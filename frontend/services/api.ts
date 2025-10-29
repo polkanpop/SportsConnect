@@ -1,12 +1,20 @@
+
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_URL = 'https://your-project.supabase.co';
+const SUPABASE_ANON_KEY = 'your-anon-key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+export const api = axios.create({
+  baseURL: 'http://localhost:8000/api', // FastAPI
+  timeout: 10000,
+});
 
-//JUST NOTE
-//create a config file with BASE_URL and API_KEY after connect with supabase
-//considering create a custom hook
-
+// Add auth token automatically
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session?.access_token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
+  }
+});

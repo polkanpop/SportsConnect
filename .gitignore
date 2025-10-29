@@ -1,3 +1,4 @@
 .vscode
 .qodo
-node_modulesS
+node_modules
+.env*
