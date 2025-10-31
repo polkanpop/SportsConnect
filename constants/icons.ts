@@ -4,9 +4,11 @@ export const ICONS = {
   accountCircle: require('../assets/icons/account_circle.png'),
   activity: require('../assets/icons/Activity.png'),
   arrowRightCircle: require('../assets/icons/Arrow_right_circle.png'),
+  arrowdown: require('../assets/icons/arrowdown.png'),
   camera: require('../assets/icons/Camera.png'),
   calendar: require('../assets/icons/Canlendar.png'),
   checkBoxDark: require('../assets/icons/check_box_dark.png'),
+  xlight: require('../assets/icons/x_light.png'),
   checkBoxLight: require('../assets/icons/check_box_light.png'),
   checkSquare: require('../assets/icons/Check_square.png'),
   clock: require('../assets/icons/Clock.png'),
@@ -36,7 +38,20 @@ export const ICONS = {
   eye: require('../assets/icons/Eye.png'),
   notEye: require('../assets/icons/notEye.png'),
   check: require('../assets/icons/Check.png'),
-  checkSmall: require('../assets/icons/check_small.png')
+  checkSmall: require('../assets/icons/check_small.png'),
+  tableTennis: require('../assets/icons/table_tennis.png'),
+  badminton: require('../assets/icons/badminton.png'),
+  golf: require('../assets/icons/golf.png'),
+  availCategory: require('../assets/icons/avail_category.png'),
+  sportCategory: require('../assets/icons/sport_category.png'),
+  venueCategory: require('../assets/icons/venue_category.png'),
+  indoor: require('../assets/icons/indoor.png'),
+  football: require('../assets/icons/football.png'),
+  basketball: require('../assets/icons/basketball.png'),
+  running: require('../assets/icons/running.png'),
+  volleyball: require('../assets/icons/volleyball.png'),
+  pickleball: require('../assets/icons/pickleball.png'),
+  outdoor: require('../assets/icons/outdoor.png'),
 };
 
 

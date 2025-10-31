@@ -33,7 +33,7 @@ export default function GoogleSignInButton() {
       options: {
         redirectTo: `${expo.scheme}://google-auth`,
         queryParams: { prompt: "consent" },
-        skipBrowserRedirect: true,
+        
       },
     });
 

@@ -143,5 +143,5 @@ export const markers = [
     sport: ["Golf"],
     venue: "Outdoor",
     availability: "Available",
-  },
+  },  
 ];

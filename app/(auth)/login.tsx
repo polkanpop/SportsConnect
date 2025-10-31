@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Link, Stack, router } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, Text, TextInput, TouchableOpacity, View } from "react-native";
-
+import '../global.css'
 export default function LoginScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);

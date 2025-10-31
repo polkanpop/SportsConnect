@@ -1,10 +1,8 @@
-import { COLORS } from '@/constants/colors';
-import { ICONS } from '@/constants/icons';
-import { IMAGES } from '@/constants/images';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Image, ImageBackground } from 'react-native';
-import '../global.css'
+import { COLORS } from "@/constants/colors";
+import { ICONS } from "@/constants/icons";
+import { Tabs } from "expo-router";
+import React from "react";
+import { Image, ImageBackground, View } from "react-native";
 
 const _layout = () => {
   return (
@@ -12,116 +10,175 @@ const _layout = () => {
       screenOptions={{
         tabBarShowLabel: true,
         tabBarStyle: {
-          backgroundColor: '#f3f3f3',
+          backgroundColor: "#ffffff", // Set navigation bar to white
         },
         tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
+          justifyContent: "center",
+          alignItems: "center",
         },
-        tabBarActiveTintColor: COLORS.darkblue, // word color when at the position
-        tabBarInactiveTintColor: COLORS.black, // word color
+        tabBarActiveTintColor: COLORS.darkblue,
+        tabBarInactiveTintColor: COLORS.black,
       }}
     >
       <Tabs.Screen
         name="Home"
         options={{
-          title: 'Homepage',
+          title: "Homepage",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
-            <ImageBackground
-              source={focused ? IMAGES.square : null} // display the focus mode with cyan frame
-              className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
-                focused ? '#d3d3d3 ' : ''
-              }`}
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                flex: 1,
+                minWidth: 60,
+                minHeight: 60,
+                marginTop: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: focused ? "#87CEEB" : "transparent", 
+                borderRadius: 8,
+              }}
             >
               <Image
                 source={ICONS.home}
-                tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-5"
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: focused ? COLORS.white : COLORS.black,
+                }}
               />
-            </ImageBackground>
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="Activity"
         options={{
-          title: 'Activities',
+          title: "Activities",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
-            <ImageBackground
-              source={focused ? IMAGES.square : null}
-              className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
-                focused ? '#d3d3d3' : ''
-              }`}
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                flex: 1,
+                minWidth: 60,
+                minHeight: 60,
+                marginTop: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: focused ? "#87CEEB" : "transparent",
+                borderRadius: 8,
+              }}
             >
               <Image
                 source={ICONS.activity}
-                tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-6"
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: focused ? COLORS.white : COLORS.black,
+                }}
               />
-            </ImageBackground>
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="Map"
         options={{
-          title: 'Map',
+          title: "Map",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
-            <ImageBackground
-              source={IMAGES.mapButton}
-              className={`flex flex-row w-full flex-1 min-w-[75px] min-h-[75px] mb-14 justify-center items-center border-1 rounded-full`}
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                flex: 1,
+                minWidth: 75,
+                minHeight: 75,
+                marginBottom: 56,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor:  "#f5a623" , 
+                borderWidth: 1, 
+                borderColor: "#000000",
+                borderRadius: 37.5,
+              }}
             >
               <Image
                 source={ICONS.map}
-                tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-10"
+                style={{
+                  width: 40,
+                  height: 40,
+                  tintColor: focused ? COLORS.white : COLORS.black,
+                }}
               />
-            </ImageBackground>
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="Notification"
         options={{
-          title: 'Notification',
+          title: "Notification",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
-            <ImageBackground
-              source={focused ? IMAGES.square : null}
-              className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
-                focused ? '#d3d3d3' : ''
-              }`}
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                flex: 1,
+                minWidth: 60,
+                minHeight: 60,
+                marginTop: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: focused ? "#87CEEB" : "transparent",
+                borderRadius: 8,
+              }}
             >
               <Image
                 source={ICONS.notifications}
-                tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-7"
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: focused ? COLORS.white : COLORS.black,
+                }}
               />
-            </ImageBackground>
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="Settings"
         options={{
-          title: 'Settings',
+          title: "Settings",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
-            <ImageBackground
-              source={focused ? IMAGES.square : null}
-              className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
-                focused ? '#d3d3d3' : ''
-              }`}
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <View
+              style={{
+                flexDirection: "row",
+                width: "100%",
+                flex: 1,
+                minWidth: 60,
+                minHeight: 60,
+                marginTop: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: focused ? "#87CEEB" : "transparent",
+                borderRadius: 8,
+              }}
             >
               <Image
                 source={ICONS.settings}
-                tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-6"
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: focused ? COLORS.white : COLORS.black,
+                }}
               />
-            </ImageBackground>
+            </View>
           ),
         }}
       />
