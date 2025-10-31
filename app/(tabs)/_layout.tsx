@@ -3,7 +3,8 @@ import { ICONS } from '@/constants/icons';
 import { IMAGES } from '@/constants/images';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import {Image, ImageBackground, } from 'react-native';
+import { Image, ImageBackground } from 'react-native';
+import '../global.css'
 
 const _layout = () => {
   return (
@@ -17,7 +18,7 @@ const _layout = () => {
           justifyContent: 'center',
           alignItems: 'center',
         },
-        tabBarActiveTintColor: COLORS.darkblue,  // word color when at the position
+        tabBarActiveTintColor: COLORS.darkblue, // word color when at the position
         tabBarInactiveTintColor: COLORS.black, // word color
       }}
     >
@@ -26,8 +27,9 @@ const _layout = () => {
         options={{
           title: 'Homepage',
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <ImageBackground source={focused ? IMAGES.square : null} // for display the focus mode with cyan frame
+          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
+            <ImageBackground
+              source={focused ? IMAGES.square : null} // display the focus mode with cyan frame
               className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
                 focused ? '#d3d3d3 ' : ''
               }`}
@@ -35,7 +37,7 @@ const _layout = () => {
               <Image
                 source={ICONS.home}
                 tintColor={focused ? COLORS.white : COLORS.black}
-                className="size-6"
+                className="size-5"
               />
             </ImageBackground>
           ),
@@ -46,8 +48,9 @@ const _layout = () => {
         options={{
           title: 'Activities',
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <ImageBackground source={focused ? IMAGES.square : null}
+          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
+            <ImageBackground
+              source={focused ? IMAGES.square : null}
               className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
                 focused ? '#d3d3d3' : ''
               }`}
@@ -66,8 +69,8 @@ const _layout = () => {
         options={{
           title: 'Map',
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <ImageBackground 
+          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
+            <ImageBackground
               source={IMAGES.mapButton}
               className={`flex flex-row w-full flex-1 min-w-[75px] min-h-[75px] mb-14 justify-center items-center border-1 rounded-full`}
             >
@@ -85,8 +88,9 @@ const _layout = () => {
         options={{
           title: 'Notification',
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <ImageBackground source={focused ? IMAGES.square : null}
+          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
+            <ImageBackground
+              source={focused ? IMAGES.square : null}
               className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
                 focused ? '#d3d3d3' : ''
               }`}
@@ -105,8 +109,9 @@ const _layout = () => {
         options={{
           title: 'Settings',
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <ImageBackground source={focused ? IMAGES.square : null}
+          tabBarIcon: ({ focused }: { focused: boolean }) => ( // Explicitly type 'focused'
+            <ImageBackground
+              source={focused ? IMAGES.square : null}
               className={`flex flex-row w-full flex-1 min-w-[60px] min-h-[60px] mt-2 justify-center items-center overflow-hidden ${
                 focused ? '#d3d3d3' : ''
               }`}

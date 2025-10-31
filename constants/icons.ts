@@ -3,7 +3,7 @@
 export const ICONS = {
   accountCircle: require('../assets/icons/account_circle.png'),
   activity: require('../assets/icons/Activity.png'),
-  arrowRightCircle: require('../assets/icons/Arrow_right-circle.png'),
+  arrowRightCircle: require('../assets/icons/Arrow_right_circle.png'),
   camera: require('../assets/icons/Camera.png'),
   calendar: require('../assets/icons/Canlendar.png'),
   checkBoxDark: require('../assets/icons/check_box_dark.png'),
@@ -29,4 +29,26 @@ export const ICONS = {
   coach: require('../assets/icons/coach.png'),
   player: require('../assets/icons/player.png'),
   court: require('../assets/icons/court.png'),
+  mic: require('../assets/icons/mic.png'),
+  location_icon: require('../assets/icons/location.png'),
+  ggmap: require('../assets/icons/ggmap.png'),
+  app_icon: require('../assets/icons/placeholder_icon.png'),
+  eye: require('../assets/icons/Eye.png'),
+  notEye: require('../assets/icons/notEye.png'),
+  check: require('../assets/icons/Check.png'),
+  checkSmall: require('../assets/icons/check_small.png')
 };
+
+
+////
+export const IMP_ICONS ={
+    adaptiveIcon: require('../assets/icons/import_icons/adaptiveicon.png'),
+    favIcon: require('../assets/icons/import_icons/favicon.png'),
+    icon: require('../assets/icons/import_icons/icon.png'),
+    partialReactLogo: require('../assets/icons/import_icons/partialreactlogo.png'),
+    reactLogo: require('../assets/icons/import_icons/reactlogo.png'),
+    reactLogo2x: require('../assets/icons/import_icons/reactlogo2x.png'),
+    reactlogo3x: require('../assets/icons/import_icons/reactlogo3x.png'),
+    splashIcon: require('../assets/icons/import_icons/splashicon.png'),
+    spaceMonoRegular: require('../assets/icons/import_icons/SpaceMono-Regular.ttf')
+}

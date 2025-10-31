@@ -1,35 +1,38 @@
-import React from 'react';
-import { Image, TextInput, TouchableOpacity, ImageBackground } from 'react-native';
-import { ICONS } from '@/constants/icons';
 import { COLORS } from '@/constants/colors';
+import { ICONS } from '@/constants/icons';
 import { IMAGES } from '@/constants/images';
+import React from 'react';
+import { Image, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
+
 
 interface Props {
   placeholder: string;
-  onPress?: () => void;
+  onChangeText?: (text: string) => void; 
 }
 
-export const SearchBar = ({ placeholder, onPress }: Props) => {
+export const SearchBar = ({ placeholder, onChangeText }: Props) => {
   return (
     <ImageBackground
       source={IMAGES.searchBar}
       style={{
         borderRadius: 40,
-        overflow: 'hidden',
+        overflow: "hidden",
         paddingHorizontal: 8,
+        backgroundColor:"#D8DAD9"
       }}
     >
       <TouchableOpacity
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: "row",
+          alignItems: "center",
           borderRadius: 40,
           paddingHorizontal: 12,
           paddingVertical: 8,
           height: 48,
         }}
-        onPress={onPress}
         activeOpacity={0.8}
+        accessible={true}
+        accessibilityLabel="Search for a location"
       >
         {/* Search Icon */}
         <Image
@@ -41,19 +44,23 @@ export const SearchBar = ({ placeholder, onPress }: Props) => {
             height: 20,
           }}
         />
-        {/* user text input props */}
+        {/* Text Input */}
         <TextInput
-          onPress={onPress}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.grey}
+          placeholderTextColor={COLORS.white}
           style={{
             flex: 1,
             marginLeft: 8,
             color: COLORS.white,
-            fontSize: 14,
-            textAlignVertical: 'center', 
-            padding: 0, 
+            fontSize: 17,
+            textAlignVertical: "center",
+            padding: 0,
+            fontWeight: 500,
           }}
+          onChangeText={onChangeText} 
+          accessible={true}
+          accessibilityLabel="Search input"
+
         />
       </TouchableOpacity>
     </ImageBackground>
