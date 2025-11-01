@@ -56,7 +56,10 @@ export const ICONS = {
   x: require('../assets/icons/x.png'),
   tick: require('../assets/icons/tick.png'),
   supportCentre: require('../assets/icons/support_centre.png'),
-};
+  starCal: require('../assets/icons/star_cal.png'),
+  coachCal: require('../assets/icons/coach_cal.png'),
+  stadiumCal: require('../assets/icons/stadium_cal.png'),
+}; 
 
 
 ////
