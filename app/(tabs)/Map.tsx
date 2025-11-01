@@ -13,6 +13,7 @@ import {
   Keyboard,
   Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -63,7 +64,7 @@ export default function App() {
   const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null); // single-select
 
   // Snap points for the BottomSheet
-  const snapPoints = useMemo(() => ["20%", "40%", "80%"], []);
+  const snapPoints = useMemo(() => ["22%", "40%", "80%"], []);
 
   // derive sport options from markers (unique)
   const sportOptions = useMemo(() => {
@@ -337,72 +338,80 @@ export default function App() {
                 />
               </View>
 
-              {/* Filter Bar under search */}
-              <View style={styles.filterBarContainer}>
-                {/* Sport */}
-                <TouchableOpacity
-                  style={styles.filterChip}
-                  activeOpacity={0.8}
-                  onPress={() => setOpenDropdown((prev) => (prev === "sport" ? null : "sport"))}
+              {/* === FILTER BAR (REPLACED) ===
+                   Now horizontally scrollable and expands to content
+              */}
+              <View style={styles.filterBarWrapper}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterBarScroll}
                 >
-                  <View style={styles.filterChipLeft}>
-                    <Image source={ICONS.sportCategory} style={styles.filterIcon} />
-                    <Text style={styles.filterChipText}>
-                      Sport{selectedSports.length > 0 ? ` (${selectedSports.length})` : ""}
-                    </Text>
-                  </View>
-                  <Image
-                    source={ICONS.arrowdown}
-                    style={[
-                      styles.filterArrow,
-                      openDropdown === "sport" ? styles.arrowOpen : null,
-                    ]}
-                  />
-                </TouchableOpacity>
+                  {/* Sport */}
+                  <TouchableOpacity
+                    style={styles.filterChip}
+                    activeOpacity={0.8}
+                    onPress={() => setOpenDropdown((prev) => (prev === "sport" ? null : "sport"))}
+                  >
+                    <View style={styles.filterChipLeft}>
+                      <Image source={ICONS.sportCategory} style={styles.filterIcon} />
+                      <Text style={styles.filterChipText}>
+                        Sport{selectedSports.length > 0 ? ` (${selectedSports.length})` : ""}
+                      </Text>
+                    </View>
+                    <Image
+                      source={ICONS.arrowdown}
+                      style={[
+                        styles.filterArrow,
+                        openDropdown === "sport" ? styles.arrowOpen : null,
+                      ]}
+                    />
+                  </TouchableOpacity>
 
-                {/* Venue */}
-                <TouchableOpacity
-                  style={styles.filterChip}
-                  activeOpacity={0.8}
-                  onPress={() => setOpenDropdown((prev) => (prev === "venue" ? null : "venue"))}
-                >
-                  <View style={styles.filterChipLeft}>
-                    <Image source={ICONS.venueCategory} style={styles.filterIcon} />
-                    <Text style={styles.filterChipText}>
-                      Venue{selectedVenue ? `: ${selectedVenue}` : ""}
-                    </Text>
-                  </View>
-                  <Image
-                    source={ICONS.arrowdown}
-                    style={[
-                      styles.filterArrow,
-                      openDropdown === "venue" ? styles.arrowOpen : null,
-                    ]}
-                  />
-                </TouchableOpacity>
+                  {/* Venue */}
+                  <TouchableOpacity
+                    style={styles.filterChip}
+                    activeOpacity={0.8}
+                    onPress={() => setOpenDropdown((prev) => (prev === "venue" ? null : "venue"))}
+                  >
+                    <View style={styles.filterChipLeft}>
+                      <Image source={ICONS.venueCategory} style={styles.filterIcon} />
+                      <Text style={styles.filterChipText}>
+                        Venue{selectedVenue ? `: ${selectedVenue}` : ""}
+                      </Text>
+                    </View>
+                    <Image
+                      source={ICONS.arrowdown}
+                      style={[
+                        styles.filterArrow,
+                        openDropdown === "venue" ? styles.arrowOpen : null,
+                      ]}
+                    />
+                  </TouchableOpacity>
 
-                {/* Availability */}
-                <TouchableOpacity
-                  style={styles.filterChip}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    setOpenDropdown((prev) => (prev === "availability" ? null : "availability"))
-                  }
-                >
-                  <View style={styles.filterChipLeft}>
-                    <Image source={ICONS.availCategory} style={styles.filterIcon} />
-                    <Text style={styles.filterChipText}>
-                      {selectedAvailability ? selectedAvailability : "Status"}
-                    </Text>
-                  </View>
-                  <Image
-                    source={ICONS.arrowdown}
-                    style={[
-                      styles.filterArrow,
-                      openDropdown === "availability" ? styles.arrowOpen : null,
-                    ]}
-                  />
-                </TouchableOpacity>
+                  {/* Availability */}
+                  <TouchableOpacity
+                    style={styles.filterChip}
+                    activeOpacity={0.8}
+                    onPress={() =>
+                      setOpenDropdown((prev) => (prev === "availability" ? null : "availability"))
+                    }
+                  >
+                    <View style={styles.filterChipLeft}>
+                      <Image source={ICONS.availCategory} style={styles.filterIcon} />
+                      <Text style={styles.filterChipText}>
+                        {selectedAvailability ? selectedAvailability : "Status"}
+                      </Text>
+                    </View>
+                    <Image
+                      source={ICONS.arrowdown}
+                      style={[
+                        styles.filterArrow,
+                        openDropdown === "availability" ? styles.arrowOpen : null,
+                      ]}
+                    />
+                  </TouchableOpacity>
+                </ScrollView>
               </View>
 
               {/* Dropdown lists */}
@@ -429,7 +438,7 @@ export default function App() {
                                   <Text style={styles.dropdownItemText}>{item}</Text>
                                 </View>
                                 <Image
-                                  source={selected ? ICONS.checkBoxLight : ICONS.xlight}
+                                  source={selected ? ICONS.tick : ""}
                                   style={styles.optionCheck}
                                 />
                               </TouchableOpacity>
@@ -474,7 +483,7 @@ export default function App() {
                                   <Text style={styles.dropdownItemText}>{item}</Text>
                                 </View>
                                 <Image
-                                  source={selected ? ICONS.checkBoxLight : ICONS.xlight}
+                                  source={selected ? ICONS.tick : ""}
                                   style={styles.optionCheck}
                                 />
                               </TouchableOpacity>
@@ -502,13 +511,13 @@ export default function App() {
                               >
                                 <View style={styles.dropdownItemLeft}>
                                   <Image
-                                    source={item === "Available" ? ICONS.checkBoxLight : ICONS.xlight}
+                                    source={item === "Available" ? ICONS.check : ICONS.x}
                                     style={styles.optionIcon}
                                   />
                                   <Text style={styles.dropdownItemText}>{item}</Text>
                                 </View>
                                 <Image
-                                  source={selected ? ICONS.checkBoxLight : ICONS.xlight}
+                                  source={selected ? ICONS.tick : ""}
                                   style={styles.optionCheck}
                                 />
                               </TouchableOpacity>
@@ -625,6 +634,8 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+
+  // Search container (unchanged)
   searchContainer: {
     position: "absolute",
     top: 60,
@@ -632,18 +643,23 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     zIndex: 50, // Ensure the search bar is above the map
   },
-  filterBarContainer: {
+
+  // === FILTER BAR: wrapper + scroll ===
+  filterBarWrapper: {
     position: "absolute",
     top: 115,
-    width: "92%",
-    alignSelf: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
+    width: "100%",
     zIndex: 50,
   },
+  filterBarScroll: {
+    paddingLeft: 16,
+    paddingRight: 12,
+    alignItems: "center",
+    // gap is not supported on RN <0.70; we preserve spacing with margin on chips
+  },
+
+  // Individual chip (no flex:1 so it sizes to content)
   filterChip: {
-    flex: 1,
-    marginHorizontal: 4,
     backgroundColor: COLORS.white,
     borderRadius: 24,
     paddingHorizontal: 12,
@@ -655,6 +671,7 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 4,
+    marginRight: 8, // spacing between chips
   },
   filterChipLeft: {
     flexDirection: "row",
@@ -675,10 +692,12 @@ const styles = StyleSheet.create({
     height: 14,
     resizeMode: "contain",
     transform: [{ rotate: "0deg" }],
+    marginLeft: 8,
   },
   arrowOpen: {
     transform: [{ rotate: "180deg" }],
   },
+
   // overlay covers full screen when dropdown open
   overlay: {
     position: "absolute",
@@ -691,8 +710,8 @@ const styles = StyleSheet.create({
   dropdownContainer: {
     position: "absolute",
     top: 160,
-    left: "4%",
-    right: "4%",
+    width: "92%",
+    alignSelf: "center",
     zIndex: 60,
   },
   dropdown: {

@@ -52,6 +52,8 @@ export const ICONS = {
   volleyball: require('../assets/icons/volleyball.png'),
   pickleball: require('../assets/icons/pickleball.png'),
   outdoor: require('../assets/icons/outdoor.png'),
+  x: require('../assets/icons/x.png'),
+  tick: require('../assets/icons/tick.png'),
 };
 
 
