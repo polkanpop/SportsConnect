@@ -1,35 +1,98 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { ICONS } from "@/constants/icons";
-import { notifications } from "@/constants/notifications"; // Import dummy notifications
+import { supabase } from "@/lib/supabase";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+interface NotificationRow {
+  notificationid: number;
+  status: string;
+  userid: number;
+  message: string;
+  time: string; // ISO/timestamp string
+  notificationtype: string; // enum in db
+  notificationtypeid: number;
+}
 
 export default function NotificationsPage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [viewedNotifications, setViewedNotifications] = useState(new Set());
+  const [rows, setRows] = useState<NotificationRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<number | null>(null);
 
-  // Filter notifications based on category
-  const filteredNotifications = notifications.filter(
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("notificationid,status,userid,message,time,notificationtype,notificationtypeid")
+      .order("time", { ascending: false });
+    if (error) {
+      setError(error.message);
+    } else if (data) {
+      setRows(data);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const categories = ["All", ...Array.from(new Set(rows.map(r => r.notificationtype)))];
+
+  const filteredNotifications = rows.filter(
     (notif) => selectedCategory === "All" || notif.notificationtype === selectedCategory
   );
 
-  const handleNotificationClick = (id: number) => {
-    setViewedNotifications((prev) => new Set(prev).add(id)); // Mark notification as viewed
+  const handleNotificationClick = async (id: number) => {
+    // Optimistic update to mark read
+    setUpdating(id);
+    const idx = rows.findIndex(r => r.notificationid === id);
+    if (idx === -1) return;
+    const original = rows[idx];
+    const updated = { ...original, status: "read" };
+    setRows(prev => {
+      const copy = [...prev];
+      copy[idx] = updated;
+      return copy;
+    });
+    const { error } = await supabase
+      .from("notifications")
+      .update({ status: "read" })
+      .eq("notificationid", id);
+    if (error) {
+      // rollback
+      setRows(prev => {
+        const copy = [...prev];
+        copy[idx] = original;
+        return copy;
+      });
+      setError(error.message);
+    }
+    setUpdating(null);
   };
 
-  const renderItem = ({ item }: { item: typeof notifications[0] }) => (
+  const renderItem = ({ item }: { item: NotificationRow }) => (
     <TouchableOpacity
-      style={[styles.notificationRow, viewedNotifications.has(item.notificationid) && styles.viewedNotification]}
+      style={[
+        styles.notificationRow,
+        item.status !== "unread" && styles.viewedNotification,
+        updating === item.notificationid && styles.updatingRow,
+      ]}
       onPress={() => handleNotificationClick(item.notificationid)}
     >
       <View style={styles.notificationLeft}>
         <Image source={ICONS.calendar} style={styles.notificationIcon} />
         <View style={styles.notificationContent}>
-          <Text style={styles.notificationTitle}>{item.title}</Text>
+          <Text style={styles.notificationTitle}>
+            {item.notificationtype.charAt(0).toUpperCase() + item.notificationtype.slice(1)}
+          </Text>
           <Text style={styles.notificationMessage}>{item.message}</Text>
         </View>
       </View>
-      <Text style={styles.notificationTime}>{item.time}</Text>
+      <Text style={styles.notificationTime}>{new Date(item.time).toLocaleString()}</Text>
     </TouchableOpacity>
   );
 
@@ -42,7 +105,7 @@ export default function NotificationsPage() {
 
       {/* Category Tabs */}
       <View style={styles.categoryContainer}>
-        {["All", "Event", "Promotion", "Update"].map((category) => (
+        {categories.map((category) => (
           <TouchableOpacity
             key={category}
             style={[
@@ -56,11 +119,20 @@ export default function NotificationsPage() {
         ))}
       </View>
 
+      {loading && (
+        <View style={styles.loadingWrapper}><ActivityIndicator /></View>
+      )}
+      {error && (
+        <View style={styles.errorWrapper}><Text style={styles.errorText}>{error}</Text></View>
+      )}
+
       {/* Notifications List */}
       <FlatList
         data={filteredNotifications}
         renderItem={renderItem}
         keyExtractor={(item) => item.notificationid.toString()}
+        refreshing={loading}
+        onRefresh={fetchNotifications}
       />
     </SafeAreaView>
   );
@@ -109,6 +181,9 @@ const styles = StyleSheet.create({
   viewedNotification: {
     backgroundColor: "#F5F5F5",
   },
+  updatingRow: {
+    opacity: 0.6,
+  },
   notificationLeft: {
     flexDirection: "row",
     flex: 1,
@@ -134,4 +209,15 @@ const styles = StyleSheet.create({
     color: "#888",
     marginLeft: 10,
   },
+  loadingWrapper: {
+    paddingVertical: 8,
+    alignItems: 'center'
+  },
+  errorWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  errorText: {
+    color: '#c00'
+  }
 });
