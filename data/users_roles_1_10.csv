@@ -1,0 +1,11 @@
+userid,role,userinfo,phone
+1,player,"{""name"":""User1 Player"",""preferences"":{""sports"":[""soccer"",""tennis""]}}","+15550101001"
+2,coach,"{""name"":""User2 Coach"",""preferences"":{""sports"":[""basketball"",""running""]}}","+15550101002"
+3,organizer,"{""name"":""User3 Organizer"",""preferences"":{""sports"":[""volleyball""]}}","+15550101003"
+4,courtowner,"{""name"":""User4 CourtOwner"",""preferences"":{""sports"":[""pickleball"",""badminton""]}}","+15550101004"
+5,player,"{""name"":""User5 Player"",""preferences"":{""sports"":[""swimming"",""cycling""]}}","+15550101005"
+6,coach,"{""name"":""User6 Coach"",""preferences"":{""sports"":[""soccer"",""basketball""]}}","+15550101006"
+7,organizer,"{""name"":""User7 Organizer"",""preferences"":{""sports"":[""running"",""tennis""]}}","+15550101007"
+8,courtowner,"{""name"":""User8 CourtOwner"",""preferences"":{""sports"":[""pickleball"",""soccer""]}}","+15550101008"
+9,player,"{""name"":""User9 Player"",""preferences"":{""sports"":[""volleyball"",""cycling""]}}","+15550101009"
+10,coach,"{""name"":""User10 Coach"",""preferences"":{""sports"":[""basketball"",""swimming""]}}","+15550101010"

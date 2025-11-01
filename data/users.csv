@@ -1,0 +1,6 @@
+userid,role,userinfo,phone
+1,member,"{""name"":""Alice Smith"",""preferences"":{""sports"":[""soccer"",""tennis""]}}","+15550000001"
+2,member,"{""name"":""Bob Johnson"",""preferences"":{""sports"":[""basketball""]}}","+15550000002"
+3,admin,"{""name"":""Carol Lee"",""preferences"":{""sports"":[]}}","+15550000003"
+4,member,"{""name"":""David Kim"",""preferences"":{""sports"":[""running"",""swimming""]}}","+15550000004"
+5,guest,"{""name"":""Eve Turner"",""preferences"":{""sports"":[""volleyball""]}}","+15550000005"

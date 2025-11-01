@@ -48,3 +48,30 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Backend Demo (FastAPI + Supabase)
+
+A minimal FastAPI backend was added under `backend/` to demonstrate CRUD-style API calls against your Supabase project.
+
+Quick start (PowerShell):
+
+```powershell
+cd backend
+python -m venv .venv
+./.venv/Scripts/Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+notepad .env   # add SUPABASE_URL + SUPABASE_ANON_KEY
+uvicorn main:app --reload --port 8000
+```
+
+Open http://127.0.0.1:8000/docs for Swagger UI.
+
+Endpoints implemented:
+- `GET /health`
+- `GET /events`
+- `POST /events`
+- `GET /events/{id}`
+- `POST /bookings`
+
+Adjust table & column names in `schemas.py` and `main.py` to match your actual Supabase schema.
