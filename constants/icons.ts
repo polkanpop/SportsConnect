@@ -4,6 +4,7 @@ export const ICONS = {
   accountCircle: require('../assets/icons/account_circle.png'),
   activity: require('../assets/icons/Activity.png'),
   arrowRightCircle: require('../assets/icons/Arrow_right_circle.png'),
+  arrowright: require('../assets/icons/arrow_right.png'),
   arrowdown: require('../assets/icons/arrowdown.png'),
   camera: require('../assets/icons/Camera.png'),
   calendar: require('../assets/icons/Canlendar.png'),
@@ -54,6 +55,7 @@ export const ICONS = {
   outdoor: require('../assets/icons/outdoor.png'),
   x: require('../assets/icons/x.png'),
   tick: require('../assets/icons/tick.png'),
+  supportCentre: require('../assets/icons/support_centre.png'),
 };
 
 
