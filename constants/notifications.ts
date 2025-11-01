@@ -144,7 +144,7 @@ export const notifications = [
     time: "2023-10-20 10:00:00",
     notificationtype: 'Update',
     notificationtypeid: 3,
-    title: "Item Delivered"
+    title: "Transaction cancelled"
   },
   {
     notificationid: 15,
