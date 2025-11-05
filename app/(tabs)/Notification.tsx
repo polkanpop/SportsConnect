@@ -12,6 +12,7 @@ interface NotificationRow {
   time: string; // ISO/timestamp string
   notificationtype: string; // enum in db
   notificationtypeid: number;
+  title: string;
 }
 
 export default function NotificationsPage() {
@@ -26,7 +27,7 @@ export default function NotificationsPage() {
     setError(null);
     const { data, error } = await supabase
       .from("notifications")
-      .select("notificationid,status,userid,message,time,notificationtype,notificationtypeid")
+      .select("notificationid,status,userid,message,time,notificationtype,notificationtypeid,title")
       .order("time", { ascending: false });
     if (error) {
       setError(error.message);
@@ -40,10 +41,24 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  const categories = ["All", ...Array.from(new Set(rows.map(r => r.notificationtype)))];
-
+  // Map notificationtype to new categories
+  const categories = ["All", "Event", "Coach", "Court"];
+  const typeToCategory = (type: string) => {
+    switch (type) {
+      case "eventbooking":
+        return "Event";
+      case "tsbooking":
+        return "Coach";
+      case "coach":
+        return "Coach";
+      case "courtbooking":
+        return "Court";
+      default:
+        return "Event";
+    }
+  };
   const filteredNotifications = rows.filter(
-    (notif) => selectedCategory === "All" || notif.notificationtype === selectedCategory
+    (notif) => selectedCategory === "All" || typeToCategory(notif.notificationtype) === selectedCategory
   );
 
   const handleNotificationClick = async (id: number) => {
@@ -87,7 +102,7 @@ export default function NotificationsPage() {
         <Image source={ICONS.calendar} style={styles.notificationIcon} />
         <View style={styles.notificationContent}>
           <Text style={styles.notificationTitle}>
-            {item.notificationtype.charAt(0).toUpperCase() + item.notificationtype.slice(1)}
+            {item.title}
           </Text>
           <Text style={styles.notificationMessage}>{item.message}</Text>
         </View>

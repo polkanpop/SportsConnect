@@ -47,6 +47,8 @@ const INITIAL_REGION = {
 };
 
 export default function App() {
+  // Favorite state for selected marker
+  const [isFavorite, setIsFavorite] = useState(false);
   const mapRef = useRef<MapView | null>(null); // Ref to the map
   const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
 
@@ -60,7 +62,7 @@ export default function App() {
   // Filter states
   const [openDropdown, setOpenDropdown] = useState<"sport" | "venue" | "availability" | null>(null);
   const [selectedSports, setSelectedSports] = useState<string[]>([]); // multi-select
-  const [selectedVenue, setSelectedVenue] = useState<string | null>(null); // single-select
+  const [selectedVenue, setSelectedVenue] = useState<string[]>([]); // multi-select
   const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null); // single-select
 
   // Snap points for the BottomSheet
@@ -121,7 +123,7 @@ export default function App() {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
               },
-              zoom: 15,
+              zoom: 12,
             },
             { duration: 1000 }
           );
@@ -193,6 +195,7 @@ export default function App() {
       return;
     }
     setSelectedMarker(marker);
+    setIsFavorite(false); // Reset favorite when new marker selected
     mapRef.current?.animateCamera(
       {
         center: { latitude: marker.latitude, longitude: marker.longitude },
@@ -265,9 +268,14 @@ export default function App() {
     });
   };
 
-  // Select one venue
-  const chooseVenue = (venue: string) => {
-    setSelectedVenue((prev) => (prev === venue ? null : venue));
+  // Toggle venue in multi-select
+  const toggleVenue = (venue: string) => {
+    setSelectedVenue((prev) => {
+      if (prev.includes(venue)) {
+        return prev.filter((v) => v !== venue);
+      }
+      return [...prev, venue];
+    });
   };
 
   // Select one availability
@@ -300,11 +308,17 @@ export default function App() {
       });
     }
 
-    // Filter by venue (single)
-    if (selectedVenue) {
+    // Filter by venue (multi)
+    if (selectedVenue.length > 0) {
       results = results.filter((m) => {
-        const mVenue = Array.isArray(m.venue) ? m.venue : [m.venue];
-        return mVenue.map((x) => String(x).toLowerCase()).includes(selectedVenue.toLowerCase());
+        const mVenue = Array.isArray(m.venue) ? m.venue.map((x) => String(x).toLowerCase()) : [String(m.venue).toLowerCase()];
+        if (selectedVenue.length === 2) {
+          // Only show markers that have both 'indoor' and 'outdoor'
+          return mVenue.includes('indoor') && mVenue.includes('outdoor');
+        } else {
+          // Show markers that match the selected venue
+          return selectedVenue.some((v) => mVenue.includes(v.toLowerCase()));
+        }
       });
     }
 
@@ -377,7 +391,7 @@ export default function App() {
                     <View style={styles.filterChipLeft}>
                       <Image source={ICONS.venueCategory} style={styles.filterIcon} />
                       <Text style={styles.filterChipText}>
-                        Venue{selectedVenue ? `: ${selectedVenue}` : ""}
+                        Venue{selectedVenue.length === 2 ? ": Both" : selectedVenue.length === 1 ? `: ${selectedVenue[0]}` : ""}
                       </Text>
                     </View>
                     <Image
@@ -466,17 +480,14 @@ export default function App() {
                           data={venueOptions}
                           keyExtractor={(item) => item}
                           renderItem={({ item }) => {
-                            const selected = selectedVenue === item;
+                            const selected = selectedVenue.includes(item);
                             const leftIcon = item.toLowerCase().includes("indoor")
                               ? ICONS.indoor
                               : ICONS.outdoor;
                             return (
                               <TouchableOpacity
                                 style={styles.dropdownItem}
-                                onPress={() => {
-                                  chooseVenue(item);
-                                  setOpenDropdown(null);
-                                }}
+                                onPress={() => toggleVenue(item)}
                               >
                                 <View style={styles.dropdownItemLeft}>
                                   <Image source={leftIcon as any} style={styles.optionIcon} />
@@ -491,6 +502,14 @@ export default function App() {
                           }}
                           ItemSeparatorComponent={() => <View style={styles.sep} />}
                         />
+                        <View style={styles.dropdownFooter}>
+                          <TouchableOpacity
+                            onPress={() => setSelectedVenue([])}
+                            style={styles.clearButton}
+                          >
+                            <Text style={styles.clearText}>Clear All</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     )}
 
@@ -599,8 +618,27 @@ export default function App() {
               >
                 {selectedMarker ? (
                   <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
-                    {/* Location Name */}
-                    <Text style={styles.markerTitle}>{selectedMarker.name}</Text>
+                    {/* ...existing code... */}
+                    {/* Title, Favorite, and Book in a row (moved up) */}
+                    <View style={[styles.titleRow, { marginTop: -12 }]}> 
+                      <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
+                      <TouchableOpacity
+                        style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
+                        onPress={() => setIsFavorite((prev) => !prev)}
+                      >
+                        <Image
+                          source={ICONS.starCal}
+                          style={[styles.favoriteIcon, isFavorite && { tintColor: '#FFFF00' }]}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.bookingButton, selectedMarker.availability === "Unavailable" && styles.bookingButtonDisabled]}
+                        disabled={selectedMarker.availability === "Unavailable"}
+                      >
+                        <Image source={ICONS.booking} style={[styles.bookingIcon, selectedMarker.availability === "Unavailable" && { tintColor: '#bbb' }]} />
+                        <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>Book</Text>
+                      </TouchableOpacity>
+                    </View>
 
                     {/* Location Address */}
                     <Text style={styles.markerAddress}>Address: {selectedMarker.address}</Text>
@@ -796,16 +834,75 @@ const styles = StyleSheet.create({
   bottomSheetContent: {
     alignItems: "flex-start",
     padding: 16,
+    position: "relative",
+  },
+  topRightActions: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  favoriteButton: {
+    marginRight: 10,
+    marginTop: -12,
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: '#eee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteActive: {
+    backgroundColor: '#F0F0F0', // light grey
+  },
+  favoriteIcon: {
+    width: 24,
+    height: 24,
+    tintColor: '#888',
+  },
+  bookingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF5733',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: -12,
+    height: 36,
+  },
+  bookingButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  bookingIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 8,
+    marginLeft: 2,
+    tintColor: '#fff',
+  },
+  bookingText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
   placeholderText: {
     fontSize: 16,
     color: "#888",
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 4,
+  },
   markerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 8,
     textAlign: "left",
+    flexShrink: 1,
+    width: '65%',
+    marginRight: 8,
   },
   markerAddress: {
     fontSize: 16,

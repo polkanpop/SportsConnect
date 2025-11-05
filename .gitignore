@@ -3,6 +3,12 @@
 # dependencies
 node_modules/
 
+# Ignore data folder
+data/
+
+# Ignore environment variables
+.env
+
 # Expo
 .expo/
 dist/
