@@ -2,7 +2,8 @@
 import { SearchBar } from "@/components/SearchBar";
 import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
-import { markers as ALL_MARKERS } from "@/constants/marker"; // static data for markers
+// Removed static markers import
+import { supabase } from "@/lib/supabase";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
@@ -53,7 +54,10 @@ export default function App() {
   const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
 
   const [searchQuery, setSearchQuery] = useState(""); // State for search query
-  const [filteredMarkers, setFilteredMarkers] = useState<MarkerType[]>(ALL_MARKERS); // State for filtered markers
+  const [markers, setMarkers] = useState<MarkerType[]>([]); // fetched markers
+  const [filteredMarkers, setFilteredMarkers] = useState<MarkerType[]>([]); // filtered subset
+  const [loadingMarkers, setLoadingMarkers] = useState(false);
+  const [errorMarkers, setErrorMarkers] = useState<string | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null); // State to store selected marker
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null); // State to store user location
   const [isFlatListVisible, setFlatListVisible] = useState(false); // To show/hide the FlatList
@@ -66,34 +70,61 @@ export default function App() {
   const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null); // single-select
 
   // Snap points for the BottomSheet
-  const snapPoints = useMemo(() => ["22%", "40%", "80%"], []);
+  const snapPoints = useMemo(() => ["24%", "40%", "80%"], []);
 
   // derive sport options from markers (unique)
   const sportOptions = useMemo(() => {
     const set = new Set<string>();
-    ALL_MARKERS.forEach((m) => {
+    markers.forEach((m) => {
       const s = m.sport;
-      if (Array.isArray(s)) {
-        s.forEach((x) => set.add(x));
-      } else if (s) {
-        set.add(s as string);
-      }
+      if (Array.isArray(s)) s.forEach((x) => set.add(x));
+      else if (s) set.add(s as string);
     });
     return Array.from(set);
-  }, []);
+  }, [markers]);
 
   const venueOptions = useMemo(() => {
-    // standardize to strings Indoor/Outdoor
     const set = new Set<string>();
-    ALL_MARKERS.forEach((m) => {
+    markers.forEach((m) => {
       const v = m.venue;
-      if (Array.isArray(v)) {
-        v.forEach((x) => set.add(String(x)));
-      } else if (v) {
-        set.add(String(v));
-      }
+      if (Array.isArray(v)) v.forEach((x) => set.add(String(x)));
+      else if (v) set.add(String(v));
     });
     return Array.from(set);
+  }, [markers]);
+  // Fetch markers from Supabase courtinfo table
+  useEffect(() => {
+    const fetchMarkers = async () => {
+      setLoadingMarkers(true);
+      setErrorMarkers(null);
+      const { data, error } = await supabase
+        .from("courtinfo")
+        .select("courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability")
+        .order("courtinfoid", { ascending: true });
+      if (error) {
+        setErrorMarkers(error.message);
+        setMarkers([]);
+        setFilteredMarkers([]);
+      } else if (data) {
+        // Ensure arrays are arrays (Supabase should already return them correctly)
+        const normalized: MarkerType[] = data.map((m: any) => ({
+          latitude: m.latitude ?? 0,
+          longitude: m.longitude ?? 0,
+            latitudeDelta: m.latitudedelta ?? 0.05,
+            longitudeDelta: m.longitudedelta ?? 0.05,
+          name: m.name || m.address || `Court #${m.courtinfoid}`,
+          address: m.address || "Unknown",
+          images: Array.isArray(m.images) ? m.images : [],
+          sport: Array.isArray(m.sport) ? m.sport : [],
+          venue: Array.isArray(m.venue) ? m.venue : [],
+          availability: m.availability || "Available",
+        }));
+        setMarkers(normalized);
+        setFilteredMarkers(normalized);
+      }
+      setLoadingMarkers(false);
+    };
+    fetchMarkers();
   }, []);
 
   const availabilityOptions = ["Available", "Unavailable"];
@@ -211,18 +242,15 @@ export default function App() {
   const handleSearchChange = useCallback(
     debounce((text: string) => {
       setSearchQuery(text);
-
-      // Filter markers based on search query (initial search filtering)
-      const filtered = ALL_MARKERS.filter(
+      const filtered = markers.filter(
         (marker) =>
           marker.name.toLowerCase().includes(text.toLowerCase()) ||
           marker.address.toLowerCase().includes(text.toLowerCase())
       );
-
       setFilteredMarkers(filtered);
       setFlatListVisible(text.length > 0);
     }, 300),
-    []
+    [markers]
   );
 
   // Called whenever search text changes
@@ -285,7 +313,7 @@ export default function App() {
 
   // Apply filters to marker list whenever filters change
   useEffect(() => {
-    let results: MarkerType[] = ALL_MARKERS;
+  let results: MarkerType[] = markers;
 
     // Filter by search query first (if any)
     if (searchQuery && searchQuery.trim().length > 0) {
@@ -330,7 +358,7 @@ export default function App() {
     }
 
     setFilteredMarkers(results);
-  }, [selectedSports, selectedVenue, selectedAvailability, searchQuery]);
+  }, [selectedSports, selectedVenue, selectedAvailability, searchQuery, markers]);
 
   // Dismiss dropdowns when tapping outside - we'll render a full-screen overlay when a dropdown is open
   const handleOverlayPress = () => {
@@ -550,6 +578,17 @@ export default function App() {
                 </>
               )}
 
+              {/* Loading / Error */}
+              {loadingMarkers && (
+                <View style={[styles.searchResults,{justifyContent:'center',alignItems:'center'}]}>
+                  <Text>Loading courts...</Text>
+                </View>
+              )}
+              {errorMarkers && !loadingMarkers && (
+                <View style={[styles.searchResults,{justifyContent:'center'}]}>
+                  <Text style={{color:'red'}}>Error: {errorMarkers}</Text>
+                </View>
+              )}
               {/* Search Results (FlatList) */}
               {isFlatListVisible && (
                 <FlatList
