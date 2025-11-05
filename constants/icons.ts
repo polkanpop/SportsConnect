@@ -5,6 +5,7 @@ export const ICONS = {
   activity: require('../assets/icons/Activity.png'),
   arrowRightCircle: require('../assets/icons/Arrow_right_circle.png'),
   arrowright: require('../assets/icons/arrow_right.png'),
+  arrowLeft: require('../assets/icons/Arrow_left.png'),
   arrowdown: require('../assets/icons/arrowdown.png'),
   camera: require('../assets/icons/Camera.png'),
   calendar: require('../assets/icons/Canlendar.png'),
@@ -59,6 +60,7 @@ export const ICONS = {
   starCal: require('../assets/icons/star_cal.png'),
   coachCal: require('../assets/icons/coach_cal.png'),
   stadiumCal: require('../assets/icons/stadium_cal.png'),
+  event_category: require('../assets/icons/event.png'),
 }; 
 
 

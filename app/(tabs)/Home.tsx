@@ -1,11 +1,63 @@
 import { SearchBar } from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
 import { useRouter } from "expo-router";
-import { Image, ScrollView, Text, View } from "react-native";
+import React from "react";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function Home() {
   const router = useRouter();
+
+  // Define different label styles based on the icon sizes
+  const labelStyles = {
+    first: {
+      fontWeight: "600" as const,
+      fontSize: 14,
+      marginTop: 5,
+      textAlign: "center" as const,
+    },
+    second: {
+      fontWeight: "600" as const,
+      fontSize: 13,
+      marginTop: 1,
+      marginBottom: 2,
+      textAlign: "center" as const,
+    },
+    third: {
+      fontWeight: "600" as const,
+      fontSize: 13,
+      marginBottom: 10,
+      textAlign: "center" as const,
+    },
+  };
+
+  // Category data with navigation routes
+  const categories = [
+    {
+      icon: ICONS.coach,
+      label: "Coach",
+      color: "#32CD32",
+      iconStyle: { width: 45, height: 45 },
+      labelStyle: labelStyles.first,
+      route: "/event/coach",
+    },
+    {
+      icon: ICONS.event_category,
+      label: "Event",
+      color: "#FFA500",
+      iconStyle: { width: 50, height: 50 },
+      labelStyle: labelStyles.second,
+      route: "/event/eventBooking",
+    },
+    {
+      icon: ICONS.court,
+      label: "Court",
+      color: "#FFB6C1",
+      iconStyle: { width: 60, height: 60 },
+      labelStyle: labelStyles.third,
+      route: "/event/courtBooking",
+    },
+  ];
 
   return (
     <SafeAreaProvider>
@@ -26,24 +78,29 @@ export default function Home() {
             <SearchBar placeholder="Search for courts..." />
           </View>
 
-          {/* Profile Icon */}
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              backgroundColor: "#d4d4d4",
-              borderRadius: 24,
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: 8,
-            }}
+          {/* Profile Icon (Touchable) */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => router.push("/event/profile")}
           >
-            <Image
-              source={ICONS.accountCircle}
-              style={{ width: 40, height: 40 }}
-              resizeMode="contain"
-            />
-          </View>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                backgroundColor: "#d4d4d4",
+                borderRadius: 24,
+                alignItems: "center",
+                justifyContent: "center",
+                marginLeft: 8,
+              }}
+            >
+              <Image
+                source={ICONS.accountCircle}
+                style={{ width: 40, height: 40 }}
+                resizeMode="contain"
+              />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Scroll View Content */}
@@ -61,36 +118,36 @@ export default function Home() {
               paddingVertical: 16,
             }}
           >
-            {[
-              { icon: ICONS.player, label: "Player", color: "#FFA500" }, // Orange
-              { icon: ICONS.coach, label: "Coaches", color: "#32CD32" }, // Green
-              { icon: ICONS.court, label: "Court", color: "#FFB6C1" }, // Pink
-            ].map((category, index) => (
-              <View
+            {categories.map((category, index) => (
+              <TouchableOpacity
                 key={index}
-                style={{
-                  width: 80,
-                  height: 80,
-                  backgroundColor: category.color,
-                  borderRadius: 8,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                activeOpacity={0.7}
+                onPress={() => router.push(category.route as any)}
+
               >
-                <Image
-                  source={category.icon}
-                  style={{ width: 48, height: 48 }}
-                  resizeMode="contain"
-                />
-                <Text style={{ fontWeight: "600", fontSize: 12 }}>
-                  {category.label}
-                </Text>
-              </View>
+                <View
+                  style={{
+                    width: 80,
+                    height: 80,
+                    backgroundColor: category.color,
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Image
+                    source={category.icon}
+                    style={category.iconStyle}
+                    resizeMode="contain"
+                  />
+                  <Text style={category.labelStyle}>{category.label}</Text>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
 
           {/* Tag Section */}
-          <View>
+          <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8 }}>
               Your choices
             </Text>
@@ -99,12 +156,12 @@ export default function Home() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 10 }}
             >
-              {[...Array(7)].map((_, index) => (
+              {[...Array(5)].map((_, index) => (
                 <View
                   key={index}
                   style={{
                     width: 80,
-                    height: 40,
+                    height: 20,
                     backgroundColor: "#d4d4d4",
                     borderRadius: 8,
                     marginRight: 16,
@@ -115,7 +172,7 @@ export default function Home() {
           </View>
 
           {/* Event Section */}
-          <View>
+          <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
               Event
             </Text>
@@ -140,7 +197,7 @@ export default function Home() {
           </View>
 
           {/* Recommend Section */}
-          <View>
+          <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
               Recommend for you
             </Text>

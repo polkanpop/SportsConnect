@@ -52,7 +52,7 @@ export const SearchBar = ({ placeholder, onChangeText }: Props) => {
             flex: 1,
             marginLeft: 8,
             color: COLORS.white,
-            fontSize: 17,
+            fontSize: 15,
             textAlignVertical: "center",
             padding: 0,
             fontWeight: 500,

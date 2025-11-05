@@ -1,5 +1,6 @@
 import { courtBookings, eventBookings, trainingSessions } from "@/constants/bookings";
 import { ICONS } from "@/constants/icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -59,8 +60,10 @@ const shuffleArray = (array: UnifiedBooking[]) => {
   return array;
 };
 
+
 export default function ActivityPage() {
   const [showAll, setShowAll] = useState(false);
+  const router = useRouter();
   let data = mergeBookings();  // Unified bookings data
 
   // Shuffle the data to display random results
@@ -111,7 +114,7 @@ export default function ActivityPage() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Activity</Text>
-        <TouchableOpacity style={styles.historyButton}>
+        <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/event/history")}> 
           <View style={styles.historyButtonContainer}>
             <Image
               source={ICONS.clock} // History Icon

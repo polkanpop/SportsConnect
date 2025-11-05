@@ -31,8 +31,7 @@ export default function SettingsPage() {
         </TouchableOpacity>
 
         {/* Search */}
-        <SearchBar placeholder="Search in settings" />
-
+        <SearchBar placeholder="Search in settings..." />
 
         {/* Section One */}
         <View style={styles.card}>
