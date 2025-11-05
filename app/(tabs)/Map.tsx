@@ -4,6 +4,7 @@ import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
+import { FavoriteMarker, getFavorites, getRemoteFavoriteIds, isFavorited, toggleFavorite } from '@/storage/favorites';
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
@@ -27,6 +28,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 // TypeScript type for a marker
 type MarkerType = {
+  id: number; // courtinfoid unique id
   latitude: number;
   longitude: number;
   latitudeDelta: number;
@@ -37,6 +39,7 @@ type MarkerType = {
   sport: string[] | string;
   venue: string | string[];
   availability: string;
+  isFavorite?: boolean; // client-side instantaneous favorite flag
 };
 
 // Initial map region
@@ -62,6 +65,8 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null); // State to store user location
   const [isFlatListVisible, setFlatListVisible] = useState(false); // To show/hide the FlatList
   const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(-1); // Track BottomSheet index
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
 
   // Filter states
   const [openDropdown, setOpenDropdown] = useState<"sport" | "venue" | "availability" | null>(null);
@@ -107,7 +112,8 @@ export default function App() {
         setFilteredMarkers([]);
       } else if (data) {
         // Ensure arrays are arrays (Supabase should already return them correctly)
-        const normalized: MarkerType[] = data.map((m: any) => ({
+        let normalized: MarkerType[] = data.map((m: any) => ({
+          id: m.courtinfoid,
           latitude: m.latitude ?? 0,
           longitude: m.longitude ?? 0,
             latitudeDelta: m.latitudedelta ?? 0.05,
@@ -118,9 +124,21 @@ export default function App() {
           sport: Array.isArray(m.sport) ? m.sport : [],
           venue: Array.isArray(m.venue) ? m.venue : [],
           availability: m.availability || "Available",
+          isFavorite: false,
         }));
-        setMarkers(normalized);
-        setFilteredMarkers(normalized);
+        setMarkers(normalized); // initial set (all not favorite yet)
+        // Preload favorites (local + remote merged) BEFORE setting filteredMarkers so initial render shows yellow
+        const [localFavs, remoteFavIds] = await Promise.all([
+          getFavorites(),
+          getRemoteFavoriteIds()
+        ]);
+        const mergedIds = Array.from(new Set([...localFavs.map(f => f.id), ...remoteFavIds]));
+        setFavoriteIds(mergedIds);
+  // Stamp favorites onto marker objects for immediate color updates without needing star toggle
+  normalized = normalized.map(m => ({ ...m, isFavorite: mergedIds.includes(m.id) }));
+  setMarkers(normalized); // overwrite with favorite flags
+  // Apply initial filtering (none yet) but ensure favorites coloring via isFavorite flags
+  setFilteredMarkers(normalized);
       }
       setLoadingMarkers(false);
     };
@@ -220,13 +238,15 @@ export default function App() {
   };
 
   // Handle marker when pressed
-  const handleMarkerPress = (marker: MarkerType) => {
+  const handleMarkerPress = async (marker: MarkerType) => {
     if (selectedMarker?.name === marker.name) {
       bottomSheetRef.current?.snapToIndex(0);
       return;
     }
     setSelectedMarker(marker);
-    setIsFavorite(false); // Reset favorite when new marker selected
+    // Load favorite state from storage
+    const fav = await isFavorited(marker.id);
+    setIsFavorite(fav);
     mapRef.current?.animateCamera(
       {
         center: { latitude: marker.latitude, longitude: marker.longitude },
@@ -313,6 +333,17 @@ export default function App() {
 
   // Apply filters to marker list whenever filters change
   useEffect(() => {
+  // Debug/instrumentation: measure filtering cycle triggered by dependencies
+  const t0 = Date.now();
+  console.log('[FavoritesToggle] Filter pass start', {
+    showFavoritesOnly,
+    favoriteIdsCount: favoriteIds.length,
+    markersCount: markers.length,
+    selectedSports,
+    selectedVenue,
+    selectedAvailability,
+    searchQueryLength: searchQuery.length,
+  });
   let results: MarkerType[] = markers;
 
     // Filter by search query first (if any)
@@ -356,9 +387,16 @@ export default function App() {
         return String(m.availability).toLowerCase() === selectedAvailability.toLowerCase();
       });
     }
-
+    // Favorites-only toggle
+    if (showFavoritesOnly) {
+      results = results.filter(m => favoriteIds.includes(m.id));
+    }
     setFilteredMarkers(results);
-  }, [selectedSports, selectedVenue, selectedAvailability, searchQuery, markers]);
+    console.log('[FavoritesToggle] Filter pass end', {
+      resultingCount: results.length,
+      durationMs: Date.now() - t0,
+    });
+  }, [selectedSports, selectedVenue, selectedAvailability, searchQuery, markers, showFavoritesOnly, favoriteIds]);
 
   // Dismiss dropdowns when tapping outside - we'll render a full-screen overlay when a dropdown is open
   const handleOverlayPress = () => {
@@ -374,10 +412,26 @@ export default function App() {
             <View style={{ flex: 1 }}>
               {/* Search Bar */}
               <View style={styles.searchContainer}>
-                <SearchBar
-                  placeholder="Search for a location..."
-                  onChangeText={onSearchTextChange}
-                />
+                <View style={styles.searchOverlayWrapper}>
+                  <SearchBar
+                    placeholder="Search for a location..."
+                    onChangeText={onSearchTextChange}
+                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('[FavoritesToggle] Star icon pressed. Toggling favorites-only view from', showFavoritesOnly, 'to', !showFavoritesOnly);
+                      setShowFavoritesOnly(prev => !prev);
+                    }}
+                    style={[styles.inlineStar, showFavoritesOnly && styles.inlineStarActive]}
+                    accessibilityLabel={showFavoritesOnly ? 'Show all locations' : 'Show favorite locations only'}
+                    activeOpacity={0.8}
+                  >
+                    <Image
+                      source={ICONS.starCal}
+                      style={{ width:22, height:22, tintColor: showFavoritesOnly ? '#333' : '#fff' }}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* === FILTER BAR (REPLACED) ===
@@ -620,17 +674,23 @@ export default function App() {
                 ref={mapRef}
               >
                 {/* Render all markers */}
-                {filteredMarkers.map((marker, index) => (
-                  <Marker
-                    key={index}
-                    coordinate={{
-                      latitude: marker.latitude,
-                      longitude: marker.longitude,
-                    }}
-                    pinColor={selectedMarker?.name === marker.name ? COLORS.blue : COLORS.red} // apparently only work on IOS device
-                    onPress={() => handleMarkerPress(marker)}
-                  />
-                ))}
+                {filteredMarkers.map((marker) => {
+                  const selected = selectedMarker?.id === marker.id;
+                  const pinColor = selected
+                    ? COLORS.green
+                    : marker.isFavorite
+                      ? '#FFD700'
+                      : COLORS.red;
+                  const keyFingerprint = `${marker.id}-${marker.isFavorite ? 'fav' : 'nf'}-${selected ? 'sel' : 'nosel'}`;
+                  return (
+                    <Marker
+                      key={keyFingerprint}
+                      coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+                      pinColor={pinColor}
+                      onPress={() => handleMarkerPress(marker)}
+                    />
+                  );
+                })}
               </MapView>
 
               {/* Google Maps Button (above My Location) */}
@@ -663,7 +723,31 @@ export default function App() {
                       <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
                       <TouchableOpacity
                         style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
-                        onPress={() => setIsFavorite((prev) => !prev)}
+                        onPress={async () => {
+                          if (!selectedMarker) return;
+                          const newState = await toggleFavorite({
+                            id: selectedMarker.id,
+                            name: selectedMarker.name,
+                            address: selectedMarker.address,
+                            latitude: selectedMarker.latitude,
+                            longitude: selectedMarker.longitude,
+                            images: selectedMarker.images,
+                            sport: selectedMarker.sport,
+                            venue: selectedMarker.venue,
+                            availability: selectedMarker.availability,
+                          } as FavoriteMarker);
+                          setIsFavorite(newState);
+                          setFavoriteIds(prev => {
+                            const exists = prev.includes(selectedMarker.id);
+                            if (newState && !exists) return [...prev, selectedMarker.id];
+                            if (!newState && exists) return prev.filter(id => id !== selectedMarker.id);
+                            return prev;
+                          });
+                          // Immediate color change: mutate markers & filteredMarkers with isFavorite flag
+                          setMarkers(prev => prev.map(m => m.id === selectedMarker.id ? { ...m, isFavorite: newState } : m));
+                          setFilteredMarkers(prev => prev.map(m => m.id === selectedMarker.id ? { ...m, isFavorite: newState } : m));
+                          setSelectedMarker(sm => sm && sm.id === selectedMarker.id ? { ...sm, isFavorite: newState } : sm);
+                        }}
                       >
                         <Image
                           source={ICONS.starCal}
@@ -996,5 +1080,24 @@ const styles = StyleSheet.create({
   googleMapIcon: {
     width: 24,
     height: 24,
+  },
+  // Search row containing search bar + favorite toggle
+  searchOverlayWrapper: {
+    position: 'relative',
+  },
+  inlineStar: {
+    position: 'absolute',
+    right: 14,
+    top: '50%',
+    transform: [{ translateY: -17 }], // vertically center inside 48px bar
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inlineStarActive: {
+    backgroundColor: '#FFD700',
   },
 });
