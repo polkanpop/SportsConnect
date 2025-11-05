@@ -1,7 +1,8 @@
 import { SearchBar } from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
-import { useRouter } from "expo-router";
-import React from "react";
+import { FavoriteMarker, getFavorites } from "@/storage/favorites";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -58,6 +59,30 @@ export default function Home() {
       route: "/event/courtBooking",
     },
   ];
+
+  // Favorites state for "Your choices" section
+  const [favoriteLocations, setFavoriteLocations] = useState<FavoriteMarker[]>([]);
+
+  const loadFavorites = async () => {
+    try {
+      const favs = await getFavorites();
+      setFavoriteLocations(favs);
+    } catch (e) {
+      console.log('Home favorites load error', e);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
+  // Refresh when screen gains focus (user may have just favorited on Map)
+  useFocusEffect(
+    useCallback(() => {
+      loadFavorites();
+    }, [])
+  );
 
   return (
     <SafeAreaProvider>
@@ -146,7 +171,7 @@ export default function Home() {
             ))}
           </View>
 
-          {/* Tag Section */}
+          {/* Your Choices (Favorites) Section */}
           <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8 }}>
               Your choices
@@ -154,20 +179,84 @@ export default function Home() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 10 }}
+              contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'center' }}
             >
-              {[...Array(5)].map((_, index) => (
-                <View
-                  key={index}
+              {favoriteLocations.length === 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => router.push('/(tabs)/Map')}
                   style={{
-                    width: 80,
-                    height: 20,
-                    backgroundColor: "#d4d4d4",
-                    borderRadius: 8,
-                    marginRight: 16,
+                    paddingHorizontal: 22,
+                    paddingVertical: 16,
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: 20,
+                    marginRight: 14,
+                    minWidth: 150,
+                    minHeight: 62,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#e2e2e2'
                   }}
-                />
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>Add more...</Text>
+                  <Text style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
+                </TouchableOpacity>
+              )}
+              {favoriteLocations.map(fav => (
+                <TouchableOpacity
+                  key={fav.id}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    // Placeholder navigation target: set route here later
+                    // router.push( `/court/${fav.id}` ); // Example future route
+                    console.log('Pressed favorite location', fav.id, fav.name);
+                  }}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    backgroundColor: '#FFD700',
+                    borderRadius: 16,
+                    marginRight: 12,
+                    minWidth: 120,
+                    maxWidth: 160,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: 13, fontWeight: '600', color: '#333' }}
+                  >
+                    {fav.name || 'Unnamed'}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: 11, color: '#444' }}
+                  >
+                    {fav.address || ''}
+                  </Text>
+                </TouchableOpacity>
               ))}
+              {favoriteLocations.length > 0 && (
+                <TouchableOpacity
+                  key="add-more-single"
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/(tabs)/Map')}
+                  style={{
+                    paddingHorizontal: 20,
+                    paddingVertical: 14,
+                    backgroundColor: '#fafafa',
+                    borderRadius: 18,
+                    marginRight: 12,
+                    minWidth: 120,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: '#e6e6e6',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#666' }}>Add more...</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
 
