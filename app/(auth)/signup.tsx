@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, TouchableOpacity, View, StyleSheet, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import '../global.css';
+import { ICONS } from '@/constants/icons';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
   // For production, add hashing again (bcrypt/argon2) and stronger validation.
@@ -92,96 +92,103 @@ import '../global.css';
           return (
             <SafeAreaView style={{ flex: 1 }}>
               <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <View className="flex-1 bg-[#f8f8f8] px-7 pt-14">
-                  <View className="items-center mb-6">
-                    <Text className="text-3xl font-extrabold text-green-700 tracking-wide">Sign Up</Text>
+                <View style={styles.container}>
+                  <View style={styles.headerWrapper}>
+                    <Text style={styles.screenTitle}>Sign Up</Text>
                   </View>
-
-                  <View>
-                    {generalError ? <Text className="text-red-600 text-center mb-3 text-sm">{generalError}</Text> : null}
-                    {successMessage ? <Text className="text-green-700 text-center mb-3 text-sm">{successMessage}</Text> : null}
-                    <Text className="text-sm text-center mb-6 text-green-700">Create your account</Text>
+                  <View style={styles.formWrapper}>
+                    {generalError ? <Text style={styles.feedbackError}>{generalError}</Text> : null}
+                    {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
+                    <Text style={styles.subtitle}>Create your account</Text>
 
                     {/* Account Name */}
                     <TextInput
                       placeholder="Account Name"
-                      placeholderTextColor="#6A6B6B"
+                      placeholderTextColor={COLOR.dark300}
                       value={accountName}
                       onChangeText={t => { setAccountName(t); if (fieldErrors.accountName) setFieldErrors({...fieldErrors, accountName: undefined}); }}
                       autoCapitalize="words"
-                      className="w-full bg-white rounded-xl py-3 px-4 border border-dark-300 mb-2 text-dark-300"
+                      style={styles.input}
                     />
-                    {fieldErrors.accountName && <Text className="text-red-600 text-xs mb-2">{fieldErrors.accountName}</Text>}
+                    {fieldErrors.accountName && <Text style={styles.fieldError}>{fieldErrors.accountName}</Text>}
+
                     {/* Email */}
                     <TextInput
                       placeholder="Email"
-                      placeholderTextColor="#6A6B6B"
+                      placeholderTextColor={COLOR.dark300}
                       value={email}
                       onChangeText={t => { setEmail(t); if (fieldErrors.email) setFieldErrors({...fieldErrors, email: undefined}); }}
                       keyboardType="email-address"
                       autoCapitalize="none"
-                      className="w-full bg-white rounded-xl py-3 px-4 border border-dark-300 mb-2 text-dark-300"
+                      style={styles.input}
                     />
-                    {fieldErrors.email && <Text className="text-red-600 text-xs mb-2">{fieldErrors.email}</Text>}
+                    {fieldErrors.email && <Text style={styles.fieldError}>{fieldErrors.email}</Text>}
+
                     {/* Password */}
-                    <View className="w-full mb-2 flex-row items-center bg-white rounded-xl border border-dark-300 pr-3">
+                    <View style={styles.passwordRow}>
                       <TextInput
                         placeholder="Password"
-                        placeholderTextColor="#6A6B6B"
+                        placeholderTextColor={COLOR.dark300}
                         secureTextEntry={!passwordVisible}
                         value={password}
                         onChangeText={t => { setPassword(t); if (fieldErrors.password) setFieldErrors({...fieldErrors, password: undefined}); }}
-                        className="flex-1 py-3 px-4 text-dark-300"
+                        style={styles.passwordInput}
                       />
-                      <Pressable onPress={() => setPasswordVisible(p => !p)} className="px-2">
-                        <Text className="text-green-700 font-semibold text-xs">{passwordVisible ? 'Hide' : 'Show'}</Text>
+                      <Pressable onPress={() => setPasswordVisible(p => !p)}>
+                        <Image source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
                       </Pressable>
                     </View>
-                    {fieldErrors.password && <Text className="text-red-600 text-xs mb-2">{fieldErrors.password}</Text>}
+                    {fieldErrors.password && <Text style={styles.fieldError}>{fieldErrors.password}</Text>}
+
                     {/* Confirm Password */}
-                    <View className="w-full mb-3 flex-row items-center bg-white rounded-xl border border-dark-300 pr-3">
+                    <View style={styles.passwordRowConfirm}>
                       <TextInput
                         placeholder="Confirm Password"
-                        placeholderTextColor="#6A6B6B"
+                        placeholderTextColor={COLOR.dark300}
                         secureTextEntry={!confirmPasswordVisible}
                         value={confirmPassword}
                         onChangeText={t => { setConfirmPassword(t); if (fieldErrors.confirmPassword) setFieldErrors({...fieldErrors, confirmPassword: undefined}); }}
-                        className="flex-1 py-3 px-4 text-dark-300"
+                        style={styles.passwordInput}
                       />
-                      <Pressable onPress={() => setConfirmPasswordVisible(p => !p)} className="px-2">
-                        <Text className="text-green-700 font-semibold text-xs">{confirmPasswordVisible ? 'Hide' : 'Show'}</Text>
+                      <Pressable onPress={() => setConfirmPasswordVisible(p => !p)}>
+                        <Image source={confirmPasswordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
                       </Pressable>
                     </View>
-                    {fieldErrors.confirmPassword && <Text className="text-red-600 text-xs mb-2">{fieldErrors.confirmPassword}</Text>}
+                    {fieldErrors.confirmPassword && <Text style={styles.fieldError}>{fieldErrors.confirmPassword}</Text>}
 
                     {/* Terms Checkbox */}
-                    <Pressable onPress={() => { setAgree(a => !a); if (fieldErrors.agree) setFieldErrors({...fieldErrors, agree: undefined}); }} className="flex-row items-center mb-4">
-                      <View className={`w-5 h-5 rounded-md border mr-2 justify-center items-center ${agree ? 'bg-green-700 border-green-700' : 'border-dark-300'}`}>          
-                        {agree && <Text className="text-white text-xs font-bold">✓</Text>}
+                    <Pressable
+                      onPress={() => { setAgree(a => !a); if (fieldErrors.agree) setFieldErrors({...fieldErrors, agree: undefined}); }}
+                      style={styles.checkboxRow}
+                    >
+                      <View style={[styles.checkboxBase, agree && styles.checkboxChecked]}>
+                        {agree && <Image source={ICONS.checkSmall} style={styles.checkboxTick} />}
                       </View>
-                      <Text className="text-dark-300">I agree with Terms of Service</Text>
+                      <Text style={styles.textDark}>
+                        I agree with <Text onPress={() => {}} style={styles.termsLink}>Terms of Service</Text>
+                      </Text>
                     </Pressable>
-                    {fieldErrors.agree && <Text className="text-red-600 text-xs mb-4">{fieldErrors.agree}</Text>}
+                    {fieldErrors.agree && <Text style={styles.fieldErrorBottom}>{fieldErrors.agree}</Text>}
 
                     {/* Submit Button */}
                     <TouchableOpacity
                       onPress={handleSignUp}
                       disabled={loading}
-                      className={`w-full py-3 rounded-xl shadow-md ${loading ? 'bg-green-800' : 'bg-green-700'}`}
+                      style={[styles.submitButton, loading && styles.submitButtonLoading]}
                     >
                       {loading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text className="text-white text-center font-semibold text-lg">Sign Up</Text>
+                        <Text style={styles.submitButtonText}>Sign Up</Text>
                       )}
                     </TouchableOpacity>
                   </View>
 
                   {/* Footer */}
-                  <View className="flex-row gap-1 mt-10 justify-center">
-                    <Text className="text-dark-300">Already have an account?</Text>
-                    <Pressable onPress={() => {/* navigate to login route here */}}>
-                      <Text className="text-green-700 font-bold">Sign in</Text>
+                  <View style={styles.footerRow}>
+                    <Text style={styles.textDark}>Already have an account?</Text>
+                    <Pressable>
+                      <Text style={styles.footerLink}>Sign in</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -191,3 +198,163 @@ import '../global.css';
         };
 
         export default SignUpScreen;
+
+// Shared color tokens (matching login.tsx local definition)
+const COLOR = {
+  dark300: '#6A6B6B',
+  green700: '#15803d',
+  green800: '#166534',
+  white: '#ffffff',
+  red600: '#dc2626',
+  bg: '#f8f8f8'
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLOR.bg,
+    paddingHorizontal: 28, // px-7
+    paddingTop: 80, // unify with login (pt-20)
+  },
+  headerWrapper: {
+    alignItems: 'center',
+    marginBottom: 24, // mb-6
+  },
+  screenTitle: {
+    fontSize: 30, // text-3xl
+    fontWeight: '800', // font-extrabold
+    color: COLOR.green700,
+    letterSpacing: 0.5, // tracking-wide approx
+  },
+  formWrapper: {},
+  feedbackError: {
+    color: COLOR.red600,
+    textAlign: 'center',
+    marginBottom: 12, // mb-3
+    fontSize: 14, // text-sm
+  },
+  feedbackSuccess: {
+    color: COLOR.green700,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 32, // increased spacing below subtitle (was mb-6 -> now mb-8)
+    color: COLOR.green700,
+  },
+  input: {
+    width: '100%',
+    backgroundColor: COLOR.white,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: COLOR.dark300,
+    marginBottom: 8, // mb-2
+    color: COLOR.dark300,
+  },
+  fieldError: {
+    color: COLOR.red600,
+    fontSize: 12, // text-xs
+    marginBottom: 8, // mb-2
+  },
+  passwordRow: {
+    width: '100%',
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLOR.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOR.dark300,
+    paddingRight: 12, // pr-3
+  },
+  passwordRowConfirm: {
+    width: '100%',
+    marginBottom: 12, // mb-3
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLOR.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLOR.dark300,
+    paddingRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    color: COLOR.dark300,
+  },
+  eyeIcon: { width: 24, height: 24, tintColor: COLOR.dark300 },
+  fieldErrorBottom: {
+    color: COLOR.red600,
+    fontSize: 12,
+    marginBottom: 8, // mb-2 (for agree differs slightly after checkbox)
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16, // mb-4
+  },
+  checkboxBase: {
+    width: 20,
+    height: 20,
+    borderRadius: 6, // rounded-md
+    borderWidth: 1,
+    borderColor: COLOR.dark300,
+    marginRight: 8, // mr-2
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxChecked: {
+    backgroundColor: COLOR.green700,
+    borderColor: COLOR.green700,
+  },
+  checkboxTick: {
+    width: 20,
+    height: 20,
+    tintColor: COLOR.white, // icon tint
+  },
+  textDark: { color: COLOR.dark300 },
+  submitButton: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLOR.green700,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 4,
+    marginTop: 4,
+  },
+  submitButtonLoading: { backgroundColor: COLOR.green800 },
+  submitButtonText: {
+    color: COLOR.white,
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 18,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40, // mt-10
+    columnGap: 4, // gap-1 (RN experimental)
+  },
+  footerLink: {
+    color: COLOR.green700,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
+  termsLink: {
+    color: COLOR.green700,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+});

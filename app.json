@@ -46,8 +46,7 @@
       "expo-apple-authentication"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
     
   }
