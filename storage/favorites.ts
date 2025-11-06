@@ -4,6 +4,9 @@
 
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// Use legacy FileSystem API to suppress deprecation warnings while keeping current logic.
+// Later we can migrate to the new File/Directory classes without changing behavior.
+import * as FileSystem from 'expo-file-system/legacy';
 
 export type FavoriteMarker = {
   id: number; // courtinfoid
@@ -25,29 +28,80 @@ type FavoritesPayload = {
 
 const DEFAULT_PAYLOAD: FavoritesPayload = { items: {}, order: [] };
 
+// Directory for per-user favorites files (device persistent doc storage)
+// Prefer FileSystem.documentDirectory when available (native). Fallback to cache if undefined (web/dev edge cases)
+const BASE_DIR = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || 'file:///tmp/';
+const USERDATA_DIR = BASE_DIR + 'userdata/';
+
+const favoritesFilePath = (userId?: string | null) => `${USERDATA_DIR}${userId ?? 'guest'}/favorites.json`;
+
 // Build storage key using user id (anon fallback)
 const buildKey = (userId?: string | null) => `@favorites:${userId ?? 'guest'}`;
 
 // Get current user id from Supabase session (if available)
 const getCurrentUserId = () => supabase.auth.getSession().then(r => r.data.session?.user?.id ?? null).catch(() => null);
 
+async function ensureUserDir(userId?: string | null) {
+  try {
+    const dir = USERDATA_DIR + (userId ?? 'guest');
+    const info = await FileSystem.getInfoAsync(dir);
+    if (!info.exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    }
+  } catch (e) {
+    // Swallow errors – fallback to AsyncStorage only (reduce warning noise)
+    console.debug('[favorites] ensureUserDir failed (non-fatal)', (e as any)?.message);
+  }
+}
+
+async function readFilePayload(userId?: string | null): Promise<FavoritesPayload | null> {
+  try {
+    await ensureUserDir(userId);
+    const path = favoritesFilePath(userId);
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists) return null;
+    const raw = await FileSystem.readAsStringAsync(path);
+    if (!raw) return null;
+    const parsed: FavoritesPayload = JSON.parse(raw);
+    if (!parsed.items || !parsed.order) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function writeFilePayload(userId: string | null, payload: FavoritesPayload) {
+  try {
+    await ensureUserDir(userId);
+    const path = favoritesFilePath(userId);
+    await FileSystem.writeAsStringAsync(path, JSON.stringify(payload));
+  } catch (e) {
+    // Non-fatal; AsyncStorage already written. Avoid noisy warning spam.
+    console.debug('[favorites] writeFilePayload failed (non-fatal)', (e as any)?.message);
+  }
+}
+
 async function readPayload(userId?: string | null): Promise<FavoritesPayload> {
+  // 1. Try AsyncStorage
   const key = buildKey(userId);
   const raw = await AsyncStorage.getItem(key);
-  if (!raw) return DEFAULT_PAYLOAD;
-  try {
-    const parsed: FavoritesPayload = JSON.parse(raw);
-    // basic validation
-    if (!parsed.items || !parsed.order) return DEFAULT_PAYLOAD;
-    return parsed;
-  } catch {
-    return DEFAULT_PAYLOAD;
+  if (raw) {
+    try {
+      const parsed: FavoritesPayload = JSON.parse(raw);
+      if (parsed.items && parsed.order) return parsed;
+    } catch {/* continue to file fallback */}
   }
+  // 2. Try file-system fallback
+  const filePayload = await readFilePayload(userId);
+  if (filePayload) return filePayload;
+  // 3. Default
+  return DEFAULT_PAYLOAD;
 }
 
 async function writePayload(userId: string | null, payload: FavoritesPayload) {
   const key = buildKey(userId);
   await AsyncStorage.setItem(key, JSON.stringify(payload));
+  await writeFilePayload(userId, payload);
 }
 
 // --- Remote persistence helpers (Supabase) ---
@@ -140,4 +194,27 @@ export async function setFavorites(markers: FavoriteMarker[]): Promise<void> {
     order: markers.map(m => m.id),
   };
   await writePayload(userId, payload);
+}
+
+// Initialize favorites for current user (ensure directory & sync remote -> local file)
+export async function initFavoritesForCurrentUser(): Promise<void> {
+  const userId = await getCurrentUserId();
+  await ensureUserDir(userId);
+  // Merge remote favorite ids into local payload if missing
+  if (userId) {
+    const remoteIds = await fetchRemoteFavorites(userId);
+    if (remoteIds.length) {
+      const payload = await readPayload(userId);
+      let changed = false;
+      remoteIds.forEach(id => {
+        if (!payload.items[id]) {
+          // Minimal stub entry; can be hydrated later by map fetch
+          payload.items[id] = { id, name: '', address: '', latitude: 0, longitude: 0 };
+          payload.order.push(id);
+          changed = true;
+        }
+      });
+      if (changed) await writePayload(userId, payload);
+    }
+  }
 }

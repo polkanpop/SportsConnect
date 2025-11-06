@@ -2,6 +2,7 @@ import AppleSignInButton from "@/components/social-auth-buttons/apple/expo-apple
 import GoogleSignInButton from "@/components/social-auth-buttons/google/google-sign-in-button";
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase";
+import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
@@ -105,8 +106,10 @@ export default function LoginScreen() {
         setErrorMsg('No user returned.');
         return;
       }
-      setPassword('');
-      router.replace('/(tabs)/Home');
+  // Initialize per-user favorites persistence before navigating
+  try { await initFavoritesForCurrentUser(); } catch (e) { /* non-fatal */ }
+  setPassword('');
+  router.replace('/(tabs)/Home');
     } catch (e: any) {
       setErrorMsg('Unexpected error.');
     } finally {

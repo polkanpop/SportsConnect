@@ -4,7 +4,7 @@ import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
-import { FavoriteMarker, getFavorites, getRemoteFavoriteIds, isFavorited, toggleFavorite } from '@/storage/favorites';
+import { FavoriteMarker, getFavorites, getRemoteFavoriteIds, initFavoritesForCurrentUser, isFavorited, toggleFavorite } from '@/storage/favorites';
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
@@ -102,6 +102,8 @@ export default function App() {
     const fetchMarkers = async () => {
       setLoadingMarkers(true);
       setErrorMarkers(null);
+      // Ensure favorites file initialized for current user (safe to call repeatedly)
+      try { await initFavoritesForCurrentUser(); } catch (e) { console.warn('[Map] initFavorites failed', e); }
       const { data, error } = await supabase
         .from("courtinfo")
         .select("courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability")
