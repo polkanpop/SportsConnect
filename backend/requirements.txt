@@ -1,0 +1,7 @@
+fastapi==0.115.2
+uvicorn[standard]==0.32.0
+# Using direct REST calls; supabase client temporarily removed due to bug with httpx 'proxy' arg
+# supabase==2.4.0
+python-dotenv==1.0.1
+pydantic==2.9.2
+httpx==0.27.2
