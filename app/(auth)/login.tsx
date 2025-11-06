@@ -4,40 +4,134 @@ import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase";
 import { Link, Stack, router } from "expo-router";
 import { useState } from "react";
-import { Image, Pressable, Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-// NOTE: NativeWind removed. Styles converted from Tailwind utility classes to StyleSheet equivalents.
+import { Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+
+// Restored unified login: identifier can be email OR username, resolves to email then authenticates.
 export default function LoginScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState(""); // email or username
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const looksLikeEmail = (v: string) => /^[^@]+@[^@]+\.[^@]+$/.test(v);
+
+  // Resolve identifier to email. If already email, return normalized. If username, lookup userlogin -> userinfo.
+  const resolveEmailFromIdentifier = async (value: string): Promise<string | null> => {
+    const id = value.trim();
+    if (!id) return null;
+    if (looksLikeEmail(id)) return id.toLowerCase();
+    const { data: loginRow, error: loginErr } = await supabase
+      .from('userlogin')
+      .select('loginid, userid, username')
+      .ilike('username', id)
+      .maybeSingle(); // avoid throwing on 0 matches
+    if (loginErr || !loginRow) return null;
+  const userid: number = (loginRow as any).userid;
+    const { data: infoRow, error: infoErr } = await supabase
+      .from('userinfo')
+      .select('email')
+      .eq('userid', userid)
+      .maybeSingle();
+    if (infoErr || !infoRow?.email) return null;
+  const email = (infoRow as any).email?.toLowerCase();
+  return email || null;
+  };
+
+  // Check if an email exists locally (in userinfo) to differentiate not found vs wrong password
+  const emailExistsLocally = async (email: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from('userinfo')
+      .select('userid')
+      .ilike('email', email)
+      .maybeSingle();
+    if (error) return false;
+    return !!data;
+  };
+
+  // Simplified classification: remove any explicit email confirmation messaging per design.
+  const classifyAuthError = (raw: string, wasUsername: boolean) => {
+    if (/rate limit/i.test(raw)) return 'Too many attempts. Please wait and try again.';
+    if (/invalid login credentials/i.test(raw)) {
+      return wasUsername ? 'Incorrect password for that username.' : 'Incorrect password.';
+    }
+    if (/user not found/i.test(raw)) return 'Account not found.';
+    // Suppress 'email not confirmed' specifics intentionally.
+    return 'Login failed.';
+  };
+
+  const handleLogin = async () => {
+    setErrorMsg(null);
+    // Clear previous state
+    if (!identifier.trim() || !password) {
+      setErrorMsg('Enter identifier and password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const isUsername = !looksLikeEmail(identifier.trim());
+      const email = await resolveEmailFromIdentifier(identifier);
+      if (!email) {
+        setErrorMsg('Account not found.');
+        return;
+      }
+      // If we resolved via username we already proved existence; avoid second query that can fail and misclassify
+      let localEmailExists = true;
+      if (!isUsername) {
+        // Only check existence again when identifier is an email (to distinguish wrong password vs not found)
+        localEmailExists = await emailExistsLocally(email);
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // Treat all unconfirmed email cases as generic incorrect password
+        if (/email not confirmed/i.test(error.message)) {
+          setErrorMsg(isUsername ? 'Incorrect password for that username.' : 'Incorrect password.');
+          return;
+        }
+        if (/invalid login credentials/i.test(error.message)) {
+          // refine invalid credentials based on local existence
+          if (localEmailExists) {
+            setErrorMsg(isUsername ? 'Incorrect password for that username.' : 'Incorrect password.');
+          } else {
+            setErrorMsg('Account not found.');
+          }
+        } else {
+          setErrorMsg(classifyAuthError(error.message, isUsername));
+        }
+        return;
+      }
+      if (!data?.user) {
+        setErrorMsg('No user returned.');
+        return;
+      }
+      setPassword('');
+      router.replace('/(tabs)/Home');
+    } catch (e: any) {
+      setErrorMsg('Unexpected error.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-
-      {/* this for the sign in google bug where it auto resize the footer component*/}
-  <View style={styles.container}>
-
-        {/* Logo Section  */}
+      <View style={styles.container}>
         <View style={styles.logoWrapper}>
           <Image source={ICONS.app_icon} style={styles.logo} />
-          <Text style={styles.appTitle}>
-            SportConnect
-          </Text>
+          <Text style={styles.appTitle}>SportConnect</Text>
         </View>
 
-        {/* LOGIN FORM */}
         <View style={styles.formWrapper}>
-          <Text style={styles.formTitle}>
-            Login
-          </Text>
+          <Text style={styles.formTitle}>Login</Text>
 
           <TextInput
-            placeholder="Email"
+            placeholder="Email or Username"
             placeholderTextColor={COLORS.dark300}
-            value={email}
-            onChangeText={setEmail}
+            value={identifier}
+            onChangeText={(t) => { setIdentifier(t); if (errorMsg) setErrorMsg(null); }}
+            autoCapitalize="none"
             style={styles.input}
           />
 
@@ -51,89 +145,52 @@ export default function LoginScreen() {
               style={styles.passwordInput}
             />
             <Pressable onPress={() => setPasswordVisible(!passwordVisible)}>
-              <Image
-                source={passwordVisible ? ICONS.notEye : ICONS.eye}
-                style={styles.eyeIcon}
-              />
+              <Image source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
             </Pressable>
           </View>
 
           <View style={styles.optionsRow}>
-            <Pressable
-              onPress={() => setRememberMe(!rememberMe)}
-              style={styles.rememberMePressable}
-            >
-              <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}> 
-                {rememberMe && (
-                  <Image source={ICONS.checkSmall} style={styles.checkboxTick} />
-                )}
+            <Pressable onPress={() => setRememberMe(!rememberMe)} style={styles.rememberMePressable}>
+              <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && (<Image source={ICONS.checkSmall} style={styles.checkboxTick} />)}
               </View>
               <Text style={styles.textDark}>Remember me</Text>
             </Pressable>
-
             <Pressable>
-              <Text style={styles.forgotPassword}>
-                Forgot Password?
-              </Text>
+              <Text style={styles.forgotPassword}>Forgot Password ?</Text>
             </Pressable>
           </View>
 
-          <TouchableOpacity
-            onPress={async () => {
-              if (!email || !password) {
-                alert("Please fill in both email and password.");
-                return;
-              }
+          {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-              if (email !== "test@example.com" || password !== "123456") {
-                alert("Wrong email or password.");
-                return;
-              }
-
-              alert("Login successful!");
-            }}
-            style={styles.loginButton}
-          >
-            <Text style={styles.loginButtonText}>
-              Login
-            </Text>
+          <TouchableOpacity disabled={loading} onPress={handleLogin} style={[styles.loginButton, loading && { opacity: 0.7 }]}>
+            <Text style={styles.loginButtonText}>{loading ? 'Signing in...' : 'Login'}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Divider */}
         <View style={styles.dividerRow}>
           <View style={[styles.dividerLine, styles.mr3]} />
           <Text style={styles.dividerText}>Or Login with</Text>
           <View style={[styles.dividerLine, styles.ml3]} />
         </View>
 
-        {/* Social Buttons */}
         <View style={styles.socialRow}>
           <GoogleSignInButton />
           <AppleSignInButton />
         </View>
 
-        {/* Quick Login */}
-        <TouchableOpacity
-          onPress={async () => {
-            const { error } = await supabase.auth.signInAnonymously();
-            if (!error) router.replace("/(tabs)/Home");
-          }}
-        >
-          <Text style={styles.quickAccessText}>
-            Quick Access to Home
-          </Text>
+        <TouchableOpacity onPress={async () => {
+          const { error } = await supabase.auth.signInAnonymously();
+          if (!error) router.replace('/(tabs)/Home');
+        }}>
+          <Text style={styles.quickAccessText}>Quick Access to Home</Text>
         </TouchableOpacity>
 
-        {/* Sign Up */}
         <View style={styles.signupRow}>
           <Text style={styles.textDark}>Don't have an account?</Text>
-          <Link href="/(auth)/signup">
-            <Text style={styles.signUpLink}>Sign up</Text>
-          </Link>
+          <Link href="/(auth)/signup"><Text style={styles.signUpLink}>Sign up</Text></Link>
         </View>
       </View>
-      
     </>
   );
 }
@@ -288,5 +345,12 @@ const styles = StyleSheet.create({
     color: COLORS.green700,
     fontWeight: '700', // font-bold
   },
+  errorText: {
+    color: COLORS.red600,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  // Removed debug/raw error styles
 });
 

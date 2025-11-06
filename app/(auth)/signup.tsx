@@ -1,14 +1,16 @@
+import { ICONS } from '@/constants/icons';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, TouchableOpacity, View, StyleSheet, Image } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { ICONS } from '@/constants/icons';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
   // For production, add hashing again (bcrypt/argon2) and stronger validation.
 
         const SignUpScreen = () => {
-          const [accountName, setAccountName] = useState('');
+          const [accountName, setAccountName] = useState(''); // display name shown publicly
+          const [username, setUsername] = useState(''); // unique login handle stored in userlogin.username
           const [email, setEmail] = useState('');
           const [password, setPassword] = useState('');
           const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,13 +18,20 @@ import { ICONS } from '@/constants/icons';
           const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
           const [agree, setAgree] = useState(false);
           const [loading, setLoading] = useState(false);
-          const [fieldErrors, setFieldErrors] = useState<{accountName?: string; email?: string; password?: string; confirmPassword?: string; agree?: string}>({});
+          const [fieldErrors, setFieldErrors] = useState<{accountName?: string; username?: string; email?: string; password?: string; confirmPassword?: string; agree?: string}>({});
           const [generalError, setGeneralError] = useState('');
           const [successMessage, setSuccessMessage] = useState('');
 
           const validate = () => {
             const errs: typeof fieldErrors = {};
-            if (!accountName.trim()) errs.accountName = 'Account name is required.';
+            if (!accountName.trim()) errs.accountName = 'Display name is required.';
+            if (!username.trim()) errs.username = 'Username is required.';
+            else {
+              const uname = username.trim();
+              if (uname.length < 3) errs.username = 'Min 3 characters.';
+              else if (uname.length > 32) errs.username = 'Max 32 characters.';
+              else if (!/^[a-zA-Z0-9_]+$/.test(uname)) errs.username = 'Only letters, numbers, underscore.';
+            }
             if (!email.trim()) errs.email = 'Email is required.';
             else if (!email.toLowerCase().includes('@gmail.com')) errs.email = 'Email must contain @gmail.com';
             if (password.length < 6) errs.password = 'Minimum 6 characters.';
@@ -38,50 +47,116 @@ import { ICONS } from '@/constants/icons';
             if (!validate()) return;
             setLoading(true);
             try {
-              const { error, data } = await supabase.auth.signUp({
-                email,
-                password,
-              });
-              if (error) {
-                setGeneralError(error.message);
+              // 1. Create auth user (Supabase Auth)
+              const { error: authError, data: authData } = await supabase.auth.signUp({ email, password });
+              if (authError) {
+                setGeneralError(authError.message);
                 return;
               }
-              // If no session (email confirmation may be required), attempt direct sign-in to obtain session
-              let authUserId = data.user?.id;
-              if (!data.session) {
-                const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-                if (signInError) {
-                  // Still proceed with insert (will use anon role if grants allow) but warn user
-                  setGeneralError(prev => prev || 'Signed up but no active session (email may need verification or missing grants).');
-                } else {
-                  authUserId = signInData.user?.id;
-                }
+
+
+              // 2. Ensure we have a session (optional convenience)
+              let authUserId = authData.user?.id;
+              if (!authData.session) {
+                const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+                if (!signInErr) authUserId = signInData.user?.id;
               }
-              // WARNING: Plain password stored for demo only.
-              const passwordHash = password; // DO NOT USE IN PRODUCTION
-              // Insert into usersignup table (userid auto-increments; do not pass it)
-              const { data: signupRow, error: usersignupError } = await supabase
-                .from('usersignup')
+
+              // WARNING: Demo only – plain password stored. Replace with server-side hashing.
+              const passwordHash = password;
+
+              // 3. Insert profile row into userinfo (use infoid as canonical key)
+              // NEW FLOW: Because schema has users.userid as FK target for both userinfo.userid and userlogin.userid,
+              // we must first create a row in users to obtain a userid. The users table requires a role (enum); we assume 'player'.
+              // If this value is invalid, fetch allowed roles via: SELECT enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid=t.oid WHERE t.typname='role';
+              const { data: usersRow, error: usersErr } = await supabase
+                .from('users')
+                .insert({ role: 'player' })
+                .select()
+                .single();
+              if (usersErr) {
+                const msg = usersErr.message || '';
+                if (/permission denied/i.test(msg)) {
+                  setGeneralError('Permission denied inserting users. Check table grants/RLS and sequence users_userid_seq privileges.');
+                } else if (/invalid input value for enum/i.test(msg)) {
+                  setGeneralError('Invalid role enum value. Query allowed roles and adjust signup default.');
+                } else if (/duplicate key value violates unique constraint.*users_pkey/i.test(msg)) {
+                  setGeneralError('Duplicate key on users.userid. Admin must realign sequence: SELECT setval(\'public.users_userid_seq\',(SELECT max(userid) FROM public.users)+1,false);');
+                } else {
+                  setGeneralError(msg);
+                }
+                return;
+              }
+
+              const userId = (usersRow as any)?.userid;
+              if (!userId) {
+                setGeneralError('Failed to retrieve userid from users insert. Verify users table sequence/default.');
+                return;
+              }
+
+              // Insert profile row into userinfo referencing users.userid
+              const { data: userInfoRow, error: userInfoErr } = await supabase
+                .from('userinfo')
                 .insert({
-                  account_name: accountName,
-                  username: accountName,
-                  passwordhash: passwordHash,
-                  signuptype: 'email'
+                  userid: userId,
+                  name: accountName,
+                  email: email,
                 })
                 .select()
                 .single();
-              if (usersignupError) {
-                if (/permission denied/i.test(usersignupError.message)) {
-                  setGeneralError('Permission denied for usersignup. Run GRANT statements or disable RLS.');
+              if (userInfoErr) {
+                // Distinguish sequence privilege issue vs generic table issue
+                const msg = userInfoErr.message || '';
+                if (/permission denied.*userinfo_infoid_seq/i.test(msg) || /sequence.*permission denied/i.test(msg)) {
+                  setGeneralError('Permission denied on sequence userinfo_infoid_seq. Run: GRANT USAGE, SELECT ON SEQUENCE public.userinfo_infoid_seq TO anon, authenticated;');
+                } else if (/permission denied/i.test(msg)) {
+                  setGeneralError('Permission denied inserting userinfo. Ensure table grants + sequence grants + RLS disabled or policy added.');
                 } else {
-                  setGeneralError(usersignupError.message);
+                  setGeneralError(msg);
                 }
-              } else if (signupRow) {
-                setSuccessMessage('Account created successfully.');
+                return;
               }
-              // Clear form
+
+              const infoId = (userInfoRow as any)?.infoid; // retained if needed for future features
+              if (!infoId) {
+                setGeneralError('userinfo insert returned no infoid. Verify PK/sequence configuration.');
+                return;
+              }
+
+              // 4. Insert credentials/login referencing userinfo.infoid
+              // userlogin.userid must reference users.userid, not userinfo.infoid per schema
+              const { error: userLoginErr } = await supabase
+                .from('userlogin')
+                .insert({
+                  userid: userId,
+                  username: username.trim(),
+                  passwordhash: passwordHash,
+                  logintype: 'Local', // matches schema default
+                });
+              if (userLoginErr) {
+                const loginMsg = userLoginErr.message || '';
+                if (/permission denied.*userlogin_loginid_seq/i.test(loginMsg) || /sequence.*permission denied/i.test(loginMsg)) {
+                  setGeneralError('Permission denied on sequence userlogin_loginid_seq. Run: GRANT USAGE, SELECT ON SEQUENCE public.userlogin_loginid_seq TO anon, authenticated;');
+                } else if (/permission denied/i.test(loginMsg)) {
+                  setGeneralError('Permission denied inserting userlogin. Ensure table + sequence grants and RLS policies.');
+                } else if (/duplicate key value violates unique constraint.*userlogin_username_key/i.test(loginMsg)) {
+                  setGeneralError('Username already taken. Choose another.');
+                } else if (/foreign key/i.test(loginMsg)) {
+                  setGeneralError('Foreign key error: userlogin.userid must reference userinfo.infoid.');
+                } else {
+                  setGeneralError(loginMsg);
+                }
+                return;
+              }
+
+              // 5. Success
+              setSuccessMessage('Account created successfully. Redirecting to sign in…');
               setPassword('');
               setConfirmPassword('');
+              // Delay briefly to show success message then navigate to login
+              setTimeout(() => {
+                router.replace('/(auth)/login');
+              }, 900);
             } catch (err: any) {
               setGeneralError(err.message || 'Unknown error');
             } finally {
@@ -99,6 +174,7 @@ import { ICONS } from '@/constants/icons';
                   <View style={styles.formWrapper}>
                     {generalError ? <Text style={styles.feedbackError}>{generalError}</Text> : null}
                     {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
+                    {/* Debug info removed */}
                     <Text style={styles.subtitle}>Create your account</Text>
 
                     {/* Account Name */}
@@ -111,6 +187,17 @@ import { ICONS } from '@/constants/icons';
                       style={styles.input}
                     />
                     {fieldErrors.accountName && <Text style={styles.fieldError}>{fieldErrors.accountName}</Text>}
+
+                    {/* Username (login handle) */}
+                    <TextInput
+                      placeholder="Username"
+                      placeholderTextColor={COLOR.dark300}
+                      value={username}
+                      onChangeText={t => { setUsername(t); if (fieldErrors.username) setFieldErrors({...fieldErrors, username: undefined}); }}
+                      autoCapitalize="none"
+                      style={styles.input}
+                    />
+                    {fieldErrors.username && <Text style={styles.fieldError}>{fieldErrors.username}</Text>}
 
                     {/* Email */}
                     <TextInput
@@ -187,7 +274,7 @@ import { ICONS } from '@/constants/icons';
                   {/* Footer */}
                   <View style={styles.footerRow}>
                     <Text style={styles.textDark}>Already have an account?</Text>
-                    <Pressable>
+                    <Pressable onPress={() => router.replace('/(auth)/login')}>
                       <Text style={styles.footerLink}>Sign in</Text>
                     </Pressable>
                   </View>
