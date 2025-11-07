@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "SportsApp",
+    "slug": "sport_app",
+    "extra": {
+      "SUPABASE_URL": "https://pfhgiyujvxeartkomrpv.supabase.co",
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1Ni..."
+    },
+
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "sportapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "usesAppleSignIn": true,
+      "budnleIdentifier": ".com.group4.sportapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": ".com.group4.sportapp"
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-speech-recognition",
+      "expo-secure-store",
+      "expo-apple-authentication"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+    
+  }
+}
