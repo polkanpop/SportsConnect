@@ -1,7 +1,8 @@
 import AppleSignInButton from "@/components/social-auth-buttons/apple/expo-apple-sign-in-button";
 import GoogleSignInButton from "@/components/social-auth-buttons/google/google-sign-in-button";
 import { ICONS } from "@/constants/icons";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase"; // retained for social/anonymous flows
+import { authLogin } from '@/lib/backendApi';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
 import { useState } from "react";
@@ -18,104 +19,26 @@ export default function LoginScreen() {
 
   const looksLikeEmail = (v: string) => /^[^@]+@[^@]+\.[^@]+$/.test(v);
 
-  // Resolve identifier to email. If already email, return normalized. If username, lookup userlogin -> userinfo.
-  const resolveEmailFromIdentifier = async (value: string): Promise<string | null> => {
-    const id = value.trim();
-    if (!id) return null;
-    if (looksLikeEmail(id)) return id.toLowerCase();
-    const { data: loginRow, error: loginErr } = await supabase
-      .from('userlogin')
-      .select('loginid, userid, username')
-      .ilike('username', id)
-      .maybeSingle(); // avoid throwing on 0 matches
-    if (loginErr || !loginRow) return null;
-  const userid: number = (loginRow as any).userid;
-    const { data: infoRow, error: infoErr } = await supabase
-      .from('userinfo')
-      .select('email')
-      .eq('userid', userid)
-      .maybeSingle();
-    if (infoErr || !infoRow?.email) return null;
-  const email = (infoRow as any).email?.toLowerCase();
-  return email || null;
-  };
-
-  // Check if an email exists locally (in userinfo) to differentiate not found vs wrong password
-  const emailExistsLocally = async (email: string): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from('userinfo')
-      .select('userid')
-      .ilike('email', email)
-      .maybeSingle();
-    if (error) return false;
-    return !!data;
-  };
-
-  // Simplified classification: remove any explicit email confirmation messaging per design.
-  const classifyAuthError = (raw: string, wasUsername: boolean) => {
-    if (/rate limit/i.test(raw)) return 'Too many attempts. Please wait and try again.';
-    if (/invalid login credentials/i.test(raw)) {
-      return wasUsername ? 'Incorrect password for that username.' : 'Incorrect password.';
-    }
-    if (/user not found/i.test(raw)) return 'Account not found.';
-    // Suppress 'email not confirmed' specifics intentionally.
-    return 'Login failed.';
-  };
-
   const handleLogin = async () => {
-    setErrorMsg(null);
-    // Clear previous state
+    setErrorMsg(null)
     if (!identifier.trim() || !password) {
-      setErrorMsg('Enter identifier and password.');
-      return;
+      setErrorMsg('Enter identifier and password.')
+      return
     }
-    setLoading(true);
+    setLoading(true)
     try {
-      const isUsername = !looksLikeEmail(identifier.trim());
-      const email = await resolveEmailFromIdentifier(identifier);
-      if (!email) {
-        setErrorMsg('Account not found.');
-        return;
-      }
-      // If we resolved via username we already proved existence; avoid second query that can fail and misclassify
-      let localEmailExists = true;
-      if (!isUsername) {
-        // Only check existence again when identifier is an email (to distinguish wrong password vs not found)
-        localEmailExists = await emailExistsLocally(email);
-      }
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        // Treat all unconfirmed email cases as generic incorrect password
-        if (/email not confirmed/i.test(error.message)) {
-          setErrorMsg(isUsername ? 'Incorrect password for that username.' : 'Incorrect password.');
-          return;
-        }
-        if (/invalid login credentials/i.test(error.message)) {
-          // refine invalid credentials based on local existence
-          if (localEmailExists) {
-            setErrorMsg(isUsername ? 'Incorrect password for that username.' : 'Incorrect password.');
-          } else {
-            setErrorMsg('Account not found.');
-          }
-        } else {
-          setErrorMsg(classifyAuthError(error.message, isUsername));
-        }
-        return;
-      }
-      if (!data?.user) {
-        setErrorMsg('No user returned.');
-        return;
-      }
-  // Initialize per-user favorites persistence before navigating
-  try { await initFavoritesForCurrentUser(); } catch (e) { /* non-fatal */ }
-  setPassword('');
-  router.replace('/(tabs)/Home');
+      const res = await authLogin({ identifier: identifier.trim(), password })
+      console.log('[login] success', res)
+      try { await initFavoritesForCurrentUser() } catch (e) { console.log('[login] initFavorites error', e) }
+      setPassword('')
+      router.replace('/(tabs)/Home')
     } catch (e: any) {
-      setErrorMsg('Unexpected error.');
+      console.log('[login] error', e)
+      setErrorMsg(e.message || 'Login failed')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <>

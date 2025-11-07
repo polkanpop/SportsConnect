@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase';
+import { authSignup } from '@/lib/backendApi';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
   // For production, add hashing again (bcrypt/argon2) and stronger validation.
@@ -47,122 +47,24 @@ import { supabase } from '../../lib/supabase';
             if (!validate()) return;
             setLoading(true);
             try {
-              // 1. Create auth user (Supabase Auth)
-              const { error: authError, data: authData } = await supabase.auth.signUp({ email, password });
-              if (authError) {
-                setGeneralError(authError.message);
-                return;
-              }
-
-
-              // 2. Ensure we have a session (optional convenience)
-              let authUserId = authData.user?.id;
-              if (!authData.session) {
-                const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-                if (!signInErr) authUserId = signInData.user?.id;
-              }
-
-              // WARNING: Demo only – plain password stored. Replace with server-side hashing.
-              const passwordHash = password;
-
-              // 3. Insert profile row into userinfo (use infoid as canonical key)
-              // NEW FLOW: Because schema has users.userid as FK target for both userinfo.userid and userlogin.userid,
-              // we must first create a row in users to obtain a userid. The users table requires a role (enum); we assume 'player'.
-              // If this value is invalid, fetch allowed roles via: SELECT enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid=t.oid WHERE t.typname='role';
-              const { data: usersRow, error: usersErr } = await supabase
-                .from('users')
-                .insert({ role: 'player' })
-                .select()
-                .single();
-              if (usersErr) {
-                const msg = usersErr.message || '';
-                if (/permission denied/i.test(msg)) {
-                  setGeneralError('Permission denied inserting users. Check table grants/RLS and sequence users_userid_seq privileges.');
-                } else if (/invalid input value for enum/i.test(msg)) {
-                  setGeneralError('Invalid role enum value. Query allowed roles and adjust signup default.');
-                } else if (/duplicate key value violates unique constraint.*users_pkey/i.test(msg)) {
-                  setGeneralError('Duplicate key on users.userid. Admin must realign sequence: SELECT setval(\'public.users_userid_seq\',(SELECT max(userid) FROM public.users)+1,false);');
-                } else {
-                  setGeneralError(msg);
-                }
-                return;
-              }
-
-              const userId = (usersRow as any)?.userid;
-              if (!userId) {
-                setGeneralError('Failed to retrieve userid from users insert. Verify users table sequence/default.');
-                return;
-              }
-
-              // Insert profile row into userinfo referencing users.userid
-              const { data: userInfoRow, error: userInfoErr } = await supabase
-                .from('userinfo')
-                .insert({
-                  userid: userId,
-                  name: accountName,
-                  email: email,
-                })
-                .select()
-                .single();
-              if (userInfoErr) {
-                // Distinguish sequence privilege issue vs generic table issue
-                const msg = userInfoErr.message || '';
-                if (/permission denied.*userinfo_infoid_seq/i.test(msg) || /sequence.*permission denied/i.test(msg)) {
-                  setGeneralError('Permission denied on sequence userinfo_infoid_seq. Run: GRANT USAGE, SELECT ON SEQUENCE public.userinfo_infoid_seq TO anon, authenticated;');
-                } else if (/permission denied/i.test(msg)) {
-                  setGeneralError('Permission denied inserting userinfo. Ensure table grants + sequence grants + RLS disabled or policy added.');
-                } else {
-                  setGeneralError(msg);
-                }
-                return;
-              }
-
-              const infoId = (userInfoRow as any)?.infoid; // retained if needed for future features
-              if (!infoId) {
-                setGeneralError('userinfo insert returned no infoid. Verify PK/sequence configuration.');
-                return;
-              }
-
-              // 4. Insert credentials/login referencing userinfo.infoid
-              // userlogin.userid must reference users.userid, not userinfo.infoid per schema
-              const { error: userLoginErr } = await supabase
-                .from('userlogin')
-                .insert({
-                  userid: userId,
-                  username: username.trim(),
-                  passwordhash: passwordHash,
-                  logintype: 'Local', // matches schema default
-                });
-              if (userLoginErr) {
-                const loginMsg = userLoginErr.message || '';
-                if (/permission denied.*userlogin_loginid_seq/i.test(loginMsg) || /sequence.*permission denied/i.test(loginMsg)) {
-                  setGeneralError('Permission denied on sequence userlogin_loginid_seq. Run: GRANT USAGE, SELECT ON SEQUENCE public.userlogin_loginid_seq TO anon, authenticated;');
-                } else if (/permission denied/i.test(loginMsg)) {
-                  setGeneralError('Permission denied inserting userlogin. Ensure table + sequence grants and RLS policies.');
-                } else if (/duplicate key value violates unique constraint.*userlogin_username_key/i.test(loginMsg)) {
-                  setGeneralError('Username already taken. Choose another.');
-                } else if (/foreign key/i.test(loginMsg)) {
-                  setGeneralError('Foreign key error: userlogin.userid must reference userinfo.infoid.');
-                } else {
-                  setGeneralError(loginMsg);
-                }
-                return;
-              }
-
-              // 5. Success
-              setSuccessMessage('Account created successfully. Redirecting to sign in…');
-              setPassword('');
-              setConfirmPassword('');
-              // Delay briefly to show success message then navigate to login
-              setTimeout(() => {
-                router.replace('/(auth)/login');
-              }, 900);
+              const res = await authSignup({
+                username: username.trim(),
+                email: email.trim(),
+                password: password,
+                accountName: accountName.trim(),
+              })
+              console.log('[signup] success', res)
+              setSuccessMessage('Account created successfully. Redirecting to sign in…')
+              setPassword('')
+              setConfirmPassword('')
+              setTimeout(() => { router.replace('/(auth)/login') }, 900)
             } catch (err: any) {
-              setGeneralError(err.message || 'Unknown error');
+              console.log('[signup] error', err)
+              setGeneralError(err.message || 'Signup failed')
             } finally {
-              setLoading(false);
+              setLoading(false)
             }
-          };
+          }
 
           return (
             <SafeAreaView style={{ flex: 1 }}>
