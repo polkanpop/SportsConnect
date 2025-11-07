@@ -16,6 +16,7 @@ from .routers import (
     eventbookings,
     trainingsessions,
     history,
+    auth
 )
 
 settings = get_settings()
@@ -44,7 +45,7 @@ app.include_router(courtbookings.router, prefix="/api")
 app.include_router(eventbookings.router, prefix="/api")
 app.include_router(trainingsessions.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
-
+app.include_router(auth.router, prefix = "/api")
 @app.get("/api/health")
 async def api_health():
     return {"status": "ok", "scope": "api"}
