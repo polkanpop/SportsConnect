@@ -2,7 +2,16 @@
 // Thin client for the FastAPI backend. Uses Expo public env var EXPO_PUBLIC_BACKEND_URL.
 // Falls back to direct Supabase when backend not available (optional strategy).
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:8000"; // default for dev
+import { Platform } from 'react-native';
+
+// Determine backend base URL.
+// Priority: EXPO_PUBLIC_BACKEND_URL env -> fallback localhost.
+// Android emulator cannot reach host 'localhost' of the dev machine; use 10.0.2.2 automatically.
+const RAW_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:8000";
+let BACKEND_URL = RAW_BACKEND_URL;
+if (Platform.OS === 'android' && /localhost/.test(RAW_BACKEND_URL)) {
+  BACKEND_URL = RAW_BACKEND_URL.replace('localhost', '10.0.2.2');
+}
 
 async function api<T>(path: string, options: RequestInit & { expect?: number[] } = {}): Promise<T> {
   const url = `${BACKEND_URL}${path}`;

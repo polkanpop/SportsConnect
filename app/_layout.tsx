@@ -21,14 +21,8 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/icons/import_icons/SpaceMono-Regular.ttf'),
   })
-
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null
-  }
-
+  // Hooks must not be conditional: declare all before any early return.
   const [backendOk, setBackendOk] = useState<boolean | null>(null)
-
   useEffect(() => {
     let mounted = true
     const check = async () => {
@@ -40,9 +34,13 @@ export default function RootLayout() {
       }
     }
     check()
-    const interval = setInterval(check, 30000) // re-check every 30s
+    const interval = setInterval(check, 30000)
     return () => { mounted = false; clearInterval(interval) }
   }, [])
+
+  if (!loaded) {
+    return null
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
