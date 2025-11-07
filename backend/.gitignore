@@ -48,4 +48,5 @@ app-example
 /ios
 /android
 
-/__pycache__/*
+# Python bytecode caches - canonical rule for all nested __pycache__ dirs
+**/__pycache__/**
