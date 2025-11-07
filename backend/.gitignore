@@ -48,4 +48,4 @@ app-example
 /ios
 /android
 
-*/__pycache__
+/__pycache__/*
