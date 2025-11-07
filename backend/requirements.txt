@@ -1,0 +1,11 @@
+fastapi==0.115.2
+uvicorn[standard]==0.32.0
+httpx==0.27.2
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+pydantic==2.9.2
+
+# Notes:
+# - Using uvicorn[standard] for recommended extras (watchfiles, etc.).
+# - Added python-jose[cryptography] to ensure cryptographic backend is available.
+# - Removed duplicate lines and fixed malformed concatenation.

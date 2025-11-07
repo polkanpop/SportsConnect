@@ -71,6 +71,8 @@ export default function AuthProvider({ children }: PropsWithChildren) {
         isLoading,
         profile,
         isLoggedIn: session != undefined,
+        // expose access token directly for convenience
+        accessToken: session?.access_token,
       }}
     >
       {children}

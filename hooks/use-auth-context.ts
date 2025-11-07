@@ -6,6 +6,7 @@ export type AuthData = {
   profile?: any | null
   isLoading: boolean
   isLoggedIn: boolean
+  accessToken?: string | null
 }
 
 export const AuthContext = createContext<AuthData>({
@@ -13,6 +14,7 @@ export const AuthContext = createContext<AuthData>({
   profile: undefined,
   isLoading: true,
   isLoggedIn: false,
+  accessToken: null,
 })
 
 export const useAuthContext = () => useContext(AuthContext)
