@@ -6,6 +6,7 @@ from .routers import (
     courtinfo,
     notifications,
     favorites,
+    favouritecourts,
     profiles,
     data,
     courts,
@@ -16,6 +17,7 @@ from .routers import (
     eventbookings,
     trainingsessions,
     history,
+    auth,
 )
 
 settings = get_settings()
@@ -34,6 +36,7 @@ app.add_middleware(
 app.include_router(courtinfo.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
+app.include_router(favouritecourts.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
 app.include_router(courts.router, prefix="/api")
@@ -44,6 +47,7 @@ app.include_router(courtbookings.router, prefix="/api")
 app.include_router(eventbookings.router, prefix="/api")
 app.include_router(trainingsessions.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 @app.get("/api/health")
 async def api_health():
@@ -58,6 +62,7 @@ async def api_index():
             "courtinfo": "/api/courtinfo",
             "notifications": "/api/notifications",
             "favorites": "/api/favorites",
+            "favouritecourts": "/api/favouritecourts",
             "profiles": "/api/profiles/{user_id}",
             "data": "/api/data/{table}",
             "health": "/api/health",
@@ -88,6 +93,7 @@ async def status():
             "/api/courtinfo",
             "/api/notifications",
             "/api/favorites",
+            "/api/favouritecourts",
             "/api/profiles",
             "/api/data/{table}",
             "/api/data/{table}/{pk}",
@@ -106,6 +112,7 @@ async def status():
             "/api/trainingsessions",
             "/api/trainingsessions/{sessionid}",
             "/api/history",
+            
         ],
     }
 

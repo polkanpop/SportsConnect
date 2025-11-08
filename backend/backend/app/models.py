@@ -41,3 +41,12 @@ class Favorite(BaseModel):
 
 class FavoriteCreate(BaseModel):
     courtinfoid: int
+
+class FavouriteCourt(BaseModel):
+    favouriteid: int
+    userid: int
+    courtid: int
+
+class FavouriteCourtCreate(BaseModel):
+    courtid: int
+    userid: int  # required when auth removed
