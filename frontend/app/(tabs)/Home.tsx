@@ -1,10 +1,11 @@
 import { SearchBar } from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
-import { FavoriteMarker, getFavorites } from "@/storage/favorites";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from "@/lib/supabase";
+import { listFavouriteCourts, FavouriteCourt } from "@/lib/backendApi";
 
 export default function Home() {
   const router = useRouter();
@@ -60,29 +61,76 @@ export default function Home() {
     },
   ];
 
-  // Favorites state for "Your choices" section
-  const [favoriteLocations, setFavoriteLocations] = useState<FavoriteMarker[]>([]);
+  // Favourites resolved with court display info
+  type FavoriteLocation = {
+    favouriteid: number;
+    courtid: number;
+    name: string;
+    address: string;
+  };
+  const [favoriteLocations, setFavoriteLocations] = useState<FavoriteLocation[]>([]);
+  const [loadingFavs, setLoadingFavs] = useState(false);
+  const [favError, setFavError] = useState<string | null>(null);
 
-  const loadFavorites = async () => {
+  const getCurrentNumericUserId = async (): Promise<number | null> => {
     try {
-      const favs = await getFavorites();
-      setFavoriteLocations(favs);
-    } catch (e) {
-      console.log('Home favorites load error', e);
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (!uid) return null;
+      const asInt = parseInt(uid, 10);
+      return Number.isNaN(asInt) ? null : asInt;
+    } catch {
+      return null;
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    loadFavorites();
-  }, []);
+  const loadFavorites = async () => {
+    setLoadingFavs(true);
+    setFavError(null);
+    try {
+      const userId = await getCurrentNumericUserId();
+      if (userId == null) {
+        setFavoriteLocations([]);
+        setLoadingFavs(false);
+        return;
+      }
+      // Fetch favourite court rows
+      const rows = await listFavouriteCourts({ userid: userId });
+      const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
+      const courtIds = favRows.map(r => r.courtid);
+      if (courtIds.length === 0) {
+        setFavoriteLocations([]);
+        setLoadingFavs(false);
+        return;
+      }
+      // Query courtinfo by courtid (join via foreign key). We expect 1 courtinfo per court.
+      const { data: infoData, error: infoError } = await supabase
+        .from('courtinfo')
+        .select('courtinfoid,courtid,name,address')
+        .in('courtid', courtIds);
+      if (infoError) {
+        throw new Error(infoError.message);
+      }
+      // Build display list combining favourite row with courtinfo fields
+      const favs: FavoriteLocation[] = favRows.map(fr => {
+        const info: any | undefined = (infoData || []).find((ci: any) => ci.courtid === fr.courtid);
+        return {
+          favouriteid: fr.favouriteid,
+          courtid: fr.courtid,
+          name: info?.name || `Court ${fr.courtid}`,
+          address: info?.address || '',
+        };
+      });
+      setFavoriteLocations(favs);
+    } catch (e: any) {
+      setFavError(e.message || String(e));
+    } finally {
+      setLoadingFavs(false);
+    }
+  };
 
-  // Refresh when screen gains focus (user may have just favorited on Map)
-  useFocusEffect(
-    useCallback(() => {
-      loadFavorites();
-    }, [])
-  );
+  useEffect(() => { loadFavorites(); }, []);
+  useFocusEffect(useCallback(() => { loadFavorites(); }, []));
 
   return (
     <SafeAreaProvider>
@@ -176,12 +224,18 @@ export default function Home() {
             <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8 }}>
               Your choices
             </Text>
+            {favError && (
+              <Text style={{ color: 'red', marginBottom: 6 }}>Failed to load favourites: {favError}</Text>
+            )}
+            {loadingFavs && (
+              <Text style={{ marginBottom: 6 }}>Loading favourites...</Text>
+            )}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'center' }}
             >
-              {favoriteLocations.length === 0 && (
+              {!loadingFavs && favoriteLocations.length === 0 && (
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => router.push('/(tabs)/Map')}
@@ -205,12 +259,10 @@ export default function Home() {
               )}
               {favoriteLocations.map(fav => (
                 <TouchableOpacity
-                  key={fav.id}
+                  key={fav.favouriteid}
                   activeOpacity={0.75}
                   onPress={() => {
-                    // Placeholder navigation target: set route here later
-                    // router.push( `/court/${fav.id}` ); // Example future route
-                    console.log('Pressed favorite location', fav.id, fav.name);
+                    console.log('Pressed favorite location', fav.courtid, fav.name);
                   }}
                   style={{
                     paddingHorizontal: 16,

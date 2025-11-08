@@ -3,6 +3,7 @@ import GoogleSignInButton from "@/components/social-auth-buttons/google/google-s
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase"; // retained for social/anonymous flows
 import { authLogin } from '@/lib/backendApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
 import { useState } from "react";
@@ -29,6 +30,17 @@ export default function LoginScreen() {
     try {
       const res = await authLogin({ identifier: identifier.trim(), password })
       console.log('[login] success', res)
+      // Persist basic backend profile (userid, username, name, email) for later screens (e.g., Settings)
+      try {
+        await AsyncStorage.setItem('@backendProfile', JSON.stringify({
+          userid: res.userid,
+          username: res.username,
+          name: res.name,
+          email: res.email,
+        }))
+      } catch (e) {
+        console.warn('[login] failed storing backendProfile', (e as any)?.message)
+      }
       try { await initFavoritesForCurrentUser() } catch (e) { console.log('[login] initFavorites error', e) }
       setPassword('')
       router.replace('/(tabs)/Home')

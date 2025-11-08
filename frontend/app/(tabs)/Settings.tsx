@@ -1,6 +1,6 @@
 import SearchBar from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   Image,
   ScrollView,
@@ -9,8 +9,43 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCallback, useState } from 'react';
+import { getUserInfoByUserId } from '@/lib/backendApi';
 
 export default function SettingsPage() {
+  const [displayName, setDisplayName] = useState<string>('Guest');
+  const [loadingName, setLoadingName] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refreshName = useCallback(async () => {
+    setError(null);
+    setLoadingName(true);
+    try {
+      const raw = await AsyncStorage.getItem('@backendProfile');
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.name) setDisplayName(parsed.name);
+          // Attempt fresh fetch in case name changed.
+          if (parsed?.userid) {
+            const row = await getUserInfoByUserId(parsed.userid);
+            if (row?.name) setDisplayName(row.name);
+          }
+        } catch {/* ignore parse errors */}
+      } else {
+        setDisplayName('Guest');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed loading name');
+    } finally {
+      setLoadingName(false);
+    }
+  }, []);
+
+  // Refresh when screen focused
+  useFocusEffect(useCallback(() => { refreshName(); }, [refreshName]));
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <ScrollView
@@ -27,8 +62,9 @@ export default function SettingsPage() {
           onPress={() => router.push("/event/profile")}
         >
           <Image source={ICONS.accountCircle} style={styles.profileIcon} />
-          <Text style={styles.username}>Username</Text>
+          <Text style={styles.username}>{loadingName ? 'Loading...' : displayName || 'Guest'}</Text>
         </TouchableOpacity>
+        {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
 
         {/* Search */}
         <SearchBar placeholder="Search in settings..." />

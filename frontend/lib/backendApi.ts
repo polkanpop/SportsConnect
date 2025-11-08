@@ -42,3 +42,53 @@ export async function authLogin(payload: { identifier: string; password: string 
 		debugLabel: 'authLogin'
 	})
 }
+
+// ---- Favourite Courts API (public) ----
+// Table schema: favouritecourts(favouriteid int PK, userid int, courtid int)
+// Endpoints implemented server-side (no auth required):
+// GET /api/favouritecourts?userid=&ids_only=
+// POST /api/favouritecourts { userid, courtid }
+// DELETE /api/favouritecourts/{favouriteid}
+
+export type FavouriteCourt = { favouriteid: number; userid: number; courtid: number }
+
+export async function listFavouriteCourts(params?: { userid?: number; idsOnly?: boolean }) {
+	const qs: string[] = []
+	if (params?.userid !== undefined) qs.push(`userid=${encodeURIComponent(params.userid)}`)
+	if (params?.idsOnly) qs.push(`ids_only=true`)
+	const path = `/favouritecourts${qs.length ? '?' + qs.join('&') : ''}`
+	const data = await request(path, { debugLabel: 'listFavouriteCourts' })
+	return data as FavouriteCourt[] | number[]
+}
+
+export async function addFavouriteCourt(userid: number, courtid: number) {
+	const body = { userid, courtid }
+	const data = await request('/favouritecourts', {
+		method: 'POST',
+		body: JSON.stringify(body),
+		debugLabel: 'addFavouriteCourt'
+	})
+	return data as FavouriteCourt
+}
+
+export async function removeFavouriteCourt(favouriteid: number) {
+	const data = await request(`/favouritecourts/${favouriteid}`, {
+		method: 'DELETE',
+		debugLabel: 'removeFavouriteCourt'
+	})
+	return data as { deleted: boolean; count: number }
+}
+
+// ---- User Info API ----
+// GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
+// Helper to fetch first row by userid.
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | null }
+
+export async function getUserInfoByUserId(userid: number) {
+	if (userid == null) throw new Error('userid required')
+	const path = `/userinfo?userid=${encodeURIComponent(userid)}`
+	const rows = await request(path, { debugLabel: 'getUserInfoByUserId' })
+	if (Array.isArray(rows) && rows.length) return rows[0] as UserInfoRow
+	return null
+}
+

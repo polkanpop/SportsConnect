@@ -1,5 +1,7 @@
 // constants/icons.ts
 
+import { ZoomOut } from "react-native-reanimated";
+
 export const ICONS = {
   accountCircle: require('../assets/icons/account_circle.png'),
   activity: require('../assets/icons/Activity.png'),
@@ -62,6 +64,8 @@ export const ICONS = {
   stadiumCal: require('../assets/icons/stadium_cal.png'),
   event_category: require('../assets/icons/event.png'),
   booking: require('../assets/icons/bookings.png'),
+  zoomIn: require('../assets/icons/Zoomin.png'),
+  ZoomOut: require('../assets/icons/Zoomout.png'),
 }; 
 
 

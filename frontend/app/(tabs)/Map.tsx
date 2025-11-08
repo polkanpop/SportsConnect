@@ -4,7 +4,8 @@ import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
-import { FavoriteMarker, getFavorites, getRemoteFavoriteIds, initFavoritesForCurrentUser, isFavorited, toggleFavorite } from '@/storage/favorites';
+// Backend favouritecourts API helpers (public)
+import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt } from '@/lib/backendApi';
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
@@ -29,6 +30,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 // TypeScript type for a marker
 type MarkerType = {
   id: number; // courtinfoid unique id
+  courtid: number; // foreign key to courts (REAL court id for favourites)
   latitude: number;
   longitude: number;
   latitudeDelta: number;
@@ -65,8 +67,14 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null); // State to store user location
   const [isFlatListVisible, setFlatListVisible] = useState(false); // To show/hide the FlatList
   const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(-1); // Track BottomSheet index
-  const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts (courtinfoid assumed)
+  const [favouriteRecords, setFavouriteRecords] = useState<FavouriteCourt[]>([]); // full favourite rows
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
+  // Zoom stages: 0 = fully out (baseline region), 1 = mid zoom, 2 = max zoom (shows ZoomOut icon)
+  const [zoomStage, setZoomStage] = useState<number>(0);
+
+  // Define zoom levels (tweak as desired)
+  const ZOOM_LEVELS = useRef<number[]>([10, 13.5, 16]); // corresponds to camera zoom values
 
   // Filter states
   const [openDropdown, setOpenDropdown] = useState<"sport" | "venue" | "availability" | null>(null);
@@ -76,6 +84,21 @@ export default function App() {
 
   // Snap points for the BottomSheet
   const snapPoints = useMemo(() => ["24%", "40%", "80%"], []);
+
+  // Helper: obtain numeric user id from a Supabase session or return null if unavailable.
+  // Adjust if your auth system differs (e.g., mapping UUID to int server-side).
+  const getCurrentNumericUserId = async (): Promise<number | null> => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (!uid) return null;
+      // If uid is already numeric string, parse; otherwise return null (requires mapping not implemented here).
+      const asInt = parseInt(uid, 10);
+      return Number.isNaN(asInt) ? null : asInt;
+    } catch (e) {
+      return null;
+    }
+  };
 
   // derive sport options from markers (unique)
   const sportOptions = useMemo(() => {
@@ -102,8 +125,7 @@ export default function App() {
     const fetchMarkers = async () => {
       setLoadingMarkers(true);
       setErrorMarkers(null);
-      // Ensure favorites file initialized for current user (safe to call repeatedly)
-      try { await initFavoritesForCurrentUser(); } catch (e) { console.warn('[Map] initFavorites failed', e); }
+  // Local storage favorites removed; now using backend favouritecourts table
       const { data, error } = await supabase
         .from("courtinfo")
         .select("courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability")
@@ -116,10 +138,11 @@ export default function App() {
         // Ensure arrays are arrays (Supabase should already return them correctly)
         let normalized: MarkerType[] = data.map((m: any) => ({
           id: m.courtinfoid,
+          courtid: m.courtid, // keep real court id separate
           latitude: m.latitude ?? 0,
           longitude: m.longitude ?? 0,
-            latitudeDelta: m.latitudedelta ?? 0.05,
-            longitudeDelta: m.longitudedelta ?? 0.05,
+          latitudeDelta: m.latitudedelta ?? 0.05,
+          longitudeDelta: m.longitudedelta ?? 0.05,
           name: m.name || m.address || `Court #${m.courtinfoid}`,
           address: m.address || "Unknown",
           images: Array.isArray(m.images) ? m.images : [],
@@ -129,18 +152,24 @@ export default function App() {
           isFavorite: false,
         }));
         setMarkers(normalized); // initial set (all not favorite yet)
-        // Preload favorites (local + remote merged) BEFORE setting filteredMarkers so initial render shows yellow
-        const [localFavs, remoteFavIds] = await Promise.all([
-          getFavorites(),
-          getRemoteFavoriteIds()
-        ]);
-        const mergedIds = Array.from(new Set([...localFavs.map(f => f.id), ...remoteFavIds]));
-        setFavoriteIds(mergedIds);
-  // Stamp favorites onto marker objects for immediate color updates without needing star toggle
-  normalized = normalized.map(m => ({ ...m, isFavorite: mergedIds.includes(m.id) }));
-  setMarkers(normalized); // overwrite with favorite flags
-  // Apply initial filtering (none yet) but ensure favorites coloring via isFavorite flags
-  setFilteredMarkers(normalized);
+        // Fetch favourites from API if we can determine numeric user id
+        const numericUserId = await getCurrentNumericUserId();
+        let favIds: number[] = [];
+        if (numericUserId !== null) {
+          try {
+            const rows = await listFavouriteCourts({ userid: numericUserId });
+            const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
+            setFavouriteRecords(favRows);
+            favIds = favRows.map(r => r.courtid);
+            setFavoriteIds(favIds);
+          } catch (e) {
+            console.warn('[Map] failed to load favouritecourts', e);
+          }
+        }
+        // Stamp favorites onto markers for initial render
+  normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
+        setMarkers(normalized);
+        setFilteredMarkers(normalized);
       }
       setLoadingMarkers(false);
     };
@@ -205,10 +234,11 @@ export default function App() {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
           },
-          zoom: 15,
+          zoom: ZOOM_LEVELS.current[2],
         },
         { duration: 1000 }
       );
+      setZoomStage(2);
     } else {
       // Animate to existing user location
       mapRef.current?.animateCamera(
@@ -217,10 +247,11 @@ export default function App() {
             latitude: userLocation.coords.latitude,
             longitude: userLocation.coords.longitude,
           },
-          zoom: 15,
+          zoom: ZOOM_LEVELS.current[2],
         },
         { duration: 1000 }
       );
+      setZoomStage(2);
     }
   };
 
@@ -246,18 +277,45 @@ export default function App() {
       return;
     }
     setSelectedMarker(marker);
-    // Load favorite state from storage
-    const fav = await isFavorited(marker.id);
-    setIsFavorite(fav);
+  // Favorite state derived from favoriteIds
+  setIsFavorite(favoriteIds.includes(marker.courtid));
     mapRef.current?.animateCamera(
       {
         center: { latitude: marker.latitude, longitude: marker.longitude },
-        zoom: 15,
+        zoom: ZOOM_LEVELS.current[2],
       },
       { duration: 500 }
     );
+    setZoomStage(2); // go to max zoom when selecting a marker
     // open bottom sheet
     bottomSheetRef.current?.snapToIndex(0);
+  };
+
+  // Cycle through zoom levels (0 -> 1 -> 2 -> 0) while updating icon state
+  const handleZoomToggle = () => {
+    if (!mapRef.current) return;
+    // Determine next stage
+    const nextStage = zoomStage < 2 ? zoomStage + 1 : 0; // cycle back out after max
+    setZoomStage(nextStage);
+
+    // Determine center focus priority: selected marker > user location > current camera center (fallback INITIAL_REGION)
+    let centerLat = INITIAL_REGION.latitude;
+    let centerLng = INITIAL_REGION.longitude;
+    if (selectedMarker) {
+      centerLat = selectedMarker.latitude;
+      centerLng = selectedMarker.longitude;
+    } else if (userLocation) {
+      centerLat = userLocation.coords.latitude;
+      centerLng = userLocation.coords.longitude;
+    }
+
+    mapRef.current.animateCamera(
+      {
+        center: { latitude: centerLat, longitude: centerLng },
+        zoom: ZOOM_LEVELS.current[nextStage],
+      },
+      { duration: 600 }
+    );
   };
 
   // Handle search input change with debounce
@@ -391,7 +449,7 @@ export default function App() {
     }
     // Favorites-only toggle
     if (showFavoritesOnly) {
-      results = results.filter(m => favoriteIds.includes(m.id));
+      results = results.filter(m => favoriteIds.includes(m.courtid));
     }
     setFilteredMarkers(results);
     console.log('[FavoritesToggle] Filter pass end', {
@@ -702,6 +760,20 @@ export default function App() {
                 </TouchableOpacity>
               )}
 
+              {/* Zoom Toggle Button (left side, parallel to Google Maps button) */}
+              {isButtonVisible && (
+                <TouchableOpacity
+                  style={styles.zoomToggleButton}
+                  onPress={handleZoomToggle}
+                  accessibilityLabel={zoomStage === 2 ? 'Zoom out' : 'Zoom in'}
+                >
+                  <Image
+                    source={zoomStage === 2 ? ICONS.ZoomOut : ICONS.zoomIn}
+                    style={styles.zoomIcon}
+                  />
+                </TouchableOpacity>
+              )}
+
               {/* My Location Button */}
               {isButtonVisible && (
                 <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocationPress}>
@@ -727,28 +799,39 @@ export default function App() {
                         style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
                         onPress={async () => {
                           if (!selectedMarker) return;
-                          const newState = await toggleFavorite({
-                            id: selectedMarker.id,
-                            name: selectedMarker.name,
-                            address: selectedMarker.address,
-                            latitude: selectedMarker.latitude,
-                            longitude: selectedMarker.longitude,
-                            images: selectedMarker.images,
-                            sport: selectedMarker.sport,
-                            venue: selectedMarker.venue,
-                            availability: selectedMarker.availability,
-                          } as FavoriteMarker);
-                          setIsFavorite(newState);
-                          setFavoriteIds(prev => {
-                            const exists = prev.includes(selectedMarker.id);
-                            if (newState && !exists) return [...prev, selectedMarker.id];
-                            if (!newState && exists) return prev.filter(id => id !== selectedMarker.id);
-                            return prev;
-                          });
-                          // Immediate color change: mutate markers & filteredMarkers with isFavorite flag
-                          setMarkers(prev => prev.map(m => m.id === selectedMarker.id ? { ...m, isFavorite: newState } : m));
-                          setFilteredMarkers(prev => prev.map(m => m.id === selectedMarker.id ? { ...m, isFavorite: newState } : m));
-                          setSelectedMarker(sm => sm && sm.id === selectedMarker.id ? { ...sm, isFavorite: newState } : sm);
+                          const numericUserId = await getCurrentNumericUserId();
+                          if (numericUserId == null) {
+                            console.warn('[Map] Cannot toggle favorite: missing numeric user id');
+                            return;
+                          }
+                          const courtId = selectedMarker.courtid; // use real courts.courtid
+                          const alreadyFav = favoriteIds.includes(courtId);
+                          // Optimistic UI
+                          setFavoriteIds(prev => alreadyFav ? prev.filter(id => id !== courtId) : [...prev, courtId]);
+                          setIsFavorite(!alreadyFav);
+                          setMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: !alreadyFav } : m));
+                          setFilteredMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: !alreadyFav } : m));
+                          setSelectedMarker(sm => sm && sm.courtid === courtId ? { ...sm, isFavorite: !alreadyFav } : sm);
+                          try {
+                            if (!alreadyFav) {
+                              const created = await addFavouriteCourt(numericUserId, courtId);
+                              setFavouriteRecords(prev => [...prev, created]);
+                            } else {
+                              const row = favouriteRecords.find(r => r.courtid === courtId);
+                              if (row) {
+                                await removeFavouriteCourt(row.favouriteid);
+                                setFavouriteRecords(prev => prev.filter(r => r.favouriteid !== row.favouriteid));
+                              }
+                            }
+                          } catch (e) {
+                            console.warn('[Map] favourite toggle failed, reverting', e);
+                            // Revert
+                            setFavoriteIds(prev => alreadyFav ? [...prev, courtId] : prev.filter(id => id !== courtId));
+                            setIsFavorite(alreadyFav);
+                            setMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: alreadyFav } : m));
+                            setFilteredMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: alreadyFav } : m));
+                            setSelectedMarker(sm => sm && sm.courtid === courtId ? { ...sm, isFavorite: alreadyFav } : sm);
+                          }
                         }}
                       >
                         <Image
@@ -1082,6 +1165,25 @@ const styles = StyleSheet.create({
   googleMapIcon: {
     width: 24,
     height: 24,
+  },
+  // Zoom toggle button
+  zoomToggleButton: {
+    position: 'absolute',
+    bottom: 360, // align vertically with googleMapButton
+    left: 20,
+    backgroundColor: COLORS.white,
+    borderRadius: 50,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 20,
+  },
+  zoomIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   // Search row containing search bar + favorite toggle
   searchOverlayWrapper: {

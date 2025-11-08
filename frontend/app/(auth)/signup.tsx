@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { authSignup } from '@/lib/backendApi';
+import { authSignup, authLogin } from '@/lib/backendApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
   // For production, add hashing again (bcrypt/argon2) and stronger validation.
@@ -54,10 +55,23 @@ import { authSignup } from '@/lib/backendApi';
                 accountName: accountName.trim(),
               })
               console.log('[signup] success', res)
-              setSuccessMessage('Account created successfully. Redirecting to sign in…')
+              setSuccessMessage('Account created successfully. Logging you in…')
               setPassword('')
               setConfirmPassword('')
-              setTimeout(() => { router.replace('/(auth)/login') }, 900)
+              // Auto-login after signup
+              try {
+                const loginRes = await authLogin({ identifier: email.trim(), password });
+                await AsyncStorage.setItem('@backendProfile', JSON.stringify({
+                  userid: loginRes.userid,
+                  username: loginRes.username,
+                  name: loginRes.name,
+                  email: loginRes.email,
+                }));
+                router.replace('/(tabs)/Home');
+              } catch (loginErr: any) {
+                setGeneralError('Signup succeeded but auto-login failed. Please sign in manually.');
+                setTimeout(() => { router.replace('/(auth)/login') }, 1200);
+              }
             } catch (err: any) {
               console.log('[signup] error', err)
               setGeneralError(err.message || 'Signup failed')
