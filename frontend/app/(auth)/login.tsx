@@ -3,7 +3,6 @@ import GoogleSignInButton from "@/components/social-auth-buttons/google/google-s
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase"; // retained for social/anonymous flows
 import { authLogin } from '@/lib/backendApi';
-import { hashPassword } from '@/lib/hash';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
@@ -29,8 +28,7 @@ export default function LoginScreen() {
     }
     setLoading(true)
     try {
-      const hashed = await hashPassword(password);
-      const res = await authLogin({ identifier: identifier.trim(), password: hashed })
+  const res = await authLogin({ identifier: identifier.trim(), password })
       console.log('[login] success', res)
       // Persist basic backend profile (userid, username, name, email) for later screens (e.g., Settings)
       try {
