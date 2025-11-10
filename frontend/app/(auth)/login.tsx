@@ -6,7 +6,7 @@ import { authLogin } from '@/lib/backendApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 // Restored unified login: identifier can be email OR username, resolves to email then authenticates.
@@ -19,6 +19,24 @@ export default function LoginScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const looksLikeEmail = (v: string) => /^[^@]+@[^@]+\.[^@]+$/.test(v);
+
+  // On mount, restore rememberMe preference & auto redirect if already remembered
+  useEffect(() => {
+    (async () => {
+      try {
+        const flag = await AsyncStorage.getItem('@rememberAuth')
+        if (flag === 'true') {
+          setRememberMe(true)
+          // If we already have a stored backend profile treat as auto-login
+          const raw = await AsyncStorage.getItem('@backendProfile')
+          if (raw) {
+            console.log('[login] auto-redirect via remember me')
+            router.replace('/(tabs)/Home')
+          }
+        }
+      } catch (e) { console.warn('[login] rememberMe restore failed', (e as any)?.message) }
+    })()
+  }, [])
 
   const handleLogin = async () => {
     setErrorMsg(null)
@@ -38,6 +56,11 @@ export default function LoginScreen() {
           name: res.name,
           email: res.email,
         }))
+        if (rememberMe) {
+          await AsyncStorage.setItem('@rememberAuth', 'true')
+        } else {
+          await AsyncStorage.removeItem('@rememberAuth')
+        }
       } catch (e) {
         console.warn('[login] failed storing backendProfile', (e as any)?.message)
       }
@@ -263,7 +286,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     marginBottom: 32, // mb-8
-    // gap-3 simulated via children adding marginRight if needed (handled in button components if required)
   },
   quickAccessText: {
     textDecorationLine: 'underline',
@@ -276,7 +298,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    columnGap: 4, // gap-1 (RN may ignore; optional)
+    columnGap: 4, 
     marginBottom: 40, // mb-10
   },
   signUpLink: {
@@ -289,6 +311,5 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 14,
   },
-  // Removed debug/raw error styles
 });
 

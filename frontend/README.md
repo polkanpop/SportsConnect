@@ -54,6 +54,17 @@ Screens `app/(auth)/login.tsx` and `app/(auth)/signup.tsx` use pure `StyleSheet`
 2. Map Tailwind spacing: `1 -> 4px`, `2 -> 8px`, `3 -> 12px`, etc.
 3. Colors from former Tailwind config: dark300 `#6A6B6B`, green700 `#15803d`.
 
+### Remember Me (Persistent Backend Profile)
+
+The login screen has a "Remember me" checkbox. When checked:
+* After successful login, `@backendProfile` (basic user data) is stored AND a flag `@rememberAuth` is set to `true` in `AsyncStorage`.
+* On app restart / reload, the AuthProvider reads `@rememberAuth` + `@backendProfile` and treats the user as logged in even without a Supabase session.
+* Sign out removes both keys so the next launch returns to the login screen.
+
+Security note: This is a minimal demo (no JWT/token). Do NOT ship storing plaintext credentials. Only profile + a boolean flag are persisted; endpoints are currently public.
+
+To disable: remove references to `@rememberAuth` in `login.tsx` and `auth-providers.tsx`.
+
 ## 5. Remaining NativeWind Usage
 
 Some files still have `className` (e.g. `app/+not-found.tsx`). NativeWind remains enabled via `metro.config.js`. To fully remove it later:

@@ -59,7 +59,8 @@ export default function SettingsPage() {
         return;
       }
       // Clear cached profile info
-      await AsyncStorage.removeItem('@backendProfile');
+  await AsyncStorage.removeItem('@backendProfile');
+  await AsyncStorage.removeItem('@rememberAuth'); // clear remember-me flag as part of sign out
       // Navigate back to auth flow
   // Expo Router segment includes the (auth) group wrapper
   router.replace('/(auth)/login');
