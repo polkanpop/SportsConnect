@@ -2,21 +2,26 @@ import SearchBar from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
 import { router, useFocusEffect } from "expo-router";
 import {
+  Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
 import { getUserInfoByUserId } from '@/lib/backendApi';
+import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState<string>('Guest');
   const [loadingName, setLoadingName] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSignOutModal, setShowSignOutModal] = useState<boolean>(false);
 
   const refreshName = useCallback(async () => {
     setError(null);
@@ -42,6 +47,34 @@ export default function SettingsPage() {
       setLoadingName(false);
     }
   }, []);
+
+  // Sign out handler
+  const handleSignOut = useCallback(async () => {
+    try {
+      // Optional optimistic UI: disable interaction or show loading state (not added for brevity)
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+        Alert.alert('Sign Out Failed', error.message || 'Please try again.');
+        return;
+      }
+      // Clear cached profile info
+      await AsyncStorage.removeItem('@backendProfile');
+      // Navigate back to auth flow
+  // Expo Router segment includes the (auth) group wrapper
+  router.replace('/(auth)/login');
+    } catch (e: any) {
+      console.error('Unexpected sign out error:', e);
+      Alert.alert('Sign Out Error', e.message || 'Unexpected error.');
+    }
+  }, []);
+
+  const openSignOutModal = useCallback(() => setShowSignOutModal(true), []);
+  const closeSignOutModal = useCallback(() => setShowSignOutModal(false), []);
+  const confirmAndSignOut = useCallback(async () => {
+    await handleSignOut();
+    closeSignOutModal();
+  }, [handleSignOut, closeSignOutModal]);
 
   // Refresh when screen focused
   useFocusEffect(useCallback(() => { refreshName(); }, [refreshName]));
@@ -83,21 +116,57 @@ export default function SettingsPage() {
           <SettingRow icon={ICONS.comment} label="Share your feedback" />
           <SettingRow icon={ICONS.checkBoxLight} label="Term of Services" />
           <SettingRow icon={ICONS.users} label="About us" />
+          <SettingRow icon={ICONS.signout} label="Sign Out" onPress={openSignOutModal} />
         </View>
       </ScrollView>
+
+      {/* Sign Out Confirmation Modal */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showSignOutModal}
+        onRequestClose={closeSignOutModal}
+      >
+        <TouchableWithoutFeedback onPress={closeSignOutModal}>
+          <View style={styles.modalBackdrop} />
+        </TouchableWithoutFeedback>
+        <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Are you sure you want to sign out ?</Text>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={closeSignOutModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalButtonCancelText}>Return</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={confirmAndSignOut}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalButtonConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-/** ✅ Setting Row Component */
+/** Setting Row Component */
 const SettingRow = ({
   icon,
   label,
+  onPress,
 }: {
   icon: any;
   label: string;
+  onPress?: () => void;
 }) => (
-  <TouchableOpacity activeOpacity={0.7} style={styles.row}>
+  <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={onPress}>
     <View style={styles.rowLeft}>
       <Image source={icon} style={styles.rowIcon} />
       <Text style={styles.rowText}>{label}</Text>
@@ -167,6 +236,67 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     tintColor: "#000",
+  },
+  // Modal styles
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalCenteredWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 28,
+    paddingHorizontal: 22,
+    width: '100%',
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#E5E7EB',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#EF4444',
+  },
+  modalButtonCancelText: {
+    color: '#1F2937',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  modalButtonConfirmText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
 

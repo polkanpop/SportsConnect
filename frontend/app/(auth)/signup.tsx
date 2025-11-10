@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authSignup, authLogin } from '@/lib/backendApi';
+import { hashPassword } from '@/lib/hash';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
@@ -48,10 +49,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
             if (!validate()) return;
             setLoading(true);
             try {
+              // Hash password client-side (NOTE: prefer server-side hashing in production)
+              const hashed = await hashPassword(password);
               const res = await authSignup({
                 username: username.trim(),
                 email: email.trim(),
-                password: password,
+                password: hashed,
                 accountName: accountName.trim(),
               })
               console.log('[signup] success', res)
@@ -60,7 +63,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
               setConfirmPassword('')
               // Auto-login after signup
               try {
-                const loginRes = await authLogin({ identifier: email.trim(), password });
+                const loginRes = await authLogin({ identifier: email.trim(), password: hashed });
                 await AsyncStorage.setItem('@backendProfile', JSON.stringify({
                   userid: loginRes.userid,
                   username: loginRes.username,
