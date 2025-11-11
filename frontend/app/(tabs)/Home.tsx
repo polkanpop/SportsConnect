@@ -4,8 +4,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "@/lib/supabase";
-import { listFavouriteCourts, FavouriteCourt } from "@/lib/backendApi";
+import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
+import { listFavouriteCourts, FavouriteCourt, listCourtInfo, CourtInfoRow } from "@/lib/backendApi";
+import { favouritesEvents } from "@/lib/favouritesEvents";
+import { useAuthContext } from "@/hooks/use-auth-context";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Home() {
   const router = useRouter();
@@ -71,66 +74,100 @@ export default function Home() {
   const [favoriteLocations, setFavoriteLocations] = useState<FavoriteLocation[]>([]);
   const [loadingFavs, setLoadingFavs] = useState(false);
   const [favError, setFavError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const lastLoadAbortRef = React.useRef<AbortController | null>(null);
 
+  // Unified numeric user id resolver (matches Map.tsx logic):
+  // 1. Backend profile from AuthContext (login via /auth/login)
+  // 2. AsyncStorage persisted @backendProfile
+  // 3. Supabase session id if numeric (anonymous or social sign-in rarely numeric)
+  const { profile } = useAuthContext();
   const getCurrentNumericUserId = async (): Promise<number | null> => {
+    if (profile && typeof (profile as any).userid === 'number') return (profile as any).userid;
+    try {
+      const raw = await AsyncStorage.getItem('@backendProfile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.userid === 'number') return parsed.userid;
+      }
+    } catch {}
     try {
       const { data } = await supabase.auth.getSession();
       const uid = data.session?.user?.id;
-      if (!uid) return null;
-      const asInt = parseInt(uid, 10);
-      return Number.isNaN(asInt) ? null : asInt;
-    } catch {
-      return null;
-    }
+      if (uid && /^\d+$/.test(uid)) {
+        const asInt = parseInt(uid, 10);
+        if (!Number.isNaN(asInt)) return asInt;
+      }
+    } catch {}
+    return null;
   };
 
   const loadFavorites = async () => {
+    // Abort any in-flight load to avoid race conditions when user switches rapidly
+    if (lastLoadAbortRef.current) {
+      lastLoadAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    lastLoadAbortRef.current = abortController;
     setLoadingFavs(true);
     setFavError(null);
     try {
       const userId = await getCurrentNumericUserId();
+      setCurrentUserId(userId);
+      if (abortController.signal.aborted) return; // early exit if aborted mid lookup
       if (userId == null) {
         setFavoriteLocations([]);
-        setLoadingFavs(false);
         return;
       }
-      // Fetch favourite court rows
       const rows = await listFavouriteCourts({ userid: userId });
+      if (abortController.signal.aborted) return;
       const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
-      const courtIds = favRows.map(r => r.courtid);
-      if (courtIds.length === 0) {
-        setFavoriteLocations([]);
-        setLoadingFavs(false);
-        return;
-      }
-      // Query courtinfo by courtid (join via foreign key). We expect 1 courtinfo per court.
-      const { data: infoData, error: infoError } = await supabase
-        .from('courtinfo')
-        .select('courtinfoid,courtid,name,address')
-        .in('courtid', courtIds);
-      if (infoError) {
-        throw new Error(infoError.message);
-      }
-      // Build display list combining favourite row with courtinfo fields
-      const favs: FavoriteLocation[] = favRows.map(fr => {
-        const info: any | undefined = (infoData || []).find((ci: any) => ci.courtid === fr.courtid);
-        return {
+      if (favRows.length === 0) { setFavoriteLocations([]); return; }
+      const courtInfoRows: CourtInfoRow[] = await listCourtInfo();
+      if (abortController.signal.aborted) return;
+      const infoMap = new Map<number, CourtInfoRow>();
+      courtInfoRows.forEach(ci => { if (typeof ci.courtid === 'number') infoMap.set(ci.courtid, ci); });
+      // De-duplicate in case of any accidental duplicates from backend (defensive)
+      const seenCourtIds = new Set<number>();
+      const favs: FavoriteLocation[] = favRows.reduce<FavoriteLocation[]>((acc, fr) => {
+        if (seenCourtIds.has(fr.courtid)) return acc;
+        seenCourtIds.add(fr.courtid);
+        const info = infoMap.get(fr.courtid);
+        acc.push({
           favouriteid: fr.favouriteid,
           courtid: fr.courtid,
           name: info?.name || `Court ${fr.courtid}`,
           address: info?.address || '',
-        };
-      });
+        });
+        return acc;
+      }, []);
       setFavoriteLocations(favs);
     } catch (e: any) {
+      if (e?.name === 'AbortError') return; // silent abort
       setFavError(e.message || String(e));
     } finally {
-      setLoadingFavs(false);
+      if (!abortController.signal.aborted) setLoadingFavs(false);
     }
   };
 
+  // Initial load
   useEffect(() => { loadFavorites(); }, []);
+  // Refresh on screen focus
   useFocusEffect(useCallback(() => { loadFavorites(); }, []));
+  // Refresh when profile (and thus potential numeric user id) changes
+  useEffect(() => { loadFavorites(); }, [profile]);
+  // Subscribe to favourites change events emitted by Map or other screens
+  useEffect(() => {
+    const unsubscribe = favouritesEvents.subscribe(async ({ userid }) => {
+      // Only reload if event matches currently resolved user id
+      const activeId = await getCurrentNumericUserId();
+      if (activeId != null && activeId === userid) {
+        loadFavorites();
+      }
+    });
+    return unsubscribe;
+  }, []);
+
 
   return (
     <SafeAreaProvider>

@@ -1,7 +1,9 @@
 import time
 import logging
+import hashlib
 from typing import Optional
 from fastapi import APIRouter, HTTPException
+from passlib.context import CryptContext
 from ..db import rest_select, rest_upsert
 
 logger = logging.getLogger("auth")
@@ -13,6 +15,9 @@ if not logger.handlers:
 logger.setLevel(logging.DEBUG)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Bcrypt password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -41,7 +46,7 @@ def signup(payload: dict):
     Minimal signup: create rows in users, userinfo, userlogin.
     EXPECTS JSON: {username, email, password, accountName?, role?}
     Returns created summary without any token (client may store locally).
-    NOTE: Password stored in plain text (per user request). DO NOT USE IN PRODUCTION.
+    SECURE VERSION: Password is now hashed with bcrypt (passlib) before storage.
     """
     t0 = _now_ms()
     username = (payload.get('username') or '').strip()
@@ -119,9 +124,10 @@ def signup(payload: dict):
     infoid = info_row.get('infoid')
     logger.debug(f"Inserted/allocated userinfo infoid={infoid}")
 
-    # 3. userlogin with sequence fallback
+    # 3. userlogin with sequence fallback - hash password with bcrypt
+    bcrypt_hash = pwd_context.hash(password)
     try:
-        login_rows = rest_upsert("userlogin", {"userid": userid, "username": username, "passwordhash": password, "logintype": "Local"})
+        login_rows = rest_upsert("userlogin", {"userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local"})
     except Exception as e:
         msg = str(e)
         if "permission denied for sequence userlogin_loginid_seq" in msg:
@@ -134,7 +140,7 @@ def signup(payload: dict):
             next_loginid = (max_row.get('loginid') if max_row else 0) + 1
             logger.debug(f"next_loginid={next_loginid}")
             try:
-                login_rows = rest_upsert("userlogin", {"loginid": next_loginid, "userid": userid, "username": username, "passwordhash": password, "logintype": "Local"})
+                login_rows = rest_upsert("userlogin", {"loginid": next_loginid, "userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local"})
             except Exception as e3:
                 logger.exception("Manual loginid insert failed")
                 raise HTTPException(status_code=500, detail=f"manual loginid insert failed: {e3}")
@@ -163,7 +169,7 @@ def signup(payload: dict):
 def login(payload: dict):
     """
     Minimal login: Accept identifier (email OR username) + password.
-    Resolves to user via userlogin or userinfo then compares raw passwordhash.
+    Resolves to user via userlogin or userinfo then verifies bcrypt hash.
     Returns basic profile data if match.
     """
     t0 = _now_ms()
@@ -191,7 +197,30 @@ def login(payload: dict):
         raise HTTPException(status_code=404, detail="Login record not found")
 
     stored_pw = login_row.get('passwordhash')
-    if stored_pw != password:
+
+    # Determine if existing hash is bcrypt; if not attempt legacy migrations (plaintext or SHA256).
+    def is_bcrypt(pw: str) -> bool:
+        return pw.startswith("$2a$") or pw.startswith("$2b$") or pw.startswith("$2y$")
+
+    password_valid = False
+    if stored_pw and is_bcrypt(stored_pw):
+        # Standard bcrypt verification
+        if pwd_context.verify(password, stored_pw):
+            password_valid = True
+    else:
+        # Legacy path: either plaintext or prior SHA256 client-hash
+        sha256_hex = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        if stored_pw == password or stored_pw == sha256_hex:
+            password_valid = True
+            # Re-hash & upgrade to bcrypt
+            try:
+                new_hash = pwd_context.hash(password)
+                rest_upsert("userlogin", {"loginid": login_row.get('loginid'), "userid": userid, "username": login_row.get('username'), "passwordhash": new_hash, "logintype": login_row.get('logintype') or 'Local'})
+                logger.debug(f"/login password upgraded to bcrypt for userid={userid}")
+            except Exception as e:
+                logger.warning(f"/login bcrypt upgrade failed userid={userid} err={e}")
+
+    if not password_valid:
         raise HTTPException(status_code=401, detail="Incorrect password")
 
     elapsed = _now_ms() - t0

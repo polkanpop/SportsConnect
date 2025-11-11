@@ -808,9 +808,10 @@ export default function App() {
                 {selectedMarker ? (
                   <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
                     {/* ...existing code... */}
-                    {/* Title, Favorite, and Book in a row (moved up) */}
-                    <View style={[styles.titleRow, { marginTop: -12 }]}> 
+                    {/* Title & actions row (layout adjusted for single-line names) */}
+                    <View style={styles.titleRow}> 
                       <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
+                      <View style={styles.actionRow}> 
                       <TouchableOpacity
                         style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
                         onPress={async () => {
@@ -865,6 +866,7 @@ export default function App() {
                         <Image source={ICONS.booking} style={[styles.bookingIcon, selectedMarker.availability === "Unavailable" && { tintColor: '#bbb' }]} />
                         <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>Book</Text>
                       </TouchableOpacity>
+                      </View>
                     </View>
 
                     {/* Location Address */}
@@ -1122,14 +1124,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     marginBottom: 4,
+    justifyContent: 'space-between',
   },
   markerTitle: {
     fontSize: 20,
     fontWeight: "bold",
     textAlign: "left",
     flexShrink: 1,
-    width: '65%',
-    marginRight: 8,
+    flex: 1,
+    marginRight: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   markerAddress: {
     fontSize: 16,
