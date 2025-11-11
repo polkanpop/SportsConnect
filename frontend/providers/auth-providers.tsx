@@ -2,77 +2,79 @@ import { AuthContext } from '@/hooks/use-auth-context'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import { PropsWithChildren, useEffect, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export default function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | undefined | null>()
   const [profile, setProfile] = useState<any>()
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoadingSupabase, setIsLoadingSupabase] = useState<boolean>(true)
+  const [isLoadingRemember, setIsLoadingRemember] = useState<boolean>(true)
+  const [rememberProfile, setRememberProfile] = useState<any | null>(null)
+  const [rememberFlag, setRememberFlag] = useState<boolean>(false)
 
-  // Fetch the session once, and subscribe to auth state changes
+  // --- Supabase session bootstrap & subscription ---
   useEffect(() => {
     const fetchSession = async () => {
-      setIsLoading(true)
-
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession()
-
-      if (error) {
-        console.error('Error fetching session:', error)
-      }
-
+      setIsLoadingSupabase(true)
+      const { data: { session }, error } = await supabase.auth.getSession()
+      if (error) console.error('Error fetching session:', error)
       setSession(session)
-      setIsLoading(false)
+      setIsLoadingSupabase(false)
     }
-
     fetchSession()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', { event: _event, session })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[AuthProvider] Auth state changed:', { event: _event, session })
       setSession(session)
     })
-
-    // Cleanup subscription on unmount
-    return () => {
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
 
-  // Fetch the profile when the session changes
+  // --- Backend "remember me" bootstrap ---
+  useEffect(() => {
+    const loadRemember = async () => {
+      try {
+        const flag = await AsyncStorage.getItem('@rememberAuth')
+        const rawProfile = await AsyncStorage.getItem('@backendProfile')
+        if (flag === 'true' && rawProfile) {
+          setRememberFlag(true)
+          try { setRememberProfile(JSON.parse(rawProfile)) } catch { setRememberProfile(null) }
+        } else {
+          setRememberFlag(false)
+          setRememberProfile(null)
+        }
+      } catch (e) {
+        console.warn('[AuthProvider] failed loading remember auth', (e as any)?.message)
+      } finally {
+        setIsLoadingRemember(false)
+      }
+    }
+    loadRemember()
+  }, [])
+
+  // --- Supabase profile fetch (only if supabase session present) ---
   useEffect(() => {
     const fetchProfile = async () => {
-      setIsLoading(true)
-
-      if (session) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-
+      // Only show supabase loading spinner portion when supabase path engaged
+      if (!session) { setProfile(null); return }
+      try {
+        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
         setProfile(data)
-      } else {
+      } catch (e) {
+        console.error('[AuthProvider] profile fetch error', e)
         setProfile(null)
       }
-
-      setIsLoading(false)
     }
-
     fetchProfile()
   }, [session])
 
+  // Unified loading & logged-in derivation
+  const isLoading = isLoadingSupabase || isLoadingRemember
+  const isLoggedIn = (!!session) || rememberFlag
+  // Exposed composite profile preference: supabase profile if present else remembered backend profile
+  const exposedProfile = session ? profile : rememberProfile
+
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        isLoading,
-        profile,
-        isLoggedIn: session != undefined,
-      }}
-    >
+    <AuthContext.Provider value={{ session, isLoading, profile: exposedProfile, isLoggedIn }}>
       {children}
     </AuthContext.Provider>
   )

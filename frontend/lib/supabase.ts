@@ -23,7 +23,8 @@ export const supabase = createClient(
       storage: ExpoSecureStoreAdapter as any,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      // Enable detecting the session in AuthSession redirect URLs (we still manually call setSession for robustness).
+      detectSessionInUrl: true,
     },
   },
 );

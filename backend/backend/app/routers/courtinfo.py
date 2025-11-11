@@ -1,18 +1,28 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from ..db import rest_select
 from ..models import CourtInfo
 
 router = APIRouter(prefix="/courtinfo", tags=["courtinfo"])
 
 @router.get("", response_model=list[CourtInfo])
-async def list_courts():
+async def list_courts(courtids: str | None = Query(default=None)):
+    """List courtinfo rows. Optional filter: ?courtids=1,2,3
+    (Client-side subset until REST helper supports IN filter)."""
     try:
-        data = rest_select(
+        select_cols = "courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability"
+        data_all = rest_select(
             "courtinfo",
-            "courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability",
+            select_cols,
             order={"column": "courtinfoid"},
         )
-        return data
+        if courtids:
+            try:
+                wanted = {int(x) for x in courtids.split(',') if x.strip().isdigit()}
+            except ValueError:
+                wanted = set()
+            if wanted:
+                return [d for d in data_all if d.get("courtid") in wanted]
+        return data_all
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 

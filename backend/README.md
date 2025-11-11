@@ -18,7 +18,7 @@ pip install -r backend\backend\requirements.txt
 # Copy & edit environment file if you have an example (create manually otherwise)
 New-Item -ItemType File .env -Force | Out-Null
 # Populate .env with required keys below
-uvicorn backend.backend.app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.backend.app.main:app --reload --host  --port 8000
 ```
 
 Visit:
