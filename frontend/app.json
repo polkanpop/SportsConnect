@@ -1,22 +1,28 @@
 {
   "expo": {
-    "name": "SportConnect",
-    "slug": "sport_connect",
+    "name": "Sportapp",
+    "slug": "sport_app",
     "icon": "./assets/icons/placeholder_icon.png",
     "extra": {
       "SUPABASE_URL": "https://pfhgiyujvxeartkomrpv.supabase.co",
-      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1Ni..."
+      "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1Ni...",
+      "eas": {
+        "projectId": "72bf906e-3a54-4c90-a272-bc5def1b8642"
+      }
     },
-
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "sportconnect",
+    "scheme": "sportapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "usesAppleSignIn": true,
-      "bundleIdentifier": ".com.group4.sportconnect"
+      "bundleIdentifier": "com.group5.sportapp",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +30,10 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": ".com.group4.sportconnect"
+      "package": "com.group5.sportapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static"
@@ -48,7 +57,7 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
-    
+    },
+    "owner": "le_tri"
   }
 }
