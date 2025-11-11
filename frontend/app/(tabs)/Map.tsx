@@ -4,8 +4,10 @@ import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
-// Backend favouritecourts API helpers (public)
-import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt } from '@/lib/backendApi';
+// Backend API helpers (public)
+import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfo, CourtInfoRow } from '@/lib/backendApi';
+import { useAuthContext } from '@/hooks/use-auth-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
@@ -85,19 +87,38 @@ export default function App() {
   // Snap points for the BottomSheet
   const snapPoints = useMemo(() => ["24%", "40%", "80%"], []);
 
-  // Helper: obtain numeric user id from a Supabase session or return null if unavailable.
-  // Adjust if your auth system differs (e.g., mapping UUID to int server-side).
+  // Auth context (backend login OR supabase anonymous/social)
+  const { profile, session } = useAuthContext();
+  const warnedMissingUserIdRef = useRef(false);
+
+  // Unified resolver for numeric userid used by backend tables.
+  // Priority:
+  // 1. Backend profile from AuthContext (login via /auth/login)
+  // 2. Cached @backendProfile in AsyncStorage (in case provider not yet hydrated)
+  // 3. Attempt to parse supabase session user id IF it is numeric (rare; usually UUID -> will fail gracefully)
   const getCurrentNumericUserId = async (): Promise<number | null> => {
+    // Backend remembered profile (preferred)
+    if (profile && typeof (profile as any).userid === 'number') {
+      return (profile as any).userid;
+    }
+    // Fallback: AsyncStorage directly
+    try {
+      const raw = await AsyncStorage.getItem('@backendProfile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.userid === 'number') return parsed.userid;
+      }
+    } catch {}
+    // Supabase session id (usually UUID -> cannot convert to numeric user table id)
     try {
       const { data } = await supabase.auth.getSession();
       const uid = data.session?.user?.id;
-      if (!uid) return null;
-      // If uid is already numeric string, parse; otherwise return null (requires mapping not implemented here).
-      const asInt = parseInt(uid, 10);
-      return Number.isNaN(asInt) ? null : asInt;
-    } catch (e) {
-      return null;
-    }
+      if (uid && /^\d+$/.test(uid)) {
+        const asInt = parseInt(uid, 10);
+        if (!Number.isNaN(asInt)) return asInt;
+      }
+    } catch {}
+    return null;
   };
 
   // derive sport options from markers (unique)
@@ -120,45 +141,37 @@ export default function App() {
     });
     return Array.from(set);
   }, [markers]);
-  // Fetch markers from Supabase courtinfo table
+  // Fetch markers from backend /courtinfo API (architecture shift away from direct Supabase client)
   useEffect(() => {
     const fetchMarkers = async () => {
       setLoadingMarkers(true);
       setErrorMarkers(null);
-  // Local storage favorites removed; now using backend favouritecourts table
-      const { data, error } = await supabase
-        .from("courtinfo")
-        .select("courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability")
-        .order("courtinfoid", { ascending: true });
-      if (error) {
-        setErrorMarkers(error.message);
-        setMarkers([]);
-        setFilteredMarkers([]);
-      } else if (data) {
-        // Ensure arrays are arrays (Supabase should already return them correctly)
-        let normalized: MarkerType[] = data.map((m: any) => ({
+      try {
+        // Fetch via backend API
+        const rows: CourtInfoRow[] = await listCourtInfo();
+        let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => ({
           id: m.courtinfoid,
-          courtid: m.courtid, // keep real court id separate
+          courtid: m.courtid,
           latitude: m.latitude ?? 0,
           longitude: m.longitude ?? 0,
           latitudeDelta: m.latitudedelta ?? 0.05,
           longitudeDelta: m.longitudedelta ?? 0.05,
           name: m.name || m.address || `Court #${m.courtinfoid}`,
           address: m.address || "Unknown",
-          images: Array.isArray(m.images) ? m.images : [],
-          sport: Array.isArray(m.sport) ? m.sport : [],
-          venue: Array.isArray(m.venue) ? m.venue : [],
+          images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
+          sport: Array.isArray(m.sport) ? m.sport : (m.sport ? [m.sport].flat() : []),
+          venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
           availability: m.availability || "Available",
           isFavorite: false,
         }));
-        setMarkers(normalized); // initial set (all not favorite yet)
-        // Fetch favourites from API if we can determine numeric user id
+        setMarkers(normalized);
+        // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
         const numericUserId = await getCurrentNumericUserId();
         let favIds: number[] = [];
         if (numericUserId !== null) {
           try {
-            const rows = await listFavouriteCourts({ userid: numericUserId });
-            const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
+            const rowsFav = await listFavouriteCourts({ userid: numericUserId });
+            const favRows: FavouriteCourt[] = Array.isArray(rowsFav) ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
             setFavouriteRecords(favRows);
             favIds = favRows.map(r => r.courtid);
             setFavoriteIds(favIds);
@@ -166,10 +179,13 @@ export default function App() {
             console.warn('[Map] failed to load favouritecourts', e);
           }
         }
-        // Stamp favorites onto markers for initial render
-  normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
+        normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
         setMarkers(normalized);
         setFilteredMarkers(normalized);
+      } catch (e: any) {
+        setErrorMarkers(e.message || String(e));
+        setMarkers([]);
+        setFilteredMarkers([]);
       }
       setLoadingMarkers(false);
     };
@@ -801,7 +817,10 @@ export default function App() {
                           if (!selectedMarker) return;
                           const numericUserId = await getCurrentNumericUserId();
                           if (numericUserId == null) {
-                            console.warn('[Map] Cannot toggle favorite: missing numeric user id');
+                            if (!warnedMissingUserIdRef.current) {
+                              console.warn('[Map] Cannot toggle favorite: missing numeric user id. Log in via app backend (email/username + password) to enable favourites.');
+                              warnedMissingUserIdRef.current = true;
+                            }
                             return;
                           }
                           const courtId = selectedMarker.courtid; // use real courts.courtid
@@ -1193,7 +1212,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 14,
     top: '50%',
-    transform: [{ translateY: -17 }], // vertically center inside 48px bar
+    transform: [{ translateY: -17 }], 
     width: 34,
     height: 34,
     borderRadius: 17,

@@ -92,3 +92,26 @@ export async function getUserInfoByUserId(userid: number) {
 	return null
 }
 
+// ---- Court Info API ----
+// Existing backend endpoint: GET /courtinfo returns list of courtinfo rows.
+// Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability
+export type CourtInfoRow = {
+	courtinfoid: number
+	courtid: number
+	name?: string | null
+	address: string
+	latitude?: number | null
+	longitude?: number | null
+	latitudedelta?: number | null
+	longitudedelta?: number | null
+	sport?: string[] | string | null
+	venue?: string[] | string | null
+	images?: string[] | null
+	availability?: string | null
+}
+
+export async function listCourtInfo(): Promise<CourtInfoRow[]> {
+	const data = await request('/courtinfo', { debugLabel: 'listCourtInfo' })
+	return Array.isArray(data) ? data as CourtInfoRow[] : []
+}
+
