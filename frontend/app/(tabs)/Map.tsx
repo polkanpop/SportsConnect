@@ -46,6 +46,41 @@ type MarkerType = {
   isFavorite?: boolean; // client-side instantaneous favorite flag
 };
 
+// Memoized marker component – only re-renders if favorite state, selection, or coordinates change.
+type CourtMarkerProps = {
+  marker: MarkerType;
+  selectedId: number | null;
+  onPress: (m: MarkerType) => void;
+};
+
+const CourtMarker = React.memo(function CourtMarker({ marker, selectedId, onPress }: CourtMarkerProps) {
+  const isSelected = selectedId === marker.id;
+  const pinColor = isSelected
+    ? COLORS.green
+    : marker.isFavorite
+      ? '#FFD700'
+      : COLORS.red;
+  const coordinate = useMemo(() => ({ latitude: marker.latitude, longitude: marker.longitude }), [marker.latitude, marker.longitude]);
+  const handlePress = useCallback(() => onPress(marker), [onPress, marker]);
+  // Key still includes states to preserve previous remount semantics when fav/selection toggles
+  const keyFingerprint = `${marker.id}-${marker.isFavorite ? 'fav' : 'nf'}-${isSelected ? 'sel' : 'nosel'}`;
+  return (
+    <Marker
+      key={keyFingerprint}
+      coordinate={coordinate}
+      pinColor={pinColor}
+      onPress={handlePress}
+    />
+  );
+}, (prev, next) => {
+  return (
+    prev.selectedId === next.selectedId &&
+    prev.marker.isFavorite === next.marker.isFavorite &&
+    prev.marker.latitude === next.marker.latitude &&
+    prev.marker.longitude === next.marker.longitude
+  );
+});
+
 // Initial map region
 const INITIAL_REGION = {
   latitude: 14.0583, // Vietnam center
@@ -749,24 +784,15 @@ export default function App() {
                 showsCompass={false}
                 ref={mapRef}
               >
-                {/* Render all markers */}
-                {filteredMarkers.map((marker) => {
-                  const selected = selectedMarker?.id === marker.id;
-                  const pinColor = selected
-                    ? COLORS.green
-                    : marker.isFavorite
-                      ? '#FFD700'
-                      : COLORS.red;
-                  const keyFingerprint = `${marker.id}-${marker.isFavorite ? 'fav' : 'nf'}-${selected ? 'sel' : 'nosel'}`;
-                  return (
-                    <Marker
-                      key={keyFingerprint}
-                      coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-                      pinColor={pinColor}
-                      onPress={() => handleMarkerPress(marker)}
-                    />
-                  );
-                })}
+                {/* Render all markers via memoized CourtMarker */}
+                {filteredMarkers.map(marker => (
+                  <CourtMarker
+                    key={marker.id}
+                    marker={marker}
+                    selectedId={selectedMarker?.id ?? null}
+                    onPress={handleMarkerPress}
+                  />
+                ))}
               </MapView>
 
               {/* Google Maps Button (above My Location) */}
