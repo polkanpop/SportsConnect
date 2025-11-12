@@ -8,6 +8,7 @@ data/
 
 # Ignore environment variables
 .env
+/backend/.venv/
 
 # Expo
 .expo/
