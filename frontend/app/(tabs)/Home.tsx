@@ -44,7 +44,7 @@ export default function Home() {
       color: "#32CD32",
       iconStyle: { width: 45, height: 45 },
       labelStyle: labelStyles.first,
-      route: "/event/coach",
+      route: "/event/tsLit",
     },
     {
       icon: ICONS.event_category,
@@ -52,7 +52,7 @@ export default function Home() {
       color: "#FFA500",
       iconStyle: { width: 50, height: 50 },
       labelStyle: labelStyles.second,
-      route: "/event/eventBooking",
+      route: "/event/eventList",
     },
     {
       icon: ICONS.court,
@@ -60,7 +60,8 @@ export default function Home() {
       color: "#FFB6C1",
       iconStyle: { width: 60, height: 60 },
       labelStyle: labelStyles.third,
-      route: "/event/courtBooking",
+      // Updated to point to the new simplified court list screen
+      route: "/event/courtList",
     },
   ];
 

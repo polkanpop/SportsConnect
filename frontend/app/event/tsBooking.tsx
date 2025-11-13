@@ -3,7 +3,7 @@ import { View, TouchableOpacity, Text, Image } from "react-native";
 import { ICONS } from "@/constants/icons";
 import { useRouter } from "expo-router";
 
-export default function Coach() {
+export default function tsBooking() {
   const router = useRouter();
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
