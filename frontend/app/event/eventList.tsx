@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { listEventsCombined, CombinedEvent, CourtInfoRow } from '@/lib/backendApi'
+import { listEventsCombinedCached, CombinedEvent, CourtInfoRow } from '@/lib/backendApi'
+import { hydrateThenRefresh } from '@/lib/cache'
 
 // Reuse helper from courtList (duplicated locally to avoid circular import)
 function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | null): string[] {
@@ -36,7 +37,8 @@ const EventListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [allEvents, setAllEvents] = useState<CombinedEvent[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | null>(null)
@@ -45,11 +47,19 @@ const EventListScreen = () => {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 
   // Load events
+  // Read-through cached load: show cached quickly then refresh.
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const rows = await listEventsCombined()
-      setAllEvents(rows)
+      // hydrate from cache first then refresh
+      await hydrateThenRefresh<CombinedEvent[]>(
+        'cache:events:combined:v1',
+        60_000,
+        120_000,
+        () => listEventsCombinedCached(),
+        (rows) => setAllEvents(rows)
+      )
+      setInitialized(true)
     } catch (e: any) {
       setError(e.message || String(e))
     } finally { setLoading(false) }
@@ -82,6 +92,18 @@ const EventListScreen = () => {
       return sportOk && venueOk
     })
   }, [allEvents, search, selectedSports, selectedVenues])
+
+  // Pagination state for incremental rendering
+  const BATCH_SIZE = 15
+  const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
+  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedSports, selectedVenues])
+  const handleScroll = useCallback((e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
+    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
+    if (distanceFromBottom < 40) {
+      setVisibleCount(prev => prev >= filteredEvents.length ? prev : Math.min(prev + BATCH_SIZE, filteredEvents.length))
+    }
+  }, [filteredEvents])
 
   const toggleSport = (s: string) => setSelectedSports(p => p.includes(s) ? p.filter(x => x!==s) : [...p, s])
   const toggleVenue = (v: string) => setSelectedVenues(p => p.includes(v) ? p.filter(x => x!==v) : [...p, v])
@@ -144,11 +166,18 @@ const EventListScreen = () => {
           </View>
         )}
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
-        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
           {loading && <Text style={styles.statusText}>Loading events...</Text>}
-            {error && <Text style={[styles.statusText,{color:'red'}]}>Failed: {error}</Text>}
-            {!loading && !error && filteredEvents.length===0 && <Text style={styles.statusText}>No events found.</Text>}
-            {filteredEvents.map(ev => {
+          {error && <Text style={[styles.statusText,{color:'red'}]}>Failed: {error}</Text>}
+          {!loading && !error && filteredEvents.length === 0 && (
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading events...</Text>
+          )}
+          {filteredEvents.slice(0, visibleCount).map(ev => {
               const sports = asArray(ev.sport)
               const venues = asArray(ev.venue)
               let venueDisplay: string[] = []

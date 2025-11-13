@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/env'
+import { fetchWithCache } from '@/lib/cache'
 
 type Json = Record<string, any>
 
@@ -114,6 +115,15 @@ export async function listCourtInfo(): Promise<CourtInfoRow[]> {
 	const data = await request('/courtinfo', { debugLabel: 'listCourtInfo' })
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
 }
+// Cached variant (5 min TTL, additional 5 min stale window)
+export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
+	return fetchWithCache<CourtInfoRow[]>({
+		key: 'cache:courtinfo:v1',
+		ttlMs: 5 * 60 * 1000,
+		swrMs: 5 * 60 * 1000,
+		fetcher: () => listCourtInfo()
+	})
+}
 
 // ---- Event & Training Session Aggregation Helpers ----
 // These compose multiple REST endpoints into richer objects for UI screens.
@@ -220,6 +230,15 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 		}
 	})
 }
+// Cached variant (events moderately volatile: 60s TTL, 2m stale window)
+export async function listEventsCombinedCached(): Promise<CombinedEvent[]> {
+	return fetchWithCache<CombinedEvent[]>({
+		key: 'cache:events:combined:v1',
+		ttlMs: 60 * 1000,
+		swrMs: 120 * 1000,
+		fetcher: () => listEventsCombined()
+	})
+}
 
 // Aggregate training sessions similarly.
 export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSession[]> {
@@ -274,6 +293,15 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			sport: ci?.sport,
 			venue: ci?.venue,
 		}
+	})
+}
+// Cached variant (sessions volatile similar to events)
+export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrainingSession[]> {
+	return fetchWithCache<CombinedTrainingSession[]>({
+		key: 'cache:trainingsessions:combined:v1',
+		ttlMs: 60 * 1000,
+		swrMs: 120 * 1000,
+		fetcher: () => listTrainingSessionsCombined()
 	})
 }
 

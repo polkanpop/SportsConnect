@@ -1,6 +1,7 @@
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useState } from "react";
+import { fetchWithCache } from '@/lib/cache'
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -23,19 +24,26 @@ export default function NotificationsPage() {
   const [updating, setUpdating] = useState<number | null>(null);
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("notificationid,status,userid,message,time,notificationtype,notificationtypeid,title")
-      .order("time", { ascending: false });
-    if (error) {
-      setError(error.message);
-    } else if (data) {
-      setRows(data);
-    }
-    setLoading(false);
-  }, []);
+    setLoading(true); setError(null);
+    try {
+      const rows = await fetchWithCache<NotificationRow[]>({
+        key: 'cache:notifications:v1',
+        ttlMs: 30 * 1000, // 30s hard TTL
+        swrMs: 120 * 1000, // additional 2m background refresh window
+        fetcher: async () => {
+          const { data, error } = await supabase
+            .from('notifications')
+            .select('notificationid,status,userid,message,time,notificationtype,notificationtypeid,title')
+            .order('time', { ascending: false })
+          if (error || !data) throw new Error(error?.message || 'Failed notifications')
+          return data as NotificationRow[]
+        }
+      })
+      setRows(rows)
+    } catch (e: any) {
+      setError(e.message || String(e))
+    } finally { setLoading(false) }
+  }, [])
 
   useEffect(() => {
     fetchNotifications();

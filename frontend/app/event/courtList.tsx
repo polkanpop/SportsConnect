@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { listCourtInfo, CourtInfoRow, listFavouriteCourts, FavouriteCourt } from '@/lib/backendApi'
+import { listCourtInfoCached, CourtInfoRow, listFavouriteCourts, FavouriteCourt } from '@/lib/backendApi'
+import { getCache, setCache } from '@/lib/cache'
 import { ICONS } from '@/constants/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
@@ -79,9 +80,15 @@ const CourtListScreen = () => {
       setLoading(true)
       setError(null)
       try {
-        const rows = await listCourtInfo()
+        // Attempt cached value first
+        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
+        if (cached && cached.length) {
+          setAllCourts(cached.filter(r => (r.availability || '').toLowerCase() === 'available'))
+        }
+        const rows = await listCourtInfoCached()
         const available = rows.filter(r => (r.availability || '').toLowerCase() === 'available')
         setAllCourts(available)
+        await setCache('cache:courtinfo:v1', rows, 5 * 60 * 1000, 5 * 60 * 1000)
       } catch (e: any) {
         setError(e.message || String(e))
       } finally {
@@ -144,6 +151,21 @@ const CourtListScreen = () => {
       return sportOk && venueOk && favOk
     })
   }, [allCourts, search, selectedSports, selectedVenues, showFavouritesOnly, favouriteCourtIds])
+
+  // Incremental rendering (pagination) state
+  const BATCH_SIZE = 15
+  const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
+
+  // Reset visible items when filters/search/favourite toggle change
+  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedSports, selectedVenues, showFavouritesOnly])
+
+  const handleScroll = useCallback((e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
+    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
+    if (distanceFromBottom < 40) { // threshold
+      setVisibleCount(prev => prev >= filteredCourts.length ? prev : Math.min(prev + BATCH_SIZE, filteredCourts.length))
+    }
+  }, [filteredCourts])
 
   // Toggle selections
   const toggleSport = (s: string) => {
@@ -224,13 +246,18 @@ const CourtListScreen = () => {
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
 
         {/* Content list */}
-        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
           {loading && <Text style={styles.statusText}>Loading courts...</Text>}
           {error && <Text style={[styles.statusText, { color: 'red' }]}>Failed: {error}</Text>}
           {!loading && !error && filteredCourts.length === 0 && (
             <Text style={styles.statusText}>No courts match your filters.</Text>
           )}
-          {filteredCourts.map(c => {
+          {filteredCourts.slice(0, visibleCount).map(c => {
             const sports = asArray(c.sport)
             const venues = asArray(c.venue)
             // Venue tag logic: if both indoor & outdoor present, show In/Outdoor single tag

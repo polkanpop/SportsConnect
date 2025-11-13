@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { listTrainingSessionsCombined, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
+import { listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
+import { hydrateThenRefresh } from '@/lib/cache'
 
 function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | null): string[] {
   if (!v) return []
@@ -33,7 +34,8 @@ const TrainingSessionListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | null>(null)
@@ -44,8 +46,14 @@ const TrainingSessionListScreen = () => {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const rows = await listTrainingSessionsCombined()
-      setAllSessions(rows)
+      await hydrateThenRefresh<CombinedTrainingSession[]>(
+        'cache:trainingsessions:combined:v1',
+        60_000,
+        120_000,
+        () => listTrainingSessionsCombinedCached(),
+        rows => setAllSessions(rows)
+      )
+      setInitialized(true)
     } catch (e: any) { setError(e.message || String(e)) } finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
@@ -70,6 +78,18 @@ const TrainingSessionListScreen = () => {
       return sportOk && venueOk
     })
   }, [allSessions, search, selectedSports, selectedVenues])
+
+  // Incremental rendering state (pagination)
+  const BATCH_SIZE = 15
+  const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
+  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedSports, selectedVenues])
+  const handleScroll = useCallback((e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
+    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
+    if (distanceFromBottom < 40) {
+      setVisibleCount(prev => prev >= filteredSessions.length ? prev : Math.min(prev + BATCH_SIZE, filteredSessions.length))
+    }
+  }, [filteredSessions])
 
   const toggleSport = (s: string) => setSelectedSports(p => p.includes(s)?p.filter(x=>x!==s):[...p,s])
   const toggleVenue = (v: string) => setSelectedVenues(p => p.includes(v)?p.filter(x=>x!==v):[...p,v])
@@ -119,11 +139,18 @@ const TrainingSessionListScreen = () => {
           </View>
         )}
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
-        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
           {loading && <Text style={styles.statusText}>Loading sessions...</Text>}
           {error && <Text style={[styles.statusText,{color:'red'}]}>Failed: {error}</Text>}
-          {!loading && !error && filteredSessions.length===0 && <Text style={styles.statusText}>No sessions found.</Text>}
-          {filteredSessions.map(s => {
+          {!loading && !error && filteredSessions.length === 0 && (
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading sessions...</Text>
+          )}
+          {filteredSessions.slice(0, visibleCount).map(s => {
             const sports = asArray(s.sport)
             const venues = asArray(s.venue)
             let venueDisplay:string[]=[]

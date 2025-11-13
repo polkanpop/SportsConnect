@@ -5,7 +5,8 @@ import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
 // Backend API helpers (public)
-import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfo, CourtInfoRow } from '@/lib/backendApi';
+import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from '@/lib/backendApi';
+import { getCache, setCache } from '@/lib/cache';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
@@ -44,6 +45,20 @@ type MarkerType = {
   venue: string | string[];
   availability: string;
   isFavorite?: boolean; // client-side instantaneous favorite flag
+};
+
+// Sport color map (larger tags for bottom sheet)
+const SHEET_SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
+  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
+  soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
+  tennis: { bg: '#32CD32', color: '#fff' },
+  tabletennis: { bg: '#32CD32', color: '#fff' },
+  badminton: { bg: '#32CD32', color: '#fff' },
+  basketball: { bg: '#FFA500', color: '#111' },
+  volleyball: { bg: '#FFA500', color: '#111' },
+  golf: { bg: '#2e8b57', color: '#fff' },
+  running: { bg: '#4682B4', color: '#fff' },
+  pickleball: { bg: '#FF69B4', color: '#111' },
 };
 
 // Memoized marker component – only re-renders if favorite state, selection, or coordinates change.
@@ -183,7 +198,19 @@ export default function App() {
       setErrorMarkers(null);
       try {
         // Fetch via backend API
-        const rows: CourtInfoRow[] = await listCourtInfo();
+        // Hydrate markers from cache first for snappy load
+        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
+        let rows: CourtInfoRow[] = []
+        if (cached) rows = cached
+        // Always fetch fresh (cached variant handles TTL)
+        try {
+          const fresh = await listCourtInfoCached();
+          rows = fresh
+          // refresh cache TTL
+          setCache('cache:courtinfo:v1', fresh, 5 * 60 * 1000, 5 * 60 * 1000)
+        } catch (e) {
+          if (!cached) throw e // only surface if we had nothing cached
+        }
         let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => ({
           id: m.courtinfoid,
           courtid: m.courtid,
@@ -199,8 +226,8 @@ export default function App() {
           availability: m.availability || "Available",
           isFavorite: false,
         }));
-        setMarkers(normalized);
-        // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
+  setMarkers(normalized);
+  // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
         const numericUserId = await getCurrentNumericUserId();
         let favIds: number[] = [];
         if (numericUserId !== null) {
@@ -895,8 +922,54 @@ export default function App() {
                       </View>
                     </View>
 
+
                     {/* Location Address */}
                     <Text style={styles.markerAddress}>Address: {selectedMarker.address}</Text>
+
+                    {/* Sport & Venue Tags (moved under address) */}
+                    <View style={styles.sheetTagRow}>
+                      {/* Sports */}
+                      {(() => {
+                        const sportsRaw = Array.isArray(selectedMarker.sport) ? selectedMarker.sport : [selectedMarker.sport].filter(Boolean)
+                        const sports = sportsRaw.filter(Boolean).map(s => String(s))
+                        if (sports.length === 0) {
+                          return (
+                            <View key="sport-na" style={[styles.sheetTag, styles.sheetTagFallback]}>
+                              <Text style={styles.sheetTagText}>Sport N/A</Text>
+                            </View>
+                          )
+                        }
+                        return sports.map(s => {
+                          const key = s.replace(/\s+/g,'').toLowerCase()
+                          const cfg = SHEET_SPORT_COLORS[key]
+                          return (
+                            <View
+                              key={s}
+                              style={[
+                                styles.sheetTag,
+                                cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.sheetTagFallback,
+                              ]}
+                            >
+                              <Text style={[styles.sheetTagText, cfg && { color: cfg.color }]}>{s}</Text>
+                            </View>
+                          )
+                        })
+                      })()}
+                      {/* Venue */}
+                      {(() => {
+                        const venueRaw = Array.isArray(selectedMarker.venue) ? selectedMarker.venue : [selectedMarker.venue].filter(Boolean)
+                        const venues = venueRaw.filter(Boolean).map(v => String(v))
+                        const lower = venues.map(v => v.toLowerCase())
+                        let venueDisplay: string[] = []
+                        if (lower.includes('indoor') && lower.includes('outdoor')) venueDisplay = ['In/Outdoor']
+                        else if (venues.length) venueDisplay = [venues[0]]
+                        return venueDisplay.map(v => (
+                          <View key={v} style={[styles.sheetTag, styles.sheetVenueTag]}>
+                            <Text style={[styles.sheetTagText, { color: '#fff' }]}>{v}</Text>
+                          </View>
+                        ))
+                      })()}
+                    </View>
 
                     {/* Images */}
                     <View style={styles.imageContainer}>
@@ -1256,4 +1329,22 @@ const styles = StyleSheet.create({
   inlineStarActive: {
     backgroundColor: '#FFD700',
   },
+  // Bottom sheet tag styles
+  sheetTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  sheetTag: {
+    backgroundColor: '#333',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  sheetTagFallback: { backgroundColor: '#444' },
+  sheetVenueTag: { backgroundColor: '#6a5acd' },
+  sheetTagText: { color: '#ddd', fontSize: 14, fontWeight: '700' },
 });
