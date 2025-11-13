@@ -16,6 +16,13 @@ from .routers import (
     courtbookings,
     eventbookings,
     trainingsessions,
+    trainingsessioninfo,
+    tsbookings,
+    courtavailability,
+    events,
+    eventinfo,
+    payments,
+    reviews,
     history,
     auth,
 )
@@ -46,6 +53,13 @@ app.include_router(users.router, prefix="/api")
 app.include_router(courtbookings.router, prefix="/api")
 app.include_router(eventbookings.router, prefix="/api")
 app.include_router(trainingsessions.router, prefix="/api")
+app.include_router(trainingsessioninfo.router, prefix="/api")
+app.include_router(tsbookings.router, prefix="/api")
+app.include_router(courtavailability.router, prefix="/api")
+app.include_router(events.router, prefix="/api")
+app.include_router(eventinfo.router, prefix="/api")
+app.include_router(payments.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 
@@ -65,6 +79,18 @@ async def api_index():
             "favouritecourts": "/api/favouritecourts",
             "profiles": "/api/profiles/{user_id}",
             "data": "/api/data/{table}",
+            "courts": "/api/courts",
+            "courtbookings": "/api/courtbookings",
+            "courtavailability": "/api/courtavailability",
+            "eventbookings": "/api/eventbookings",
+            "events": "/api/events",
+            "eventinfo": "/api/eventinfo",
+            "trainingsessions": "/api/trainingsessions",
+            "trainingsessioninfo": "/api/trainingsessioninfo",
+            "tsbookings": "/api/tsbookings",
+            "payments": "/api/payments",
+            "reviews": "/api/reviews",
+            "history": "/api/history",
             "health": "/api/health",
             "status": "/status"
         }
@@ -111,6 +137,20 @@ async def status():
             "/api/eventbookings/{eventbookingid}",
             "/api/trainingsessions",
             "/api/trainingsessions/{sessionid}",
+            "/api/trainingsessioninfo",
+            "/api/trainingsessioninfo/{sessioninfoid}",
+            "/api/tsbookings",
+            "/api/tsbookings/{tsbookingid}",
+            "/api/courtavailability",
+            "/api/courtavailability/{availabilityid}",
+            "/api/events",
+            "/api/events/{eventid}",
+            "/api/eventinfo",
+            "/api/eventinfo/{eventinfoid}",
+            "/api/payments",
+            "/api/payments/{paymentid}",
+            "/api/reviews",
+            "/api/reviews/{reviewid}",
             "/api/history",
             
         ],

@@ -171,7 +171,7 @@ const CourtListScreen = () => {
         <View style={styles.searchContainer}>
           <Image source={ICONS.search} style={styles.searchIcon} />
           <TextInput
-            placeholder='Search courts...'
+            placeholder='Search for courts...'
             placeholderTextColor={'#777'}
             value={search}
             onChangeText={setSearch}
@@ -247,7 +247,7 @@ const CourtListScreen = () => {
                 key={c.courtinfoid}
                 activeOpacity={0.7}
                 style={styles.card}
-                onPress={() => router.push(`/event/${c.courtid}` as any)}
+                onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
               >
                 {isFav && (
                   <Image source={ICONS.bookMark} style={styles.bookmarkIcon} />
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: '#111', fontSize: 15, paddingVertical: 0 },
   // More space below filters
   filterRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  sectionTitle: { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 12, marginLeft: 4, marginTop: 15 },
+  sectionTitle: { fontSize: 22, fontWeight: '500', color: '#222', marginBottom: 12, marginLeft: 4, marginTop: 15 },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,12 +335,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#1e1e1e',
     borderRadius: 14,
-    padding: 16,
+    padding: 18,
     marginBottom: 16,
     alignItems: 'center',
-    minHeight: 120,
+    minHeight: 140,
   },
-  bookmarkIcon: { position: 'absolute', top: 10, right: 10, width: 26, height: 26, tintColor: '#FFD700', zIndex: 5, resizeMode: 'contain' },
+  bookmarkIcon: { position: 'absolute', top: 25, right: 10, width: 26, height: 26, tintColor: '#FFD700', zIndex: 5, resizeMode: 'contain' },
   cardLeft: { flex: 1, paddingRight: 12 },
   cardTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 4 },
   cardAddress: { color: '#ccc', fontSize: 13 },
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   venueTag: { backgroundColor: '#6a5acd' },
   tagText: { color: '#ddd', fontSize: 11, fontWeight: '600' },
   cardRight: { alignItems: 'center' },
-  // Larger placeholder image to reflect bigger card
-  placeholderImg: { width: 70, height: 70, backgroundColor: '#2d2d2d', borderRadius: 10, marginBottom: 6 },
-  arrowIcon: { width: 22, height: 22, tintColor: '#888' },
+  // Slightly larger placeholder image to match the subtly bigger card
+  placeholderImg: { width: 74, height: 74, backgroundColor: '#2d2d2d', borderRadius: 10, marginBottom: 6 },
+  arrowIcon: { width: 22, height: 22, tintColor: '#888', position: 'absolute',  left:58,top:80 },
 })

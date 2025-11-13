@@ -7,17 +7,28 @@ router = APIRouter(prefix="/data", tags=["data"])
 # Mapping of tables to their primary key column name.
 # Extend this dict as needed; values are kept simple for read-only listing.
 TABLES: Dict[str, Dict[str, str]] = {
+    # Core court & availability
     "courts": {"pk": "courtid"},
-    "eventbooking": {"pk": "id"},
-    "eventinfo": {"pk": "id"},
-    "events": {"pk": "id"},
-    "payments": {"pk": "id"},
-    "reviews": {"pk": "id"},
-    "trainingsessioninfo": {"pk": "id"},
-    "trainingsessions": {"pk": "id"},
-    "tsbookings": {"pk": "id"},
-    "userinfo": {"pk": "id"},
-    "userlogin": {"pk": "id"},
+    "courtinfo": {"pk": "courtinfoid"},
+    "courtbookings": {"pk": "courtbookingid"},
+    "courtavailability": {"pk": "availabilityid"},
+    # Events
+    "eventbookings": {"pk": "eventbookingid"},
+    "eventinfo": {"pk": "eventinfoid"},
+    "events": {"pk": "eventid"},
+    # Training sessions
+    "trainingsessions": {"pk": "sessionid"},
+    "trainingsessioninfo": {"pk": "sessioninfoid"},
+    "tsbookings": {"pk": "tsbookingid"},
+    # Users & auth
+    "userinfo": {"pk": "infoid"},
+    "userlogin": {"pk": "loginid"},
+    "users": {"pk": "userid"},
+    # Misc
+    "notifications": {"pk": "notificationid"},
+    "payments": {"pk": "paymentid"},
+    "reviews": {"pk": "reviewid"},
+    "favouritecourts": {"pk": "favouriteid"},
 }
 
 @router.get("/{table}", response_model=list[dict])

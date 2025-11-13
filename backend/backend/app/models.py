@@ -50,3 +50,57 @@ class FavouriteCourt(BaseModel):
 class FavouriteCourtCreate(BaseModel):
     courtid: int
     userid: int  # required when auth removed
+
+# --- Newly added models for missing tables ---
+
+class CourtAvailability(BaseModel):
+    availabilityid: int
+    courtid: int
+    status: Optional[str] = None
+    start_time: Optional[str] = None  # HH:MM:SS
+    end_time: Optional[str] = None
+    booking_date: Optional[dict] = None  # stored as jsonb
+
+class EventInfo(BaseModel):
+    eventinfoid: int
+    eventid: int
+    numberofpeople: Optional[int] = None
+    description: Optional[str] = None
+    title: str
+
+class Event(BaseModel):
+    eventid: int
+    time: str  # timestamp
+    courtbookingid: int
+    status: Optional[str] = None
+    organizerid: int
+
+class Payment(BaseModel):
+    paymentid: int
+    status: Optional[str] = None
+    time: Optional[str] = None
+    method: Optional[str] = None
+    amount: Optional[float] = None
+
+class Review(BaseModel):
+    reviewid: int
+    rating: int
+    comment: str
+    targettype: str
+    targetid: int
+    userid: int
+
+class TrainingSessionInfo(BaseModel):
+    sessioninfoid: int
+    sessionid: Optional[int] = None
+    numberofpeople: int
+    description: str
+    title: str
+
+class TSBooking(BaseModel):
+    tsbookingid: int
+    sessionid: int
+    paymentid: Optional[int] = None
+    userid: int
+    status: Optional[str] = None
+

@@ -44,7 +44,7 @@ export default function Home() {
       color: "#32CD32",
       iconStyle: { width: 45, height: 45 },
       labelStyle: labelStyles.first,
-      route: "/event/tsLit",
+      route: "/event/tsList",
     },
     {
       icon: ICONS.event_category,

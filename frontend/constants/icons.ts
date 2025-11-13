@@ -58,6 +58,7 @@ export const ICONS = {
   outdoor: require('../assets/icons/outdoor.png'),
   x: require('../assets/icons/x.png'),
   tick: require('../assets/icons/tick.png'),
+  participants: require('../assets/icons/participants.png'),
   supportCentre: require('../assets/icons/support_centre.png'),
   starCal: require('../assets/icons/star_cal.png'),
   coachCal: require('../assets/icons/coach_cal.png'),
@@ -67,6 +68,9 @@ export const ICONS = {
   zoomIn: require('../assets/icons/Zoomin.png'),
   ZoomOut: require('../assets/icons/Zoomout.png'),
   signout: require('../assets/icons/signout.png'),
+  bookingButton: require('../assets/icons/bookingButton.png'),
+  // Alias requested in spec (user referred to ICONS.buttonBooking)
+  buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   bookMark: require('../assets/icons/bookmark.png'),
   menu: require('../assets/icons/menu.png'),

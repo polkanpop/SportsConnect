@@ -115,3 +115,165 @@ export async function listCourtInfo(): Promise<CourtInfoRow[]> {
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
 }
 
+// ---- Event & Training Session Aggregation Helpers ----
+// These compose multiple REST endpoints into richer objects for UI screens.
+
+export type EventRow = { eventid: number; time: string; courtbookingid: number; status?: string; organizerid: number }
+export type EventInfoMeta = { eventinfoid: number; eventid: number; numberofpeople?: number | null; description?: string | null; title: string }
+export type CombinedEvent = {
+	eventid: number
+	time?: string
+	status?: string
+	courtbookingid: number
+	organizerid: number
+	organizerName?: string | null
+	title?: string
+	description?: string | null
+	numberofpeople?: number | null
+	courtid?: number
+	address?: string
+	sport?: string[] | string | null
+	venue?: string[] | string | null
+}
+
+export type TrainingSessionRow = { sessionid: number; time: string; courtbookingid: number; status?: string; coachid: number }
+export type TrainingSessionInfoMeta = { sessioninfoid: number; sessionid: number; numberofpeople: number; description: string; title: string }
+export type CombinedTrainingSession = {
+	sessionid: number
+	time?: string
+	status?: string
+	courtbookingid: number
+	coachid: number
+	coachName?: string | null
+	title?: string
+	description?: string | null
+	numberofpeople?: number | null
+	courtid?: number
+	address?: string
+	sport?: string[] | string | null
+	venue?: string[] | string | null
+}
+
+// Utility to safely fetch a single resource and swallow errors (returns null)
+async function safeGet(path: string, label: string) {
+	try { return await request(path, { debugLabel: label }) } catch { return null }
+}
+
+// Aggregate events with related meta, court info and organizer name.
+export async function listEventsCombined(): Promise<CombinedEvent[]> {
+	const eventsData = await request('/events', { debugLabel: 'listEvents' })
+	if (!Array.isArray(eventsData)) return []
+	const events: EventRow[] = eventsData as EventRow[]
+
+	// Fetch event info in one call & map
+	const infoRowsRaw = await request('/eventinfo', { debugLabel: 'listEventInfoAll' })
+	const infoByEventId = new Map<number, EventInfoMeta>()
+	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as EventInfoMeta[]) infoByEventId.set(r.eventid, r)
+
+	// Batch fetch courtbookings (single call) then filter needed ids
+	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
+	const bookingById = new Map<number, any>()
+	if (Array.isArray(allCourtBookings))
+		for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
+
+	// Get availability ids from bookings then batch fetch all availability slots once
+	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
+	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
+	const availabilityById = new Map<number, any>()
+	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
+
+	// Derive courtids
+	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
+	let courtInfoRows: CourtInfoRow[] = []
+	if (courtIds.length) {
+		const ci = await safeGet(`/courtinfo?courtids=${courtIds.join(',')}`, 'listCourtInfoSubset')
+		if (Array.isArray(ci)) courtInfoRows = ci as CourtInfoRow[]
+	}
+	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
+	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	// Batch userinfo single call then map by userid
+	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
+	const nameByUserId = new Map<number, string | null>()
+	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
+
+	return events.map(e => {
+		const booking = bookingById.get(e.courtbookingid)
+		const availability = booking ? availabilityById.get(booking.availabilityid) : null
+		const courtid = availability?.courtid
+		const ci = courtid != null ? courtInfoByCourtId.get(courtid) : undefined
+		const meta = infoByEventId.get(e.eventid)
+		return {
+			eventid: e.eventid,
+			time: e.time,
+			status: e.status,
+			courtbookingid: e.courtbookingid,
+			organizerid: e.organizerid,
+			organizerName: nameByUserId.get(e.organizerid) || null,
+			title: meta?.title,
+			description: meta?.description,
+			numberofpeople: meta?.numberofpeople ?? null,
+			courtid,
+			address: ci?.address,
+			sport: ci?.sport,
+			venue: ci?.venue,
+		}
+	})
+}
+
+// Aggregate training sessions similarly.
+export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSession[]> {
+	const tsData = await request('/trainingsessions', { debugLabel: 'listTrainingSessions' })
+	if (!Array.isArray(tsData)) return []
+	const sessions: TrainingSessionRow[] = tsData as TrainingSessionRow[]
+
+	const infoRowsRaw = await request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' })
+	const infoBySessionId = new Map<number, TrainingSessionInfoMeta>()
+	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as TrainingSessionInfoMeta[]) infoBySessionId.set(r.sessionid, r)
+
+	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
+	const bookingById = new Map<number, any>()
+	if (Array.isArray(allCourtBookings)) for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
+
+	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
+	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
+	const availabilityById = new Map<number, any>()
+	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
+
+	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
+	let courtInfoRows: CourtInfoRow[] = []
+	if (courtIds.length) {
+		const ci = await safeGet(`/courtinfo?courtids=${courtIds.join(',')}`, 'listCourtInfoSubset')
+		if (Array.isArray(ci)) courtInfoRows = ci as CourtInfoRow[]
+	}
+	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
+	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
+	const nameByUserId = new Map<number, string | null>()
+	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
+
+	return sessions.map(s => {
+		const booking = bookingById.get(s.courtbookingid)
+		const availability = booking ? availabilityById.get(booking.availabilityid) : null
+		const courtid = availability?.courtid
+		const ci = courtid != null ? courtInfoByCourtId.get(courtid) : undefined
+		const meta = infoBySessionId.get(s.sessionid)
+		return {
+			sessionid: s.sessionid,
+			time: s.time,
+			status: s.status,
+			courtbookingid: s.courtbookingid,
+			coachid: s.coachid,
+			coachName: nameByUserId.get(s.coachid) || null,
+			title: meta?.title,
+			description: meta?.description,
+			numberofpeople: meta?.numberofpeople ?? null,
+			courtid,
+			address: ci?.address,
+			sport: ci?.sport,
+			venue: ci?.venue,
+		}
+	})
+}
+

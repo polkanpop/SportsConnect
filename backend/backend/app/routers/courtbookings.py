@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from ..db import rest_select, rest_upsert
 from ..auth import get_current_user
 
-router = APIRouter(prefix="/courtbookings", tags=["bookings"])
+router = APIRouter(prefix="/courtbookings", tags=["bookings"])  # Route keeps plural for consistency, underlying table is singular
 
 PRIMARY_KEY = "courtbookingid"
 
@@ -14,8 +14,8 @@ def list_court_bookings(userid: int | None = Query(None), status: str | None = Q
             filters["userid"] = userid
         if status is not None:
             filters["status"] = status
-        data = rest_select("courtbookings", "*", filters=filters or None, order={"column": PRIMARY_KEY})
-        # manual slicing for pagination (Supabase REST lacks limit/offset w/out query modification; could add ?limit=?&offset=? if enabled)
+        # Table name in schema is singular 'courtbooking'
+        data = rest_select("courtbooking", "*", filters=filters or None, order={"column": PRIMARY_KEY})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []
@@ -25,7 +25,7 @@ def list_court_bookings(userid: int | None = Query(None), status: str | None = Q
 @router.get("/{courtbookingid}", response_model=dict)
 def get_court_booking(courtbookingid: int):
     try:
-        row = rest_select("courtbookings", "*", filters={PRIMARY_KEY: courtbookingid}, single=True)
+        row = rest_select("courtbooking", "*", filters={PRIMARY_KEY: courtbookingid}, single=True)
         if not row:
             raise HTTPException(status_code=404, detail="Court booking not found")
         return row
@@ -38,7 +38,7 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
     Demo-only: trusts body and injects userid from auth subject."""
     try:
         payload = {**body, "userid": body.get("userid") or current_user}
-        resp = rest_upsert("courtbookings", payload)
+        resp = rest_upsert("courtbooking", payload)
         return resp[0] if isinstance(resp, list) and resp else payload
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
