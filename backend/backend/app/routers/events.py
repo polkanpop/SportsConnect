@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from ..db import rest_select, rest_upsert
 from ..auth import get_current_user
+from fastapi_cache.decorator import cache
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 PRIMARY_KEY = "eventid"
 
 @router.get("", response_model=list[dict])
+@cache(expire=60)
 def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int | str] = {}
@@ -24,6 +26,7 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{eventid}", response_model=dict)
+@cache(expire=120)
 def get_event(eventid: int):
     try:
         row = rest_select("events", "*", filters={PRIMARY_KEY: eventid}, single=True)

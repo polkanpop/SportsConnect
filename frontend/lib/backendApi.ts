@@ -62,6 +62,18 @@ export async function listFavouriteCourts(params?: { userid?: number; idsOnly?: 
 	return data as FavouriteCourt[] | number[]
 }
 
+// Cached variant: per-user favourites are moderately volatile; short TTL
+export async function listFavouriteCourtsCached(params: { userid: number; idsOnly?: boolean }) {
+	const { userid, idsOnly } = params
+	const key = `cache:favouritecourts:user:${userid}:v1${idsOnly ? ':ids' : ''}`
+	return fetchWithCache<any[]>({
+		key,
+		ttlMs: 30 * 1000,
+		swrMs: 60 * 1000,
+		fetcher: () => listFavouriteCourts({ userid, idsOnly })
+	})
+}
+
 export async function addFavouriteCourt(userid: number, courtid: number) {
 	const body = { userid, courtid }
 	const data = await request('/favouritecourts', {
@@ -91,6 +103,16 @@ export async function getUserInfoByUserId(userid: number) {
 	const rows = await request(path, { debugLabel: 'getUserInfoByUserId' })
 	if (Array.isArray(rows) && rows.length) return rows[0] as UserInfoRow
 	return null
+}
+
+// Cached variant: user info display name rarely changes; short TTL
+export async function getUserInfoByUserIdCached(userid: number) {
+	return fetchWithCache<UserInfoRow | null>({
+		key: `cache:userinfo:user:${userid}:v1`,
+		ttlMs: 60 * 1000,
+		swrMs: 120 * 1000,
+		fetcher: () => getUserInfoByUserId(userid)
+	})
 }
 
 // ---- Court Info API ----

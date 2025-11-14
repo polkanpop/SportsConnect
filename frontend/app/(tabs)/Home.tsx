@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
-import { listFavouriteCourts, FavouriteCourt, listCourtInfo, CourtInfoRow } from "@/lib/backendApi";
+import { listFavouriteCourtsCached, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from "@/lib/backendApi";
 import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -120,11 +120,11 @@ export default function Home() {
         setFavoriteLocations([]);
         return;
       }
-      const rows = await listFavouriteCourts({ userid: userId });
+      const rows = await listFavouriteCourtsCached({ userid: userId });
       if (abortController.signal.aborted) return;
       const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
       if (favRows.length === 0) { setFavoriteLocations([]); return; }
-      const courtInfoRows: CourtInfoRow[] = await listCourtInfo();
+      const courtInfoRows: CourtInfoRow[] = await listCourtInfoCached();
       if (abortController.signal.aborted) return;
       const infoMap = new Map<number, CourtInfoRow>();
       courtInfoRows.forEach(ci => { if (typeof ci.courtid === 'number') infoMap.set(ci.courtid, ci); });

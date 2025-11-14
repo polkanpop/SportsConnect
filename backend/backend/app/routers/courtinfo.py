@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from ..db import rest_select
 from ..models import CourtInfo
+from fastapi_cache.decorator import cache
 
 router = APIRouter(prefix="/courtinfo", tags=["courtinfo"])
 
 @router.get("", response_model=list[CourtInfo])
+@cache(expire=300)
 async def list_courts(courtids: str | None = Query(default=None)):
     """List courtinfo rows. Optional filter: ?courtids=1,2,3
     (Client-side subset until REST helper supports IN filter)."""
@@ -27,6 +29,7 @@ async def list_courts(courtids: str | None = Query(default=None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtinfoid}", response_model=CourtInfo)
+@cache(expire=300)
 async def get_court(courtinfoid: int):
     try:
         data = rest_select(

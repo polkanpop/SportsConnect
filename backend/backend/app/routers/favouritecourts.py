@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from ..rate_limit import limiter
 from ..db import rest_select, rest_upsert, rest_delete
 from ..models import FavouriteCourt, FavouriteCourtCreate
 
@@ -18,13 +19,16 @@ async def list_favourite_courts(userid: int | None = Query(default=None), ids_on
 
 
 @router.post("", response_model=FavouriteCourt)
-async def add_favourite_court(body: FavouriteCourtCreate):
+@limiter.limit("12/minute")
+async def add_favourite_court(request: Request, body: FavouriteCourtCreate):
     """Idempotent add: returns existing favourite if (userid,courtid) already present.
 
     Performs existence checks for referenced user & court to avoid 500 errors from FK violations.
     Returns 400 with a clear message if either does not exist.
     """
     try:
+        # Attach userid for per-user rate limiting
+        request.state.user_id = body.userid
         # Validate referenced user exists
         user_row = rest_select("users", "userid", filters={"userid": body.userid}, single=True)
         if user_row is None:
@@ -55,7 +59,8 @@ async def add_favourite_court(body: FavouriteCourtCreate):
 
 
 @router.post("/toggle")
-async def toggle_favourite(body: FavouriteCourtCreate):
+@limiter.limit("20/minute")  # toggle can be a bit higher to avoid frustration
+async def toggle_favourite(request: Request, body: FavouriteCourtCreate):
     """Toggle favourite for a user/court pair. Returns action and record.
 
     Response shape:
@@ -63,6 +68,7 @@ async def toggle_favourite(body: FavouriteCourtCreate):
     Performs existence checks for user & court.
     """
     try:
+        request.state.user_id = body.userid
         user_row = rest_select("users", "userid", filters={"userid": body.userid}, single=True)
         if user_row is None:
             raise HTTPException(status_code=400, detail=f"User {body.userid} does not exist")
@@ -91,9 +97,14 @@ async def toggle_favourite(body: FavouriteCourtCreate):
 
 
 @router.delete("/{favouriteid}")
-async def remove_favourite_court(favouriteid: int):
+@limiter.limit("12/minute")
+async def remove_favourite_court(request: Request, favouriteid: int):
     """Public delete favourite by primary key favouriteid."""
     try:
+        # Optionally scope by user if we can resolve it quickly
+        row = rest_select("favouritecourts", "userid", filters={"favouriteid": favouriteid}, single=True)
+        if isinstance(row, dict) and "userid" in row:
+            request.state.user_id = row["userid"]
         resp = rest_delete("favouritecourts", {"favouriteid": favouriteid})
         return {"deleted": True, "count": len(resp) if isinstance(resp, list) else 0}
     except RuntimeError as e:

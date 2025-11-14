@@ -1,7 +1,10 @@
 import time
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .db import get_settings
+from .rate_limit import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 from .routers import (
     courtinfo,
     notifications,
@@ -26,11 +29,20 @@ from .routers import (
     history,
     auth,
 )
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi import Response
 
 settings = get_settings()
 START_TIME = time.time()
 
 app = FastAPI(title="SportsConnect API", version="0.1.0")
+
+# Attach limiter & middleware (only endpoints decorated with @limiter.limit will be enforced)
+app.state.limiter = limiter
+app.add_exception_handler(429, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +74,13 @@ app.include_router(payments.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+
+@app.on_event("startup")
+async def _init_cache():
+    # Initialize fastapi-cache with in-memory backend (Layer 2)
+    # Prefix isolates cache keys for this service.
+    FastAPICache.init(InMemoryBackend(), prefix="sportsconnect-cache")
+
 
 @app.get("/api/health")
 async def api_health():

@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from ..db import rest_select
+from fastapi_cache.decorator import cache
 
 router = APIRouter(prefix="/courts", tags=["courts"])
 
 SELECT_COLUMNS = "*"  # adjust if you want a slimmer payload
 
 @router.get("", response_model=list[dict])
+@cache(expire=300)
 def list_courts():
     try:
         data = rest_select("courts", SELECT_COLUMNS, order={"column": "courtid"})
@@ -14,6 +16,7 @@ def list_courts():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtid}", response_model=dict)
+@cache(expire=300)
 def get_court(courtid: int):
     try:
         row = rest_select("courts", SELECT_COLUMNS, filters={"courtid": courtid}, single=True)

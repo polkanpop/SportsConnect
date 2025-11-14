@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
-import { getUserInfoByUserId } from '@/lib/backendApi';
+import { getUserInfoByUserIdCached } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
@@ -34,7 +34,7 @@ export default function SettingsPage() {
           if (parsed?.name) setDisplayName(parsed.name);
           // Attempt fresh fetch in case name changed.
           if (parsed?.userid) {
-            const row = await getUserInfoByUserId(parsed.userid);
+            const row = await getUserInfoByUserIdCached(parsed.userid);
             if (row?.name) setDisplayName(row.name);
           }
         } catch {/* ignore parse errors */}

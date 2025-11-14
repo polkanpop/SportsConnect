@@ -5,7 +5,7 @@ import { ICONS } from "@/constants/icons";
 // Removed static markers import
 import { supabase } from "@/lib/supabase";
 // Backend API helpers (public)
-import { listFavouriteCourts, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from '@/lib/backendApi';
+import { listFavouriteCourtsCached, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from '@/lib/backendApi';
 import { getCache, setCache } from '@/lib/cache';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -232,7 +232,7 @@ export default function App() {
         let favIds: number[] = [];
         if (numericUserId !== null) {
           try {
-            const rowsFav = await listFavouriteCourts({ userid: numericUserId });
+            const rowsFav = await listFavouriteCourtsCached({ userid: numericUserId });
             const favRows: FavouriteCourt[] = Array.isArray(rowsFav) ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
             setFavouriteRecords(favRows);
             favIds = favRows.map(r => r.courtid);

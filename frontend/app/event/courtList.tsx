@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { listCourtInfoCached, CourtInfoRow, listFavouriteCourts, FavouriteCourt } from '@/lib/backendApi'
+import { listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt } from '@/lib/backendApi'
 import { getCache, setCache } from '@/lib/cache'
 import { ICONS } from '@/constants/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -107,7 +107,7 @@ const CourtListScreen = () => {
       const uid = await resolveUserId()
       setCurrentUserId(uid)
       if (uid == null) { setFavouriteCourtIds([]); return }
-      const rows = await listFavouriteCourts({ userid: uid })
+      const rows = await listFavouriteCourtsCached({ userid: uid })
       if (controller.signal.aborted) return
       const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : []
       setFavouriteCourtIds(favRows.map(r => r.courtid))
