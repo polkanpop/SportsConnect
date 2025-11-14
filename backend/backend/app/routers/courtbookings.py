@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_insert
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/courtbookings", tags=["bookings"])  # Route keeps plural for consistency, underlying table is singular
@@ -38,7 +38,17 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
     Demo-only: trusts body and injects userid from auth subject."""
     try:
         payload = {**body, "userid": body.get("userid") or current_user}
-        resp = rest_upsert("courtbooking", payload)
-        return resp[0] if isinstance(resp, list) and resp else payload
+        resp = rest_insert("courtbooking", payload)
+        # Supabase should return representation list with inserted/merged row.
+        if not isinstance(resp, list) or not resp:
+            raise HTTPException(status_code=500, detail="Insert did not return representation; check Supabase headers/policies")
+        row = resp[0]
+        # Ensure primary key present so frontend doesn't treat echo payload as success.
+        if PRIMARY_KEY not in row:
+            raise HTTPException(status_code=500, detail="Insert succeeded but missing primary key in response")
+        return row
     except RuntimeError as e:
+        # Surface conflict separately (duplicate primary key) so operator can repair sequence.
+        if "409" in str(e):
+            raise HTTPException(status_code=409, detail="Duplicate primary key on insert; sequence likely misaligned")
         raise HTTPException(status_code=400, detail=str(e))

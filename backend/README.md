@@ -98,6 +98,49 @@ If you see CORS errors from the frontend, append its origin to `ALLOWED_ORIGINS`
 2. Add basic pytest suite (e.g. health & one endpoint).
 3. Introduce rate limiting (e.g. slowapi) for write endpoints.
 4. Replace HS256 fallback with mandatory JWKS once Supabase enables RS256.
+5. Add startup sequence alignment health check (see below).
+
+## Sequence Alignment (Prevent Overwrites)
+
+If you imported seed data manually, make sure the underlying Postgres sequences advance past the current max primary key to avoid accidental overwrites (especially now that inserts are strict).
+
+Run in Supabase SQL editor once after seeding:
+
+```sql
+-- Court bookings: next value should be max(courtbookingid)+1 (existing max assumed 30)
+select setval('courtbooking_courtbookingid_seq', (select coalesce(max(courtbookingid),0)+1 from courtbooking), false);
+
+-- Payments: advance sequence (existing max assumed 31)
+select setval('payments_paymentid_seq', (select coalesce(max(paymentid),0)+1 from payments), false);
+```
+
+Verify:
+```sql
+select max(courtbookingid) as max_id, nextval('courtbooking_courtbookingid_seq') as next_after_fix from courtbooking;
+select max(paymentid) as max_id, nextval('payments_paymentid_seq') as next_after_fix from payments;
+```
+
+Notes:
+* Passing `false` as third arg means the sequence returns the exact value you set on the first `nextval` after the fix (so if max was 30, `nextval` returns 31).
+* If you use `true`, `nextval` will advance again (return 32 in that example). Use `false` for intuitive "next = max+1".
+* After alignment, inserts will append without touching existing seed rows because the backend now uses strict inserts (no upsert merge).
+
+Optional RPC helper (create once) to align a sequence generically:
+```sql
+create or replace function ensure_sequence(seq regclass, tbl text, pk text)
+returns bigint language plpgsql as $$
+declare m bigint;
+begin
+  execute format('select max(%I) from %I', pk, tbl) into m;
+  if m is null then m := 0; end if;
+  perform setval(seq::text, m+1, false);
+  return m+1;
+end;$$;
+```
+Call via PostgREST:
+`POST /rest/v1/rpc/ensure_sequence { "seq":"courtbooking_courtbookingid_seq", "tbl":"courtbooking", "pk":"courtbookingid" }`
+
+---
 
 ## Contributing
 

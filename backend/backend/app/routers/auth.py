@@ -1,10 +1,13 @@
 import time
 import logging
 import hashlib
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
+from jose import jwt
 from ..db import rest_select, rest_upsert
+from ..auth import get_jwt_secret, HS_ALGORITHM
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -155,6 +158,23 @@ def signup(payload: dict):
 
     elapsed = _now_ms() - t0
     logger.debug(f"/signup COMPLETE userid={userid} elapsedMs={elapsed}")
+    # Issue JWT (HS256 using SUPABASE_JWT_SECRET or anon/service key) so frontend can call protected endpoints.
+    secret = get_jwt_secret()
+    token = None
+    if secret:
+        try:
+            exp = datetime.utcnow() + timedelta(hours=24)
+            payload_token = {
+                "sub": str(userid),
+                "role": role,
+                "email": email,
+                "username": username,
+                "iat": int(time.time()),
+                "exp": int(exp.timestamp()),
+            }
+            token = jwt.encode(payload_token, secret, algorithm=HS_ALGORITHM)
+        except Exception as e:
+            logger.warning(f"/signup token generation failed userid={userid} err={e}")
     return {
         "status": "ok",
         "userid": userid,
@@ -163,6 +183,7 @@ def signup(payload: dict):
         "infoid": infoid,
         "loginid": loginid,
         "elapsedMs": elapsed,
+        "token": token,
     }
 
 @router.post('/login')
@@ -225,6 +246,22 @@ def login(payload: dict):
 
     elapsed = _now_ms() - t0
     logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed}")
+    # Issue JWT (24h validity)
+    secret = get_jwt_secret()
+    token = None
+    if secret:
+        try:
+            exp = datetime.utcnow() + timedelta(hours=24)
+            payload_token = {
+                "sub": str(userid),
+                "username": login_row.get('username'),
+                "email": info_row.get('email') if info_row else None,
+                "iat": int(time.time()),
+                "exp": int(exp.timestamp()),
+            }
+            token = jwt.encode(payload_token, secret, algorithm=HS_ALGORITHM)
+        except Exception as e:
+            logger.warning(f"/login token generation failed userid={userid} err={e}")
     return {
         "status": "ok",
         "userid": userid,
@@ -232,4 +269,5 @@ def login(payload: dict):
         "email": info_row.get('email') if info_row else None,
         "name": info_row.get('name') if info_row else None,
         "elapsedMs": elapsed,
+        "token": token,
     }

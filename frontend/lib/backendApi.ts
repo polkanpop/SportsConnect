@@ -1,5 +1,7 @@
 import { API_BASE_URL } from '@/env'
 import { fetchWithCache } from '@/lib/cache'
+import { supabase } from './supabase'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 type Json = Record<string, any>
 
@@ -7,10 +9,30 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`
 	const t0 = Date.now()
 	const debugLabel = options.debugLabel || path
+	// Attach Authorization Bearer token when Supabase session present
+	let authHeader: Record<string,string> = {}
+	try {
+		const { data } = await supabase.auth.getSession()
+		const token = data?.session?.access_token
+		if (token) {
+			authHeader = { Authorization: `Bearer ${token}` }
+		} else {
+			// Fallback to locally-issued JWT from custom /auth/login or /auth/signup
+			const localToken = await AsyncStorage.getItem('@localAuthToken')
+			if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
+		}
+	} catch (e) {
+		// Attempt local token even if supabase call failed
+		try {
+			const localToken = await AsyncStorage.getItem('@localAuthToken')
+			if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
+		} catch {}
+	}
 	const res = await fetch(url, {
 		method: options.method || 'GET',
 		headers: {
 			'Content-Type': 'application/json',
+			...authHeader,
 			...(options.headers || {})
 		},
 		body: options.body,
@@ -29,19 +51,25 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 }
 
 export async function authSignup(payload: { username: string; email: string; password: string; accountName?: string; role?: string }) {
-	return request('/auth/signup', {
+	const data = await request('/auth/signup', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 		debugLabel: 'authSignup'
 	})
+	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
+	try { if (data?.userid != null) await AsyncStorage.setItem('@backendProfile', JSON.stringify(data)) } catch {}
+	return data
 }
 
 export async function authLogin(payload: { identifier: string; password: string }) {
-	return request('/auth/login', {
+	const data = await request('/auth/login', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 		debugLabel: 'authLogin'
 	})
+	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
+	try { if (data?.userid != null) await AsyncStorage.setItem('@backendProfile', JSON.stringify(data)) } catch {}
+	return data
 }
 
 // ---- Favourite Courts API (public) ----
@@ -145,6 +173,22 @@ export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 		swrMs: 5 * 60 * 1000,
 		fetcher: () => listCourtInfo()
 	})
+}
+
+// ---- Payments & Court Bookings (simplified create helpers) ----
+export type PaymentRow = { paymentid: number; status: string; time: string; method: string; amount: number }
+export async function createPayment(payload: { status: 'paid'|'pending'|'failed'; method: 'vnpay'|'cash'; amount: number }) {
+	return request('/payments', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createPayment' }) as Promise<PaymentRow>
+}
+
+export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string }
+export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
+	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
+}
+
+export async function listCourtAvailability(courtid: number) {
+	const path = `/courtavailability?courtid=${encodeURIComponent(courtid)}`
+	return request(path, { debugLabel: 'listCourtAvailability' }) as Promise<any[]>
 }
 
 // ---- Event & Training Session Aggregation Helpers ----

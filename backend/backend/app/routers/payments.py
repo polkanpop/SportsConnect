@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_insert
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -33,7 +33,12 @@ def get_payment(paymentid: int):
 @router.post("", response_model=dict)
 def create_payment(body: dict):
     try:
-        resp = rest_upsert("payments", body)
-        return resp[0] if isinstance(resp, list) and resp else body
+        resp = rest_insert("payments", body)
+        if not isinstance(resp, list) or not resp:
+            raise HTTPException(status_code=500, detail="Payment insert did not return representation")
+        row = resp[0]
+        if PRIMARY_KEY not in row:
+            raise HTTPException(status_code=500, detail="Payment insert missing primary key in response")
+        return row
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

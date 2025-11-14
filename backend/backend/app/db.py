@@ -63,6 +63,19 @@ def rest_upsert(table: str, payload: Dict[str, Any]) -> Any:
         raise RuntimeError(f"Supabase REST error {r.status_code} on {table}: {r.text}")
     return r.json()
 
+def rest_insert(table: str, payload: Dict[str, Any]) -> Any:
+    """Strict insert (no upsert). Will raise 409 on duplicate primary key instead of silently updating.
+    This protects sample seed data from being overwritten when sequences are misaligned."""
+    settings = get_settings()
+    client = get_http_client()
+    url = f"{settings.SUPABASE_URL}/rest/v1/{table}"
+    headers = rest_headers(settings)
+    headers["Prefer"] = "return=representation"  # omit resolution=merge-duplicates
+    r = client.post(url, headers=headers, json=payload)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Supabase REST error {r.status_code} on {table}: {r.text}")
+    return r.json()
+
 def rest_delete(table: str, filters: Dict[str, Any]) -> Any:
     settings = get_settings()
     client = get_http_client()
