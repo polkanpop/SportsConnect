@@ -38,8 +38,27 @@ const favoritesFilePath = (userId?: string | null) => `${USERDATA_DIR}${userId ?
 // Build storage key using user id (anon fallback)
 const buildKey = (userId?: string | null) => `@favorites:${userId ?? 'guest'}`;
 
-// Get current user id from Supabase session (if available)
-const getCurrentUserId = () => supabase.auth.getSession().then(r => r.data.session?.user?.id ?? null).catch(() => null);
+// Get current user id from Supabase session (uuid) OR backend remembered profile (numeric userid)
+// Return value always coerced to string so storage keys are consistent.
+const getCurrentUserId = async (): Promise<string | null> => {
+  // 1. Try Supabase session user id
+  try {
+    const { data } = await supabase.auth.getSession();
+    const supaId = data.session?.user?.id;
+    if (supaId) return String(supaId);
+  } catch {/* fall through */}
+  // 2. Fallback to backend remembered profile
+  try {
+    const raw = await AsyncStorage.getItem('@backendProfile');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.userid === 'number') {
+        return String(parsed.userid);
+      }
+    }
+  } catch {/* ignore */}
+  return null;
+};
 
 async function ensureUserDir(userId?: string | null) {
   try {
@@ -137,6 +156,8 @@ export async function getFavorites(): Promise<FavoriteMarker[]> {
 // Remote favorite ids (lightweight). Returns [] for guest.
 export async function getRemoteFavoriteIds(): Promise<number[]> {
   const userId = await getCurrentUserId();
+  // Only Supabase UUID users are synced remotely; numeric backend ids currently have no remote table mapping.
+  // We conservatively attempt remote fetch for any non-null id string.
   if (!userId) return [];
   return fetchRemoteFavorites(userId);
 }

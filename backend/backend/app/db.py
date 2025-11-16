@@ -89,3 +89,18 @@ def rest_delete(table: str, filters: Dict[str, Any]) -> Any:
     if r.status_code >= 400:
         raise RuntimeError(f"Supabase REST error {r.status_code} on {table}: {r.text}")
     return r.json()
+
+def rest_update(table: str, filters: Dict[str, Any], payload: Dict[str, Any]) -> Any:
+    """PATCH rows matching filters (no identity column override)."""
+    settings = get_settings()
+    client = get_http_client()
+    url = f"{settings.SUPABASE_URL}/rest/v1/{table}"
+    params: Dict[str, Any] = {}
+    for k, v in filters.items():
+        params[k] = f"eq.{v}"
+    headers = rest_headers(settings)
+    headers["Prefer"] = "return=representation"
+    r = client.patch(url, headers=headers, params=params, json=payload)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Supabase REST error {r.status_code} on {table}: {r.text}")
+    return r.json()

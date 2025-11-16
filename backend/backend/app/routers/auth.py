@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from jose import jwt
 from ..db import rest_select, rest_upsert
 from ..auth import get_jwt_secret, HS_ALGORITHM
+from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -196,6 +197,7 @@ def login(payload: dict):
     t0 = _now_ms()
     identifier = (payload.get('identifier') or '').strip()
     password = payload.get('password') or ''
+    remember_me = bool(payload.get('rememberMe'))
     logger.debug(f"/login START identifier={identifier}")
     if not identifier or not password:
         raise HTTPException(status_code=400, detail="Missing identifier/password")
@@ -247,21 +249,40 @@ def login(payload: dict):
     elapsed = _now_ms() - t0
     logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed}")
     # Issue JWT (24h validity)
-    secret = get_jwt_secret()
-    token = None
-    if secret:
-        try:
-            exp = datetime.utcnow() + timedelta(hours=24)
-            payload_token = {
-                "sub": str(userid),
-                "username": login_row.get('username'),
-                "email": info_row.get('email') if info_row else None,
-                "iat": int(time.time()),
-                "exp": int(exp.timestamp()),
-            }
-            token = jwt.encode(payload_token, secret, algorithm=HS_ALGORITHM)
-        except Exception as e:
-            logger.warning(f"/login token generation failed userid={userid} err={e}")
+    # Persist token pair (access + refresh) in user_tokens
+    tokens = None
+    try:
+        tokens = create_user_tokens(userid, login_row.get('username'), info_row.get('email') if info_row else None, remember_me)
+    except Exception as e:
+        logger.warning(f"/login token persistence failed userid={userid} err={e}")
+        # Fallback to legacy single JWT for backward compatibility
+        secret = get_jwt_secret()
+        token = None
+        if secret:
+            try:
+                exp = datetime.utcnow() + timedelta(hours=24)
+                payload_token = {
+                    "sub": str(userid),
+                    "username": login_row.get('username'),
+                    "email": info_row.get('email') if info_row else None,
+                    "iat": int(time.time()),
+                    "exp": int(exp.timestamp()),
+                }
+                token = jwt.encode(payload_token, secret, algorithm=HS_ALGORITHM)
+            except Exception:
+                pass
+        return {
+            "status": "ok",
+            "userid": userid,
+            "username": login_row.get('username'),
+            "email": info_row.get('email') if info_row else None,
+            "name": info_row.get('name') if info_row else None,
+            "elapsedMs": elapsed,
+            "token": token,
+            "rememberMe": remember_me,
+            "usingLegacy": True,
+        }
+    # New structured response
     return {
         "status": "ok",
         "userid": userid,
@@ -269,5 +290,32 @@ def login(payload: dict):
         "email": info_row.get('email') if info_row else None,
         "name": info_row.get('name') if info_row else None,
         "elapsedMs": elapsed,
-        "token": token,
+        "accessToken": tokens.get('access_token'),
+        "accessTokenExpiresAt": tokens.get('access_token_expires_at'),
+        "refreshToken": tokens.get('refresh_token'),
+        "refreshTokenExpiresAt": tokens.get('refresh_token_expires_at'),
+        "rememberMe": remember_me,
     }
+
+
+@router.post('/refresh')
+def refresh(payload: dict):
+    """Exchange a valid refresh token for a new access token."""
+    rt = (payload.get('refreshToken') or '').strip()
+    if not rt:
+        raise HTTPException(status_code=400, detail="Missing refreshToken")
+    try:
+        data = verify_and_refresh(rt)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    return {"status": "ok", "accessToken": data['access_token'], "accessTokenExpiresAt": data['access_token_expires_at']}
+
+
+@router.post('/logout')
+def logout(payload: dict):
+    """Revoke the refresh token (access token naturally expires)."""
+    rt = (payload.get('refreshToken') or '').strip()
+    if not rt:
+        raise HTTPException(status_code=400, detail="Missing refreshToken")
+    revoked = revoke_refresh_token(rt)
+    return {"status": "ok", "revoked": revoked}

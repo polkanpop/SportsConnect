@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
-import { getUserInfoByUserIdCached } from '@/lib/backendApi';
+import { getUserInfoByUserIdCached, authLogout } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
@@ -51,19 +51,21 @@ export default function SettingsPage() {
   // Sign out handler
   const handleSignOut = useCallback(async () => {
     try {
-      // Optional optimistic UI: disable interaction or show loading state (not added for brevity)
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Error signing out:', error);
-        Alert.alert('Sign Out Failed', error.message || 'Please try again.');
-        return;
+      // Attempt backend logout (refresh token revocation)
+      const revoked = await authLogout();
+      if (!revoked) {
+        console.log('[Settings] backend logout returned false (maybe already revoked or missing token)');
       }
-      // Clear cached profile info
-  await AsyncStorage.removeItem('@backendProfile');
-  await AsyncStorage.removeItem('@rememberAuth'); // clear remember-me flag as part of sign out
-      // Navigate back to auth flow
-  // Expo Router segment includes the (auth) group wrapper
-  router.replace('/(auth)/login');
+      // Supabase sign out (social/anon sessions)
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.warn('[Settings] supabase signOut error', error.message);
+      } catch (e) {
+        console.warn('[Settings] supabase signOut threw', (e as any)?.message);
+      }
+      // Clear all local auth artifacts
+      await AsyncStorage.multiRemove(['@backendProfile','@backendAuth','@rememberAuth','@localAuthToken']);
+      router.replace('/(auth)/login');
     } catch (e: any) {
       console.error('Unexpected sign out error:', e);
       Alert.alert('Sign Out Error', e.message || 'Unexpected error.');

@@ -34,21 +34,38 @@ def get_court_booking(courtbookingid: int):
 
 @router.post("", response_model=dict)
 def create_court_booking(body: dict, current_user: str = Depends(get_current_user)):
-    """Create a court booking. Expects JSON with at least courtbookingid or necessary scheduling fields.
-    Demo-only: trusts body and injects userid from auth subject."""
+    """Create a court booking with single-booking-per-user enforcement.
+
+    New logic:
+      - A user may only have ONE booking (any status) in the system. Adjust rule by filtering on date or availability if needed.
+      - Optional `note` field is accepted and persisted when present.
+    """
     try:
-        payload = {**body, "userid": body.get("userid") or current_user}
+        userid = body.get("userid") or current_user
+        # Single booking rule: check existing rows for userid
+        existing = rest_select("courtbooking", PRIMARY_KEY, filters={"userid": userid})
+        if isinstance(existing, list) and existing:
+            raise HTTPException(status_code=403, detail="User already has a booking and cannot create another.")
+
+        # Build payload; include note if provided
+        payload = {
+            **body,
+            "userid": userid,
+        }
+        # Pass through note if present (nullable column)
+        if "note" in body:
+            payload["note"] = body.get("note")
+
         resp = rest_insert("courtbooking", payload)
-        # Supabase should return representation list with inserted/merged row.
         if not isinstance(resp, list) or not resp:
             raise HTTPException(status_code=500, detail="Insert did not return representation; check Supabase headers/policies")
         row = resp[0]
-        # Ensure primary key present so frontend doesn't treat echo payload as success.
         if PRIMARY_KEY not in row:
             raise HTTPException(status_code=500, detail="Insert succeeded but missing primary key in response")
         return row
+    except HTTPException:
+        raise
     except RuntimeError as e:
-        # Surface conflict separately (duplicate primary key) so operator can repair sequence.
         if "409" in str(e):
             raise HTTPException(status_code=409, detail="Duplicate primary key on insert; sequence likely misaligned")
         raise HTTPException(status_code=400, detail=str(e))

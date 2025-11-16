@@ -1,4 +1,14 @@
 import time
+import os
+import warnings
+
+# Suppress deprecation warning emitted during import of limits/slowapi (pkg_resources).
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API",
+    category=UserWarning,
+)
+
 from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .db import get_settings
@@ -30,7 +40,15 @@ from .routers import (
     auth,
 )
 from fastapi_cache import FastAPICache
-from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
+
+# Silence deprecation warning emitted by limits (dependency of slowapi) regarding pkg_resources.
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API",
+    category=UserWarning,
+)
 from fastapi import Response
 
 settings = get_settings()
@@ -77,9 +95,11 @@ app.include_router(auth.router, prefix="/api")
 
 @app.on_event("startup")
 async def _init_cache():
-    # Initialize fastapi-cache with in-memory backend (Layer 2)
-    # Prefix isolates cache keys for this service.
-    FastAPICache.init(InMemoryBackend(), prefix="sportsconnect-cache")
+    """Initialize fastapi-cache with Redis backend.
+    Uses REDIS_URL from environment (defaults to local docker)."""
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    redis = aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+    FastAPICache.init(RedisBackend(redis), prefix="sportsconnect-cache")
 
 
 @app.get("/api/health")

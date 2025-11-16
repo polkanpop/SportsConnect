@@ -9,6 +9,9 @@ bcrypt<4.0.0  # Pin to pre-4.x to avoid missing __about__ attribute used by pass
 fastapi-cache2==0.2.2
 slowapi==0.1.9
 
+# Pin setuptools to avoid pkg_resources deprecation warning (see https://setuptools.pypa.io)
+setuptools<81
+
 # Notes:
 # - Using uvicorn[standard] for recommended extras (watchfiles, etc.).
 # - Added python-jose[cryptography] to ensure cryptographic backend is available.

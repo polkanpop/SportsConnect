@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { listCourtInfoCached, listCourtAvailability, createPayment, createCourtBooking, PaymentRow, CourtBookingRow } from '@/lib/backendApi'
+import { CourtBookingRow } from '@/lib/backendApi'
 import { useAuthContext } from '@/hooks/use-auth-context'
+import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
+import { useUserId } from '@/hooks/use-user-id'
 
 type AvailabilityRow = {
   availabilityid: number
@@ -19,6 +20,17 @@ type AvailabilityRow = {
 // Format helpers
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
+
+// Helper to normalise sport/venue value to array of strings (matches courtList.tsx)
+function asArray(v: any): string[] {
+  if (!v) return []
+  if (Array.isArray(v)) return v.filter(Boolean).map(String)
+  if (typeof v === 'string') {
+    if (v.includes(',') || v.includes('|')) return v.split(/[,|]/).map(s => s.trim()).filter(Boolean)
+    return [v.trim()]
+  }
+  return []
+}
 
 const WEEK_DAYS: { key: string; label: string }[] = [
   { key: 'Mon', label: 'Mon' },
@@ -36,11 +48,21 @@ export default function CourtBooking() {
   const courtid = params.courtid ? parseInt(String(params.courtid), 10) : NaN
   const { profile } = useAuthContext()
 
-  const [courtName, setCourtName] = useState<string>('')
-  const [courtAddress, setCourtAddress] = useState<string>('')
-  const [availability, setAvailability] = useState<AvailabilityRow | null>(null)
-  const [loading, setLoading] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+  const { data: courtInfoData, isLoading: courtInfoLoading, error: courtInfoError } = useCourtInfo()
+  const courtInfo = courtInfoData?.find?.((c:any)=> c.courtid === courtid)
+  const { data: availabilityRows, isLoading: availabilityLoading, error: availabilityError } = useCourtAvailability(courtid)
+  const availability: AvailabilityRow | null = Array.isArray(availabilityRows) && availabilityRows.length ? {
+    ...availabilityRows[0],
+    booking_date: (() => {
+      const bd: any = availabilityRows[0].booking_date
+      if (typeof bd === 'string') {
+        try { const parsed = JSON.parse(bd); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+      }
+      return Array.isArray(bd) ? bd : []
+    })()
+  } : null
+  const loading = courtInfoLoading || availabilityLoading
+  const error = (courtInfoError as any)?.message || (availabilityError as any)?.message || null
   const [selectedDay, setSelectedDay] = useState<string | null>(null) // 'Mon' etc.
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [startSlot, setStartSlot] = useState<string | null>(null)
@@ -60,49 +82,13 @@ export default function CourtBooking() {
   }, [startSlot, endSlot])
   const durationInvalid = !!(startSlot && endSlot && (durationMinutes < 60 || durationMinutes > 180))
 
-  // Resolve numeric userid similar to other screens
-  const resolveUserId = useCallback(async (): Promise<number | null> => {
-    if (profile && typeof (profile as any).userid === 'number') return (profile as any).userid
-    try {
-      const raw = await AsyncStorage.getItem('@backendProfile')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed.userid === 'number') return parsed.userid
-      }
-    } catch {}
-    return null
-  }, [profile])
-  const [userId, setUserId] = useState<number | null>(null)
-  useEffect(() => { resolveUserId().then(setUserId) }, [resolveUserId])
-
-  // Fetch court info & availability
-  useEffect(() => {
-    if (!courtid || Number.isNaN(courtid)) return
-    let cancelled = false
-    const run = async () => {
-      setLoading(true); setError(null)
-      try {
-        const courts = await listCourtInfoCached()
-        const ci = courts.find(c => c.courtid === courtid)
-        if (ci) { setCourtName(ci.name || `Court ${courtid}`); setCourtAddress(ci.address || '') }
-        const avRows = await listCourtAvailability(courtid)
-        const row = Array.isArray(avRows) && avRows.length ? avRows[0] : null
-        if (row) {
-          // booking_date may be JSON string; normalize to array
-          let bd: any = row.booking_date
-          if (typeof bd === 'string') {
-            try { bd = JSON.parse(bd) } catch {}
-          }
-          row.booking_date = Array.isArray(bd) ? bd : []
-        }
-        if (!cancelled) setAvailability(row)
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e))
-      } finally { if (!cancelled) setLoading(false) }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [courtid])
+  // Resolve numeric userid similar to other screens via query
+  const { data: userId } = useUserId()
+  const { data: existingBookings } = useUserCourtBookings(userId)
+  const bookings = Array.isArray(existingBookings) ? existingBookings : []
+  const hasBookingForCurrentAvailability = !!(availability && bookings.some(b => b.availabilityid === availability.availabilityid))
+  const hasOtherBooking = bookings.length > 0 && !hasBookingForCurrentAvailability
+  const [showOtherBookingModal, setShowOtherBookingModal] = useState(false)
 
   // Derive current week dates (Mon -> Sun) anchored to today
   const weekDaysDetailed = useMemo(() => {
@@ -138,7 +124,8 @@ export default function CourtBooking() {
 
   // Derived validity and button enable state
   const isDaySelectable = useCallback((dayKey: string) => availableDayKeys.includes(dayKey), [availableDayKeys])
-  const canConfirm = !!(selectedDay && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid)
+  const canConfirmBase = !!(selectedDay && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid)
+  const canConfirm = canConfirmBase && !hasBookingForCurrentAvailability
 
   const onSelectDay = (dayKey: string) => {
     if (!isDaySelectable(dayKey)) return
@@ -168,34 +155,42 @@ export default function CourtBooking() {
     setEndSlot(slot)
   }
 
+  const bookingMutation = useCreateBookingWithPayment()
   const confirmBooking = async () => {
-    if (!canConfirm || !availability || !userId || !selectedDay || !startSlot || !endSlot) return
-    setSubmitting(true); setSubmitError(null); setConfirmation(null)
-    try {
-      // Build timestamps
-      const weekDay = weekDaysDetailed.find(w => w.key === selectedDay)
-      if (!weekDay) throw new Error('Week day resolve failed')
-      const bookingDateStr = weekDay.dateStr
-      const startTs = `${bookingDateStr} ${startSlot}:00`
-      const endTs = `${bookingDateStr} ${endSlot}:00`
-      const paymentStatus = paymentMethod === 'cash' ? 'pending' : 'paid'
-      const payment = await createPayment({ status: paymentStatus, method: paymentMethod, amount: 50000 }) as PaymentRow
-      const bookingPayload = {
-        availabilityid: availability.availabilityid,
-        userid: userId,
-        status: 'approved',
-        paymentid: payment.paymentid,
-        start_timestamp: startTs,
-        end_timestamp: endTs,
-        bookingdate: bookingDateStr,
-      }
-      const booking = await createCourtBooking(bookingPayload)
-      setConfirmation(booking)
-      // Basic success toast substitute
-      console.log('[CourtBooking] booking success', booking)
-    } catch (e: any) {
-      setSubmitError(e.message || String(e))
-    } finally { setSubmitting(false) }
+    if (!canConfirm || !availability || !userId || !selectedDay || !startSlot || !endSlot || !paymentMethod) return
+    setSubmitError(null); setConfirmation(null)
+    setSubmitting(true)
+    const weekDay = weekDaysDetailed.find(w => w.key === selectedDay)
+    if (!weekDay) { setSubmitError('Week day resolve failed'); setSubmitting(false); return }
+    const bookingDateStr = weekDay.dateStr
+    const startTs = `${bookingDateStr} ${startSlot}:00`
+    const endTs = `${bookingDateStr} ${endSlot}:00`
+    bookingMutation.mutate({
+      availabilityid: availability.availabilityid,
+      userid: userId,
+      status: 'approved',
+      paymentMethod: paymentMethod,
+      start_timestamp: startTs,
+      end_timestamp: endTs,
+      bookingdate: bookingDateStr,
+      amount: 50000,
+      note: noteText.trim() ? noteText.trim() : null,
+    }, {
+      onSuccess: (data) => {
+        setConfirmation(data.booking)
+        console.log('[CourtBooking] booking success', data)
+      },
+      onError: (err: any) => {
+        setSubmitError(err?.message || 'Booking failed')
+      },
+      onSettled: () => setSubmitting(false)
+    })
+  }
+
+  const onPressConfirm = () => {
+    if (!canConfirmBase || submitting) return
+    if (hasOtherBooking && !showOtherBookingModal) { setShowOtherBookingModal(true); return }
+    confirmBooking()
   }
 
   return (
@@ -217,15 +212,64 @@ export default function CourtBooking() {
         {error && <Text style={styles.errorText}>{error}</Text>}
         {!loading && !error && (
           <View>
-            <Text style={styles.courtName}>{courtName || 'Unknown Court'}</Text>
+            <View style={styles.courtHeaderRow}>
+              {(() => {
+                const venueRaw = courtInfo?.venue
+                const venueTokens = asArray(venueRaw).map(v => v.toLowerCase())
+                const hasIndoor = venueTokens.some(t => t.includes('indoor'))
+                const hasOutdoor = venueTokens.some(t => t.includes('outdoor'))
+                let iconSrc = null
+                if (hasIndoor && hasOutdoor) iconSrc = ICONS.bothVenue
+                else if (hasIndoor) iconSrc = ICONS.indoorIcon
+                else if (hasOutdoor) iconSrc = ICONS.outdoorIcon
+                return iconSrc ? <Image source={iconSrc} style={styles.venueIcon} /> : null
+              })()}
+              <Text style={styles.courtName}>{courtInfo?.name || `Court ${courtid}`}</Text>
+            </View>
+            {(() => {
+              // Sport-only tags with shared color scheme from court list
+              const sportRaw = courtInfo?.sport
+              const sportTokens = asArray(sportRaw)
+              const tags = sportTokens.map(t => String(t).trim()).filter(t => t.length)
+              if (!tags.length) return null
+              const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
+                football: { bg: '#ffffff', color: '#111', border: '#ddd' },
+                soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
+                tennis: { bg: '#32CD32', color: '#fff' },
+                tabletennis: { bg: '#32CD32', color: '#fff' },
+                badminton: { bg: '#32CD32', color: '#fff' },
+                basketball: { bg: '#FFA500', color: '#111' },
+                volleyball: { bg: '#FFA500', color: '#111' },
+                golf: { bg: '#2e8b57', color: '#fff' },
+                running: { bg: '#4682B4', color: '#fff' },
+                pickleball: { bg: '#FF69B4', color: '#111' },
+              }
+              const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+              return (
+                <View style={styles.tagsRow}>
+                  {tags.map(tag => {
+                    const key = normaliseKey(tag)
+                    const cfg = SPORT_COLORS[key]
+                    return (
+                      <View
+                        key={tag}
+                        style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
+                      >
+                        <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{tag}</Text>
+                      </View>
+                    )
+                  })}
+                </View>
+              )
+            })()}
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />
-              <Text style={styles.courtAddress}>{courtAddress}</Text>
+              <Text style={styles.courtAddress}>{(courtInfoData?.find?.((c:any)=>c.courtid===courtid)?.address) || ''}</Text>
             </View>
             {availability && (
               <View style={styles.metaRow}>
                 <Image source={ICONS.clock} style={styles.metaIcon} />
-                <Text style={styles.availabilityMeta}>Opening time: {availability.start_time} - {availability.end_time}</Text>
+                <Text style={styles.availabilityMeta}>Opening {availability.start_time} - {availability.end_time}</Text>
               </View>
             )}
           </View>
@@ -323,6 +367,9 @@ export default function CourtBooking() {
             </TouchableOpacity>
           </View>
           {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+          {hasBookingForCurrentAvailability && !confirmation && (
+            <Text style={styles.errorText}>You already booked this court.</Text>
+          )}
           {confirmation && (
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>Booked!</Text>
@@ -330,6 +377,9 @@ export default function CourtBooking() {
               <Text style={styles.successLine}>{confirmation.start_timestamp} → {confirmation.end_timestamp}</Text>
               <Text style={styles.successLine}>Payment #{confirmation.paymentid}</Text>
             </View>
+          )}
+          {bookingMutation.isError && !submitError && (
+            <Text style={styles.errorText}>Mutation error occurred.</Text>
           )}
         </View>
       </View>
@@ -339,13 +389,29 @@ export default function CourtBooking() {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           disabled={!canConfirm || submitting}
-          onPress={confirmBooking}
+          onPress={onPressConfirm}
           style={[styles.confirmUnifiedBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled]}
         >
-          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : 'Confirm Booking - 50,000₫'}</Text>
+          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : hasBookingForCurrentAvailability ? 'Already Booked' : 'Confirm Booking - 50,000₫'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
+    {showOtherBookingModal && !hasBookingForCurrentAvailability && (
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Existing Booking Detected</Text>
+          <Text style={styles.modalBody}>You already have a booking on another court. Do you want to create an additional booking here?</Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setShowOtherBookingModal(false)}>
+              <Text style={styles.modalBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => { setShowOtherBookingModal(false); confirmBooking() }}>
+              <Text style={[styles.modalBtnText,{color:'#fff'}]}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )}
     </View>
   )
 }
@@ -405,4 +471,19 @@ const styles = StyleSheet.create({
   noteInputWrapper: { marginTop: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 10 },
   noteInput: { minHeight: 80, padding: 10, fontSize: 14, color: '#222', textAlignVertical: 'top' },
   durationWarning: { marginTop: 8, color: '#c00', fontSize: 12, fontWeight: '600' },
+  courtHeaderRow: { flexDirection:'row', alignItems:'center', marginBottom:4 },
+  venueIcon: { width:28, height:28, resizeMode:'contain', marginRight:8 },
+  tagsRow: { flexDirection:'row', flexWrap:'wrap', marginTop:8 },
+  tag: { backgroundColor:'#eee', paddingHorizontal:10, paddingVertical:6, borderRadius:16, marginRight:6, marginBottom:6 },
+  tagFallback: { backgroundColor:'#eee' },
+  tagText: { fontSize:12, fontWeight:'600', color:'#333' },
+  modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
+  modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
+  modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
+  modalBody: { fontSize:14, color:'#444', lineHeight:20 },
+  modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
+  modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
+  modalCancel: { backgroundColor:'#eee' },
+  modalConfirm: { backgroundColor:'#FF5733' },
+  modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
 })

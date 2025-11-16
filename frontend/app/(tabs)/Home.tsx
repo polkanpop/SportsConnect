@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
-import { listFavouriteCourtsCached, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from "@/lib/backendApi";
+import { listFavouriteCourts, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from "@/lib/backendApi";
 import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,6 +71,7 @@ export default function Home() {
     courtid: number;
     name: string;
     address: string;
+    availability: string; // used only for color, no labels/sorting
   };
   const [favoriteLocations, setFavoriteLocations] = useState<FavoriteLocation[]>([]);
   const [loadingFavs, setLoadingFavs] = useState(false);
@@ -120,7 +121,8 @@ export default function Home() {
         setFavoriteLocations([]);
         return;
       }
-      const rows = await listFavouriteCourtsCached({ userid: userId });
+      // Use non-cached fetch for immediate reflection of changes
+      const rows = await listFavouriteCourts({ userid: userId });
       if (abortController.signal.aborted) return;
       const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
       if (favRows.length === 0) { setFavoriteLocations([]); return; }
@@ -139,9 +141,11 @@ export default function Home() {
           courtid: fr.courtid,
           name: info?.name || `Court ${fr.courtid}`,
           address: info?.address || '',
+          availability: info?.availability || 'Available',
         });
         return acc;
       }, []);
+      // No sorting by availability; keep original order (de-duped)
       setFavoriteLocations(favs);
     } catch (e: any) {
       if (e?.name === 'AbortError') return; // silent abort
@@ -295,37 +299,43 @@ export default function Home() {
                   <Text style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
                 </TouchableOpacity>
               )}
-              {favoriteLocations.map(fav => (
-                <TouchableOpacity
-                  key={fav.favouriteid}
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    console.log('Pressed favorite location', fav.courtid, fav.name);
-                  }}
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    backgroundColor: '#FFD700',
-                    borderRadius: 16,
-                    marginRight: 12,
-                    minWidth: 120,
-                    maxWidth: 160,
-                  }}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 13, fontWeight: '600', color: '#333' }}
+              {favoriteLocations.map(fav => {
+                const isAvailable = String(fav.availability).toLowerCase() === 'available';
+                return (
+                  <TouchableOpacity
+                    key={fav.favouriteid}
+                    activeOpacity={isAvailable ? 0.75 : 1}
+                    onPress={() => {
+                      if (!isAvailable) return;
+                      router.push({ pathname: '/event/courtBooking', params: { courtid: String(fav.courtid) } });
+                    }}
+                    disabled={!isAvailable}
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      backgroundColor: isAvailable ? '#FFD700' : '#d4d4d4', // simple color diff only
+                      borderRadius: 16,
+                      marginRight: 12,
+                      minWidth: 120,
+                      maxWidth: 180,
+                      opacity: isAvailable ? 1 : 0.6,
+                    }}
                   >
-                    {fav.name || 'Unnamed'}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 11, color: '#444' }}
-                  >
-                    {fav.address || ''}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 13, fontWeight: '600', color: '#333' }}
+                    >
+                      {fav.name || 'Unnamed'}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 11, color: '#444' }}
+                    >
+                      {fav.address || ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
               {favoriteLocations.length > 0 && (
                 <TouchableOpacity
                   key="add-more-single"

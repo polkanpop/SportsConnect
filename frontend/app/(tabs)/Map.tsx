@@ -6,6 +6,7 @@ import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase";
 // Backend API helpers (public)
 import { listFavouriteCourtsCached, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from '@/lib/backendApi';
+import { favouritesEvents } from '@/lib/favouritesEvents';
 import { getCache, setCache } from '@/lib/cache';
 import { useAuthContext } from '@/hooks/use-auth-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +14,7 @@ import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Location from "expo-location";
 import debounce from "lodash.debounce";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from 'expo-router';
 import {
   FlatList,
   Image,
@@ -105,6 +107,7 @@ const INITIAL_REGION = {
 };
 
 export default function App() {
+  const router = useRouter();
   // Favorite state for selected marker
   const [isFavorite, setIsFavorite] = useState(false);
   const mapRef = useRef<MapView | null>(null); // Ref to the map
@@ -889,11 +892,13 @@ export default function App() {
                             if (!alreadyFav) {
                               const created = await addFavouriteCourt(numericUserId, courtId);
                               setFavouriteRecords(prev => [...prev, created]);
+                              favouritesEvents.emitFavouriteChanged(numericUserId);
                             } else {
                               const row = favouriteRecords.find(r => r.courtid === courtId);
                               if (row) {
                                 await removeFavouriteCourt(row.favouriteid);
                                 setFavouriteRecords(prev => prev.filter(r => r.favouriteid !== row.favouriteid));
+                                favouritesEvents.emitFavouriteChanged(numericUserId);
                               }
                             }
                           } catch (e) {
@@ -904,6 +909,8 @@ export default function App() {
                             setMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: alreadyFav } : m));
                             setFilteredMarkers(prev => prev.map(m => m.courtid === courtId ? { ...m, isFavorite: alreadyFav } : m));
                             setSelectedMarker(sm => sm && sm.courtid === courtId ? { ...sm, isFavorite: alreadyFav } : sm);
+                            // Emit after revert so Home can reflect original state
+                            favouritesEvents.emitFavouriteChanged(numericUserId);
                           }
                         }}
                       >
@@ -915,6 +922,11 @@ export default function App() {
                       <TouchableOpacity
                         style={[styles.bookingButton, selectedMarker.availability === "Unavailable" && styles.bookingButtonDisabled]}
                         disabled={selectedMarker.availability === "Unavailable"}
+                        onPress={() => {
+                          if (!selectedMarker || selectedMarker.availability === 'Unavailable') return;
+                          router.push({ pathname: '/event/courtBooking', params: { courtid: String(selectedMarker.courtid) } });
+                        }}
+                        accessibilityLabel="Book this court"
                       >
                         <Image source={ICONS.booking} style={[styles.bookingIcon, selectedMarker.availability === "Unavailable" && { tintColor: '#bbb' }]} />
                         <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>Book</Text>

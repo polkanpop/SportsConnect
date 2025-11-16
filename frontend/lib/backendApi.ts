@@ -68,8 +68,50 @@ export async function authLogin(payload: { identifier: string; password: string 
 		debugLabel: 'authLogin'
 	})
 	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
-	try { if (data?.userid != null) await AsyncStorage.setItem('@backendProfile', JSON.stringify(data)) } catch {}
+	// Persist profile subset
+	try {
+		if (data?.userid != null) {
+			await AsyncStorage.setItem('@backendProfile', JSON.stringify({
+				userid: data.userid,
+				username: data.username,
+				name: data.name,
+				email: data.email,
+			}))
+		}
+	} catch {}
+	// Persist issued tokens (access + refresh) for later logout/refresh flows
+	try {
+		if (data?.accessToken && data?.refreshToken) {
+			await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+				accessToken: data.accessToken,
+				accessTokenExpiresAt: data.accessTokenExpiresAt,
+				refreshToken: data.refreshToken,
+				refreshTokenExpiresAt: data.refreshTokenExpiresAt,
+				userid: data.userid,
+			}))
+		}
+	} catch {}
 	return data
+}
+
+// Backend logout using stored refreshToken; returns true if revoked
+export async function authLogout(): Promise<boolean> {
+	try {
+		const raw = await AsyncStorage.getItem('@backendAuth')
+		if (!raw) return false
+		let refreshToken: string | null = null
+		try { refreshToken = JSON.parse(raw)?.refreshToken } catch {}
+		if (!refreshToken) return false
+		const resp = await request('/auth/logout', {
+			method: 'POST',
+			body: JSON.stringify({ refreshToken }),
+			debugLabel: 'authLogout'
+		})
+		return !!resp?.revoked
+	} catch (e) {
+		console.warn('[authLogout] error', (e as any)?.message)
+		return false
+	}
 }
 
 // ---- Favourite Courts API (public) ----
@@ -181,9 +223,22 @@ export async function createPayment(payload: { status: 'paid'|'pending'|'failed'
 	return request('/payments', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createPayment' }) as Promise<PaymentRow>
 }
 
-export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string }
+export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null }
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
+}
+
+// Prepare delete endpoint for future UI integration (optimistic removal supported in hook)
+export async function deleteCourtBooking(courtbookingid: number) {
+	if (courtbookingid == null) throw new Error('courtbookingid required')
+	return request(`/courtbookings/${courtbookingid}` , { method: 'DELETE', debugLabel: 'deleteCourtBooking' }) as Promise<{ deleted: boolean; count?: number }>
+}
+
+export async function listCourtBookings(params?: { userid?: number }) {
+	const qs: string[] = []
+	if (params?.userid !== undefined) qs.push(`userid=${encodeURIComponent(params.userid)}`)
+	const path = `/courtbookings${qs.length ? '?' + qs.join('&') : ''}`
+	return request(path, { debugLabel: 'listCourtBookings' }) as Promise<CourtBookingRow[]>
 }
 
 export async function listCourtAvailability(courtid: number) {
