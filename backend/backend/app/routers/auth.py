@@ -9,6 +9,7 @@ from jose import jwt
 from ..db import rest_select, rest_upsert
 from ..auth import get_jwt_secret, HS_ALGORITHM
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
+from ..login_rules import record_login_attempt, get_user_state_snapshot
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -244,6 +245,11 @@ def login(payload: dict):
                 logger.warning(f"/login bcrypt upgrade failed userid={userid} err={e}")
 
     if not password_valid:
+        # Log failure rules (logging only; does not block response timeline)
+        try:
+            record_login_attempt(userid, password, success=False)
+        except Exception as e:
+            logger.warning(f"/login rule logging failure userid={userid} err={e}")
         raise HTTPException(status_code=401, detail="Incorrect password")
 
     # --- Token lifecycle adjustments for remember-me semantics ---
@@ -285,8 +291,19 @@ def login(payload: dict):
         except Exception as e:
             logger.warning(f"/login token lifecycle update failed tokenid={tok.get('tokenid')} err={e}")
 
+    # Successful password; reset rule counters via record_login_attempt
+    try:
+        record_login_attempt(userid, password, success=True)
+    except Exception as e:
+        logger.warning(f"/login rule reset failure userid={userid} err={e}")
+
     elapsed = _now_ms() - t0
-    logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed}")
+    state_snapshot = {}
+    try:
+        state_snapshot = get_user_state_snapshot(userid)
+    except Exception:
+        pass
+    logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed} state={state_snapshot}")
     # Issue new token pair
     tokens = None
     try:
