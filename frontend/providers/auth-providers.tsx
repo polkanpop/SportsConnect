@@ -2,6 +2,8 @@ import { AuthContext } from '@/hooks/use-auth-context'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import { PropsWithChildren, useEffect, useState } from 'react'
+import { AppState } from 'react-native'
+import { authSessionClose } from '@/lib/backendApi'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export default function AuthProvider({ children }: PropsWithChildren) {
@@ -72,6 +74,27 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const isLoggedIn = (!!session) || rememberFlag
   // Exposed composite profile preference: supabase profile if present else remembered backend profile
   const exposedProfile = session ? profile : rememberProfile
+
+  // --- AppState listener to enforce remember-me closure semantics ---
+  useEffect(() => {
+    // Only attach if we have finished loading remember flag
+    if (isLoadingRemember) return
+    const handler = async (state: string) => {
+      if (state === 'background' || state === 'inactive') {
+        try {
+          // Determine remember flag dynamically (storage may have changed)
+          const flag = await AsyncStorage.getItem('@rememberAuth')
+          const remember = flag === 'true'
+          // Call backend to update last_used_at or revoke token
+          await authSessionClose(remember)
+        } catch (e) {
+          console.warn('[AuthProvider] app close handler error', (e as any)?.message)
+        }
+      }
+    }
+    const sub = AppState.addEventListener('change', handler)
+    return () => { sub.remove() }
+  }, [isLoadingRemember])
 
   return (
     <AuthContext.Provider value={{ session, isLoading, profile: exposedProfile, isLoggedIn }}>

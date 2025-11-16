@@ -78,12 +78,14 @@ def create_user_tokens(userid: int, username: Optional[str], email: Optional[str
     # PostgREST expects base64 for bytea JSON input
     encrypted_access_b64 = base64.b64encode(encrypted_access_bytes).decode()
     refresh_hash = _hash_refresh_token(refresh_token)
+    # Persist token row; include last_used_at on creation so we can always compute lifespan deltas
     row_payload = {
         "userid": userid,
         "access_token_encrypted": encrypted_access_b64,
         "refresh_token_hash": refresh_hash,
         "access_token_expires_at": access_exp.isoformat(),
         "refresh_token_expires_at": refresh_exp.isoformat(),
+        "last_used_at": _now().isoformat(),
         "is_revoked": False,
     }
     # Use strict insert so duplicate hash errors surface (should not occur)
@@ -133,6 +135,20 @@ def revoke_refresh_token(refresh_token: str) -> bool:
     # PATCH instead of upsert to avoid identity column constraint error
     rest_update("user_tokens", {"tokenid": row.get("tokenid")}, {
         "is_revoked": True,
+        "last_used_at": _now().isoformat(),
+    })
+    return True
+
+
+def touch_refresh_token(refresh_token: str) -> bool:
+    """Update last_used_at for a refresh token without revoking it.
+    Returns True if a row was found and updated, False otherwise.
+    Safe to call even if token already revoked (still updates last_used_at)."""
+    refresh_hash = _hash_refresh_token(refresh_token)
+    row = rest_select("user_tokens", "tokenid, userid", {"refresh_token_hash": refresh_hash}, single=True)
+    if not row:
+        return False
+    rest_update("user_tokens", {"tokenid": row.get("tokenid")}, {
         "last_used_at": _now().isoformat(),
     })
     return True

@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 from jose import jwt
 from ..db import rest_select, rest_upsert
 from ..auth import get_jwt_secret, HS_ALGORITHM
-from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token
+from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -246,16 +246,53 @@ def login(payload: dict):
     if not password_valid:
         raise HTTPException(status_code=401, detail="Incorrect password")
 
+    # --- Token lifecycle adjustments for remember-me semantics ---
+    # Requirement:
+    #  - Non "remember me" sessions: when app is closed/refreshed (no explicit /logout), treat as sign out -> revoke prior non-remember tokens.
+    #  - "Remember me" sessions: keep tokens valid; update last_used_at only.
+    # Since the backend cannot observe an app close directly, we implement this by
+    # revoking any existing non-remember tokens at the moment a new login occurs.
+    # We infer remember status by lifespan: 1 day refresh expiry => non-remember; >= 30 days => remember.
+    # Fetch existing tokens for user (equality filter only; then apply logic in Python).
+    prior_tokens = []
+    try:
+        prior_tokens = rest_select("user_tokens", "tokenid, userid, refresh_token_expires_at, created_at, is_revoked, last_used_at, access_token_expires_at", {"userid": userid}) or []
+    except Exception as e:
+        logger.warning(f"/login fetch prior tokens failed userid={userid} err={e}")
+
+    now_iso = datetime.utcnow().isoformat()
+    for tok in prior_tokens:
+        try:
+            if tok.get("is_revoked"):
+                continue
+            created_at = tok.get("created_at") or tok.get("last_used_at")  # fallback
+            refresh_exp = tok.get("refresh_token_expires_at")
+            if not created_at or not refresh_exp:
+                continue
+            try:
+                created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00")) if "Z" in created_at else datetime.fromisoformat(created_at)
+                exp_dt = datetime.fromisoformat(refresh_exp.replace("Z", "+00:00")) if "Z" in refresh_exp else datetime.fromisoformat(refresh_exp)
+            except Exception:
+                continue
+            lifespan_days = (exp_dt - created_dt).days
+            is_remember_token = lifespan_days >= 29  # treat >=29 days as remember-me token
+            if is_remember_token:
+                # Update last_used_at for remember tokens so inactivity windows advance.
+                rest_upsert("user_tokens", {"tokenid": tok.get("tokenid"), "last_used_at": now_iso})
+            else:
+                # Always revoke prior non-remember tokens when any new login occurs.
+                rest_upsert("user_tokens", {"tokenid": tok.get("tokenid"), "is_revoked": True, "last_used_at": now_iso})
+        except Exception as e:
+            logger.warning(f"/login token lifecycle update failed tokenid={tok.get('tokenid')} err={e}")
+
     elapsed = _now_ms() - t0
     logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed}")
-    # Issue JWT (24h validity)
-    # Persist token pair (access + refresh) in user_tokens
+    # Issue new token pair
     tokens = None
     try:
         tokens = create_user_tokens(userid, login_row.get('username'), info_row.get('email') if info_row else None, remember_me)
     except Exception as e:
         logger.warning(f"/login token persistence failed userid={userid} err={e}")
-        # Fallback to legacy single JWT for backward compatibility
         secret = get_jwt_secret()
         token = None
         if secret:
@@ -282,7 +319,6 @@ def login(payload: dict):
             "rememberMe": remember_me,
             "usingLegacy": True,
         }
-    # New structured response
     return {
         "status": "ok",
         "userid": userid,
@@ -319,3 +355,22 @@ def logout(payload: dict):
         raise HTTPException(status_code=400, detail="Missing refreshToken")
     revoked = revoke_refresh_token(rt)
     return {"status": "ok", "revoked": revoked}
+
+
+@router.post('/session/close')
+def session_close(payload: dict):
+    """Handle app close/background semantics.
+    If rememberMe is false -> revoke token (sign out semantics).
+    If rememberMe is true -> only update last_used_at.
+    Frontend should call this when the app transitions to background/inactive.
+    """
+    rt = (payload.get('refreshToken') or '').strip()
+    remember_me = bool(payload.get('rememberMe'))
+    if not rt:
+        raise HTTPException(status_code=400, detail="Missing refreshToken")
+    if remember_me:
+        touched = touch_refresh_token(rt)
+        return {"status": "ok", "revoked": False, "touched": touched}
+    revoked = revoke_refresh_token(rt)
+    # revoke already updates last_used_at; expose touched=True for consistency
+    return {"status": "ok", "revoked": revoked, "touched": True}

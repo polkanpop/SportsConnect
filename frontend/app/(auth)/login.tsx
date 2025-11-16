@@ -46,7 +46,7 @@ export default function LoginScreen() {
     }
     setLoading(true)
     try {
-  const res = await authLogin({ identifier: identifier.trim(), password })
+  const res = await authLogin({ identifier: identifier.trim(), password, rememberMe })
       console.log('[login] success', res)
       // Persist basic backend profile (userid, username, name, email) for later screens (e.g., Settings)
       try {

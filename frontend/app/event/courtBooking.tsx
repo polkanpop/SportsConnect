@@ -73,6 +73,8 @@ export default function CourtBooking() {
   const [confirmation, setConfirmation] = useState<CourtBookingRow | null>(null)
   const [noteExpanded, setNoteExpanded] = useState(false)
   const [noteText, setNoteText] = useState('')
+  // Week navigation (0 = current week, can move forward to +2)
+  const [weekOffset, setWeekOffset] = useState(0)
   // Derived duration (minutes) of selected booking window
   const durationMinutes = useMemo(() => {
     if (!startSlot || !endSlot) return 0
@@ -90,18 +92,17 @@ export default function CourtBooking() {
   const hasOtherBooking = bookings.length > 0 && !hasBookingForCurrentAvailability
   const [showOtherBookingModal, setShowOtherBookingModal] = useState(false)
 
-  // Derive current week dates (Mon -> Sun) anchored to today
+  // Derive week dates (Mon -> Sun) with offset (future weeks only)
   const weekDaysDetailed = useMemo(() => {
     const today = new Date()
-    // Find Monday of this week
     const dayIdx = today.getDay() // Sun=0
-    const offsetToMonday = ((dayIdx + 6) % 7) // converts Sun(0)->6, Mon(1)->0,...
-    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday)
+    const offsetToMonday = ((dayIdx + 6) % 7)
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + weekOffset * 7)
     return WEEK_DAYS.map((wd, i) => {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
-      return { ...wd, date: d, dateStr: toDateString(d), isToday: toDateString(d) === toDateString(today) }
+      return { ...wd, date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
     })
-  }, [])
+  }, [weekOffset])
 
   const availableDayKeys = (availability?.booking_date as string[] | undefined) || []
 
@@ -278,10 +279,41 @@ export default function CourtBooking() {
 
       {/* Section 2: Date & Time & Payment */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>Schedule</Text>
+        <View style={styles.scheduleHeaderRow}>
+          <Text style={styles.sectionTitle}>Schedule</Text>
+          <View style={styles.weekNavInline}>
+            <TouchableOpacity
+              disabled={weekOffset === 0}
+              onPress={() => {
+                if (weekOffset > 0) {
+                  setWeekOffset(w => w - 1)
+                  setSelectedDay(null); setShowTimePicker(false); setStartSlot(null); setEndSlot(null)
+                }
+              }}
+              style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}
+            >
+              <Image source={ICONS.arrowright} style={[styles.navIcon,{ transform:[{ rotate:'180deg'}]}]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={weekOffset === 2}
+              onPress={() => {
+                if (weekOffset < 2) {
+                  setWeekOffset(w => w + 1)
+                  setSelectedDay(null); setShowTimePicker(false); setStartSlot(null); setEndSlot(null)
+                }
+              }}
+              style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}
+            >
+              <Image source={ICONS.arrowright} style={styles.navIcon} />
+            </TouchableOpacity>
+          </View>
+        </View>
         <View style={styles.weekRow}>
           {weekDaysDetailed.map(d => {
-            const disabled = !isDaySelectable(d.key)
+            const today = new Date();
+            const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+            const pastDisabled = weekOffset === 0 && d.date < todayOnly
+            const disabled = !isDaySelectable(d.key) || pastDisabled
             const selected = selectedDay === d.key
             return (
               <TouchableOpacity
@@ -477,6 +509,12 @@ const styles = StyleSheet.create({
   tag: { backgroundColor:'#eee', paddingHorizontal:10, paddingVertical:6, borderRadius:16, marginRight:6, marginBottom:6 },
   tagFallback: { backgroundColor:'#eee' },
   tagText: { fontSize:12, fontWeight:'600', color:'#333' },
+  // New schedule header + navigation styles
+  scheduleHeaderRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
+  weekNavInline: { flexDirection:'row', alignItems:'center' },
+  navBtn: { padding:8, borderRadius:10, backgroundColor:'#e0e0e0', marginHorizontal:4 },
+  navBtnDisabled: { opacity:0.35 },
+  navIcon: { width:20, height:20, tintColor:'#333', resizeMode:'contain' },
   modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
   modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
   modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },

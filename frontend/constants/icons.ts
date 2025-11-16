@@ -69,6 +69,7 @@ export const ICONS = {
   coachCal: require('../assets/icons/coach_cal.png'),
   stadiumCal: require('../assets/icons/stadium_cal.png'),
   event_category: require('../assets/icons/event.png'),
+  smallArrowLeft: require('../assets/icons/small_arrow_left.png'),
   cashIcon: require('../assets/icons/cash_icon.png'),
   vnpayIcon: require('../assets/icons/vnpay_icon.png'),
   booking: require('../assets/icons/bookings.png'),

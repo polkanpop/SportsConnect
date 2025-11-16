@@ -1,6 +1,6 @@
 import { SearchBar } from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -104,7 +104,9 @@ export default function Home() {
     return null;
   };
 
-  const loadFavorites = async () => {
+  const lastUserIdRef = React.useRef<number | null>(null);
+
+  const loadFavorites = async (force: boolean = false) => {
     // Abort any in-flight load to avoid race conditions when user switches rapidly
     if (lastLoadAbortRef.current) {
       lastLoadAbortRef.current.abort();
@@ -121,6 +123,11 @@ export default function Home() {
         setFavoriteLocations([]);
         return;
       }
+      // Skip duplicate fetches for same user unless forced (e.g. after a favourite change)
+      if (!force && lastUserIdRef.current === userId) {
+        return;
+      }
+      lastUserIdRef.current = userId;
       // Use non-cached fetch for immediate reflection of changes
       const rows = await listFavouriteCourts({ userid: userId });
       if (abortController.signal.aborted) return;
@@ -145,8 +152,14 @@ export default function Home() {
         });
         return acc;
       }, []);
-      // No sorting by availability; keep original order (de-duped)
-      setFavoriteLocations(favs);
+      // Sort favourites so "Available" courts appear first while preserving original relative order within groups.
+      const favsAvailable: FavoriteLocation[] = [];
+      const favsUnavailable: FavoriteLocation[] = [];
+      favs.forEach(f => {
+        const isAvail = String(f.availability).toLowerCase() === 'available';
+        (isAvail ? favsAvailable : favsUnavailable).push(f);
+      });
+      setFavoriteLocations([...favsAvailable, ...favsUnavailable]);
     } catch (e: any) {
       if (e?.name === 'AbortError') return; // silent abort
       setFavError(e.message || String(e));
@@ -155,19 +168,17 @@ export default function Home() {
     }
   };
 
-  // Initial load
-  useEffect(() => { loadFavorites(); }, []);
-  // Refresh on screen focus
-  useFocusEffect(useCallback(() => { loadFavorites(); }, []));
-  // Refresh when profile (and thus potential numeric user id) changes
-  useEffect(() => { loadFavorites(); }, [profile]);
+  // Initial load (forced to ensure we fetch once on mount)
+  useEffect(() => { loadFavorites(true); }, []);
+  // Load again only if profile user id changes from null to a different number
+  useEffect(() => { loadFavorites(false); }, [profile]);
   // Subscribe to favourites change events emitted by Map or other screens
   useEffect(() => {
     const unsubscribe = favouritesEvents.subscribe(async ({ userid }) => {
       // Only reload if event matches currently resolved user id
       const activeId = await getCurrentNumericUserId();
       if (activeId != null && activeId === userid) {
-        loadFavorites();
+        loadFavorites(true); // force reload after a favourites mutation
       }
     });
     return unsubscribe;

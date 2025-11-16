@@ -61,10 +61,10 @@ export async function authSignup(payload: { username: string; email: string; pas
 	return data
 }
 
-export async function authLogin(payload: { identifier: string; password: string }) {
+export async function authLogin(payload: { identifier: string; password: string; rememberMe?: boolean }) {
 	const data = await request('/auth/login', {
 		method: 'POST',
-		body: JSON.stringify(payload),
+		body: JSON.stringify({ identifier: payload.identifier, password: payload.password, rememberMe: !!payload.rememberMe }),
 		debugLabel: 'authLogin'
 	})
 	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
@@ -111,6 +111,26 @@ export async function authLogout(): Promise<boolean> {
 	} catch (e) {
 		console.warn('[authLogout] error', (e as any)?.message)
 		return false
+	}
+}
+
+// App closure/background handler: updates last_used_at or revokes depending on remember flag
+export async function authSessionClose(rememberMe: boolean): Promise<{ revoked: boolean; touched: boolean } | null> {
+	try {
+		const raw = await AsyncStorage.getItem('@backendAuth')
+		if (!raw) return null
+		let refreshToken: string | null = null
+		try { refreshToken = JSON.parse(raw)?.refreshToken } catch {}
+		if (!refreshToken) return null
+		const resp = await request('/auth/session/close', {
+			method: 'POST',
+			body: JSON.stringify({ refreshToken, rememberMe }),
+			debugLabel: 'authSessionClose'
+		})
+		return { revoked: !!resp?.revoked, touched: !!resp?.touched }
+	} catch (e) {
+		console.warn('[authSessionClose] error', (e as any)?.message)
+		return null
 	}
 }
 
