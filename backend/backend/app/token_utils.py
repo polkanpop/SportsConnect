@@ -28,7 +28,8 @@ def _get_encryption_key() -> Optional[str]:
 
 
 def _get_refresh_pepper() -> str:
-    return os.getenv("REFRESH_TOKEN_PEPPER", "pepper")
+    val = os.getenv("REFRESH_TOKEN_PEPPER", "pepper")
+    return val.strip().strip('"').strip("'")
 
 
 def _encrypt_access_token(token: str) -> bytes:

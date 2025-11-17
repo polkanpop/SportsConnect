@@ -1,6 +1,7 @@
 import time
 import logging
 import hashlib
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException
@@ -9,7 +10,12 @@ from jose import jwt
 from ..db import rest_select, rest_upsert
 from ..auth import get_jwt_secret, HS_ALGORITHM
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
-from ..login_rules import record_login_attempt, get_user_state_snapshot
+from ..login_rules import (
+    record_login_attempt,
+    get_user_state_snapshot,
+    record_username_attempt,
+    get_username_state_snapshot,
+)
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -23,6 +29,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Bcrypt password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _get_password_pepper() -> str:
+    """Return password pepper from environment (stripped). Empty string if unset.
+    NOTE: Ensure .env line has no spaces like PASSWORD_PEPPER="value".
+    """
+    val = os.getenv("PASSWORD_PEPPER", "")
+    # strip quotes & whitespace to avoid accidental space inclusion
+    return val.strip().strip('"').strip("'")
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -129,8 +144,9 @@ def signup(payload: dict):
     infoid = info_row.get('infoid')
     logger.debug(f"Inserted/allocated userinfo infoid={infoid}")
 
-    # 3. userlogin with sequence fallback - hash password with bcrypt
-    bcrypt_hash = pwd_context.hash(password)
+    # 3. userlogin with sequence fallback - hash password with bcrypt (+ optional pepper)
+    pepper = _get_password_pepper()
+    bcrypt_hash = pwd_context.hash(password + pepper)
     try:
         login_rows = rest_upsert("userlogin", {"userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local"})
     except Exception as e:
@@ -213,6 +229,11 @@ def login(payload: dict):
     else:
         login_row = find_userlogin_by_username(identifier)
         if not login_row:
+            # Log username attempt failure (unknown username spam tracking)
+            try:
+                record_username_attempt(identifier, success=False)
+            except Exception as e:
+                logger.warning(f"/login username rule logging failure username={identifier} err={e}")
             raise HTTPException(status_code=404, detail="Account not found")
         userid = login_row.get('userid')
         info_row = find_userinfo_by_userid(userid)
@@ -227,10 +248,16 @@ def login(payload: dict):
         return pw.startswith("$2a$") or pw.startswith("$2b$") or pw.startswith("$2y$")
 
     password_valid = False
+    peppered_already = False
+    pepper = _get_password_pepper()
     if stored_pw and is_bcrypt(stored_pw):
-        # Standard bcrypt verification
-        if pwd_context.verify(password, stored_pw):
+        # Try peppered verification first (new scheme). If that fails, try legacy (no pepper).
+        if pwd_context.verify(password + pepper, stored_pw):
             password_valid = True
+            peppered_already = True
+        elif pwd_context.verify(password, stored_pw):
+            password_valid = True
+            peppered_already = False  # legacy bcrypt without pepper -> will upgrade below
     else:
         # Legacy path: either plaintext or prior SHA256 client-hash
         sha256_hex = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -238,11 +265,20 @@ def login(payload: dict):
             password_valid = True
             # Re-hash & upgrade to bcrypt
             try:
-                new_hash = pwd_context.hash(password)
+                new_hash = pwd_context.hash(password + pepper)
                 rest_upsert("userlogin", {"loginid": login_row.get('loginid'), "userid": userid, "username": login_row.get('username'), "passwordhash": new_hash, "logintype": login_row.get('logintype') or 'Local'})
                 logger.debug(f"/login password upgraded to bcrypt for userid={userid}")
             except Exception as e:
                 logger.warning(f"/login bcrypt upgrade failed userid={userid} err={e}")
+
+    # Upgrade legacy bcrypt (without pepper) to peppered bcrypt after successful verification
+    if password_valid and stored_pw and is_bcrypt(stored_pw) and not peppered_already:
+        try:
+            new_hash = pwd_context.hash(password + pepper)
+            rest_upsert("userlogin", {"loginid": login_row.get('loginid'), "userid": userid, "username": login_row.get('username'), "passwordhash": new_hash, "logintype": login_row.get('logintype') or 'Local'})
+            logger.debug(f"/login password upgraded to peppered bcrypt for userid={userid}")
+        except Exception as e:
+            logger.warning(f"/login peppered bcrypt upgrade failed userid={userid} err={e}")
 
     if not password_valid:
         # Log failure rules (logging only; does not block response timeline)
@@ -294,6 +330,9 @@ def login(payload: dict):
     # Successful password; reset rule counters via record_login_attempt
     try:
         record_login_attempt(userid, password, success=True)
+        # If identifier was a username (not email), also reset username spam counters as a success.
+        if not looks_like_email:
+            record_username_attempt(identifier, success=True)
     except Exception as e:
         logger.warning(f"/login rule reset failure userid={userid} err={e}")
 
@@ -303,7 +342,13 @@ def login(payload: dict):
         state_snapshot = get_user_state_snapshot(userid)
     except Exception:
         pass
-    logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed} state={state_snapshot}")
+    username_state = {}
+    if not looks_like_email:
+        try:
+            username_state = get_username_state_snapshot(identifier)
+        except Exception:
+            pass
+    logger.debug(f"/login SUCCESS userid={userid} elapsedMs={elapsed} state={state_snapshot} usernameState={username_state}")
     # Issue new token pair
     tokens = None
     try:
