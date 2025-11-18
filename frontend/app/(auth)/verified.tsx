@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistAuthSession } from '@/lib/backendApi';
 
 // This screen is reached via deep link after email verification redirect.
 // It receives query params with tokens if auto-login was enabled.
@@ -30,33 +31,20 @@ export default function EmailVerifiedAutoLoginScreen() {
           setError('Invalid verification response');
           return;
         }
-        // Persist profile subset (mirrors authLogin persistence logic)
-        if (params.userid) {
-          const profile = {
-            userid: Number(params.userid),
-            username: params.username || null,
-            name: params.name || null,
-            email: params.email || null,
-          };
-          await AsyncStorage.setItem('@backendProfile', JSON.stringify(profile));
+        // Consolidated persistence helper (sets profile, tokens, remember flag)
+        const authData = {
+          userid: params.userid ? Number(params.userid) : undefined,
+          username: params.username,
+          name: params.name,
+          email: params.email,
+          accessToken: params.accessToken,
+          accessTokenExpiresAt: params.accessTokenExpiresAt,
+          refreshToken: params.refreshToken,
+          refreshTokenExpiresAt: params.refreshTokenExpiresAt,
         }
-        // Persist tokens if present
-        if (params.accessToken && params.refreshToken) {
-          const authPayload = {
-            accessToken: params.accessToken,
-            accessTokenExpiresAt: params.accessTokenExpiresAt,
-            refreshToken: params.refreshToken,
-            refreshTokenExpiresAt: params.refreshTokenExpiresAt,
-            userid: params.userid ? Number(params.userid) : undefined,
-          }
-          await AsyncStorage.setItem('@backendAuth', JSON.stringify(authPayload));
-          // Provide compatibility for request() fallback bearer usage
-            await AsyncStorage.setItem('@localAuthToken', params.accessToken)
-        }
+        await persistAuthSession(authData, { rememberMe: true })
         // Clear pending signup profile (if any)
         await AsyncStorage.removeItem('@backendProfilePending');
-        // Mark remember flag true so auto-login persists across app restarts
-        await AsyncStorage.setItem('@rememberAuth', 'true');
         setDone(true);
         // Route into main app (tabs) after short delay
         setTimeout(() => router.replace('/(tabs)/Home'), 600);

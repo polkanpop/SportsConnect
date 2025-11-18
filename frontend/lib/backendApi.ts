@@ -50,6 +50,45 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	return data
 }
 
+// Centralized persistence of backend auth/session related data.
+// Accepts any object containing userid/profile fields and token fields.
+// Optionally sets remember flag.
+export async function persistAuthSession(data: any, opts?: { rememberMe?: boolean }) {
+	try {
+		if (data?.userid != null) {
+			await AsyncStorage.setItem('@backendProfile', JSON.stringify({
+				userid: data.userid,
+				username: data.username ?? null,
+				name: data.name ?? null,
+				email: data.email ?? null,
+			}))
+		}
+	} catch {}
+	// Prefer access/refresh token bundle; fallback to legacy single token
+	try {
+		if (data?.accessToken && data?.refreshToken) {
+			await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+				accessToken: data.accessToken,
+				accessTokenExpiresAt: data.accessTokenExpiresAt,
+				refreshToken: data.refreshToken,
+				refreshTokenExpiresAt: data.refreshTokenExpiresAt,
+				userid: data.userid,
+			}))
+			// Legacy bearer fallback for request()
+			await AsyncStorage.setItem('@localAuthToken', data.accessToken)
+		} else if (data?.token) {
+			await AsyncStorage.setItem('@localAuthToken', data.token)
+		}
+	} catch {}
+	try {
+		if (opts?.rememberMe) {
+			await AsyncStorage.setItem('@rememberAuth', 'true')
+		} else if (opts && opts.rememberMe === false) {
+			await AsyncStorage.removeItem('@rememberAuth')
+		}
+	} catch {}
+}
+
 export async function authSignup(payload: { username: string; email: string; password: string; accountName?: string; role?: string }) {
 	const data = await request('/auth/signup', {
 		method: 'POST',
@@ -67,30 +106,7 @@ export async function authLogin(payload: { identifier: string; password: string;
 		body: JSON.stringify({ identifier: payload.identifier, password: payload.password, rememberMe: !!payload.rememberMe }),
 		debugLabel: 'authLogin'
 	})
-	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
-	// Persist profile subset
-	try {
-		if (data?.userid != null) {
-			await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-				userid: data.userid,
-				username: data.username,
-				name: data.name,
-				email: data.email,
-			}))
-		}
-	} catch {}
-	// Persist issued tokens (access + refresh) for later logout/refresh flows
-	try {
-		if (data?.accessToken && data?.refreshToken) {
-			await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-				accessToken: data.accessToken,
-				accessTokenExpiresAt: data.accessTokenExpiresAt,
-				refreshToken: data.refreshToken,
-				refreshTokenExpiresAt: data.refreshTokenExpiresAt,
-				userid: data.userid,
-			}))
-		}
-	} catch {}
+	await persistAuthSession(data, { rememberMe: !!payload.rememberMe })
 	return data
 }
 

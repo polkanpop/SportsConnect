@@ -28,10 +28,12 @@ export default function LoginScreen() {
         const flag = await AsyncStorage.getItem('@rememberAuth')
         if (flag === 'true') {
           setRememberMe(true)
-          // If we already have a stored backend profile treat as auto-login
-          const raw = await AsyncStorage.getItem('@backendProfile')
-          if (raw) {
-            console.log('[login] auto-redirect via remember me')
+          // Only auto-redirect when both a remembered profile AND active backend auth tokens exist.
+          // This prevents redirect loops caused by stale profiles without valid tokens.
+          const rawProfile = await AsyncStorage.getItem('@backendProfile')
+          const rawAuth = await AsyncStorage.getItem('@backendAuth')
+          if (rawProfile && rawAuth) {
+            console.log('[login] auto-redirect via remember me (validated tokens)')
             router.replace('/(tabs)/Home')
           }
         }
@@ -49,22 +51,6 @@ export default function LoginScreen() {
     try {
   const res = await authLogin({ identifier: identifier.trim(), password, rememberMe })
       console.log('[login] success', res)
-      // Persist basic backend profile (userid, username, name, email) for later screens (e.g., Settings)
-      try {
-        await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-          userid: res.userid,
-          username: res.username,
-          name: res.name,
-          email: res.email,
-        }))
-        if (rememberMe) {
-          await AsyncStorage.setItem('@rememberAuth', 'true')
-        } else {
-          await AsyncStorage.removeItem('@rememberAuth')
-        }
-      } catch (e) {
-        console.warn('[login] failed storing backendProfile', (e as any)?.message)
-      }
       try { await initFavoritesForCurrentUser() } catch (e) { console.log('[login] initFavorites error', e) }
       setPassword('')
       router.replace('/(tabs)/Home')

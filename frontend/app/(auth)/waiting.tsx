@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getVerificationStatus, resendVerification } from '@/lib/backendApi';
 
 export default function WaitingForVerificationScreen() {
@@ -18,8 +19,16 @@ export default function WaitingForVerificationScreen() {
 			setStatusChecked(true);
 			if (res.emailVerified) {
 				setVerified(true);
-				// redirect to login so user can authenticate now
-				setTimeout(() => router.replace('/(auth)/login'), 1000);
+				// If backend auth tokens already exist (deep link verified screen handled persistence), skip login redirect.
+				try {
+					const rawAuth = await AsyncStorage.getItem('@backendAuth');
+					if (rawAuth) {
+						console.log('[waiting] email verified; tokens present -> skip login redirect');
+						return; // Verified screen will navigate to Home.
+					}
+				} catch {}
+				// No tokens yet: user must login manually now.
+				setTimeout(() => router.replace('/(auth)/login'), 900);
 			}
 		} catch (e: any) {
 			setError(e.message || 'Failed checking status');
