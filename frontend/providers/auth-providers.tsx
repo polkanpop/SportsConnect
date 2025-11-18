@@ -1,7 +1,8 @@
 import { AuthContext } from '@/hooks/use-auth-context'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import { PropsWithChildren, useEffect, useState } from 'react'
+import { PropsWithChildren, useEffect, useState, useRef } from 'react'
+import { AUTO_EMAIL_LOGIN } from '@/env'
 import { AppState } from 'react-native'
 import { authSessionClose } from '@/lib/backendApi'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -13,6 +14,7 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [isLoadingRemember, setIsLoadingRemember] = useState<boolean>(true)
   const [rememberProfile, setRememberProfile] = useState<any | null>(null)
   const [rememberFlag, setRememberFlag] = useState<boolean>(false)
+  const [backendAuthPresent, setBackendAuthPresent] = useState<boolean>(false)
 
   // --- Supabase session bootstrap & subscription ---
   useEffect(() => {
@@ -37,6 +39,8 @@ export default function AuthProvider({ children }: PropsWithChildren) {
       try {
         const flag = await AsyncStorage.getItem('@rememberAuth')
         const rawProfile = await AsyncStorage.getItem('@backendProfile')
+        const rawBackendAuth = await AsyncStorage.getItem('@backendAuth')
+        setBackendAuthPresent(!!rawBackendAuth)
         if (flag === 'true' && rawProfile) {
           setRememberFlag(true)
           try { setRememberProfile(JSON.parse(rawProfile)) } catch { setRememberProfile(null) }
@@ -71,21 +75,25 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
   // Unified loading & logged-in derivation
   const isLoading = isLoadingSupabase || isLoadingRemember
-  const isLoggedIn = (!!session) || rememberFlag
+  // Treat backendAuth presence as logged-in if rememberFlag OR explicit token presence (auto-login)
+  const isLoggedIn = (!!session) || rememberFlag || backendAuthPresent
   // Exposed composite profile preference: supabase profile if present else remembered backend profile
   const exposedProfile = session ? profile : rememberProfile
 
   // --- AppState listener to enforce remember-me closure semantics ---
+  const mountedAtRef = useRef<number>(Date.now())
   useEffect(() => {
-    // Only attach if we have finished loading remember flag
     if (isLoadingRemember) return
     const handler = async (state: string) => {
       if (state === 'background' || state === 'inactive') {
+        const elapsed = Date.now() - mountedAtRef.current
+        // Debounce very early transitions (e.g., opening mail app during signup) and skip if no auth yet
         try {
-          // Determine remember flag dynamically (storage may have changed)
+          const rawAuth = await AsyncStorage.getItem('@backendAuth')
+          if (!rawAuth) return
+          if (elapsed < 5000) return // ignore first 5s
           const flag = await AsyncStorage.getItem('@rememberAuth')
           const remember = flag === 'true'
-          // Call backend to update last_used_at or revoke token
           await authSessionClose(remember)
         } catch (e) {
           console.warn('[AuthProvider] app close handler error', (e as any)?.message)

@@ -56,8 +56,8 @@ export async function authSignup(payload: { username: string; email: string; pas
 		body: JSON.stringify(payload),
 		debugLabel: 'authSignup'
 	})
-	try { if (data?.token) await AsyncStorage.setItem('@localAuthToken', data.token) } catch {}
-	try { if (data?.userid != null) await AsyncStorage.setItem('@backendProfile', JSON.stringify(data)) } catch {}
+	// Token intentionally omitted until email verified
+	try { if (data?.userid != null) await AsyncStorage.setItem('@backendProfilePending', JSON.stringify(data)) } catch {}
 	return data
 }
 
@@ -92,6 +92,21 @@ export async function authLogin(payload: { identifier: string; password: string;
 		}
 	} catch {}
 	return data
+}
+
+// ---- Email Verification Helpers ----
+export async function getVerificationStatus(email: string): Promise<{ emailVerified: boolean }> {
+	const data = await request(`/auth/verification-status?email=${encodeURIComponent(email)}`, { debugLabel: 'getVerificationStatus' })
+	return { emailVerified: !!data?.emailVerified }
+}
+
+export async function resendVerification(email: string): Promise<{ resent: boolean }> {
+	const data = await request('/auth/resend-verification', {
+		method: 'POST',
+		body: JSON.stringify({ email }),
+		debugLabel: 'resendVerification'
+	})
+	return { resent: !!data?.resent }
 }
 
 // Backend logout using stored refreshToken; returns true if revoked

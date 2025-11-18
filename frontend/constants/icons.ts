@@ -80,6 +80,7 @@ export const ICONS = {
   // Alias requested in spec (user referred to ICONS.buttonBooking)
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
+  gmailButton: require('../assets/icons/gmail.png'),
   bookMark: require('../assets/icons/bookmark.png'),
   menu: require('../assets/icons/menu.png'),
   acc1: require('../assets/icons/account_placeholder1.png'),

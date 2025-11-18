@@ -2,12 +2,17 @@ import time
 import logging
 import hashlib
 import os
-from datetime import datetime, timedelta
+import secrets
+from email.message import EmailMessage
+import smtplib
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from jose import jwt
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_jwt_secret, HS_ALGORITHM
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
 from ..login_rules import (
@@ -59,6 +64,94 @@ def find_userinfo_by_userid(userid: int) -> Optional[dict]:
     row = rest_select("userinfo", "infoid, userid, email, name", {"userid": userid}, single=True)
     logger.debug(f"find_userinfo_by_userid userid={userid} ms={_now_ms()-start} row={row}")
     return row
+
+def find_unverified_by_email(email: str) -> Optional[dict]:
+    start = _now_ms()
+    row = rest_select("unverified_users", "unverifiedid, userid, email, token_hash, token_expires_at, resend_count, email_verified", {"email": email}, single=True)
+    logger.debug(f"find_unverified_by_email email={email} ms={_now_ms()-start} row={row}")
+    return row
+
+def _email_settings():
+    return {
+        "host": os.getenv("SMTP_HOST"),
+        "port": int(os.getenv("SMTP_PORT", "587")),
+        "username": os.getenv("SMTP_USERNAME"),
+        "password": os.getenv("SMTP_PASSWORD"),
+        "sender": os.getenv("SMTP_SENDER_EMAIL", os.getenv("SENDER_EMAIL", "noreply@example.com")),
+        "sender_name": os.getenv("SMTP_SENDER_NAME", os.getenv("SENDER_NAME", "SportConnect")),
+        "base_verify_url": os.getenv("EMAIL_VERIFY_BASE_URL", "http://localhost:8000/auth/verify-email"),
+        "expiry_hours": int(os.getenv("EMAIL_VERIFICATION_EXP_HOURS", "24")),
+        "resend_limit": int(os.getenv("EMAIL_VERIFICATION_RESEND_LIMIT", "5")),
+    }
+
+def _send_verification_email(to_email: str, token: str):
+    cfg = _email_settings()
+    if not cfg["host"] or not cfg["username"] or not cfg["password"]:
+        logger.warning("SMTP settings incomplete; skipping email send")
+        return False
+    verify_link = f"{cfg['base_verify_url']}?token={token}"
+    msg = EmailMessage()
+    msg["Subject"] = "Confirm Your Signup"
+    msg["From"] = f"{cfg['sender_name']} <{cfg['sender']}>"
+    msg["To"] = to_email
+    msg.set_content(f"Please verify your SportConnect account by visiting: {verify_link}\n\nIf you did not sign up, ignore this email.")
+    try:
+        with smtplib.SMTP(cfg['host'], cfg['port'], timeout=10) as smtp:
+            smtp.starttls()
+            smtp.login(cfg['username'], cfg['password'])
+            smtp.send_message(msg)
+        logger.debug(f"Sent verification email to {to_email}")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed sending verification email to {to_email} err={e}")
+        return False
+
+def _create_or_update_unverified(userid: int, email: str) -> dict:
+    """Insert or refresh unverified_users row with new token. Returns dict including plaintext token."""
+    cfg = _email_settings()
+    token_plain = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token_plain.encode('utf-8')).hexdigest()
+    expires_at = (datetime.utcnow() + timedelta(hours=cfg['expiry_hours'])).isoformat()
+    existing = find_unverified_by_email(email)
+    if existing:
+        # refresh token (keep unverifiedid)
+        try:
+            rest_update("unverified_users", {"unverifiedid": existing.get("unverifiedid")}, {
+                "token_hash": token_hash,
+                "token_expires_at": expires_at,
+                "email_verified": False,
+            })
+        except Exception as e:
+            logger.exception(f"Failed updating unverified_users email={email} err={e}")
+            raise HTTPException(status_code=500, detail="Failed updating verification record")
+        existing['token_hash'] = token_hash
+        existing['token_expires_at'] = expires_at
+        existing['email_verified'] = False
+        existing['plaintext_token'] = token_plain
+        return existing
+    # allocate unverifiedid manually (no sequence defined in schema snippet)
+    try:
+        max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+    except Exception:
+        max_row = None
+    next_id = (max_row.get('unverifiedid') if max_row else 0) + 1
+    payload = {
+        "unverifiedid": next_id,
+        "userid": userid,
+        "email": email,
+        "token_hash": token_hash,
+        "token_expires_at": expires_at,
+        "resend_count": 0,
+        "email_verified": False,
+    }
+    try:
+        rows = rest_upsert("unverified_users", payload)
+    except Exception as e:
+        logger.exception(f"Failed inserting unverified_users email={email} err={e}")
+        raise HTTPException(status_code=500, detail="Failed creating verification record")
+    rec = rows[0] if isinstance(rows, list) else payload
+    rec['plaintext_token'] = token_plain
+    return rec
 
 @router.post('/signup')
 def signup(payload: dict):
@@ -174,25 +267,12 @@ def signup(payload: dict):
     loginid = login_row.get('loginid')
     logger.debug(f"Inserted/allocated userlogin loginid={loginid}")
 
+    # 4. Create verification record + send email
+    ver_rec = _create_or_update_unverified(userid, email)
+    email_sent = _send_verification_email(email, ver_rec['plaintext_token'])
     elapsed = _now_ms() - t0
-    logger.debug(f"/signup COMPLETE userid={userid} elapsedMs={elapsed}")
-    # Issue JWT (HS256 using SUPABASE_JWT_SECRET or anon/service key) so frontend can call protected endpoints.
-    secret = get_jwt_secret()
-    token = None
-    if secret:
-        try:
-            exp = datetime.utcnow() + timedelta(hours=24)
-            payload_token = {
-                "sub": str(userid),
-                "role": role,
-                "email": email,
-                "username": username,
-                "iat": int(time.time()),
-                "exp": int(exp.timestamp()),
-            }
-            token = jwt.encode(payload_token, secret, algorithm=HS_ALGORITHM)
-        except Exception as e:
-            logger.warning(f"/signup token generation failed userid={userid} err={e}")
+    logger.debug(f"/signup COMPLETE userid={userid} elapsedMs={elapsed} emailSent={email_sent}")
+    # Do NOT auto-login; client must verify email first
     return {
         "status": "ok",
         "userid": userid,
@@ -201,7 +281,8 @@ def signup(payload: dict):
         "infoid": infoid,
         "loginid": loginid,
         "elapsedMs": elapsed,
-        "token": token,
+        "verificationEmailSent": email_sent,
+        "emailVerified": False,
     }
 
 @router.post('/login')
@@ -226,10 +307,13 @@ def login(payload: dict):
             raise HTTPException(status_code=404, detail="Account not found")
         userid = info_row.get('userid')
         login_row = rest_select("userlogin", "loginid, userid, username, passwordhash", {"userid": userid}, single=True)
+        # Enforce email verification
+        unver = find_unverified_by_email(identifier)
+        if unver and not unver.get('email_verified'):
+            raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
     else:
         login_row = find_userlogin_by_username(identifier)
         if not login_row:
-            # Log username attempt failure (unknown username spam tracking)
             try:
                 record_username_attempt(identifier, success=False)
             except Exception as e:
@@ -237,6 +321,10 @@ def login(payload: dict):
             raise HTTPException(status_code=404, detail="Account not found")
         userid = login_row.get('userid')
         info_row = find_userinfo_by_userid(userid)
+        if info_row and info_row.get('email'):
+            unver = find_unverified_by_email(info_row.get('email'))
+            if unver and not unver.get('email_verified'):
+                raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
 
     if not login_row:
         raise HTTPException(status_code=404, detail="Login record not found")
@@ -394,6 +482,139 @@ def login(payload: dict):
         "refreshTokenExpiresAt": tokens.get('refresh_token_expires_at'),
         "rememberMe": remember_me,
     }
+
+
+@router.get('/verify-email')
+def verify_email(token: str = Query(..., description="Plaintext email verification token")):
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    row = rest_select(
+        "unverified_users",
+        "unverifiedid, userid, email, token_expires_at, email_verified",
+        {"token_hash": token_hash},
+        single=True,
+    )
+    if not row:
+        raise HTTPException(status_code=400, detail="Invalid or already used token")
+    if row.get('email_verified'):
+        # Optional redirect even if already verified
+        redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
+        auto_login = os.getenv("EMAIL_VERIFY_AUTO_LOGIN", "").lower() == "true"
+        if redirect_url:
+            params = {"status": "ok", "alreadyVerified": "true", "email": row.get('email')}
+            if auto_login:
+                try:
+                    userlogin_row = rest_select("userlogin", "loginid, userid, username", {"userid": row.get("userid")}, single=True)
+                    info_row = rest_select("userinfo", "infoid, userid, name, email", {"userid": row.get("userid")}, single=True)
+                    tokens = create_user_tokens(row.get("userid"), userlogin_row.get("username") if userlogin_row else None, info_row.get("email") if info_row else row.get('email'), remember_me=False)
+                    params.update({
+                        "accessToken": tokens.get("access_token"),
+                        "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+                        "refreshToken": tokens.get("refresh_token"),
+                        "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+                        "userid": row.get("userid"),
+                        "username": (userlogin_row.get("username") if userlogin_row else None) or "",
+                        "name": (info_row.get("name") if info_row else "") or "",
+                    })
+                except Exception as e:
+                    logger.warning(f"auto-login issuance failed userid={row.get('userid')} err={e}")
+            return RedirectResponse(f"{redirect_url}?{urlencode({k:v for k,v in params.items() if v is not None})}")
+        return {"status": "ok", "alreadyVerified": True}
+
+    exp_raw = row.get('token_expires_at')
+    try:
+        exp_dt = datetime.fromisoformat(exp_raw.replace('Z', '+00:00')) if exp_raw else None
+    except Exception:
+        exp_dt = None
+    # Normalize timezone (make both aware UTC)
+    if exp_dt and exp_dt.tzinfo is None:
+        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    if exp_dt and exp_dt < now_utc:
+        raise HTTPException(status_code=400, detail="Token expired")
+    # mark verified; scramble token_hash to prevent replay
+    try:
+        rest_update(
+            "unverified_users",
+            {"unverifiedid": row.get("unverifiedid")},
+            {"email_verified": True, "token_hash": f"VERIFIED:{token_hash[:12]}"},
+        )
+    except Exception as e:
+        logger.exception(f"Failed updating verification status err={e}")
+        raise HTTPException(status_code=500, detail="Failed marking verified")
+
+    redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
+    auto_login = os.getenv("EMAIL_VERIFY_AUTO_LOGIN", "").lower() == "true"
+    if redirect_url:
+        params = {"status": "ok", "verified": "true", "email": row.get('email')}
+        if auto_login:
+            try:
+                userlogin_row = rest_select("userlogin", "loginid, userid, username", {"userid": row.get("userid")}, single=True)
+                info_row = rest_select("userinfo", "infoid, userid, name, email", {"userid": row.get("userid")}, single=True)
+                tokens = create_user_tokens(row.get("userid"), userlogin_row.get("username") if userlogin_row else None, info_row.get("email") if info_row else row.get('email'), remember_me=False)
+                params.update({
+                    "accessToken": tokens.get("access_token"),
+                    "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+                    "refreshToken": tokens.get("refresh_token"),
+                    "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+                    "userid": row.get("userid"),
+                    "username": (userlogin_row.get("username") if userlogin_row else None) or "",
+                    "name": (info_row.get("name") if info_row else "") or "",
+                })
+            except Exception as e:
+                logger.warning(f"auto-login issuance failed userid={row.get('userid')} err={e}")
+        return RedirectResponse(f"{redirect_url}?{urlencode({k:v for k,v in params.items() if v is not None})}")
+    # If no redirect configured, optionally include tokens directly when auto_login enabled
+    if auto_login:
+        try:
+            userlogin_row = rest_select("userlogin", "loginid, userid, username", {"userid": row.get("userid")}, single=True)
+            info_row = rest_select("userinfo", "infoid, userid, name, email", {"userid": row.get("userid")}, single=True)
+            tokens = create_user_tokens(row.get("userid"), userlogin_row.get("username") if userlogin_row else None, info_row.get("email") if info_row else row.get('email'), remember_me=False)
+            return {
+                "status": "ok",
+                "verified": True,
+                "userid": row.get("userid"),
+                "username": (userlogin_row.get("username") if userlogin_row else None) or "",
+                "name": (info_row.get("name") if info_row else "") or "",
+                "accessToken": tokens.get("access_token"),
+                "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+                "refreshToken": tokens.get("refresh_token"),
+                "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+            }
+        except Exception as e:
+            logger.warning(f"auto-login issuance failed (no redirect) userid={row.get('userid')} err={e}")
+    return {"status": "ok", "verified": True}
+
+@router.get('/verification-status')
+def verification_status(email: str = Query(...)):
+    row = find_unverified_by_email(email)
+    if not row:
+        # If no row we treat as verified (legacy accounts before table creation)
+        return {"status": "ok", "emailVerified": True, "legacy": True}
+    return {"status": "ok", "emailVerified": bool(row.get('email_verified'))}
+
+@router.post('/resend-verification')
+def resend_verification(payload: dict):
+    email = (payload.get('email') or '').strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Missing email")
+    row = find_unverified_by_email(email)
+    if not row:
+        raise HTTPException(status_code=404, detail="No verification record for email")
+    cfg = _email_settings()
+    if row.get('email_verified'):
+        return {"status": "ok", "emailVerified": True, "alreadyVerified": True}
+    if row.get('resend_count', 0) >= cfg['resend_limit']:
+        raise HTTPException(status_code=429, detail="Resend limit reached")
+    # create new token & update resend_count
+    new_rec = _create_or_update_unverified(row.get('userid'), email)
+    try:
+        rest_update("unverified_users", {"unverifiedid": new_rec.get('unverifiedid')}, {"resend_count": row.get('resend_count', 0) + 1})
+    except Exception:
+        pass
+    sent = _send_verification_email(email, new_rec['plaintext_token'])
+    return {"status": "ok", "resent": sent}
 
 
 @router.post('/refresh')

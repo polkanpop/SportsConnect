@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { authSignup, authLogin } from '@/lib/backendApi';
+import { authSignup } from '@/lib/backendApi';
+import { AUTO_EMAIL_LOGIN } from '@/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
@@ -55,22 +56,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
                 accountName: accountName.trim(),
               })
               console.log('[signup] success', res)
-              setSuccessMessage('Account created successfully. Logging you in…')
+              setSuccessMessage('Account created. Please verify your email to continue.')
               setPassword('')
               setConfirmPassword('')
-              // Auto-login after signup
-              try {
-                const loginRes = await authLogin({ identifier: email.trim(), password });
-                await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-                  userid: loginRes.userid,
-                  username: loginRes.username,
-                  name: loginRes.name,
-                  email: loginRes.email,
-                }));
-                router.replace('/(tabs)/Home');
-              } catch (loginErr: any) {
-                setGeneralError('Signup succeeded but auto-login failed. Please sign in manually.');
-                setTimeout(() => { router.replace('/(auth)/login') }, 1200);
+              if (!AUTO_EMAIL_LOGIN) {
+                setTimeout(() => {
+                  router.replace(`/(auth)/waiting?email=${encodeURIComponent(email.trim())}` as any)
+                }, 1200)
+              } else {
+                // In auto-login mode we simply display success; deep link will handle verification.
               }
             } catch (err: any) {
               console.log('[signup] error', err)

@@ -3,6 +3,7 @@ import GoogleSignInButton from "@/components/social-auth-buttons/google/google-s
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase"; // retained for social/anonymous flows
 import { authLogin } from '@/lib/backendApi';
+import { AUTO_EMAIL_LOGIN } from '@/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
@@ -69,7 +70,16 @@ export default function LoginScreen() {
       router.replace('/(tabs)/Home')
     } catch (e: any) {
       console.log('[login] error', e)
-      setErrorMsg(e.message || 'Login failed')
+      const msg = e.message || 'Login failed'
+      if (msg === 'EMAIL_NOT_VERIFIED') {
+        setErrorMsg('Email not verified. Please check your inbox or resend.');
+        // Navigate to waiting screen only if auto email login not enabled
+        if (!AUTO_EMAIL_LOGIN && looksLikeEmail(identifier)) {
+          setTimeout(() => router.replace(`/(auth)/waiting?email=${encodeURIComponent(identifier.trim())}` as any), 800)
+        }
+      } else {
+        setErrorMsg(msg)
+      }
     } finally {
       setLoading(false)
     }

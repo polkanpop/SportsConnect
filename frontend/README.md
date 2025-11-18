@@ -65,6 +65,37 @@ Security note: This is a minimal demo (no JWT/token). Do NOT ship storing plaint
 
 To disable: remove references to `@rememberAuth` in `login.tsx` and `auth-providers.tsx`.
 
+## Email Confirmation & SMTP Setup (Supabase)
+
+1. Enable the **Confirm sign-up** flow inside Supabase Auth (`Auth -> Settings -> Email -> Templates`). The app now routes to `/(auth)/confirm-email`, so keep a template such as:
+
+```html
+<h2>Confirm your signup</h2>
+<p>Follow this link to confirm your user:</p>
+<p><a href="{{ .ConfirmationURL }}">Confirm your email</a></p>
+```
+
+2. Add the waiting page as a redirect target under `Auth -> Settings -> Redirect URLs` so the confirmation link returns to the app after the user clicks it. Examples for development:
+
+```
+http://localhost:19006/(auth)/confirm-email
+https://your-web-host/(auth)/confirm-email
+```
+
+3. Under `Auth -> Settings -> Emails -> SMTP Settings`, toggle **Enable custom SMTP** and configure Resend as the provider (see the Resend SMTP tab in Supabase for guidance). Typical values:
+
+| Field | Value |
+| ----- | ----- |
+| Sender email | `no-reply@sportsconnect.app` (or your domain) |
+| Sender name | `SportConnect` |
+| Host | `smtp.resend.com` |
+| Port | `465` (TLS) or `587` |
+| Username | `resend` |
+| Password | your Resend API key |
+| Minimum interval | `60` seconds |
+
+4. Save the SMTP settings and confirm the test email appears in your inbox. The frontend stores the pending confirmation address (key `@pendingConfirmEmail`) and displays the new waiting screen until the user verifies that email.
+
 ## 5. Remaining NativeWind Usage
 
 Some files still have `className` (e.g. `app/+not-found.tsx`). NativeWind remains enabled via `metro.config.js`. To fully remove it later:
