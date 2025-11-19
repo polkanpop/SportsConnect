@@ -586,6 +586,42 @@ def verify_email(token: str = Query(..., description="Plaintext email verificati
             logger.warning(f"auto-login issuance failed (no redirect) userid={row.get('userid')} err={e}")
     return {"status": "ok", "verified": True}
 
+@router.get('/newpassword')
+def password_reset_redirect(token: str = Query(..., description="Plaintext password reset token")):
+    """Validate password reset token and redirect to Expo deep link.
+    Similar pattern to /auth/verify-email: we only validate & redirect; actual password change
+    is performed by POST /userlogin/reset-password once frontend collects new password.
+    """
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+    # Import in-memory token store from userlogin router (generation lives there)
+    try:
+        from .userlogin import _reset_tokens  # type: ignore
+    except Exception:
+        raise HTTPException(status_code=500, detail="Token store unavailable")
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    rec = _reset_tokens.get(token_hash)
+    if not rec or rec.get('used'):
+        raise HTTPException(status_code=400, detail="Invalid or already used token")
+    exp_raw = rec.get('expires_at')
+    try:
+        exp_dt = datetime.fromisoformat(exp_raw.replace('Z', '+00:00')) if exp_raw else None
+    except Exception:
+        exp_dt = None
+    if exp_dt and exp_dt < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token expired")
+    redirect_url = os.getenv("PASSWORD_RESET_REDIRECT_URL")  # Expo deep link destination
+    if not redirect_url:
+        # Fallback: just JSON so frontend can proceed manually
+        return {"status": "ok", "resetReady": True, "token": token}
+    params = {
+        "status": "ok",
+        "token": token,
+        "userid": rec.get('userid'),
+        "username": rec.get('username') or "",
+    }
+    return RedirectResponse(f"{redirect_url}?{urlencode({k:v for k,v in params.items() if v is not None})}")
+
 @router.get('/verification-status')
 def verification_status(email: str = Query(...)):
     row = find_unverified_by_email(email)

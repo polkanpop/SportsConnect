@@ -59,10 +59,10 @@ export default function EmailVerifiedAutoLoginScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
-        <Text style={styles.title}>Email Verified</Text>
+        <Text style={styles.title}>Account verified!</Text>
         {error && <Text style={styles.error}>{error}</Text>}
         {!error && !done && <ActivityIndicator size="large" color="#15803d" style={{ marginTop: 20 }} />}
-        {!error && done && <Text style={styles.info}>Setting up your session…</Text>}
+        {!error && done && <Text style={styles.info}>Logging you in…</Text>}
       </View>
     </>
   );

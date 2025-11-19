@@ -113,9 +113,9 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.textDark}>Remember me</Text>
             </Pressable>
-            <Pressable>
+            <Link href="/(auth)/forgotpassword">
               <Text style={styles.forgotPassword}>Forgot Password ?</Text>
-            </Pressable>
+            </Link>
           </View>
 
           {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}

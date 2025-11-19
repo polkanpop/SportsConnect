@@ -165,6 +165,25 @@ export async function authSessionClose(rememberMe: boolean): Promise<{ revoked: 
 	}
 }
 
+// ---- Password Reset Flow ----
+export async function requestPasswordReset(identifier: string): Promise<{ status: string }> {
+	const data = await request('/userlogin/forgot-password', {
+		method: 'POST',
+		body: JSON.stringify({ identifier }),
+		debugLabel: 'requestPasswordReset'
+	})
+	return { status: data?.status || 'ok' }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ status: string; reset?: boolean }> {
+	const data = await request('/userlogin/reset-password', {
+		method: 'POST',
+		body: JSON.stringify({ token, newPassword }),
+		debugLabel: 'resetPassword'
+	})
+	return { status: data?.status || 'ok', reset: !!data?.reset }
+}
+
 // ---- Favourite Courts API (public) ----
 // Table schema: favouritecourts(favouriteid int PK, userid int, courtid int)
 // Endpoints implemented server-side (no auth required):

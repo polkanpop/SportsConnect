@@ -1,5 +1,69 @@
 from fastapi import APIRouter, HTTPException, Query
-from ..db import rest_select
+from ..db import rest_select, rest_upsert
+import logging, hashlib, secrets, os, smtplib
+from email.message import EmailMessage
+from datetime import datetime, timedelta
+from passlib.context import CryptContext
+
+logger = logging.getLogger("password_reset")
+if not logger.handlers:
+    h = logging.StreamHandler()
+    f = logging.Formatter('[PWD_RESET] %(asctime)s %(levelname)s %(message)s')
+    h.setFormatter(f)
+    logger.addHandler(h)
+logger.setLevel(logging.DEBUG)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _get_password_pepper() -> str:
+    val = os.getenv("PASSWORD_PEPPER", "")
+    return val.strip().strip('"').strip("'")
+
+_reset_tokens: dict[str, dict] = {}
+
+def _now() -> datetime:
+    return datetime.utcnow()
+
+def _exp_minutes() -> int:
+    try:
+        return int(os.getenv("PASSWORD_RESET_EXP_MINUTES", "60"))
+    except Exception:
+        return 60
+
+def _password_reset_base_url() -> str:
+    return os.getenv("PASSWORD_RESET_BASE_URL", "http://localhost:8081/(auth)/newpassword")
+
+def _email_settings():
+    return {
+        "host": os.getenv("SMTP_HOST"),
+        "port": int(os.getenv("SMTP_PORT", "587")),
+        "username": os.getenv("SMTP_USERNAME"),
+        "password": os.getenv("SMTP_PASSWORD"),
+        "sender": os.getenv("SMTP_SENDER_EMAIL", os.getenv("SENDER_EMAIL", "noreply@example.com")),
+        "sender_name": os.getenv("SMTP_SENDER_NAME", os.getenv("SENDER_NAME", "SportConnect")),
+    }
+
+def _send_password_reset_email(to_email: str, token_plain: str) -> bool:
+    link = f"{_password_reset_base_url()}?token={token_plain}"
+    cfg = _email_settings()
+    if not cfg["host"] or not cfg["username"] or not cfg["password"]:
+        logger.warning(f"SMTP settings incomplete; skipping password reset email to {to_email} link={link}")
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = "Reset Your Password"
+    msg["From"] = f"{cfg['sender_name']} <{cfg['sender']}>"
+    msg["To"] = to_email
+    msg.set_content(f"Reset Password\n\nFollow this link to reset your password: {link}\nIf you did not request a reset, you can ignore this email.")
+    try:
+        with smtplib.SMTP(cfg['host'], cfg['port'], timeout=10) as smtp:
+            smtp.starttls()
+            smtp.login(cfg['username'], cfg['password'])
+            smtp.send_message(msg)
+        logger.info(f"Password reset email sent to {to_email} link={link}")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed sending password reset email to {to_email} err={e}")
+        return False
 
 router = APIRouter(prefix="/userlogin", tags=["users"])
 
@@ -23,3 +87,91 @@ def get_userlogin(loginid: int):
         return row
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/forgot-password")
+def forgot_password(payload: dict):
+    """Initiate password reset by username OR email.
+    Always returns {status: ok} even if account not found.
+    Debug logs indicate lookup outcome. Generates one-time token stored in memory until used/expired.
+    """
+    identifier = (payload.get("identifier") or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Missing identifier")
+    looks_like_email = "@" in identifier
+    userlogin_row = None
+    email_for_send = None
+    if looks_like_email:
+        # Find via userinfo then userlogin
+        info_row = rest_select("userinfo", "infoid, userid, email", {"email": identifier}, single=True)
+        if not info_row:
+            logger.debug(f"forgot-password identifier={identifier} emailNotFound")
+        else:
+            userlogin_row = rest_select("userlogin", "loginid, userid, username", {"userid": info_row.get("userid")}, single=True)
+            email_for_send = info_row.get("email")
+    else:
+        userlogin_row = rest_select("userlogin", "loginid, userid, username", {"username": identifier}, single=True)
+        if not userlogin_row:
+            logger.debug(f"forgot-password identifier={identifier} usernameNotFound")
+        else:
+            # Fetch email for user (optional)
+            info_row = rest_select("userinfo", "infoid, userid, email", {"userid": userlogin_row.get("userid")}, single=True)
+            email_for_send = info_row.get("email") if info_row else None
+    if not userlogin_row or not email_for_send:
+        # Intentionally do NOT reveal non-existence; just return ok
+        return {"status": "ok"}
+    # Generate token + store hashed
+    token_plain = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token_plain.encode("utf-8")).hexdigest()
+    expires_at = (_now() + timedelta(minutes=_exp_minutes())).isoformat()
+    _reset_tokens[token_hash] = {
+        "userid": userlogin_row.get("userid"),
+        "loginid": userlogin_row.get("loginid"),
+        "username": userlogin_row.get("username"),
+        "expires_at": expires_at,
+        "used": False,
+        "plaintext": token_plain,
+    }
+    sent = _send_password_reset_email(email_for_send, token_plain)
+    logger.debug(f"forgot-password issued userid={userlogin_row.get('userid')} tokenHash={token_hash[:12]} exp={expires_at} sent={sent}")
+    return {"status": "ok"}
+
+@router.post("/reset-password")
+def reset_password(payload: dict):
+    """Complete reset: expects JSON { token, newPassword }"""
+    token = (payload.get("token") or "").strip()
+    new_pw = payload.get("newPassword") or ""
+    if not token or not new_pw:
+        raise HTTPException(status_code=400, detail="Missing token/newPassword")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password too short (min 8)")
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    rec = _reset_tokens.get(token_hash)
+    if not rec:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    if rec.get("used"):
+        raise HTTPException(status_code=400, detail="Token already used")
+    exp_raw = rec.get("expires_at")
+    try:
+        exp_dt = datetime.fromisoformat(exp_raw.replace("Z", "+00:00")) if exp_raw else None
+    except Exception:
+        exp_dt = None
+    if exp_dt and exp_dt < _now():
+        # expire & drop
+        _reset_tokens.pop(token_hash, None)
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    pepper = _get_password_pepper()
+    bcrypt_hash = pwd_context.hash(new_pw + pepper)
+    try:
+        rest_upsert("userlogin", {
+            "loginid": rec.get("loginid"),
+            "userid": rec.get("userid"),
+            "username": rec.get("username"),
+            "passwordhash": bcrypt_hash,
+            "logintype": "Local"
+        })
+    except Exception as e:
+        logger.exception(f"reset-password update failed userid={rec.get('userid')} err={e}")
+        raise HTTPException(status_code=500, detail="Failed updating password")
+    rec["used"] = True
+    logger.info(f"reset-password success userid={rec.get('userid')} tokenHash={token_hash[:12]}")
+    return {"status": "ok", "reset": True}
