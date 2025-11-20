@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { CourtBookingRow } from '@/lib/backendApi'
+import { CourtBookingRow, listCourts } from '@/lib/backendApi'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useUserId } from '@/hooks/use-user-id'
@@ -140,7 +141,21 @@ export default function CourtBooking() {
 
   // Derived validity and button enable state
   const isDaySelectable = useCallback((dayKey: string) => availableDayKeys.includes(dayKey), [availableDayKeys])
-  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid)
+  // Courts pricing (price per hour) fetched from /courts
+  const { data: courtsData } = useQuery({ queryKey: ['courts'], queryFn: () => listCourts() })
+  const pricePerHour: number | null = courtsData?.find?.((c: any) => c.courtid === courtid)?.price ?? null
+  const calculatedAmount = useMemo(() => {
+    if (pricePerHour == null || !startSlot || !endSlot) return 0
+    return Math.round(Number(pricePerHour) * (durationMinutes / 60)) // prorated (e.g. 90m = 1.5h)
+  }, [pricePerHour, durationMinutes, startSlot, endSlot])
+  const formattedAmount = useMemo(() => {
+    if (!calculatedAmount) return 'Confirm Booking'
+    try {
+      return `Confirm Booking - ${new Intl.NumberFormat('vi-VN').format(calculatedAmount)}₫`
+    } catch { return `Confirm Booking - ${calculatedAmount}₫` }
+  }, [calculatedAmount])
+  // Disallow duplicate booking for same availability
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !hasBookingForCurrentAvailability)
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey)) return
@@ -187,7 +202,7 @@ export default function CourtBooking() {
       start_timestamp: startTs,
       end_timestamp: endTs,
       bookingdate: bookingDateStr,
-      amount: 50000,
+      amount: calculatedAmount || 0,
       note: noteText.trim() ? noteText.trim() : null,
     }, {
       onSuccess: (data) => {
@@ -212,6 +227,15 @@ export default function CourtBooking() {
   useFocusEffect(useCallback(() => {
     if (userId != null) refetchUserBookings()
   }, [userId, refetchUserBookings]))
+
+  // Poll for external deletions (simple immediate sync after manual DB changes)
+  useEffect(() => {
+    if (userId == null) return
+    const interval = setInterval(() => {
+      refetchUserBookings()
+    }, 4000) // 4s polling interval
+    return () => clearInterval(interval)
+  }, [userId, refetchUserBookings])
 
   return (
     <View style={styles.screen}>
@@ -367,7 +391,9 @@ export default function CourtBooking() {
         )}
         {/* Payment Method */}
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionTitle}>Payment</Text>
+          <Text style={styles.sectionTitle}>
+            {pricePerHour != null ? `Payment (${new Intl.NumberFormat('vi-VN').format(pricePerHour)}₫/hr)` : 'Payment (price/hr)'}
+          </Text>
           <View style={styles.paymentRow}>
             <TouchableOpacity
               onPress={() => setPaymentMethod(paymentMethod === 'cash' ? null : 'cash')}
@@ -409,7 +435,7 @@ export default function CourtBooking() {
           </View>
           {submitError && <Text style={styles.errorText}>{submitError}</Text>}
           {hasBookingForCurrentAvailability && !confirmation && (
-            <Text style={styles.smallText}>You have an existing booking for this court (still allowed).</Text>
+            <Text style={styles.errorText}>You have already booked this court.</Text>
           )}
           {confirmation && (
             <View style={styles.successBox}>
@@ -433,7 +459,7 @@ export default function CourtBooking() {
           onPress={onPressConfirm}
           style={[styles.confirmUnifiedBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled]}
         >
-          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : 'Confirm Booking - 50,000₫'}</Text>
+          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : formattedAmount}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

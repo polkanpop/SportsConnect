@@ -356,6 +356,25 @@ export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 	})
 }
 
+// ---- Courts base table (includes pricing) ----
+// Schema: courts(courtid int PK, courtinfo text, ownerid int, price numeric)
+export type CourtRow = { courtid: number; courtinfo: string; ownerid: number; price: number }
+
+export async function listCourts(): Promise<CourtRow[]> {
+	const data = await request('/courts', { debugLabel: 'listCourts' })
+	return Array.isArray(data) ? data as CourtRow[] : []
+}
+
+export async function getCourt(courtid: number): Promise<CourtRow | null> {
+	if (courtid == null) throw new Error('courtid required')
+	try {
+		const row = await request(`/courts/${encodeURIComponent(courtid)}`, { debugLabel: 'getCourt' })
+		return row || null
+	} catch (e) {
+		return null
+	}
+}
+
 // ---- Payments & Court Bookings (simplified create helpers) ----
 export type PaymentRow = { paymentid: number; status: string; time: string; method: string; amount: number }
 export async function createPayment(payload: { status: 'paid'|'pending'|'failed'; method: 'vnpay'|'cash'; amount: number }) {

@@ -128,27 +128,27 @@ const TrainingSessionListScreen = () => {
       </View>
       <View style={styles.container}>
         <View style={styles.filterRow}>
-          <TouchableOpacity style={styles.filterButton} onPress={() => setOpenFilter(openFilter==='sport'?null:'sport')}>
+          <TouchableOpacity style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='sport'?null:'sport')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={styles.filterText}>Sport</Text>
+            <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length>0) && styles.filterTextActive]}>Sport</Text>
             {selectedSports.length>0 && <Text style={styles.countBadge}>{selectedSports.length}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
+          <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={styles.filterText}>Venue</Text>
+            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>Venue</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
             <Image source={ICONS.freeIcon} style={styles.filterIcon} />
-            <Text style={styles.filterText}>Free</Text>
+            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>Free</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, paymentSelections.length>0 && !freeOnly && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
+            style={[styles.filterButton, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
             onPress={togglePaymentPanel}
             disabled={freeOnly}
           >
             <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor:'#aaa' }]} />
-            <Text style={[styles.filterText, freeOnly && { color:'#999' }]}>Payment</Text>
+            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color:'#999' }]}>Payment</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
         </View>
@@ -235,7 +235,7 @@ const TrainingSessionListScreen = () => {
                   {/* Entry fee + payment methods displayed on their own line (match events layout) */}
                   <View style={styles.entryRow}>
                     <View style={[styles.tag, (s as any).entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
-                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? 'Entry: Free' : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} vnd/player`}</Text>
+                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? 'Entry: Free' : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}₫/player`}</Text>
                     </View>
                     {(s as any).entry_fee != null && (s as any).support_payment_method && (
                       <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
@@ -256,6 +256,7 @@ const TrainingSessionListScreen = () => {
                     <View style={styles.expandedContent}>
                       <Text style={styles.expandedLine}>Coach: {s.coachName || s.coachid}</Text>
                       <Text style={styles.expandedLine}>Address: {s.address || 'Unknown address'}</Text>
+                      <Text style={styles.expandedDescLabel}>Description:</Text>
                       <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || 'No description'}</Text>
                     </View>
                   )}
@@ -288,10 +289,11 @@ const styles = StyleSheet.create({
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
   filterRow:{flexDirection:'row',gap:10,marginBottom:12},
   filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',paddingHorizontal:12,paddingVertical:6,borderRadius:20},
-  filterButtonActive:{backgroundColor:'#e6f9e6'},
+  filterButtonActive:{backgroundColor:'#32CD32'},
   filterButtonDisabled:{backgroundColor:'#f0f0f0',opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:'#666',marginRight:6,resizeMode:'contain'},
   filterText:{color:'#222',fontSize:13,fontWeight:'600'},
+  filterTextActive:{ color:'#fff' },
   countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden'},
   sectionTitle:{fontSize:22,fontWeight:'500',color:'#222',marginBottom:12,marginLeft:4,marginTop:15},
   dropdownWrapper:{position:'absolute',top:100,left:12,right:12,zIndex:20},
@@ -333,6 +335,7 @@ const styles = StyleSheet.create({
   participantsText:{color:'#ddd',fontSize:12,fontWeight:'600'},
   expandedContent:{marginTop:10},
   expandedLine:{color:'#bbb',fontSize:12,marginBottom:4},
+  expandedDescLabel:{color:'#bbb',fontSize:12,marginTop:4,fontWeight:'700'},
   expandedDesc:{color:'#ddd',fontSize:12,marginTop:4},
   cardRight:{alignItems:'center'},
   placeholderImg:{width:70,height:70,backgroundColor:'#2d2d2d',borderRadius:10,marginBottom:6},
