@@ -2,7 +2,7 @@ import os
 import base64
 import secrets
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple, Optional
 
 from jose import jwt
@@ -17,7 +17,8 @@ except Exception:  # pragma: no cover
 
 
 def _now() -> datetime:
-    return datetime.utcnow()
+    # Return aware UTC datetime to avoid ambiguity with timestamptz columns
+    return datetime.utcnow().replace(tzinfo=timezone.utc)
 
 
 def _get_encryption_key() -> Optional[str]:
@@ -49,7 +50,18 @@ def _hash_refresh_token(refresh_token: str) -> str:
     return h.hexdigest()
 
 
-def _issue_access_jwt(userid: int, username: Optional[str], email: Optional[str], access_minutes: int = 15) -> Tuple[str, datetime]:
+def _issue_access_jwt(userid: int, username: Optional[str], email: Optional[str], access_minutes: Optional[int] = None) -> Tuple[str, datetime]:
+    """Issue short-lived access JWT.
+    Lifetime configurable via ACCESS_TOKEN_MINUTES env (default 15).
+    """
+    if access_minutes is None:
+        raw = os.getenv("ACCESS_TOKEN_MINUTES", "15")
+        if isinstance(raw, str):
+            raw = raw.strip().strip('"').strip("'")
+        try:
+            access_minutes = int(raw)  # type: ignore[arg-type]
+        except Exception:
+            access_minutes = 15
     secret = get_jwt_secret()
     if not secret:
         raise RuntimeError("JWT secret not configured")
@@ -84,18 +96,18 @@ def create_user_tokens(userid: int, username: Optional[str], email: Optional[str
         "userid": userid,
         "access_token_encrypted": encrypted_access_b64,
         "refresh_token_hash": refresh_hash,
-        "access_token_expires_at": access_exp.isoformat(),
-        "refresh_token_expires_at": refresh_exp.isoformat(),
-        "last_used_at": _now().isoformat(),
+        "access_token_expires_at": access_exp.isoformat().replace('+00:00', 'Z'),
+        "refresh_token_expires_at": refresh_exp.isoformat().replace('+00:00', 'Z'),
+        "last_used_at": _now().isoformat().replace('+00:00', 'Z'),
         "is_revoked": False,
     }
     # Use strict insert so duplicate hash errors surface (should not occur)
     rest_insert("user_tokens", row_payload)
     return {
         "access_token": access_token,
-        "access_token_expires_at": access_exp.isoformat(),
+        "access_token_expires_at": access_exp.isoformat().replace('+00:00', 'Z'),
         "refresh_token": refresh_token,
-        "refresh_token_expires_at": refresh_exp.isoformat(),
+        "refresh_token_expires_at": refresh_exp.isoformat().replace('+00:00', 'Z'),
         "remember_me": remember_me,
     }
 
@@ -103,28 +115,35 @@ def create_user_tokens(userid: int, username: Optional[str], email: Optional[str
 def verify_and_refresh(refresh_token: str) -> dict:
     """Validate refresh token and issue new access token. Optionally rotate refresh (not implemented here)."""
     refresh_hash = _hash_refresh_token(refresh_token)
-    row = rest_select("user_tokens", "tokenid, userid, access_token_expires_at, refresh_token_expires_at, is_revoked", {"refresh_token_hash": refresh_hash}, single=True)
+    row = rest_select(
+        "user_tokens",
+        "tokenid, userid, access_token_expires_at, refresh_token_expires_at, is_revoked",
+        {"refresh_token_hash": refresh_hash},
+        single=True,
+    )
     if not row:
         raise RuntimeError("Invalid refresh token")
     if row.get("is_revoked"):
         raise RuntimeError("Token revoked")
-    refresh_exp = row.get("refresh_token_expires_at")
-    if refresh_exp and datetime.fromisoformat(refresh_exp) < _now():
-        raise RuntimeError("Refresh token expired")
+    refresh_exp_raw = row.get("refresh_token_expires_at")
+    if refresh_exp_raw:
+        try:
+            refresh_exp_dt = datetime.fromisoformat(refresh_exp_raw.replace('Z', '+00:00'))
+        except Exception:
+            raise RuntimeError("Malformed refresh token expiry")
+        if refresh_exp_dt < _now():
+            raise RuntimeError("Refresh token expired")
     userid = row.get("userid")
-    # For metadata we can optionally fetch username/email if needed
     access_token, access_exp = _issue_access_jwt(userid, None, None)
     encrypted_access_b64 = base64.b64encode(_encrypt_access_token(access_token)).decode()
-    # Update existing row with new access token + last_used
-    # Use PATCH update to avoid identity column insert error
     rest_update("user_tokens", {"tokenid": row.get("tokenid")}, {
         "access_token_encrypted": encrypted_access_b64,
-        "access_token_expires_at": access_exp.isoformat(),
-        "last_used_at": _now().isoformat(),
+        "access_token_expires_at": access_exp.isoformat().replace('+00:00', 'Z'),
+        "last_used_at": _now().isoformat().replace('+00:00', 'Z'),
     })
     return {
         "access_token": access_token,
-        "access_token_expires_at": access_exp.isoformat(),
+        "access_token_expires_at": access_exp.isoformat().replace('+00:00', 'Z'),
     }
 
 
@@ -136,7 +155,7 @@ def revoke_refresh_token(refresh_token: str) -> bool:
     # PATCH instead of upsert to avoid identity column constraint error
     rest_update("user_tokens", {"tokenid": row.get("tokenid")}, {
         "is_revoked": True,
-        "last_used_at": _now().isoformat(),
+        "last_used_at": _now().isoformat().replace('+00:00', 'Z'),
     })
     return True
 
@@ -150,6 +169,6 @@ def touch_refresh_token(refresh_token: str) -> bool:
     if not row:
         return False
     rest_update("user_tokens", {"tokenid": row.get("tokenid")}, {
-        "last_used_at": _now().isoformat(),
+        "last_used_at": _now().isoformat().replace('+00:00', 'Z'),
     })
     return True

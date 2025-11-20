@@ -5,7 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { listEventsCombinedCached, CombinedEvent, CourtInfoRow } from '@/lib/backendApi'
-import { hydrateThenRefresh } from '@/lib/cache'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/hooks/query-keys'
+import { useFocusEffect } from 'expo-router'
 
 // Reuse helper from courtList (duplicated locally to avoid circular import)
 function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | null): string[] {
@@ -33,38 +35,44 @@ const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string 
   pickleball: { bg: '#FF69B4', color: '#111' },
 }
 
+function formatPaymentMethod(method: string) {
+  switch (method?.toLowerCase()) {
+    case 'cash': return 'Cash'
+    case 'vnpay': return 'VNPay'
+    default: return method
+  }
+}
+
+function formatCurrency(n: number | null | undefined) {
+  if (n == null) return ''
+  const s = String(Math.round(Number(n)))
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
 const EventListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [allEvents, setAllEvents] = useState<CombinedEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | 'payment' | null>(null)
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [freeOnly, setFreeOnly] = useState<boolean>(false)
+  const [paymentSelections, setPaymentSelections] = useState<string[]>([]) // 'cash','vnpay'
 
-  // Load events
-  // Read-through cached load: show cached quickly then refresh.
-  const load = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
-      // hydrate from cache first then refresh
-      await hydrateThenRefresh<CombinedEvent[]>(
-        'cache:events:combined:v1',
-        60_000,
-        120_000,
-        () => listEventsCombinedCached(),
-        (rows) => setAllEvents(rows)
-      )
-      setInitialized(true)
-    } catch (e: any) {
-      setError(e.message || String(e))
-    } finally { setLoading(false) }
-  }, [])
-  useEffect(() => { load() }, [load])
+  // React Query fetch with cache key; create/update screens invalidate this key.
+  const { data: eventsData, isLoading: loading, isFetching, refetch } = useQuery({
+    queryKey: queryKeys.eventsCombined,
+    queryFn: () => listEventsCombinedCached(),
+    staleTime: 30_000,
+  })
+  // Push data into local state for existing code references.
+  useEffect(() => { if (Array.isArray(eventsData)) setAllEvents(eventsData) }, [eventsData])
+  useEffect(() => { if (!loading && !eventsData) setError('Failed loading events') }, [loading, eventsData])
+  // Refresh on screen focus (handles coming back after edit/create/delete)
+  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
   // Derive options
   const sportOptions = useMemo(() => {
@@ -81,17 +89,51 @@ const EventListScreen = () => {
   // Filtering
   const filteredEvents = useMemo(() => {
     return allEvents.filter(ev => {
+      // text search
       const title = (ev.title || '').toLowerCase()
       const address = (ev.address || '').toLowerCase()
       const queryOk = !search || title.includes(search.toLowerCase()) || address.includes(search.toLowerCase())
       if (!queryOk) return false
+      // sport & venue filters
       const sports = asArray(ev.sport)
       const venues = asArray(ev.venue)
       const sportOk = selectedSports.length === 0 || sports.some(s => selectedSports.includes(s))
       const venueOk = selectedVenues.length === 0 || venues.some(v => selectedVenues.includes(v))
-      return sportOk && venueOk
+      if (!sportOk || !venueOk) return false
+      // Free filter
+      if (freeOnly) {
+        if (ev.entry_fee != null) return false
+      } else {
+        // Payment method filter (only when not free)
+        if (paymentSelections.length) {
+          const method = (ev.support_payment_method || '').toLowerCase()
+          const allowed = new Set<string>(paymentSelections)
+          // If user selected cash or vnpay, events marked 'both' should also match
+          if (paymentSelections.some(m => m === 'cash' || m === 'vnpay')) allowed.add('both')
+          if (!allowed.has(method)) return false
+        }
+      }
+      return true
     })
-  }, [allEvents, search, selectedSports, selectedVenues])
+  }, [allEvents, search, selectedSports, selectedVenues, freeOnly, paymentSelections])
+
+  const toggleFree = () => {
+    setFreeOnly(f => {
+      const next = !f
+      if (next) setPaymentSelections([]) // disable payment filter when free is active
+      return next
+    })
+  }
+  const togglePaymentFilterPanel = () => {
+    if (freeOnly) return
+    setOpenFilter(f => f === 'payment' ? null : 'payment')
+  }
+  const togglePaymentSelection = (opt: string) => {
+    setPaymentSelections(prev => {
+      let next = prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]
+      return next
+    })
+  }
 
   // Pagination state for incremental rendering
   const BATCH_SIZE = 15
@@ -148,9 +190,22 @@ const EventListScreen = () => {
             <Text style={styles.filterText}>Venue</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
+            <Image source={ICONS.freeIcon} style={styles.filterIcon} />
+            <Text style={styles.filterText}>Free</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, paymentSelections.length>0 && !freeOnly && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
+            onPress={togglePaymentFilterPanel}
+            disabled={freeOnly}
+          >
+            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor:'#aaa' }]} />
+            <Text style={[styles.filterText, freeOnly && { color:'#999' }]}>Payment</Text>
+            {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
+          </TouchableOpacity>
         </View>
         <Text style={styles.sectionTitle}>Events</Text>
-        {openFilter && (
+        {openFilter && openFilter !== 'payment' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
               {(openFilter==='sport'?sportOptions:venueOptions).map(opt => {
@@ -165,6 +220,23 @@ const EventListScreen = () => {
             </ScrollView>
           </View>
         )}
+        {openFilter === 'payment' && (
+          <View style={styles.dropdownWrapper}>
+            <ScrollView style={styles.dropdown}>
+              {['cash','vnpay'].map(opt => {
+                const selected = paymentSelections.includes(opt)
+                return (
+                  <Pressable key={opt} onPress={() => togglePaymentSelection(opt)} style={styles.dropdownItem}>
+                    <Text style={styles.dropdownItemText}>{opt === 'cash' ? 'Cash' : 'VNPay'}</Text>
+                    <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
+                  </Pressable>
+                )
+              })}
+              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color:'#555' }}>Select payment methods to filter events.</Text>}
+              
+            </ScrollView>
+          </View>
+        )}
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
         <ScrollView
           style={styles.list}
@@ -172,10 +244,10 @@ const EventListScreen = () => {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {loading && <Text style={styles.statusText}>Loading events...</Text>}
+          {(loading || isFetching) && <Text style={styles.statusText}>Loading events...</Text>}
           {error && <Text style={[styles.statusText,{color:'red'}]}>Failed: {error}</Text>}
-          {!loading && !error && filteredEvents.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading events...</Text>
+          {!loading && !isFetching && !error && filteredEvents.length === 0 && (
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>No matching events.</Text>
           )}
           {filteredEvents.slice(0, visibleCount).map(ev => {
               const sports = asArray(ev.sport)
@@ -199,7 +271,17 @@ const EventListScreen = () => {
                         <Image source={ICONS.arrowdown} style={[styles.expandIcon, expanded && { transform:[{rotate:'180deg'}]}]} />
                       </TouchableOpacity>
                     </View>
-                    <Text style={styles.dateText}>{ev.time ? new Date(ev.time).toLocaleString() : 'Unknown date'}</Text>
+                    <Text style={styles.dateText}>{(() => {
+                      const start = ev.start_timestamp || ev.time
+                      const end = ev.end_timestamp
+                      if (!start) return 'Unknown date'
+                      const startD = new Date(start)
+                      const endD = end ? new Date(end) : null
+                      const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
+                      const startTime = startD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
+                      const endTime = endD ? endD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
+                      return `${day}, ${startTime}${endTime?` - ${endTime}`:''}`
+                    })()}</Text>
                     <View style={styles.tagRow}>
                       {sports.length===0 && <View style={[styles.tag, styles.tagFallback]}><Text style={styles.tagText}>Sport N/A</Text></View>}
                       {sports.map(s => {
@@ -215,9 +297,25 @@ const EventListScreen = () => {
                         <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color:'#fff'}]}>{v}</Text></View>
                       ))}
                     </View>
+                    {/* Entry fee + payment methods displayed on their own line */}
+                    <View style={styles.entryRow}>
+                      <View style={[styles.tag, ev.entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
+                        <Text style={[styles.tagText, ev.entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{ev.entry_fee == null ? 'Entry: Free' : `${formatCurrency(ev.entry_fee)} vnd/player`}</Text>
+                      </View>
+                      {ev.entry_fee != null && ev.support_payment_method && (
+                        <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
+                          {(ev.support_payment_method.toLowerCase()==='cash' || ev.support_payment_method.toLowerCase()==='both') && (
+                            <Image source={ICONS.cashIcon} style={styles.methodIconImg} />
+                          )}
+                          {(ev.support_payment_method.toLowerCase()==='vnpay' || ev.support_payment_method.toLowerCase()==='both') && (
+                            <Image source={ICONS.vnpayIcon} style={styles.methodIconImg} />
+                          )}
+                        </View>
+                      )}
+                    </View>
                     <View style={styles.participantsRow}>
                       <Image source={ICONS.participants} style={styles.participantsIconLarge} />
-                      <Text style={styles.participantsText}>{ev.numberofpeople ?? '0'} participants</Text>
+                      <Text style={styles.participantsText}>{(ev.numberofpeople ?? 0)}/{(ev.participants_cap ?? 0)} participants</Text>
                     </View>
                     {expanded && (
                       <View style={styles.expandedContent}>
@@ -237,7 +335,7 @@ const EventListScreen = () => {
         </ScrollView>
       </View>
       {/* Floating Create Button */}
-      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/eventBooking' as any)}>
+      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/eventCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
         <Text style={styles.fabText}>Create</Text>
       </TouchableOpacity>
@@ -259,6 +357,8 @@ const styles = StyleSheet.create({
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
   filterRow:{flexDirection:'row',gap:10,marginBottom:12},
   filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',paddingHorizontal:12,paddingVertical:6,borderRadius:20},
+  filterButtonActive:{backgroundColor:'#e6f9e6'},
+  filterButtonDisabled:{backgroundColor:'#f0f0f0', opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:'#666',marginRight:6,resizeMode:'contain'},
   filterText:{color:'#222',fontSize:13,fontWeight:'600'},
   countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden'},
@@ -280,19 +380,29 @@ const styles = StyleSheet.create({
   expandButton:{padding:4,marginLeft:6},
   expandIcon:{width:18,height:18,tintColor:'#ccc'},
   cardTitle:{color:'#fff',fontSize:16,fontWeight:'700',flexShrink:1},
-  dateText:{color:'#ccc',fontSize:12,marginTop:2},
-  tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
+  dateText:{color:'#ccc',fontSize:12,marginTop:4,marginBottom:2},
+  tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:8},
   tag:{backgroundColor:'#333',paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
   tagFallback:{backgroundColor:'#444'},
   venueTag:{backgroundColor:'#6a5acd'},
+  freeTag:{backgroundColor:'#e9f9ef', borderColor:'#2e8b57', borderWidth:1},
+  entryTag:{backgroundColor:'#ffe9d9', borderColor:'#ff6b3b', borderWidth:1},
+  methodTag:{backgroundColor:'#eef6ff', borderColor:'#3b82f6', borderWidth:1},
+  methodIcons:{flexDirection:'row',alignItems:'center'},
+  methodIconImg:{width:16,height:16,resizeMode:'contain',marginHorizontal:2},
+  entryRow:{flexDirection:'row',alignItems:'center',marginTop:8,marginBottom:6},
+  entryTagRow:{paddingHorizontal:10,paddingVertical:6},
+  methodIconsRow:{flexDirection:'row',alignItems:'center',marginLeft:8},
   tagText:{color:'#ddd',fontSize:11,fontWeight:'600'},
-  participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
+  freeTagText:{color:'#14532d',fontSize:11,fontWeight:'700'},
+  entryTagText:{color:'#7c2d12',fontSize:11,fontWeight:'700'},
+  participantsRow:{flexDirection:'row',alignItems:'center',marginTop:8},
   participantsIcon:{width:14,height:14,tintColor:'#ddd',marginRight:4,resizeMode:'contain'},
   participantsIconLarge:{width:18,height:18,tintColor:'#ddd',marginRight:6,resizeMode:'contain'},
   participantsText:{color:'#ddd',fontSize:12,fontWeight:'600'},
-  expandedContent:{marginTop:10},
-  expandedLine:{color:'#bbb',fontSize:12,marginBottom:4},
-  expandedDesc:{color:'#ddd',fontSize:12,marginTop:4},
+  expandedContent:{marginTop:12},
+  expandedLine:{color:'#bbb',fontSize:12,marginBottom:6},
+  expandedDesc:{color:'#ddd',fontSize:12,marginTop:6,lineHeight:16},
   cardRight:{alignItems:'center'},
   placeholderImg:{width:70,height:70,backgroundColor:'#2d2d2d',borderRadius:10,marginBottom:6},
   arrowIcon:{width:22,height:22,tintColor:'#888',position:'absolute',left:53,top:80},

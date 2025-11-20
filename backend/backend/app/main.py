@@ -39,6 +39,7 @@ from .routers import (
     history,
     auth,
 )
+from .routers import debug_identity
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
@@ -88,6 +89,7 @@ app.include_router(tsbookings.router, prefix="/api")
 app.include_router(courtavailability.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
 app.include_router(eventinfo.router, prefix="/api")
+app.include_router(debug_identity.router, prefix="/api")
 app.include_router(payments.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(history.router, prefix="/api")

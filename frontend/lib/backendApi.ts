@@ -1,32 +1,94 @@
 import { API_BASE_URL } from '@/env'
 import { fetchWithCache } from '@/lib/cache'
+import { invalidateByPrefix } from '@/lib/cache'
+import { queryClient } from '@/providers/query-provider'
 import { supabase } from './supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 type Json = Record<string, any>
 
-async function request(path: string, options: RequestInit & { debugLabel?: string } = {}) {
+async function refreshAccessToken(): Promise<boolean> {
+	try {
+		const raw = await AsyncStorage.getItem('@backendAuth')
+		if (!raw) return false
+		let parsed: any
+		try { parsed = JSON.parse(raw) } catch { return false }
+		const refreshToken: string | undefined = parsed?.refreshToken
+		if (!refreshToken) return false
+		const resp = await fetch(`${API_BASE_URL.replace(/\/$/, '')}/auth/refresh`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ refreshToken })
+		})
+		const text = await resp.text()
+		let data: any = null
+		try { data = text ? JSON.parse(text) : null } catch {}
+		if (!resp.ok) return false
+		if (data?.accessToken) {
+			parsed.accessToken = data.accessToken
+			parsed.accessTokenExpiresAt = data.accessTokenExpiresAt
+			await AsyncStorage.setItem('@backendAuth', JSON.stringify(parsed))
+			await AsyncStorage.setItem('@localAuthToken', data.accessToken)
+			return true
+		}
+	} catch (e) {
+		console.warn('[refreshAccessToken] failed', (e as any)?.message)
+	}
+	return false
+}
+
+async function getLocalBackendToken(): Promise<{ token?: string; exp?: number } | null> {
+	try {
+		const raw = await AsyncStorage.getItem('@backendAuth')
+		if (!raw) return null
+		const parsed = JSON.parse(raw)
+		const token: string | undefined = parsed?.accessToken
+		const expIso: string | undefined = parsed?.accessTokenExpiresAt
+		let expTs: number | undefined
+		if (expIso) {
+			try { expTs = Date.parse(expIso) } catch {}
+		}
+		return { token, exp: expTs }
+	} catch { return null }
+}
+
+async function request(path: string, options: RequestInit & { debugLabel?: string } = {}, attempt: number = 0) {
 	const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`
 	const t0 = Date.now()
 	const debugLabel = options.debugLabel || path
 	// Attach Authorization Bearer token when Supabase session present
 	let authHeader: Record<string,string> = {}
-	try {
-		const { data } = await supabase.auth.getSession()
-		const token = data?.session?.access_token
-		if (token) {
-			authHeader = { Authorization: `Bearer ${token}` }
-		} else {
-			// Fallback to locally-issued JWT from custom /auth/login or /auth/signup
-			const localToken = await AsyncStorage.getItem('@localAuthToken')
-			if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
-		}
-	} catch (e) {
-		// Attempt local token even if supabase call failed
+	// Prefer backend access token if present & not expired (allows Supabase session token to exist without overriding backend auth)
+	const backendTok = await getLocalBackendToken()
+	const now = Date.now()
+	if (backendTok?.token && backendTok.exp && backendTok.exp > now + 5_000) { // 5s skew buffer
+		authHeader = { Authorization: `Bearer ${backendTok.token}` }
+	} else {
+		// Attempt Supabase session token, else legacy local token fallback
 		try {
-			const localToken = await AsyncStorage.getItem('@localAuthToken')
-			if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
-		} catch {}
+			const { data } = await supabase.auth.getSession()
+			const token = data?.session?.access_token
+			if (token) {
+				authHeader = { Authorization: `Bearer ${token}` }
+			} else {
+				const localToken = await AsyncStorage.getItem('@localAuthToken')
+				if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
+			}
+		} catch {
+			try {
+				const localToken = await AsyncStorage.getItem('@localAuthToken')
+				if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
+			} catch {}
+		}
+	}
+	// Preflight: if this endpoint is protected (heuristic) ensure access token fresh
+	const isProtectedEndpoint = /^(?:\/courtbookings|\/events|\/trainingsessions|\/favouritecourts|\/courtavailability|\/courtinfo)/.test(path)
+	if (isProtectedEndpoint) {
+		const bt = await getLocalBackendToken()
+		const nowMs = Date.now()
+		if (bt?.token && bt.exp && bt.exp <= nowMs + 30_000) { // expires within 30s or already
+			await refreshAccessToken()
+		}
 	}
 	const res = await fetch(url, {
 		method: options.method || 'GET',
@@ -45,6 +107,13 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	console.log('[backendApi]', debugLabel, { url, status: res.status, elapsedMs: elapsed, raw: text?.slice(0,500) })
 	if (!res.ok) {
 		const detail = (data && (data.detail || data.error)) || `HTTP ${res.status}`
+		// Broaden automatic refresh: any 401 Invalid token (expired or signature) triggers one retry
+		if (res.status === 401 && attempt === 0 && /Invalid token:/i.test(detail)) {
+			const refreshed = await refreshAccessToken()
+			if (refreshed) {
+				return request(path, options, 1)
+			}
+		}
 		throw new Error(detail)
 	}
 	return data
@@ -311,6 +380,17 @@ export async function listCourtBookings(params?: { userid?: number }) {
 	return request(path, { debugLabel: 'listCourtBookings' }) as Promise<CourtBookingRow[]>
 }
 
+// --- Debug identity (backend /api/debug/identity) ---
+export async function debugIdentity(): Promise<{ token_subject: string; numeric_subject: number | null; userinfo: any } | null> {
+	try {
+		const data = await request('/debug/identity', { debugLabel: 'debugIdentity' })
+		return data || null
+	} catch (e) {
+		console.warn('[debugIdentity] failed', (e as any)?.message)
+		return null
+	}
+}
+
 export async function listCourtAvailability(courtid: number) {
 	const path = `/courtavailability?courtid=${encodeURIComponent(courtid)}`
 	return request(path, { debugLabel: 'listCourtAvailability' }) as Promise<any[]>
@@ -320,7 +400,18 @@ export async function listCourtAvailability(courtid: number) {
 // These compose multiple REST endpoints into richer objects for UI screens.
 
 export type EventRow = { eventid: number; time: string; courtbookingid: number; status?: string; organizerid: number }
-export type EventInfoMeta = { eventinfoid: number; eventid: number; numberofpeople?: number | null; description?: string | null; title: string }
+// Extend meta to include monetization fields present in schema (entry_fee, support_payment_method, participants_cap, join_status)
+export type EventInfoMeta = {
+	eventinfoid: number
+	eventid: number
+	numberofpeople?: number | null
+	description?: string | null
+	title: string
+	entry_fee?: number | null
+	support_payment_method?: string | null
+	participants_cap?: number | null
+	join_status?: boolean | null
+}
 export type CombinedEvent = {
 	eventid: number
 	time?: string
@@ -331,6 +422,12 @@ export type CombinedEvent = {
 	title?: string
 	description?: string | null
 	numberofpeople?: number | null
+	start_timestamp?: string | null
+	end_timestamp?: string | null
+	entry_fee?: number | null
+	support_payment_method?: string | null
+	participants_cap?: number | null
+	join_status?: boolean | null
 	courtid?: number
 	address?: string
 	sport?: string[] | string | null
@@ -353,6 +450,10 @@ export type CombinedTrainingSession = {
 	address?: string
 	sport?: string[] | string | null
 	venue?: string[] | string | null
+	entry_fee?: number | null
+	support_payment_method?: string | null
+	participants_cap?: number | null
+	join_status?: boolean | null
 }
 
 // Utility to safely fetch a single resource and swallow errors (returns null)
@@ -414,6 +515,12 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,
+			start_timestamp: booking?.start_timestamp ?? null,
+			end_timestamp: booking?.end_timestamp ?? null,
+			entry_fee: meta?.entry_fee ?? null,
+			support_payment_method: meta?.support_payment_method ?? null,
+			participants_cap: meta?.participants_cap ?? null,
+			join_status: meta?.join_status ?? null,
 			courtid,
 			address: ci?.address,
 			sport: ci?.sport,
@@ -429,6 +536,48 @@ export async function listEventsCombinedCached(): Promise<CombinedEvent[]> {
 		swrMs: 120 * 1000,
 		fetcher: () => listEventsCombined()
 	})
+}
+
+// ---- Event Creation Helpers ----
+export type CreateEventWithInfoPayload = {
+	courtbookingid: number
+	time?: string
+	title: string
+	description?: string
+	participants_cap: number
+	monetize: boolean
+	entry_fee?: number
+	payment_methods?: ("cash" | "vnpay" | "both")[] | string
+	organizerid?: number
+}
+
+export async function createEventWithInfo(payload: CreateEventWithInfoPayload) {
+	// Backend expects: courtbookingid,time?,title,description?,participants_cap,monetize,entry_fee?,payment_methods?
+	return request('/events/create_with_info', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'createEventWithInfo'
+	}) as Promise<{ event: EventRow; eventinfo: EventInfoMeta & { entry_fee?: number | null; support_payment_method?: string | null; participants_cap: number; join_status: boolean } }>
+}
+
+export type CreateTrainingSessionWithInfoPayload = {
+	courtbookingid: number
+	time?: string
+	title: string
+	description?: string
+	participants_cap: number
+	monetize: boolean
+	entry_fee?: number
+	payment_methods?: ("cash"|"vnpay"|"both")[] | string
+	coachid?: number
+}
+
+export async function createTrainingSessionWithInfo(payload: CreateTrainingSessionWithInfoPayload) {
+	return request('/trainingsessions/create_with_info', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'createTrainingSessionWithInfo'
+	}) as Promise<{ session: any; sessioninfo: any }>
 }
 
 // Aggregate training sessions similarly.
@@ -483,6 +632,10 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			address: ci?.address,
 			sport: ci?.sport,
 			venue: ci?.venue,
+			entry_fee: meta?.entry_fee ?? null,
+			support_payment_method: meta?.support_payment_method ?? null,
+			participants_cap: (meta as any)?.participants_cap ?? null,
+			join_status: (meta as any)?.join_status ?? null,
 		}
 	})
 }
@@ -494,5 +647,19 @@ export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrai
 		swrMs: 120 * 1000,
 		fetcher: () => listTrainingSessionsCombined()
 	})
+}
+
+// ---- Session / Cache Purge ----
+// Clears all app-level cached data that could contain user-linked information.
+// Invoked after sign-out to prevent data leakage between accounts.
+export async function purgeSessionCaches(): Promise<void> {
+	// Invalidate custom fetchWithCache entries (all keys prefixed with 'cache:')
+	try { await invalidateByPrefix('cache:') } catch (e) { console.warn('[purgeSessionCaches] invalidateByPrefix failed', (e as any)?.message) }
+	// Clear React Query in-memory cache
+	try { queryClient.clear() } catch (e) { console.warn('[purgeSessionCaches] queryClient.clear failed', (e as any)?.message) }
+	// Remove persisted React Query storage
+	try { await AsyncStorage.removeItem('tanstack-cache-v1') } catch (e) { console.warn('[purgeSessionCaches] removeItem tanstack-cache-v1 failed', (e as any)?.message) }
+	// Remove any pending profile artifacts
+	try { await AsyncStorage.removeItem('@backendProfilePending') } catch {}
 }
 

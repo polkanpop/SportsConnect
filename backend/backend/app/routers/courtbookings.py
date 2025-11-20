@@ -34,27 +34,38 @@ def get_court_booking(courtbookingid: int):
 
 @router.post("", response_model=dict)
 def create_court_booking(body: dict, current_user: str = Depends(get_current_user)):
-    """Create a court booking with single-booking-per-user enforcement.
+    """Create a court booking.
 
-    New logic:
-      - A user may only have ONE booking (any status) in the system. Adjust rule by filtering on date or availability if needed.
-      - Optional `note` field is accepted and persisted when present.
+    Relaxed logic:
+      - Multiple bookings per user allowed.
+      - Accepts numeric `userid` from body; if missing attempts to coerce auth subject.
+      - Does NOT block when token subject differs from provided userid (diagnostic print only).
+      - Optional `note` field persisted.
     """
     try:
-        userid = body.get("userid") or current_user
-        # Single booking rule: check existing rows for userid
-        existing = rest_select("courtbooking", PRIMARY_KEY, filters={"userid": userid})
-        if isinstance(existing, list) and existing:
-            raise HTTPException(status_code=403, detail="User already has a booking and cannot create another.")
+        auth_sub = current_user
+        supplied_userid = body.get("userid")
+        final_userid = None
+        if supplied_userid is not None:
+            # Require numeric
+            if not isinstance(supplied_userid, int):
+                try:
+                    supplied_userid = int(str(supplied_userid))
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="userid must be numeric")
+            final_userid = supplied_userid
+        else:
+            # Coerce auth subject to int if possible
+            try:
+                final_userid = int(auth_sub)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Provide numeric userid in body; token subject is not numeric")
 
-        # Build payload; include note if provided
-        payload = {
-            **body,
-            "userid": userid,
-        }
-        # Pass through note if present (nullable column)
+        payload = { **body, "userid": final_userid }
         if "note" in body:
             payload["note"] = body.get("note")
+
+        print(f"[create_court_booking] auth_sub={auth_sub} supplied_userid={supplied_userid} final_userid={final_userid} availabilityid={payload.get('availabilityid')}")
 
         resp = rest_insert("courtbooking", payload)
         if not isinstance(resp, list) or not resp:

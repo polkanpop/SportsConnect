@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter, useLocalSearchParams } from 'expo-router'
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { CourtBookingRow } from '@/lib/backendApi'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -20,6 +20,21 @@ type AvailabilityRow = {
 // Format helpers
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
+
+// Format a start/end timestamp into same style used by event list: "Thu, Nov 20, 09:00 - 10:30"
+function formatRange(start?: string | null, end?: string | null) {
+  if (!start) return 'Unknown date'
+  try {
+    const s = new Date(start)
+    const e = end ? new Date(end) : null
+    const day = s.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    const startTime = s.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    const endTime = e ? e.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''
+    return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
+  } catch (err) {
+    return `${start}${end ? ` → ${end}` : ''}`
+  }
+}
 
 // Helper to normalise sport/venue value to array of strings (matches courtList.tsx)
 function asArray(v: any): string[] {
@@ -63,7 +78,8 @@ export default function CourtBooking() {
   } : null
   const loading = courtInfoLoading || availabilityLoading
   const error = (courtInfoError as any)?.message || (availabilityError as any)?.message || null
-  const [selectedDay, setSelectedDay] = useState<string | null>(null) // 'Mon' etc.
+  // selectedDateStr holds the absolute date string (YYYY-MM-DD) for the selected day
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null)
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [startSlot, setStartSlot] = useState<string | null>(null)
   const [endSlot, setEndSlot] = useState<string | null>(null)
@@ -86,11 +102,10 @@ export default function CourtBooking() {
 
   // Resolve numeric userid similar to other screens via query
   const { data: userId } = useUserId()
-  const { data: existingBookings } = useUserCourtBookings(userId)
+  const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
+  // We no longer block booking based on existing bookings; only informational.
   const hasBookingForCurrentAvailability = !!(availability && bookings.some(b => b.availabilityid === availability.availabilityid))
-  const hasOtherBooking = bookings.length > 0 && !hasBookingForCurrentAvailability
-  const [showOtherBookingModal, setShowOtherBookingModal] = useState(false)
 
   // Derive week dates (Mon -> Sun) with offset (future weeks only)
   const weekDaysDetailed = useMemo(() => {
@@ -125,18 +140,17 @@ export default function CourtBooking() {
 
   // Derived validity and button enable state
   const isDaySelectable = useCallback((dayKey: string) => availableDayKeys.includes(dayKey), [availableDayKeys])
-  const canConfirmBase = !!(selectedDay && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid)
-  const canConfirm = canConfirmBase && !hasBookingForCurrentAvailability
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid)
 
-  const onSelectDay = (dayKey: string) => {
+  const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey)) return
-    if (selectedDay === dayKey) {
-      setSelectedDay(null)
+    if (selectedDateStr === dateStr) {
+      setSelectedDateStr(null)
       setShowTimePicker(false)
       setStartSlot(null); setEndSlot(null)
       return
     }
-    setSelectedDay(dayKey)
+    setSelectedDateStr(dateStr)
     setShowTimePicker(true)
     setStartSlot(null); setEndSlot(null)
   }
@@ -158,12 +172,11 @@ export default function CourtBooking() {
 
   const bookingMutation = useCreateBookingWithPayment()
   const confirmBooking = async () => {
-    if (!canConfirm || !availability || !userId || !selectedDay || !startSlot || !endSlot || !paymentMethod) return
+    if (!canConfirm || !availability || !userId || !startSlot || !endSlot || !paymentMethod) return
     setSubmitError(null); setConfirmation(null)
     setSubmitting(true)
-    const weekDay = weekDaysDetailed.find(w => w.key === selectedDay)
-    if (!weekDay) { setSubmitError('Week day resolve failed'); setSubmitting(false); return }
-    const bookingDateStr = weekDay.dateStr
+    const bookingDateStr = selectedDateStr
+    if (!bookingDateStr) { setSubmitError('Selected date missing'); setSubmitting(false); return }
     const startTs = `${bookingDateStr} ${startSlot}:00`
     const endTs = `${bookingDateStr} ${endSlot}:00`
     bookingMutation.mutate({
@@ -189,10 +202,16 @@ export default function CourtBooking() {
   }
 
   const onPressConfirm = () => {
-    if (!canConfirmBase || submitting) return
-    if (hasOtherBooking && !showOtherBookingModal) { setShowOtherBookingModal(true); return }
+    if (!canConfirm || submitting) return
     confirmBooking()
   }
+
+  // Force refetch when screen gains focus to reflect external deletions (manual DB changes)
+  // Use simple interval-less refetch on mount + when userId changes (manual DB deletes reflected)
+  // Refetch bookings whenever screen gains focus (captures manual DB deletions/insertions)
+  useFocusEffect(useCallback(() => {
+    if (userId != null) refetchUserBookings()
+  }, [userId, refetchUserBookings]))
 
   return (
     <View style={styles.screen}>
@@ -284,24 +303,14 @@ export default function CourtBooking() {
           <View style={styles.weekNavInline}>
             <TouchableOpacity
               disabled={weekOffset === 0}
-              onPress={() => {
-                if (weekOffset > 0) {
-                  setWeekOffset(w => w - 1)
-                  setSelectedDay(null); setShowTimePicker(false); setStartSlot(null); setEndSlot(null)
-                }
-              }}
+              onPress={() => { if (weekOffset > 0) setWeekOffset(w => w - 1) }}
               style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}
             >
               <Image source={ICONS.arrowright} style={[styles.navIcon,{ transform:[{ rotate:'180deg'}]}]} />
             </TouchableOpacity>
             <TouchableOpacity
               disabled={weekOffset === 2}
-              onPress={() => {
-                if (weekOffset < 2) {
-                  setWeekOffset(w => w + 1)
-                  setSelectedDay(null); setShowTimePicker(false); setStartSlot(null); setEndSlot(null)
-                }
-              }}
+              onPress={() => { if (weekOffset < 2) setWeekOffset(w => w + 1) }}
               style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}
             >
               <Image source={ICONS.arrowright} style={styles.navIcon} />
@@ -314,12 +323,12 @@ export default function CourtBooking() {
             const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
             const pastDisabled = weekOffset === 0 && d.date < todayOnly
             const disabled = !isDaySelectable(d.key) || pastDisabled
-            const selected = selectedDay === d.key
+            const selected = selectedDateStr === d.dateStr
             return (
               <TouchableOpacity
                 key={d.key}
                 disabled={disabled}
-                onPress={() => onSelectDay(d.key)}
+                onPress={() => onSelectDay(d.dateStr, d.key)}
                 style={[styles.dayCell, selected && styles.dayCellSelected, disabled && styles.dayCellDisabled]}
               >
                 <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
@@ -400,13 +409,13 @@ export default function CourtBooking() {
           </View>
           {submitError && <Text style={styles.errorText}>{submitError}</Text>}
           {hasBookingForCurrentAvailability && !confirmation && (
-            <Text style={styles.errorText}>You already booked this court.</Text>
+            <Text style={styles.smallText}>You have an existing booking for this court (still allowed).</Text>
           )}
           {confirmation && (
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>Booked!</Text>
               <Text style={styles.successLine}>ID: {confirmation.courtbookingid}</Text>
-              <Text style={styles.successLine}>{confirmation.start_timestamp} → {confirmation.end_timestamp}</Text>
+              <Text style={styles.successLine}>{formatRange(confirmation.start_timestamp, confirmation.end_timestamp)}</Text>
               <Text style={styles.successLine}>Payment #{confirmation.paymentid}</Text>
             </View>
           )}
@@ -424,26 +433,10 @@ export default function CourtBooking() {
           onPress={onPressConfirm}
           style={[styles.confirmUnifiedBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled]}
         >
-          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : hasBookingForCurrentAvailability ? 'Already Booked' : 'Confirm Booking - 50,000₫'}</Text>
+          <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : 'Confirm Booking - 50,000₫'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-    {showOtherBookingModal && !hasBookingForCurrentAvailability && (
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Existing Booking Detected</Text>
-          <Text style={styles.modalBody}>You already have a booking on another court. Do you want to create an additional booking here?</Text>
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setShowOtherBookingModal(false)}>
-              <Text style={styles.modalBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => { setShowOtherBookingModal(false); confirmBooking() }}>
-              <Text style={[styles.modalBtnText,{color:'#fff'}]}>Continue</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    )}
     </View>
   )
 }

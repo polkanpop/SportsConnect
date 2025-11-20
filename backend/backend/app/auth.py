@@ -3,8 +3,10 @@ import time
 from functools import lru_cache
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Header
+import logging
 import httpx
 from jose import jwt, JWTError
+from datetime import datetime  # for expiry diagnostics
 
 HS_ALGORITHM = "HS256"
 RS_ALGORITHMS = ["RS256", "RS384", "RS512"]
@@ -57,6 +59,13 @@ def decode_with_jwks(token: str) -> Optional[dict]:
             continue
     return None
 
+logger = logging.getLogger("authdecode")
+if not logger.handlers:
+    h = logging.StreamHandler()
+    h.setFormatter(logging.Formatter('[AUTHDECODE] %(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(h)
+logger.setLevel(logging.DEBUG)
+
 def decode_token(token: str) -> dict:
     # Attempt RS decode first
     payload = decode_with_jwks(token)
@@ -69,12 +78,25 @@ def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, secret, algorithms=[HS_ALGORITHM])
     except JWTError as e:
+        # Log first & last 12 chars of token to correlate without exposing full secret
+        snippet = f"{token[:12]}..{token[-12:]}" if len(token) > 30 else token
+        # Attempt to extract exp claim without verifying signature expiry to diagnose
+        try:
+            unverified_claims = jwt.get_unverified_claims(token)
+        except Exception:
+            unverified_claims = {}
+        exp_val = unverified_claims.get("exp")
+        now_ts = int(datetime.utcnow().timestamp())
+        logger.warning(
+            f"decode failure snippet={snippet} err={e} exp={exp_val} now={now_ts} skew={(exp_val - now_ts) if isinstance(exp_val,int) else 'n/a'}"
+        )
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
 def get_current_user(authorization: str | None = Header(None, alias="Authorization")) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
     token = authorization.removeprefix("Bearer ").strip()
+    logger.debug(f"auth header received len={len(token)} alg_hint={jwt.get_unverified_header(token).get('alg', 'na') if '.' in token else 'na'}")
     payload = decode_token(token)
     sub = payload.get("sub") or payload.get("user_id")
     if not sub:

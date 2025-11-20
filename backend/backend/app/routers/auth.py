@@ -408,10 +408,17 @@ def login(payload: dict):
             is_remember_token = lifespan_days >= 29  # treat >=29 days as remember-me token
             if is_remember_token:
                 # Update last_used_at for remember tokens so inactivity windows advance.
-                rest_upsert("user_tokens", {"tokenid": tok.get("tokenid"), "last_used_at": now_iso})
+                try:
+                    rest_update("user_tokens", {"tokenid": tok.get("tokenid")}, {"last_used_at": now_iso})
+                except Exception:
+                    # best-effort update; log and continue
+                    logger.debug(f"/login remember token update failed tokenid={tok.get('tokenid')}")
             else:
                 # Always revoke prior non-remember tokens when any new login occurs.
-                rest_upsert("user_tokens", {"tokenid": tok.get("tokenid"), "is_revoked": True, "last_used_at": now_iso})
+                try:
+                    rest_update("user_tokens", {"tokenid": tok.get("tokenid")}, {"is_revoked": True, "last_used_at": now_iso})
+                except Exception:
+                    logger.debug(f"/login revoke prior token failed tokenid={tok.get('tokenid')}")
         except Exception as e:
             logger.warning(f"/login token lifecycle update failed tokenid={tok.get('tokenid')} err={e}")
 
@@ -664,6 +671,29 @@ def refresh(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
     return {"status": "ok", "accessToken": data['access_token'], "accessTokenExpiresAt": data['access_token_expires_at']}
+
+@router.get('/debug-token')
+def debug_token(authorization: str | None = Query(None, alias="authorization")):
+    """Debug helper: decode a Bearer token passed as query param (?authorization=Bearer%20xxx).
+    Returns payload or error detail; do NOT enable in production unless behind admin auth.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=400, detail="Missing Bearer token")
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        payload = jwt.get_unverified_claims(token)
+    except Exception:
+        payload = None
+    try:
+        decoded = jwt.get_unverified_header(token)
+    except Exception:
+        decoded = None
+    # Attempt full decode (may fail if signature issue)
+    try:
+        full = decode_token(token)  # reuse existing logic
+        return {"status": "ok", "unverifiedClaims": payload, "header": decoded, "decoded": full}
+    except HTTPException as e:
+        return {"status": "error", "detail": e.detail, "unverifiedClaims": payload, "header": decoded}
 
 
 @router.post('/logout')

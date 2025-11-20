@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
-import { getUserInfoByUserIdCached, authLogout } from '@/lib/backendApi';
+import { getUserInfoByUserIdCached, authLogout, purgeSessionCaches } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 
 export default function SettingsPage() {
@@ -65,6 +65,8 @@ export default function SettingsPage() {
       }
       // Clear all local auth artifacts
       await AsyncStorage.multiRemove(['@backendProfile','@backendAuth','@rememberAuth','@localAuthToken']);
+      // Purge all caches & persisted query data to avoid cross-account leakage
+      await purgeSessionCaches();
       router.replace('/(auth)/login');
     } catch (e: any) {
       console.error('Unexpected sign out error:', e);

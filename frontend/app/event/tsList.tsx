@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
-import { hydrateThenRefresh } from '@/lib/cache'
+import { useQuery } from '@tanstack/react-query'
+import { useFocusEffect } from 'expo-router'
 
 function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | null): string[] {
   if (!v) return []
@@ -34,29 +35,23 @@ const TrainingSessionListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
-  const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | 'payment' | null>(null)
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [freeOnly, setFreeOnly] = useState(false)
+  const [paymentSelections, setPaymentSelections] = useState<string[]>([])
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
-      await hydrateThenRefresh<CombinedTrainingSession[]>(
-        'cache:trainingsessions:combined:v1',
-        60_000,
-        120_000,
-        () => listTrainingSessionsCombinedCached(),
-        rows => setAllSessions(rows)
-      )
-      setInitialized(true)
-    } catch (e: any) { setError(e.message || String(e)) } finally { setLoading(false) }
-  }, [])
-  useEffect(() => { load() }, [load])
+  const { data: sessionsData, isLoading: loading, isFetching, refetch } = useQuery({
+    queryKey: ['trainingSessionsCombinedList'],
+    queryFn: () => listTrainingSessionsCombinedCached(),
+    staleTime: 30_000,
+  })
+  useEffect(() => { if(Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
+  useEffect(() => { if(!loading && !sessionsData) setError('Failed loading sessions') }, [loading, sessionsData])
+  useFocusEffect(useCallback(()=>{ refetch() },[refetch]))
 
   const sportOptions = useMemo(() => {
     const s = new Set<string>(); allSessions.forEach(r => asArray(r.sport).forEach(x => s.add(x)))
@@ -75,9 +70,31 @@ const TrainingSessionListScreen = () => {
       const sports = asArray(s.sport); const venues = asArray(s.venue)
       const sportOk = selectedSports.length===0 || sports.some(sp => selectedSports.includes(sp))
       const venueOk = selectedVenues.length===0 || venues.some(v => selectedVenues.includes(v))
-      return sportOk && venueOk
+      if(!sportOk || !venueOk) return false
+      // Free filter logic (assumes entry_fee meta similar to events; if absent treat as free)
+      const entryFee = (s as any).entry_fee
+      const supportMethod = ((s as any).support_payment_method||'').toLowerCase()
+      if (freeOnly) {
+        if (entryFee != null) return false
+      } else if (paymentSelections.length) {
+        const allowed = new Set<string>(paymentSelections)
+        if (paymentSelections.some(m => m==='cash' || m==='vnpay')) allowed.add('both')
+        if (!allowed.has(supportMethod)) return false
+      }
+      return true
     })
-  }, [allSessions, search, selectedSports, selectedVenues])
+  }, [allSessions, search, selectedSports, selectedVenues, freeOnly, paymentSelections])
+
+  const toggleFree = () => {
+    setFreeOnly(f => { const next=!f; if (next) setPaymentSelections([]); return next })
+  }
+  const togglePaymentPanel = () => { if(freeOnly) return; setOpenFilter(f=>f==='payment'?null:'payment') }
+  const togglePaymentSelection = (opt:string) => {
+    setPaymentSelections(prev => {
+      let next = prev.includes(opt)? prev.filter(x=>x!==opt): [...prev,opt]
+      return next
+    })
+  }
 
   // Incremental rendering state (pagination)
   const BATCH_SIZE = 15
@@ -121,9 +138,22 @@ const TrainingSessionListScreen = () => {
             <Text style={styles.filterText}>Venue</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
+            <Image source={ICONS.freeIcon} style={styles.filterIcon} />
+            <Text style={styles.filterText}>Free</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, paymentSelections.length>0 && !freeOnly && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
+            onPress={togglePaymentPanel}
+            disabled={freeOnly}
+          >
+            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor:'#aaa' }]} />
+            <Text style={[styles.filterText, freeOnly && { color:'#999' }]}>Payment</Text>
+            {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
+          </TouchableOpacity>
         </View>
         <Text style={styles.sectionTitle}>Training Sessions</Text>
-        {openFilter && (
+        {openFilter && openFilter!=='payment' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
               {(openFilter==='sport'?sportOptions:venueOptions).map(opt => {
@@ -135,6 +165,23 @@ const TrainingSessionListScreen = () => {
                   </Pressable>
                 )
               })}
+            </ScrollView>
+          </View>
+        )}
+        {openFilter==='payment' && (
+          <View style={styles.dropdownWrapper}>
+            <ScrollView style={styles.dropdown}>
+              {['cash','vnpay'].map(opt => {
+                const selected = paymentSelections.includes(opt)
+                return (
+                  <Pressable key={opt} onPress={() => togglePaymentSelection(opt)} style={styles.dropdownItem}>
+                    <Text style={styles.dropdownItemText}>{opt==='cash'?'Cash':'VNPay'}</Text>
+                    <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
+                  </Pressable>
+                )
+              })}
+              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color:'#555' }}>Select payment methods to filter sessions.</Text>}
+              
             </ScrollView>
           </View>
         )}
@@ -185,9 +232,25 @@ const TrainingSessionListScreen = () => {
                     })}
                     {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color:'#fff'}]}>{v}</Text></View>)}
                   </View>
+                  {/* Entry fee + payment methods displayed on their own line (match events layout) */}
+                  <View style={styles.entryRow}>
+                    <View style={[styles.tag, (s as any).entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
+                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? 'Entry: Free' : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} vnd/player`}</Text>
+                    </View>
+                    {(s as any).entry_fee != null && (s as any).support_payment_method && (
+                      <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
+                        {((s as any).support_payment_method.toLowerCase()==='cash' || (s as any).support_payment_method.toLowerCase()==='both') && (
+                          <Image source={ICONS.cashIcon} style={styles.methodIconImg} />
+                        )}
+                        {((s as any).support_payment_method.toLowerCase()==='vnpay' || (s as any).support_payment_method.toLowerCase()==='both') && (
+                          <Image source={ICONS.vnpayIcon} style={styles.methodIconImg} />
+                        )}
+                      </View>
+                    )}
+                  </View>
                   <View style={styles.participantsRow}>
                     <Image source={ICONS.participants} style={styles.participantsIconLarge} />
-                    <Text style={styles.participantsText}>{s.numberofpeople ?? '0'} participants</Text>
+                    <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)} participants</Text>
                   </View>
                   {expanded && (
                     <View style={styles.expandedContent}>
@@ -203,7 +266,7 @@ const TrainingSessionListScreen = () => {
           })}
         </ScrollView>
       </View>
-      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/tsBooking' as any)}>
+      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/tsCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
         <Text style={styles.fabText}>Create</Text>
       </TouchableOpacity>
@@ -225,6 +288,8 @@ const styles = StyleSheet.create({
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
   filterRow:{flexDirection:'row',gap:10,marginBottom:12},
   filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',paddingHorizontal:12,paddingVertical:6,borderRadius:20},
+  filterButtonActive:{backgroundColor:'#e6f9e6'},
+  filterButtonDisabled:{backgroundColor:'#f0f0f0',opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:'#666',marginRight:6,resizeMode:'contain'},
   filterText:{color:'#222',fontSize:13,fontWeight:'600'},
   countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden'},
@@ -250,6 +315,16 @@ const styles = StyleSheet.create({
   tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
   tag:{backgroundColor:'#333',paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
   tagFallback:{backgroundColor:'#444'},
+  freeTag:{backgroundColor:'#e9f9ef', borderColor:'#2e8b57', borderWidth:1},
+  entryTag:{backgroundColor:'#ffe9d9', borderColor:'#ff6b3b', borderWidth:1},
+  methodTag:{backgroundColor:'#eef6ff', borderColor:'#3b82f6', borderWidth:1},
+  methodIcons:{flexDirection:'row',alignItems:'center'},
+  methodIconImg:{width:16,height:16,resizeMode:'contain',marginHorizontal:2},
+  freeTagText:{color:'#14532d',fontSize:11,fontWeight:'700'},
+  entryTagText:{color:'#7c2d12',fontSize:11,fontWeight:'700'},
+  entryRow:{flexDirection:'row',alignItems:'center',marginTop:6,marginBottom:6},
+  entryTagRow:{paddingHorizontal:10,paddingVertical:6},
+  methodIconsRow:{flexDirection:'row',alignItems:'center',marginLeft:8},
   venueTag:{backgroundColor:'#6a5acd'},
   tagText:{color:'#ddd',fontSize:11,fontWeight:'600'},
   participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
