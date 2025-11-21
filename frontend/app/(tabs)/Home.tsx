@@ -19,6 +19,7 @@ export default function Home() {
       fontWeight: "600" as const,
       fontSize: 14,
       marginTop: 5,
+      bottom: 1,
       textAlign: "center" as const,
     },
     second: {
@@ -39,17 +40,17 @@ export default function Home() {
   // Category data with navigation routes
   const categories = [
     {
-      icon: ICONS.coach,
+      icon: ICONS.coachIcon,
       label: "Coach",
-      color: "#32CD32",
-      iconStyle: { width: 45, height: 45 },
+      color: "rgba(151, 251, 104, 1)",
+      iconStyle: { width: 45, height: 45,top:8 },
       labelStyle: labelStyles.first,
       route: "/event/tsList",
     },
     {
       icon: ICONS.event_category,
       label: "Event",
-      color: "#FFA500",
+      color: "#91ffffff",
       iconStyle: { width: 50, height: 50 },
       labelStyle: labelStyles.second,
       route: "/event/eventList",
@@ -57,7 +58,7 @@ export default function Home() {
     {
       icon: ICONS.court,
       label: "Court",
-      color: "#FFB6C1",
+      color: "#ffcc4bff",
       iconStyle: { width: 60, height: 60 },
       labelStyle: labelStyles.third,
       // Updated to point to the new simplified court list screen

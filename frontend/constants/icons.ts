@@ -34,6 +34,7 @@ export const ICONS = {
   users: require('../assets/icons/Users.png'),
   search: require('../assets/icons/search.png'),
   coach: require('../assets/icons/coach.png'),
+  coachIcon: require('../assets/icons/coach_icon.png'),
   player: require('../assets/icons/player.png'),
   court: require('../assets/icons/court.png'),
   noteIcon: require('../assets/icons/Note_icon.png'),

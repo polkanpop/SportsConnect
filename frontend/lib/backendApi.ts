@@ -386,6 +386,17 @@ export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtboo
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
 }
 
+// ---- Event & Training Session Bookings (mirror court booking create pattern) ----
+export type EventBookingRow = { eventbookingid: number; eventid: number; userid: number; status: string; paymentid?: number | null; note?: string | null }
+export async function createEventBooking(payload: Omit<EventBookingRow, 'eventbookingid'>) {
+	return request('/eventbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createEventBooking' }) as Promise<EventBookingRow>
+}
+
+export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null }
+export async function createTrainingSessionBooking(payload: Omit<TrainingSessionBookingRow, 'tsbookingid'>) {
+	return request('/tsbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createTrainingSessionBooking' }) as Promise<TrainingSessionBookingRow>
+}
+
 // Prepare delete endpoint for future UI integration (optimistic removal supported in hook)
 export async function deleteCourtBooking(courtbookingid: number) {
 	if (courtbookingid == null) throw new Error('courtbookingid required')
@@ -449,6 +460,7 @@ export type CombinedEvent = {
 	join_status?: boolean | null
 	courtid?: number
 	address?: string
+	court_name?: string | null
 	sport?: string[] | string | null
 	venue?: string[] | string | null
 }
@@ -467,6 +479,7 @@ export type CombinedTrainingSession = {
 	numberofpeople?: number | null
 	courtid?: number
 	address?: string
+	court_name?: string | null
 	sport?: string[] | string | null
 	venue?: string[] | string | null
 	entry_fee?: number | null
@@ -542,6 +555,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			join_status: meta?.join_status ?? null,
 			courtid,
 			address: ci?.address,
+			court_name: (ci as any)?.name ?? null,
 			sport: ci?.sport,
 			venue: ci?.venue,
 		}
@@ -649,6 +663,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			numberofpeople: meta?.numberofpeople ?? null,
 			courtid,
 			address: ci?.address,
+			court_name: (ci as any)?.name ?? null,
 			sport: ci?.sport,
 			venue: ci?.venue,
 			entry_fee: meta?.entry_fee ?? null,
