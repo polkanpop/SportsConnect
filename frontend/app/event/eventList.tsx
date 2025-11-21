@@ -98,7 +98,7 @@ const EventListScreen = () => {
       const sports = asArray(ev.sport)
       const venues = asArray(ev.venue)
       const sportOk = selectedSports.length === 0 || sports.some(s => selectedSports.includes(s))
-      const venueOk = selectedVenues.length === 0 || venues.some(v => selectedVenues.includes(v))
+      const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venues.includes(sel))
       if (!sportOk || !venueOk) return false
       // Free filter
       if (freeOnly) {
@@ -107,10 +107,13 @@ const EventListScreen = () => {
         // Payment method filter (only when not free)
         if (paymentSelections.length) {
           const method = (ev.support_payment_method || '').toLowerCase()
-          const allowed = new Set<string>(paymentSelections)
-          // If user selected cash or vnpay, events marked 'both' should also match
-          if (paymentSelections.some(m => m === 'cash' || m === 'vnpay')) allowed.add('both')
-          if (!allowed.has(method)) return false
+          if (paymentSelections.length === 1) {
+            const allowed = new Set<string>(paymentSelections)
+            if (paymentSelections.some(m => m === 'cash' || m === 'vnpay')) allowed.add('both')
+            if (!allowed.has(method)) return false
+          } else {
+            if (method !== 'both') return false
+          }
         }
       }
       return true
@@ -180,6 +183,7 @@ const EventListScreen = () => {
       <View style={styles.container}>
         {/* Filters */}
         <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='sport'?null:'sport')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
             <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length>0) && styles.filterTextActive]}>Sport</Text>
@@ -203,6 +207,7 @@ const EventListScreen = () => {
             <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color:'#999' }]}>Payment</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
+          </ScrollView>
         </View>
         <Text style={styles.sectionTitle}>Events</Text>
         {openFilter && openFilter !== 'payment' && (
@@ -356,14 +361,16 @@ const styles = StyleSheet.create({
   searchIcon:{width:18,height:18,tintColor:'#666',marginRight:8,resizeMode:'contain'},
   searchInput:{flex:1,color:'#111',fontSize:15,paddingVertical:0},
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
-  filterRow:{flexDirection:'row',gap:10,marginBottom:12},
+  filterRow:{marginBottom:12},
+  filtersInner:{flexDirection:'row',gap:10,paddingRight:4},
   filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',paddingHorizontal:12,paddingVertical:6,borderRadius:20},
   filterButtonActive:{backgroundColor:'#32CD32'},
   filterButtonDisabled:{backgroundColor:'#f0f0f0', opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:'#666',marginRight:6,resizeMode:'contain'},
   filterText:{color:'#222',fontSize:13,fontWeight:'600'},
   filterTextActive:{ color:'#fff' },
-  countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden'},
+  countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden',fontWeight:'600'},
+  
   sectionTitle:{fontSize:22,fontWeight:'500',color:'#222',marginBottom:12,marginLeft:4,marginTop:15},
   dropdownWrapper:{position:'absolute',top:100,left:12,right:12,zIndex:20},
   dropdown:{maxHeight:200,backgroundColor:'#ffffff',borderRadius:8,paddingVertical:4,borderWidth:1,borderColor:'#e5e5e5'},

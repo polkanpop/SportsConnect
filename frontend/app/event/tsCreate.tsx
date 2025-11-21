@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -50,6 +51,7 @@ export default function TsCreate() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successData, setSuccessData] = useState<any | null>(null)
+  const [previewOpen, setPreviewOpen] = useState<boolean>(true)
 
   const formatRange = useCallback((start?: string | null, end?: string | null) => {
     if (!start) return 'Unknown date'
@@ -149,11 +151,47 @@ export default function TsCreate() {
     onSuccess: (data) => {
       setSuccessData(data)
       qc.invalidateQueries({ queryKey: ['trainingSessionsCombined'] })
+      // clear draft on success
+      try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
       setTimeout(() => { router.replace(`/event/tsBooking?sessionid=${data.session.sessionid}` as any) }, 900)
     },
     onError: (err: any) => setSubmitError(err?.message || 'Create failed'),
     onSettled: () => setSubmitting(false)
   })
+
+  // Draft persistence: load on mount
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('@tsCreate:draft')
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        if (!mounted || !parsed) return
+        if (typeof parsed.title === 'string') setTitle(parsed.title)
+        if (typeof parsed.participantsCap === 'string') setParticipantsCap(parsed.participantsCap)
+        if (typeof parsed.description === 'string') setDescription(parsed.description)
+        if (typeof parsed.monetize === 'boolean') setMonetize(parsed.monetize)
+        if (typeof parsed.entryFee === 'string') setEntryFee(parsed.entryFee)
+        if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
+        if (typeof parsed.payVnPay === 'boolean') setPayVnPay(parsed.payVnPay)
+        if (typeof parsed.selectedBookingId === 'number') setSelectedBookingId(parsed.selectedBookingId)
+      } catch (e) {}
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
+
+  // Save draft on change (simple throttle)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const payload = {
+        title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId
+      }
+      try { AsyncStorage.setItem('@tsCreate:draft', JSON.stringify(payload)) } catch (e) {}
+    }, 400)
+    return () => clearTimeout(t)
+  }, [title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId])
 
   const onSubmit = () => {
     if (submitting) return
@@ -249,9 +287,11 @@ export default function TsCreate() {
             )}
             {expandedCourts && enrichedBookings && (
               <View style={styles.bookingList}>
-                {enrichedBookings.map(b => (
-                  <React.Fragment key={b.courtbookingid}>{renderBookingItem({ item: b })}</React.Fragment>
-                ))}
+                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:4 }}>
+                  {enrichedBookings.map(b => (
+                    <React.Fragment key={b.courtbookingid}>{renderBookingItem({ item: b })}</React.Fragment>
+                  ))}
+                </ScrollView>
               </View>
             )}
           </View>
@@ -296,23 +336,32 @@ export default function TsCreate() {
             )}
           </View>
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Preview</Text>
-            <Text style={styles.previewLine}>Status: upcoming</Text>
-            <Text style={styles.previewLine}>Location: {selectedBookingId ? (enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.courtName || selectedBookingId) : 'None'}</Text>
-            <Text style={styles.previewLine}>Time: {selectedBookingId ? formatRange(enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.start_timestamp as any, enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.end_timestamp as any) : 'N/A'}</Text>
-            <Text style={styles.previewLine}>Max participants: {participantsCapNum || 'N/A'}</Text>
-            {monetize ? (
-              <Text style={styles.previewLine}>Entry Fee: {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' VND' : 'N/A'} | Methods: {paymentMethodsValue?.join(', ') || 'None'}</Text>
-            ) : (
-              <Text style={styles.previewLine}>Entry Fee: Free</Text>
-            )}
-            {submitError && <Text style={styles.errorText}>{submitError}</Text>}
-            {successData && (
-              <View style={styles.successBox}>
-                <Text style={styles.successTitle}>Session Created!</Text>
-                <Text style={styles.successLine}>ID: {successData.session.sessionid}</Text>
-                <Text style={styles.successLine}>Title: {successData.sessioninfo.title}</Text>
-              </View>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Preview</Text>
+              <TouchableOpacity onPress={() => setPreviewOpen(p => !p)} style={styles.expandBtn}>
+                <Image source={ICONS.arrowdown} style={[styles.expandIcon, previewOpen && { transform: [{ rotate: '180deg' }] }]} />
+              </TouchableOpacity>
+            </View>
+            {previewOpen && (
+              <>
+                <Text style={styles.previewLine}>Status: upcoming</Text>
+                <Text style={styles.previewLine}>Location: {selectedBookingId ? (enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.courtName || selectedBookingId) : 'None'}</Text>
+                <Text style={styles.previewLine}>Time: {selectedBookingId ? formatRange(enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.start_timestamp as any, enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.end_timestamp as any) : 'N/A'}</Text>
+                <Text style={styles.previewLine}>Max participants: {participantsCapNum || 'N/A'}</Text>
+                {monetize ? (
+                  <Text style={styles.previewLine}>Entry Fee: {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' VND' : 'N/A'} | Methods: {paymentMethodsValue?.join(', ') || 'None'}</Text>
+                ) : (
+                  <Text style={styles.previewLine}>Entry Fee: Free</Text>
+                )}
+                {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+                {successData && (
+                  <View style={styles.successBox}>
+                    <Text style={styles.successTitle}>Session Created!</Text>
+                    <Text style={styles.successLine}>ID: {successData.session.sessionid}</Text>
+                    <Text style={styles.successLine}>Title: {successData.sessioninfo.title}</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </ScrollView>

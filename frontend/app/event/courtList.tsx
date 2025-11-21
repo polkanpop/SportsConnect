@@ -170,7 +170,7 @@ const CourtListScreen = () => {
       const sportArr = asArray(c.sport)
       const venueArr = asArray(c.venue)
       const sportOk = selectedSports.length === 0 || sportArr.some(s => selectedSports.includes(s))
-      const venueOk = selectedVenues.length === 0 || venueArr.some(v => selectedVenues.includes(v))
+      const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venueArr.includes(sel))
       const favOk = !showFavouritesOnly || favouriteCourtIds.includes(c.courtid)
       if (!(sportOk && venueOk && favOk)) return false
       // Price filter
@@ -234,6 +234,7 @@ const CourtListScreen = () => {
 
         {/* Filter buttons row */}
         <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity
             style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter === 'sport' ? null : 'sport')}
@@ -258,13 +259,13 @@ const CourtListScreen = () => {
             <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>Favourite</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterButtonActive]}
+            style={[styles.filterButton, (minPriceK || maxPriceK || openFilter === 'price') && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
           >
             <Image source={ICONS.menu} style={styles.filterIcon} />
             <Text style={[styles.filterText, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterTextActive]}>Price</Text>
-            {(minPriceK || maxPriceK) && <Text style={styles.countBadge}>•</Text>}
           </TouchableOpacity>
+          </ScrollView>
         </View>
         {/* Subheader */}
         <Text style={styles.sectionTitle}>Court</Text>
@@ -318,11 +319,11 @@ const CourtListScreen = () => {
               <View style={styles.priceFooterRow}>
                 <TouchableOpacity
                   style={[styles.clearPriceBtn, styles.priceCloseBtn]}
-                  onPress={() => { setMinPriceK(''); setMaxPriceK(''); setOpenFilter(null) }}
+                  onPress={() => { setMinPriceK(''); setMaxPriceK(''); }}
                 >
                   <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Clear</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.clearPriceBtn, styles.priceCloseBtn]} onPress={() => { setMinPriceK(''); setMaxPriceK(''); setOpenFilter(null) }}>
+                <TouchableOpacity style={[styles.clearPriceBtn, styles.priceCloseBtn]} onPress={() => { setOpenFilter(null) }}>
                   <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Close</Text>
                 </TouchableOpacity>
               </View>
@@ -424,7 +425,8 @@ const styles = StyleSheet.create({
   searchWrapper: { marginBottom: 10 },
   searchInput: { flex: 1, color: '#111', fontSize: 15, paddingVertical: 0 },
   // More space below filters
-  filterRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  filterRow: { marginBottom: 12 },
+  filtersInner: { flexDirection: 'row', gap: 10, paddingRight: 4 },
   sectionTitle: { fontSize: 22, fontWeight: '500', color: '#222', marginBottom: 12, marginLeft: 4, marginTop: 15 },
   filterButton: {
     flexDirection: 'row',
@@ -437,7 +439,7 @@ const styles = StyleSheet.create({
   filterIcon: { width: 16, height: 16, tintColor: '#666', marginRight: 6, resizeMode: 'contain' },
   filterText: { color: '#222', fontSize: 13, fontWeight: '600' },
   favStarActive: { tintColor: '#fff' },
-  countBadge: { marginLeft: 6, backgroundColor: '#ddd', color: '#111', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, fontSize: 11, overflow: 'hidden' },
+  countBadge: { marginLeft: 6, backgroundColor: '#ddd', color: '#111', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, fontSize: 11, overflow: 'hidden', fontWeight: '600' },
   dropdownWrapper: { position: 'absolute', top: 100, left: 12, right: 12, zIndex: 20 },
   priceDropdownWrapper: { position: 'absolute', top: 45, left: 12, right: 12, zIndex: 30 },
   dropdown: { maxHeight: 200, backgroundColor: '#ffffff', borderRadius: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#e5e5e5' },
