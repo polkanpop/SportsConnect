@@ -315,8 +315,9 @@ const _layout = () => {
                   <Image
                     source={ICONS.map}
                     style={{
-                      width: 30,
-                      height: 30,
+                      width: 36,
+                      height: 36,
+                      tintColor: COLORS.black,
                     }}
                   />
                 </Animated.View>
