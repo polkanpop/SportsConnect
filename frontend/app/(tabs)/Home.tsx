@@ -232,7 +232,7 @@ export default function Home() {
 
         {/* Scroll View Content */}
         <ScrollView
-          style={{ flex: 1, backgroundColor: "#ffffff", paddingHorizontal: 8 }}
+          style={{ flex: 1, backgroundColor: "#F0F0F0", paddingHorizontal: 8 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 10 }}
         >
