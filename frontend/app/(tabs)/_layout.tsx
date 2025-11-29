@@ -141,7 +141,7 @@ const _layout = () => {
               <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
                 <Animated.View style={{
                   position: 'absolute',
-                  width: 54,
+                  width: 58,
                   height: 54,
                   borderRadius: 15,
                   backgroundColor: COLORS.lightgrey,
@@ -220,7 +220,7 @@ const _layout = () => {
               <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
                 <Animated.View style={{
                   position: 'absolute',
-                  width: 54,
+                  width: 58,
                   height: 54,
                   borderRadius: 15,
                   backgroundColor: COLORS.lightgrey,
@@ -368,7 +368,7 @@ const _layout = () => {
               <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
                 <Animated.View style={{
                   position: 'absolute',
-                  width: 54,
+                  width: 58,
                   height: 54,
                   borderRadius: 15,
                   backgroundColor: COLORS.lightgrey,
@@ -449,7 +449,7 @@ const _layout = () => {
               <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
                 <Animated.View style={{
                   position: 'absolute',
-                  width: 54,
+                  width: 58,
                   height: 54,
                   borderRadius: 15,
                   backgroundColor: COLORS.lightgrey,
