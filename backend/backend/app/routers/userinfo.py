@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Query
-from ..db import rest_select
+from fastapi import APIRouter, HTTPException, Query, Body
+from ..db import rest_select, rest_update
 
 router = APIRouter(prefix="/userinfo", tags=["users"])
 
@@ -23,3 +23,14 @@ def get_userinfo(infoid: int):
         return row
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.patch("/{userid}", response_model=dict)
+def update_userinfo(userid: int, payload: dict = Body(...)):
+    try:
+        # Update by userid
+        updated = rest_update("userinfo", {"userid": userid}, payload)
+        if not updated:
+             raise HTTPException(status_code=404, detail="User info not found")
+        return updated[0]
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))

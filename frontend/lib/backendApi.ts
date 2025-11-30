@@ -304,7 +304,7 @@ export async function removeFavouriteCourt(favouriteid: number) {
 // ---- User Info API ----
 // GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
 // Helper to fetch first row by userid.
-export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | null }
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null }
 
 export async function getUserInfoByUserId(userid: number) {
 	if (userid == null) throw new Error('userid required')
@@ -312,6 +312,16 @@ export async function getUserInfoByUserId(userid: number) {
 	const rows = await request(path, { debugLabel: 'getUserInfoByUserId' })
 	if (Array.isArray(rows) && rows.length) return rows[0] as UserInfoRow
 	return null
+}
+
+export async function updateUserInfo(userid: number, data: Partial<UserInfoRow>) {
+	const path = `/userinfo/${encodeURIComponent(userid)}`
+	const res = await request(path, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateUserInfo'
+	})
+	return res
 }
 
 // Cached variant: user info display name rarely changes; short TTL

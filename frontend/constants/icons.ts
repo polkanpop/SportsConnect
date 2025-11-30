@@ -68,6 +68,8 @@ export const ICONS = {
   outdoor: require('../assets/icons/outdoor.png'),
   x: require('../assets/icons/x.png'),
   tick: require('../assets/icons/tick.png'),
+  edit: require('../assets/icons/edit.png'),
+  cancelEdit: require('../assets/icons/cancel_edit.png'),
   participants: require('../assets/icons/participants.png'),
   supportCentre: require('../assets/icons/support_centre.png'),
   starCal: require('../assets/icons/star_cal.png'),
