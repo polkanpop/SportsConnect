@@ -1,4 +1,4 @@
-import { SearchBar } from "@/components/SearchBar";
+
 import { ICONS } from "@/constants/icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -12,6 +12,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Home() {
   const router = useRouter();
+
+  // Time logic
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000 * 60);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getTimeIcon = () => {
+    const h = now.getHours();
+    if (h >= 5 && h < 12) return ICONS.sunrise;
+    if (h >= 12 && h < 18) return ICONS.sunset;
+    return ICONS.night;
+  };
+
+  const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
 
   // Define different label styles based on the icon sizes
   const labelStyles = {
@@ -197,36 +215,42 @@ export default function Home() {
             justifyContent: "space-between",
             backgroundColor: "#ffffff",
             paddingBottom: 12,
-            paddingHorizontal: 8,
+            paddingHorizontal: 20,
+            paddingTop: 10,
           }}
         >
-          {/* Search Bar */}
-          <View style={{ flex: 1 }}>
-            <SearchBar placeholder="Search for courts..." />
+          {/* Menu Icon (Left) */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+          >
+            <Image
+              source={ICONS.homepageMenu}
+              style={{ width: 24, height: 24 }}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+
+          {/* Center Time/Date */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+             <Image source={getTimeIcon()} style={{ width: 24, height: 24, marginRight: 8 }} resizeMode="contain" />
+             <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>
+               {timeString}
+             </Text>
+             <Text style={{ fontSize: 16, fontWeight: '400', color: '#555', marginLeft: 6 }}>
+               {dateString}
+             </Text>
           </View>
 
-          {/* Profile Icon (Touchable) */}
+          {/* Profile Icon (Right) */}
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => router.push("/event/profile")}
           >
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                backgroundColor: "#d4d4d4",
-                borderRadius: 24,
-                alignItems: "center",
-                justifyContent: "center",
-                marginLeft: 8,
-              }}
-            >
-              <Image
-                source={ICONS.accountCircle}
-                style={{ width: 40, height: 40 }}
-                resizeMode="contain"
-              />
-            </View>
+            <Image
+              source={ICONS.accountCircle}
+              style={{ width: 42, height: 42 }}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </View>
 

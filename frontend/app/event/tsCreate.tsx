@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native'
+import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
@@ -52,6 +52,7 @@ export default function TsCreate() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successData, setSuccessData] = useState<any | null>(null)
   const [previewOpen, setPreviewOpen] = useState<boolean>(true)
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false)
 
   const formatRange = useCallback((start?: string | null, end?: string | null) => {
     if (!start) return 'Unknown date'
@@ -368,11 +369,36 @@ export default function TsCreate() {
       </KeyboardAvoidingView>
       <View style={[styles.bottomSafeArea, { paddingBottom: 12 }]}>
         <View style={styles.bottomBar}>
-          <TouchableOpacity onPress={onSubmit} disabled={!formValid || submitting} style={[styles.confirmUnifiedBtn, (!formValid || submitting) && styles.confirmBtnDisabled]}>
+          <TouchableOpacity onPress={() => setConfirmModalVisible(true)} disabled={!formValid || submitting} style={[styles.confirmUnifiedBtn, (!formValid || submitting) && styles.confirmBtnDisabled]}>
             {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmUnifiedText}>Create Session</Text>}
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        transparent={true}
+        visible={confirmModalVisible}
+        animationType="fade"
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm Creation</Text>
+            <Text style={styles.modalBody}>Are you sure you want to create this session?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
+                setConfirmModalVisible(false)
+                onSubmit()
+              }}>
+                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -430,6 +456,15 @@ const styles = StyleSheet.create({
   confirmUnifiedBtn: { width:'90%', backgroundColor:'#FF5733', paddingVertical:18, borderRadius:32, justifyContent:'center', alignItems:'center' },
   confirmUnifiedText: { color:'#fff', fontWeight:'700', fontSize:16 },
   confirmBtnDisabled: { opacity:0.55 },
+  modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
+  modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
+  modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
+  modalBody: { fontSize:14, color:'#444', lineHeight:20 },
+  modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
+  modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
+  modalCancel: { backgroundColor:'#eee' },
+  modalConfirm: { backgroundColor:'#FF5733' },
+  modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
 })
 
 

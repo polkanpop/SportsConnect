@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput } from 'react-native'
+import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
@@ -77,6 +77,7 @@ export default function EventBooking() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<EventBookingRow | null>(null)
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false)
 
   const isFree = event?.entry_fee == null
   const allowedMethods: ('cash' | 'vnpay')[] = useMemo(() => {
@@ -109,11 +110,27 @@ export default function EventBooking() {
         paymentid: payment.paymentid,
         note: noteText || null,
       })
-      setConfirmation(booking)
+      
+      router.replace({
+        pathname: '/event/invoice',
+        params: {
+          title: event.title,
+          subtitle: 'Event',
+          date: (() => { const d = new Date(event.start_timestamp || event.time); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
+          time: formatRange(event),
+          location: event.address || 'Unknown Location',
+          price: isFree ? 0 : event.entry_fee,
+          paymentMethod: isFree ? 'Free' : paymentMethod,
+          paymentStatus: payment.status,
+          bookingId: booking.eventbookingid,
+          note: noteText.trim(),
+          type: 'event'
+        }
+      })
     } catch (e) {
       setSubmitError((e as any)?.message || 'Failed booking')
     } finally { setSubmitting(false) }
-  }, [event, userId, paymentMethod, noteText, isFree])
+  }, [event, userId, paymentMethod, noteText, isFree, router])
 
   const sports = asArray(event?.sport)
   const venues = asArray(event?.venue)
@@ -273,13 +290,38 @@ export default function EventBooking() {
             <TouchableOpacity
               style={[styles.confirmUnifiedBtn, !canSubmit && styles.confirmBtnDisabled]}
               disabled={!canSubmit}
-              onPress={handleSubmit}
+              onPress={() => setConfirmModalVisible(true)}
             >
               <Text style={styles.confirmUnifiedText}>{submitting ? 'Submitting...' : 'Confirm Booking'}</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
       )}
+
+      <Modal
+        transparent={true}
+        visible={confirmModalVisible}
+        animationType="fade"
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm Booking</Text>
+            <Text style={styles.modalBody}>Are you sure you want to book this event?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
+                setConfirmModalVisible(false)
+                handleSubmit()
+              }}>
+                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -337,4 +379,13 @@ const styles = StyleSheet.create({
   confirmBtnDisabled: { backgroundColor: '#ccc' },
   successTitle: { fontSize: 14, fontWeight: '700', color: '#0a7a0a' },
   successLine: { fontSize: 12, color: '#0a7a0a', marginTop: 4 },
+  modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
+  modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
+  modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
+  modalBody: { fontSize:14, color:'#444', lineHeight:20 },
+  modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
+  modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
+  modalCancel: { backgroundColor:'#eee' },
+  modalConfirm: { backgroundColor:'#FF5733' },
+  modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
 })

@@ -20,6 +20,7 @@ import {
   Image,
   Keyboard,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,9 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useQuery } from '@tanstack/react-query';
+import { useCourtAvailability } from '@/hooks/use-court-data';
+import { listCourts } from '@/lib/backendApi';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -106,6 +110,20 @@ const INITIAL_REGION = {
   longitudeDelta: 10,
 };
 
+// Format helpers
+function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
+function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
+
+const WEEK_DAYS: { key: string; label: string }[] = [
+  { key: 'Mon', label: 'Mon' },
+  { key: 'Tue', label: 'Tue' },
+  { key: 'Wed', label: 'Wed' },
+  { key: 'Thu', label: 'Thu' },
+  { key: 'Fri', label: 'Fri' },
+  { key: 'Sat', label: 'Sat' },
+  { key: 'Sun', label: 'Sun' },
+]
+
 export default function App() {
   const router = useRouter();
   // Favorite state for selected marker
@@ -127,6 +145,8 @@ export default function App() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
   // Zoom stages: 0 = fully out (baseline region), 1 = mid zoom, 2 = max zoom (shows ZoomOut icon)
   const [zoomStage, setZoomStage] = useState<number>(0);
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0);
 
   // Define zoom levels (tweak as desired)
   const ZOOM_LEVELS = useRef<number[]>([10, 13.5, 16]); // corresponds to camera zoom values
@@ -142,6 +162,46 @@ export default function App() {
 
   // Auth context (backend login OR supabase anonymous/social)
   const { profile, session } = useAuthContext();
+
+  // Fetch availability for selected marker
+  const { data: availabilityRows } = useCourtAvailability(selectedMarker?.courtid || null);
+  const availability = useMemo(() => {
+    if (!Array.isArray(availabilityRows) || !availabilityRows.length) return null;
+    const row = availabilityRows[0];
+    let bd = row.booking_date;
+    if (typeof bd === 'string') {
+      try { bd = JSON.parse(bd); } catch { bd = []; }
+    }
+    return { ...row, booking_date: Array.isArray(bd) ? bd : [] };
+  }, [availabilityRows]);
+
+  // Derive week dates (Mon -> Sun) for modal
+  const weekDaysDetailed = useMemo(() => {
+    const today = new Date()
+    const dayIdx = today.getDay() // Sun=0
+    const offsetToMonday = ((dayIdx + 6) % 7)
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + weekOffset * 7)
+    return WEEK_DAYS.map((wd, i) => {
+      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+      return { ...wd, date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
+    })
+  }, [weekOffset])
+
+  // Reset week offset when modal opens
+  useEffect(() => {
+    if (calendarModalVisible) {
+      setWeekOffset(0);
+    }
+  }, [calendarModalVisible]);
+
+  // Fetch courts for price
+  const { data: courtsData } = useQuery({ 
+    queryKey: ['courts'], 
+    queryFn: () => listCourts(),
+    enabled: !!selectedMarker 
+  });
+  const price = courtsData?.find((c: any) => c.courtid === selectedMarker?.courtid)?.price;
+
   const warnedMissingUserIdRef = useRef(false);
 
   // Unified resolver for numeric userid used by backend tables.
@@ -866,7 +926,9 @@ export default function App() {
                     {/* ...existing code... */}
                     {/* Title & actions row (layout adjusted for single-line names) */}
                     <View style={styles.titleRow}> 
-                      <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
+                      <TouchableOpacity onPress={() => setCalendarModalVisible(true)} style={{ flex: 1 }}>
+                        <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
+                      </TouchableOpacity>
                       <View style={styles.actionRow}> 
                       <TouchableOpacity
                         style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
@@ -983,11 +1045,24 @@ export default function App() {
                       })()}
                     </View>
 
-                    {/* Images */}
-                    <View style={styles.imageContainer}>
-                      {selectedMarker.images.map((image, idx) => (
-                        <Image key={idx} source={{ uri: image }} style={styles.markerImage} />
-                      ))}
+                    {/* Images Section */}
+                    <Text style={styles.sectionHeader}>Images</Text>
+                    {selectedMarker.images && selectedMarker.images.length > 0 ? (
+                      <View style={styles.imageContainer}>
+                        {selectedMarker.images.map((image, idx) => (
+                          <Image key={idx} source={{ uri: image }} style={styles.markerImage} />
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={styles.placeholderSection}>
+                        <Text style={styles.placeholderText}>No images available yet.</Text>
+                      </View>
+                    )}
+
+                    {/* Reviews Section */}
+                    <Text style={styles.sectionHeader}>Reviews</Text>
+                    <View style={styles.placeholderSection}>
+                      <Text style={styles.placeholderText}>Reviews feature coming soon...</Text>
                     </View>
                   </BottomSheetScrollView>
                 ) : (
@@ -999,6 +1074,82 @@ export default function App() {
             </View>
           </TouchableWithoutFeedback>
         </SafeAreaView>
+        <Modal
+          visible={calendarModalVisible}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setCalendarModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              {/* Schedule Header with Navigation */}
+              <View style={styles.scheduleHeaderRow}>
+                <Text style={styles.modalTitle}>Schedule</Text>
+                <View style={styles.weekNavInline}>
+                  <TouchableOpacity 
+                    style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]} 
+                    onPress={() => setWeekOffset(prev => Math.max(0, prev - 1))}
+                    disabled={weekOffset === 0}
+                  >
+                    <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]} 
+                    onPress={() => setWeekOffset(prev => Math.min(2, prev + 1))}
+                    disabled={weekOffset === 2}
+                  >
+                    <Image source={ICONS.arrowright} style={styles.navIcon} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {availability && (
+                <Text style={{ fontSize: 14, color: '#444', marginBottom: 12 }}>
+                  Opening Time: {availability.start_time?.slice(0, 5)} - {availability.end_time?.slice(0, 5)}
+                </Text>
+              )}
+
+              {/* Week Row */}
+              <View style={styles.weekRow}>
+                {weekDaysDetailed.map((day, index) => {
+                  const today = new Date();
+                  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const isPast = weekOffset === 0 && day.date < todayOnly;
+                  const isDayAvailable = availability?.booking_date?.includes(day.key);
+                  const isAvailable = isDayAvailable && !isPast;
+
+                  return (
+                    <View 
+                      key={index} 
+                      style={[
+                        styles.dayCell, 
+                        !isAvailable && styles.dayCellDisabled
+                      ]}
+                    >
+                      <Text style={styles.dayLabel}>{day.label}</Text>
+                      <Text style={[styles.dayDate, day.isToday && styles.todayUnderline]}>
+                        {day.date.getDate()}
+                      </Text>
+                    </View>
+                  )
+                })}
+              </View>
+
+              <Text style={{ fontSize: 16, marginTop: 20, fontWeight: 'bold' }}>
+                Price: ({price ? new Intl.NumberFormat('vi-VN').format(Number(price)) : '0'}đ/hr)
+              </Text>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity 
+                  style={[styles.modalBtn, styles.modalCancel]} 
+                  onPress={() => setCalendarModalVisible(false)}
+                >
+                  <Text style={styles.modalBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
@@ -1359,4 +1510,24 @@ const styles = StyleSheet.create({
   sheetTagFallback: { backgroundColor: '#444' },
   sheetVenueTag: { backgroundColor: '#6a5acd' },
   sheetTagText: { color: '#ddd', fontSize: 14, fontWeight: '700' },
+  modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
+  modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
+  modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
+  modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
+  modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
+  modalCancel: { backgroundColor:'#eee' },
+  modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  scheduleHeaderRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
+  weekNavInline: { flexDirection:'row', alignItems:'center' },
+  navBtn: { padding:8, borderRadius:10, backgroundColor:'#e0e0e0', marginHorizontal:4 },
+  navBtnDisabled: { opacity:0.35 },
+  navIcon: { width:20, height:20, tintColor:'#333', resizeMode:'contain' },
+  dayCell: { flex: 1, marginHorizontal: 2, paddingVertical: 10, borderRadius: 10, backgroundColor: '#e9e9e9', alignItems: 'center' },
+  dayCellDisabled: { opacity: 0.35 },
+  dayLabel: { fontSize: 12, fontWeight: '600', color: '#222' },
+  todayUnderline: { textDecorationLine: 'underline' },
+  dayDate: { fontSize: 14, fontWeight: '700', color: '#111', marginTop: 4 },
+  sectionHeader: { fontSize: 18, fontWeight: 'bold', marginTop: 16, marginBottom: 8, color: '#333' },
+  placeholderSection: { padding: 20, backgroundColor: '#f9f9f9', borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 10 },
 });

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput } from 'react-native'
+import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { ICONS } from '@/constants/icons'
@@ -206,8 +206,23 @@ export default function CourtBooking() {
       note: noteText.trim() ? noteText.trim() : null,
     }, {
       onSuccess: (data) => {
-        setConfirmation(data.booking)
-        console.log('[CourtBooking] booking success', data)
+        // Redirect to Invoice
+        router.replace({
+          pathname: '/event/invoice',
+          params: {
+            title: courtInfo?.name || 'Court Booking',
+            subtitle: courtInfo?.sport ? (Array.isArray(courtInfo.sport) ? courtInfo.sport.join(', ') : courtInfo.sport) : '',
+            date: selectedDateStr,
+            time: `${startSlot} - ${endSlot}`,
+            location: courtInfo?.address,
+            price: calculatedAmount,
+            paymentMethod: paymentMethod,
+            paymentStatus: data.payment?.status,
+            bookingId: data.booking?.courtbookingid,
+            note: noteText.trim(),
+            type: 'court'
+          }
+        })
       },
       onError: (err: any) => {
         setSubmitError(err?.message || 'Booking failed')
@@ -216,9 +231,11 @@ export default function CourtBooking() {
     })
   }
 
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false)
+
   const onPressConfirm = () => {
     if (!canConfirm || submitting) return
-    confirmBooking()
+    setConfirmModalVisible(true)
   }
 
   // Force refetch when screen gains focus to reflect external deletions (manual DB changes)
@@ -463,6 +480,31 @@ export default function CourtBooking() {
         </TouchableOpacity>
       </View>
     </SafeAreaView>
+
+    <Modal
+      transparent={true}
+      visible={confirmModalVisible}
+      animationType="fade"
+      onRequestClose={() => setConfirmModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Confirm Booking</Text>
+          <Text style={styles.modalBody}>Are you sure you want to book this court?</Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
+              <Text style={styles.modalBtnText}>Cancel</Text>
+            </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
+              setConfirmModalVisible(false)
+              confirmBooking()
+            }}>
+              <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
     </View>
   )
 }
