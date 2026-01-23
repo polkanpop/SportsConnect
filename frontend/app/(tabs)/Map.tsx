@@ -1062,7 +1062,7 @@ export default function App() {
                     {/* Reviews Section */}
                     <Text style={styles.sectionHeader}>Reviews</Text>
                     <View style={styles.placeholderSection}>
-                      <Text style={styles.placeholderText}>Reviews feature coming soon...</Text>
+                      <Text style={styles.placeholderText}>Placeholder for user review :D</Text>
                     </View>
                   </BottomSheetScrollView>
                 ) : (

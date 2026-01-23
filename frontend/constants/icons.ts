@@ -89,7 +89,8 @@ export const ICONS = {
   ZoomOut: require('../assets/icons/Zoomout.png'),
   signout: require('../assets/icons/signout.png'),
   bookingButton: require('../assets/icons/bookingButton.png'),
-  // Alias requested in spec (user referred to ICONS.buttonBooking)
+  createSuccessful: require('../assets/icons/createsuccessful.png'),
+
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   gmailButton: require('../assets/icons/gmail.png'),

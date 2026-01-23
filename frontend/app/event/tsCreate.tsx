@@ -5,7 +5,18 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listCourtBookings, CourtBookingRow, listCourtInfoCached, createTrainingSessionWithInfo, CreateTrainingSessionWithInfoPayload, listTrainingSessionsCombined, listTrainingSessionsCombinedCached, listEventsCombinedCached } from '@/lib/backendApi'
+import {
+  adjustTrainingSessionParticipants,
+  createTrainingSessionBooking,
+  createTrainingSessionWithInfo,
+  CreateTrainingSessionWithInfoPayload,
+  listCourtBookings,
+  CourtBookingRow,
+  listCourtInfoCached,
+  listTrainingSessionsCombined,
+  listTrainingSessionsCombinedCached,
+  listEventsCombinedCached,
+} from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
 
@@ -44,6 +55,7 @@ export default function TsCreate() {
   const [title, setTitle] = useState('')
   const [participantsCap, setParticipantsCap] = useState<string>('')
   const [description, setDescription] = useState('')
+  const [addMeToParticipants, setAddMeToParticipants] = useState(true)
   const [monetize, setMonetize] = useState<boolean>(false)
   const [entryFee, setEntryFee] = useState<string>('')
   const [payCash, setPayCash] = useState(false)
@@ -151,10 +163,31 @@ export default function TsCreate() {
     },
     onSuccess: (data) => {
       setSuccessData(data)
+
+      // Optional: automatically join as a participant so the creator doesn't need to book again.
+      if (addMeToParticipants && typeof userId === 'number' && typeof data?.session?.sessionid === 'number') {
+        const sessionId = data.session.sessionid
+        void (async () => {
+          try {
+            await createTrainingSessionBooking({
+              sessionid: sessionId,
+              userid: userId,
+              status: 'pending',
+              bookingstatus: 'upcoming',
+              note: null,
+            } as any)
+          } catch {}
+
+          try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
+
+          qc.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+        })()
+      }
+
       qc.invalidateQueries({ queryKey: ['trainingSessionsCombined'] })
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
-      setTimeout(() => { router.replace(`/event/tsBooking?sessionid=${data.session.sessionid}` as any) }, 900)
+      setTimeout(() => { router.replace({ pathname: '/event/CreationInfo', params: { type: 'training' } }) }, 900)
     },
     onError: (err: any) => setSubmitError(err?.message || 'Create failed'),
     onSettled: () => setSubmitting(false)
@@ -172,6 +205,7 @@ export default function TsCreate() {
         if (typeof parsed.title === 'string') setTitle(parsed.title)
         if (typeof parsed.participantsCap === 'string') setParticipantsCap(parsed.participantsCap)
         if (typeof parsed.description === 'string') setDescription(parsed.description)
+        if (typeof parsed.addMeToParticipants === 'boolean') setAddMeToParticipants(parsed.addMeToParticipants)
         if (typeof parsed.monetize === 'boolean') setMonetize(parsed.monetize)
         if (typeof parsed.entryFee === 'string') setEntryFee(parsed.entryFee)
         if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
@@ -187,12 +221,12 @@ export default function TsCreate() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId
+        title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId
       }
       try { AsyncStorage.setItem('@tsCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId])
+  }, [title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId])
 
   const onSubmit = () => {
     if (submitting) return
@@ -304,6 +338,17 @@ export default function TsCreate() {
             <TextInput value={participantsCap} onChangeText={setParticipantsCap} keyboardType="number-pad" placeholder="e.g. 10" placeholderTextColor="#777" style={styles.input} />
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Describe the session details..." placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
+
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              activeOpacity={0.85}
+              onPress={() => setAddMeToParticipants(v => !v)}
+            >
+              <View style={[styles.checkboxBox, addMeToParticipants && styles.checkboxBoxChecked]}>
+                {addMeToParticipants && <Text style={styles.checkboxTick}>✓</Text>}
+              </View>
+              <Text style={styles.checkboxLabel}>Add me to participants list</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Monetization</Text>
@@ -418,6 +463,11 @@ const styles = StyleSheet.create({
   smallText: { fontSize:12, fontWeight:'600', color:'#555', marginTop:4 },
   errorText: { color:'#c00', fontSize:12, marginTop:8 },
   bookingList: { marginTop:12, maxHeight:260 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#bbb', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  checkboxBoxChecked: { backgroundColor: '#FF5733', borderColor: '#FF5733' },
+  checkboxTick: { color: '#fff', fontWeight: '900', fontSize: 14, marginTop: -1 },
+  checkboxLabel: { marginLeft: 10, color: '#222', fontWeight: '700' },
   bookingItem: { flexDirection:'row', alignItems:'center', backgroundColor:'#eee', padding:12, borderRadius:12, marginBottom:10 },
   bookingItemSelected: { backgroundColor:'#FFD700' },
   bookingItemDisabled: { opacity:0.5 },

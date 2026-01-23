@@ -3,9 +3,18 @@ import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
-import { listTrainingSessionsCombinedCached, listTrainingSessionsCombined, CombinedTrainingSession, createPayment, createTrainingSessionBooking, PaymentRow, TrainingSessionBookingRow } from '@/lib/backendApi'
+import {
+  adjustTrainingSessionParticipants,
+  createPayment,
+  createTrainingSessionBooking,
+  getTrainingSessionBookingsByUserId,
+  listTrainingSessionsCombined,
+  listTrainingSessionsCombinedCached,
+  CombinedTrainingSession,
+  TrainingSessionBookingRow,
+} from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
 
@@ -37,6 +46,7 @@ function formatCurrency(n: number | null | undefined): string {
 
 export default function TrainingSessionBooking() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const params = useLocalSearchParams()
   const sessionid = params.sessionid ? parseInt(String(params.sessionid), 10) : NaN
   const { profile } = useAuthContext()
@@ -63,6 +73,25 @@ export default function TrainingSessionBooking() {
   const loadingSessions = loadingCached && !sessionsFresh
   const session: CombinedTrainingSession | null = useMemo(() => allSessions.find(s => s.sessionid === sessionid) || null, [allSessions, sessionid])
 
+  const { data: userSessionBookingsRaw } = useQuery({
+    queryKey: ['trainingSessionBookingsByUserId', userId],
+    queryFn: () => getTrainingSessionBookingsByUserId(userId as number),
+    enabled: typeof userId === 'number',
+    staleTime: 10_000,
+  })
+
+  const alreadyBooked = useMemo(() => {
+    if (typeof userId !== 'number') return false
+    if (!Number.isFinite(sessionid)) return false
+    const rows = Array.isArray(userSessionBookingsRaw) ? userSessionBookingsRaw : []
+    return rows.some((b: any) => {
+      if (typeof b?.sessionid !== 'number') return false
+      if (b.sessionid !== sessionid) return false
+      const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+      return !s.includes('cancel')
+    })
+  }, [userId, sessionid, userSessionBookingsRaw])
+
   // Mirror courtBooking layout: always expanded, remove toggle arrow logic
   const [courtExpanded] = useState(true)
   const [noteExpanded, setNoteExpanded] = useState(false)
@@ -72,6 +101,10 @@ export default function TrainingSessionBooking() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<TrainingSessionBookingRow | null>(null)
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
+
+  React.useEffect(() => {
+    if (alreadyBooked && confirmModalVisible) setConfirmModalVisible(false)
+  }, [alreadyBooked, confirmModalVisible])
 
   const isFree = session?.entry_fee == null
   const allowedMethods: ('cash' | 'vnpay')[] = useMemo(() => {
@@ -83,10 +116,14 @@ export default function TrainingSessionBooking() {
     return []
   }, [session, isFree])
 
-  const canSubmit = !!session && !!userId && !submitting && !confirmation && (isFree || (!!paymentMethod))
+  const canSubmit = !!session && !!userId && !alreadyBooked && !submitting && !confirmation && (isFree || (!!paymentMethod))
 
   const handleSubmit = useCallback(async () => {
     if (!session || userId == null) return
+    if (alreadyBooked) {
+      setSubmitError('Already booked')
+      return
+    }
     if (!isFree && !paymentMethod) return
     setSubmitting(true)
     setSubmitError(null)
@@ -103,6 +140,15 @@ export default function TrainingSessionBooking() {
         paymentid: payment.paymentid,
         note: noteText || null,
       })
+
+      // Best-effort participant increment
+      try {
+        await adjustTrainingSessionParticipants(session.sessionid, +1)
+        queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+        queryClient.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+      } catch {
+        // Ignore count sync failures to avoid blocking booking
+      }
       
       router.replace({
         pathname: '/event/invoice',
@@ -123,7 +169,7 @@ export default function TrainingSessionBooking() {
     } catch (e) {
       setSubmitError((e as any)?.message || 'Failed booking')
     } finally { setSubmitting(false) }
-  }, [session, userId, paymentMethod, noteText, isFree, router])
+  }, [session, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
 
   const sports = asArray(session?.sport)
   const venues = asArray(session?.venue)
@@ -279,7 +325,9 @@ export default function TrainingSessionBooking() {
         <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
           <View style={styles.bottomBar}>
             <TouchableOpacity style={[styles.confirmUnifiedBtn, !canSubmit && styles.confirmBtnDisabled]} disabled={!canSubmit} onPress={() => setConfirmModalVisible(true)}>
-              <Text style={styles.confirmUnifiedText}>{submitting ? 'Submitting...' : 'Confirm Booking'}</Text>
+              <Text style={styles.confirmUnifiedText}>
+                {alreadyBooked ? 'Already Booked' : (submitting ? 'Submitting...' : 'Confirm Booking')}
+              </Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -302,8 +350,10 @@ export default function TrainingSessionBooking() {
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
                 setConfirmModalVisible(false)
                 handleSubmit()
-              }}>
-                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+              }} disabled={!canSubmit}>
+                <Text style={[styles.modalBtnText, {color: '#fff'}]}>
+                  {alreadyBooked ? 'Already Booked' : 'Confirm'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -1,8 +1,20 @@
-import { courtBookings, eventBookings, trainingSessions } from "@/constants/bookings";
+import {
+  getCourtBookingsByUserId,
+  getEventBookingsByUserId,
+  getTrainingSessionBookingsByUserId,
+  listCourtAvailabilityAll,
+  listCourtInfoCached,
+  listEventsCombinedCached,
+  listEventsCombinedByOrganizerId,
+  listTrainingSessionsCombinedCached,
+  listTrainingSessionsCombinedByCoachId,
+} from "@/lib/backendApi";
+import { useUserId } from "@/hooks/use-user-id";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -10,163 +22,805 @@ type UnifiedBooking = {
   id: string; // Unique identifier for each booking
   title: string;
   status: "Completed" | "Upcoming" | "Cancelled"; // Status of the booking
+  mode: "Booking" | "Hosting";
+  activity: "court" | "event" | "session";
   type: keyof typeof ICONS; // The icon type from ICONS object
+  courtName?: string | null;
   date: string; // Date of the event or booking
   time: string; // Time of the event or booking
-  day: string; // Day of the week (Mon, Tue, etc.)
+  day: string; // Day of the week (e.g., 'M', 'T', 'W')
+  dateTime: Date;
+  startTimestamp?: string | null;
+  endTimestamp?: string | null;
+};
+
+// Function to get the day of the week from a date string
+const getDayOfWeek = (dateString: string) => {
+  const date = new Date(dateString);
+  const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  return days[date.getDay()];
+};
+
+const parseIsoDateLocal = (isoDate: string) => {
+  // isoDate: YYYY-MM-DD
+  const [y, m, d] = isoDate.split('-').map((v) => Number(v));
+  if (!y || !m || !d) return new Date(NaN);
+  return new Date(y, m - 1, d);
+};
+
+const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+
+const toDateStringLocal = (d: Date) => {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const parseTimestampLoose = (ts?: string | null) => {
+  if (!ts || typeof ts !== 'string') return new Date(NaN);
+  // Support both "YYYY-MM-DD HH:mm:ss" and ISO formats.
+  const normalized = ts.includes(' ') && !ts.includes('T') ? ts.replace(' ', 'T') : ts;
+  return new Date(normalized);
+};
+
+const formatDateWeekdayDDMMYYYY = (dt: Date) => {
+  if (Number.isNaN(dt.getTime())) return '';
+  const wd = dt.toLocaleDateString(undefined, { weekday: 'short' });
+  const dd = pad2(dt.getDate());
+  const mm = pad2(dt.getMonth() + 1);
+  const yyyy = dt.getFullYear();
+  return `${wd} ${dd}-${mm}-${yyyy}`;
+};
+
+const formatTimeHHMM = (dt: Date) => {
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+};
+
+const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking["status"] => {
+  const pick = (raw: any): UnifiedBooking["status"] | null => {
+    if (typeof raw !== 'string') return null;
+    const s = raw.toLowerCase();
+    if (s.includes('cancel')) return 'Cancelled';
+    if (s.includes('complete')) return 'Completed';
+    if (s.includes('upcoming')) return 'Upcoming';
+    return null;
+  };
+  const fromStatus = pick(statusRaw);
+  if (fromStatus) return fromStatus;
+  if (dateTime && !Number.isNaN(dateTime.getTime())) return dateTime < new Date() ? 'Completed' : 'Upcoming';
+  return 'Upcoming';
 };
 
 // Merge all bookings into a unified list
-const mergeBookings = () => {
+const mergeBookings = (params: {
+  courtBookings: any[]
+  eventBookings: any[]
+  trainingSessionBookings: any[]
+  eventsById: Map<number, any>
+  sessionsById: Map<number, any>
+  courtNameByAvailabilityId: Map<number, string>
+}): UnifiedBooking[] => {
+  const courtBookings = Array.isArray(params.courtBookings) ? params.courtBookings : [];
+  const eventBookings = Array.isArray(params.eventBookings) ? params.eventBookings : [];
+  const trainingSessionBookings = Array.isArray(params.trainingSessionBookings) ? params.trainingSessionBookings : [];
+
+  const normalizeStatus = (bookingStatusRaw: any, statusRaw?: any, dateTime?: Date): UnifiedBooking["status"] => {
+    const pick = (raw: any): UnifiedBooking["status"] | null => {
+      if (typeof raw !== 'string') return null;
+      const s = raw.toLowerCase();
+      if (s.includes('cancel')) return 'Cancelled';
+      if (s.includes('complete')) return 'Completed';
+      if (s.includes('upcoming')) return 'Upcoming';
+      return null;
+    };
+
+    // Source of truth: bookingstatus column (upcoming/completed/cancelled)
+    const fromBookingStatus = pick(bookingStatusRaw);
+    if (fromBookingStatus) return fromBookingStatus;
+
+    // Backward-compatible fallback
+    const fromStatus = pick(statusRaw);
+    if (fromStatus) return fromStatus;
+
+    // Last resort fallback
+    if (dateTime && !Number.isNaN(dateTime.getTime())) return dateTime < new Date() ? 'Completed' : 'Upcoming';
+    return 'Upcoming';
+  };
+
+  const safeIsoDate = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : '');
+  const safeTime = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 16 ? ts.slice(11, 16) : '');
+
   const allBookings = [
-    ...courtBookings.map((item) => ({
-      id: `court_${item.courtbookingid}`,
-      title: item.court,
-      status: item.status as "Completed" | "Upcoming" | "Cancelled",
-      type: item.type as keyof typeof ICONS,
-      date: item.start_timestamp?.slice(0, 10) || "dd/mm/yy",
-      time: item.start_timestamp?.slice(11, 16) || "hh:mm",
-      day: item.day || "", // Day of the week (if available)
-    })),
-    ...eventBookings.map((item) => ({
-      id: `event_${item.eventbookingid}`,
-      title: item.event,
-      status: item.status as "Completed" | "Upcoming" | "Cancelled",
-      type: item.type as keyof typeof ICONS,
-      date: item.date || "dd/mm/yy",
-      time: item.time || "hh:mm",
-      day: item.day || "", // Day of the week (if available)
-    })),
-    ...trainingSessions.map((item) => ({
-      id: `session_${item.sessionid}`,
-      title: item.sessioninfo,
-      status: item.status as "Completed" | "Upcoming" | "Cancelled",
-      type: item.type as keyof typeof ICONS,
-      date: item.time.slice(0, 10) || "dd/mm/yy",  // Extract date from time field
-      time: item.time.slice(11, 16) || "hh:mm",  // Extract time from time field
-      day: item.day || "", // Day of the week (if available)
-    })),
+    ...courtBookings.map((item) => {
+      const startTs = item.start_timestamp as string | undefined;
+      const endTs = item.end_timestamp as string | undefined;
+      const dateTime = parseTimestampLoose(startTs ?? null);
+      const availabilityId = typeof item.availabilityid === 'number' ? item.availabilityid : NaN;
+      const courtName = Number.isFinite(availabilityId)
+        ? params.courtNameByAvailabilityId.get(availabilityId)
+        : undefined;
+      return {
+        id: `court_${item.courtbookingid}`,
+        title: courtName || `Court Booking #${item.courtbookingid}`,
+        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        mode: 'Booking',
+        activity: 'court',
+        type: 'stadiumCal' as keyof typeof ICONS,
+        date: safeIsoDate(startTs),
+        time: safeTime(startTs),
+        day: startTs ? getDayOfWeek(startTs) : '',
+        dateTime: dateTime,
+        startTimestamp: startTs ?? null,
+        endTimestamp: endTs ?? null,
+      } satisfies UnifiedBooking;
+    }),
+    ...eventBookings.map((item) => {
+      const eventId = typeof item.eventid === 'number' ? item.eventid : NaN;
+      const ev = Number.isFinite(eventId) ? params.eventsById.get(eventId) : undefined;
+      const startTs = (ev?.start_timestamp as string | undefined) ?? (ev?.time as string | undefined) ?? undefined;
+      const endTs = (ev?.end_timestamp as string | undefined) ?? undefined;
+      const dateTime = parseTimestampLoose(startTs ?? null);
+      return {
+        id: `event_${item.eventbookingid}`,
+        title: (ev?.title as string | undefined) || `Event #${item.eventid}`,
+        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        mode: 'Booking',
+        activity: 'event',
+        type: 'starCal' as keyof typeof ICONS,
+        courtName: (ev as any)?.court_name ?? null,
+        date: safeIsoDate(startTs),
+        time: safeTime(startTs),
+        day: startTs ? getDayOfWeek(startTs) : '',
+        dateTime: dateTime,
+        startTimestamp: startTs ?? null,
+        endTimestamp: endTs ?? null,
+      } satisfies UnifiedBooking;
+    }),
+    ...trainingSessionBookings.map((item) => {
+      const sessionId = typeof item.sessionid === 'number' ? item.sessionid : NaN;
+      const sess = Number.isFinite(sessionId) ? params.sessionsById.get(sessionId) : undefined;
+      const startTs = (sess?.start_timestamp as string | undefined) ?? (sess?.time as string | undefined) ?? undefined;
+      const endTs = (sess?.end_timestamp as string | undefined) ?? undefined;
+      const dateTime = parseTimestampLoose(startTs ?? null);
+      return {
+        id: `session_${item.tsbookingid}`,
+        title: (sess?.title as string | undefined) || `Training Session #${item.sessionid}`,
+        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        mode: 'Booking',
+        activity: 'session',
+        type: 'coachCal' as keyof typeof ICONS,
+        courtName: (sess as any)?.court_name ?? null,
+        date: safeIsoDate(startTs),
+        time: safeTime(startTs),
+        day: startTs ? getDayOfWeek(startTs) : '',
+        dateTime: dateTime,
+        startTimestamp: startTs ?? null,
+        endTimestamp: endTs ?? null,
+      } satisfies UnifiedBooking;
+    }),
   ];
 
-  return allBookings;
+  return allBookings.sort((a, b) => {
+    const at = a.dateTime.getTime();
+    const bt = b.dateTime.getTime();
+    if (Number.isNaN(at) && Number.isNaN(bt)) return 0;
+    if (Number.isNaN(at)) return 1;
+    if (Number.isNaN(bt)) return -1;
+    return at - bt;
+  });
 };
 
-// Shuffle for variety demo :)
-const shuffleArray = (array: UnifiedBooking[]) => {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+const mergeHosting = (params: {
+  createdEvents: any[]
+  createdSessions: any[]
+}): UnifiedBooking[] => {
+  const createdEvents = Array.isArray(params.createdEvents) ? params.createdEvents : [];
+  const createdSessions = Array.isArray(params.createdSessions) ? params.createdSessions : [];
+
+  const safeIsoDate = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : '');
+  const safeTime = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 16 ? ts.slice(11, 16) : '');
+
+  const all = [
+    ...createdEvents.map((ev) => {
+      const startTs = (ev?.start_timestamp as string | undefined) ?? (ev?.time as string | undefined) ?? undefined;
+      const endTs = (ev?.end_timestamp as string | undefined) ?? undefined;
+      const dateTime = parseTimestampLoose(startTs ?? null);
+      return {
+        id: `created_event_${ev?.eventid}`,
+        title: (ev?.title as string | undefined) || `Event #${ev?.eventid}`,
+        status: normalizeStatusLoose(ev?.status, dateTime),
+        mode: 'Hosting',
+        activity: 'event',
+        type: 'starCal' as keyof typeof ICONS,
+        courtName: (ev as any)?.court_name ?? null,
+        date: safeIsoDate(startTs),
+        time: safeTime(startTs),
+        day: startTs ? getDayOfWeek(startTs) : '',
+        dateTime,
+        startTimestamp: startTs ?? null,
+        endTimestamp: endTs ?? null,
+      } satisfies UnifiedBooking;
+    }),
+    ...createdSessions.map((s) => {
+      const startTs = (s?.start_timestamp as string | undefined) ?? (s?.time as string | undefined) ?? undefined;
+      const endTs = (s?.end_timestamp as string | undefined) ?? undefined;
+      const dateTime = parseTimestampLoose(startTs ?? null);
+      return {
+        id: `created_session_${s?.sessionid}`,
+        title: (s?.title as string | undefined) || `Training Session #${s?.sessionid}`,
+        status: normalizeStatusLoose(s?.status, dateTime),
+        mode: 'Hosting',
+        activity: 'session',
+        type: 'coachCal' as keyof typeof ICONS,
+        courtName: (s as any)?.court_name ?? null,
+        date: safeIsoDate(startTs),
+        time: safeTime(startTs),
+        day: startTs ? getDayOfWeek(startTs) : '',
+        dateTime,
+        startTimestamp: startTs ?? null,
+        endTimestamp: endTs ?? null,
+      } satisfies UnifiedBooking;
+    }),
+  ];
+
+  return all.sort((a, b) => {
+    const at = a.dateTime.getTime();
+    const bt = b.dateTime.getTime();
+    if (Number.isNaN(at) && Number.isNaN(bt)) return 0;
+    if (Number.isNaN(at)) return 1;
+    if (Number.isNaN(bt)) return -1;
+    return at - bt;
+  });
+};
+
+const getWeekDaysForOffset = (weekOffset: number) => {
+  const days = [] as {
+    dayLetter: string;
+    dateNumber: number;
+    fullDate: string;
+    isToday: boolean;
+  }[];
+
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // Sunday = 0, Monday = 1, etc.
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust to make Monday the first day
+
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - diff + weekOffset * 7);
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + i);
+    days.push({
+      dayLetter: ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i],
+      dateNumber: date.getDate(),
+      fullDate: toDateStringLocal(date),
+      isToday: date.toDateString() === today.toDateString(),
+    });
   }
-  return array;
-};
 
+  return days;
+};
 
 export default function ActivityPage() {
-  const [showAll, setShowAll] = useState(false);
+  const [calendarMode, setCalendarMode] = useState<"Booking" | "Hosting">("Booking");
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedActivity, setSelectedActivity] = useState<UnifiedBooking | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"All" | "Upcoming" | "Completed" | "Cancelled">("All");
+  const [activityKindFilter, setActivityKindFilter] = useState<"All" | "Court" | "Event" | "TS">("All");
+  const [openFilter, setOpenFilter] = useState<null | 'status' | 'activity' | 'type'>(null);
+
+  const statusLabel = statusFilter === 'All' ? 'Status' : statusFilter;
+  const activityLabel = activityKindFilter === 'All' ? 'Activity' : activityKindFilter;
+  const typeLabel = calendarMode;
+  
   const router = useRouter();
-  let data = mergeBookings();  // Unified bookings data
+  const queryClient = useQueryClient();
+  const { data: userId, isLoading: userIdLoading, error: userIdError } = useUserId();
 
-  // Shuffle the data to display random results
-  data = shuffleArray(data);
+  // Ensure bookings refresh when returning to this tab after creating a booking.
+  useFocusEffect(
+    useCallback(() => {
+      if (typeof userId !== 'number') return;
+      queryClient.invalidateQueries({ queryKey: ['courtBookings', userId] });
+      queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] });
+      queryClient.invalidateQueries({ queryKey: ['trainingSessionBookings', userId] });
 
-  const screenWidth = Dimensions.get("window").width; // Get screen width for calendar layout
+      // Refresh Hosting mode data as well.
+	  queryClient.invalidateQueries({ queryKey: ['createdEventsCombined', userId] });
+	  queryClient.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] });
+    }, [queryClient, userId])
+  );
 
-  // Getting the status styles for different states
+  const { data: courtBookingsRaw, isLoading: courtLoading, error: courtError } = useQuery({
+    queryKey: ["courtBookings", userId],
+    queryFn: () => getCourtBookingsByUserId(userId as number),
+    enabled: typeof userId === 'number',
+  });
+
+  const { data: eventBookingsRaw, isLoading: eventLoading, error: eventError } = useQuery({
+    queryKey: ["eventBookings", userId],
+    queryFn: () => getEventBookingsByUserId(userId as number),
+    enabled: typeof userId === 'number',
+  });
+
+  const { data: trainingSessionBookingsRaw, isLoading: trainingLoading, error: trainingError } = useQuery({
+    queryKey: ["trainingSessionBookings", userId],
+    queryFn: () => getTrainingSessionBookingsByUserId(userId as number),
+    enabled: typeof userId === 'number',
+  });
+
+  const { data: createdEventsCombinedRaw, isLoading: createdEventsLoading, error: createdEventsError } = useQuery({
+    queryKey: ["createdEventsCombined", userId],
+    queryFn: () => listEventsCombinedByOrganizerId(userId as number),
+    enabled: calendarMode === 'Hosting' && typeof userId === 'number',
+    staleTime: 15_000,
+  });
+
+  const { data: createdTrainingSessionsCombinedRaw, isLoading: createdSessionsLoading, error: createdSessionsError } = useQuery({
+    queryKey: ["createdTrainingSessionsCombined", userId],
+    queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
+    enabled: calendarMode === 'Hosting' && typeof userId === 'number',
+    staleTime: 15_000,
+  });
+
+  const courtBookingsData = useMemo(() => (Array.isArray(courtBookingsRaw) ? courtBookingsRaw : []), [courtBookingsRaw]);
+  const eventBookingsData = useMemo(() => (Array.isArray(eventBookingsRaw) ? eventBookingsRaw : []), [eventBookingsRaw]);
+  const trainingSessionBookingsData = useMemo(
+    () => (Array.isArray(trainingSessionBookingsRaw) ? trainingSessionBookingsRaw : []),
+    [trainingSessionBookingsRaw]
+  );
+
+  const { data: eventsCombinedRaw } = useQuery({
+    queryKey: ["eventsCombined"],
+    queryFn: () => listEventsCombinedCached(),
+    enabled: eventBookingsData.length > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: sessionsCombinedRaw } = useQuery({
+    queryKey: ["trainingSessionsCombined"],
+    queryFn: () => listTrainingSessionsCombinedCached(),
+    enabled: trainingSessionBookingsData.length > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: courtAvailabilityRaw } = useQuery({
+    queryKey: ["courtAvailabilityAll"],
+    queryFn: () => listCourtAvailabilityAll(),
+    enabled: courtBookingsData.length > 0,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: courtInfoRaw } = useQuery({
+    queryKey: ["courtInfoAll"],
+    queryFn: () => listCourtInfoCached(),
+    enabled: courtBookingsData.length > 0,
+    staleTime: 5 * 60_000,
+  });
+
+  const eventsById = useMemo(() => {
+    const m = new Map<number, any>();
+    if (Array.isArray(eventsCombinedRaw)) {
+      for (const e of eventsCombinedRaw) {
+        if (typeof e?.eventid === 'number') m.set(e.eventid, e);
+      }
+    }
+    return m;
+  }, [eventsCombinedRaw]);
+
+  const sessionsById = useMemo(() => {
+    const m = new Map<number, any>();
+    if (Array.isArray(sessionsCombinedRaw)) {
+      for (const s of sessionsCombinedRaw) {
+        if (typeof s?.sessionid === 'number') m.set(s.sessionid, s);
+      }
+    }
+    return m;
+  }, [sessionsCombinedRaw]);
+
+  const courtNameByAvailabilityId = useMemo(() => {
+    const availabilityById = new Map<number, any>();
+    if (Array.isArray(courtAvailabilityRaw)) {
+      for (const a of courtAvailabilityRaw) {
+        if (typeof a?.availabilityid === 'number') availabilityById.set(a.availabilityid, a);
+      }
+    }
+    const courtInfoByCourtId = new Map<number, any>();
+    if (Array.isArray(courtInfoRaw)) {
+      for (const ci of courtInfoRaw) {
+        if (typeof ci?.courtid === 'number') courtInfoByCourtId.set(ci.courtid, ci);
+      }
+    }
+    const out = new Map<number, string>();
+    for (const booking of courtBookingsData) {
+      const availabilityId = booking?.availabilityid;
+      if (typeof availabilityId !== 'number') continue;
+      const av = availabilityById.get(availabilityId);
+      const courtid = av?.courtid;
+      const name = typeof courtid === 'number' ? (courtInfoByCourtId.get(courtid)?.name as string | undefined) : undefined;
+      if (name) out.set(availabilityId, name);
+    }
+    return out;
+  }, [courtAvailabilityRaw, courtInfoRaw, courtBookingsData]);
+
+  const data = useMemo(
+    () =>
+      mergeBookings({
+        courtBookings: courtBookingsData,
+        eventBookings: eventBookingsData,
+        trainingSessionBookings: trainingSessionBookingsData,
+        eventsById,
+        sessionsById,
+        courtNameByAvailabilityId,
+      }),
+    [courtBookingsData, eventBookingsData, trainingSessionBookingsData, eventsById, sessionsById, courtNameByAvailabilityId]
+  );
+
+  const hostingData = useMemo(
+    () =>
+      mergeHosting({
+        createdEvents: createdEventsCombinedRaw as any,
+        createdSessions: createdTrainingSessionsCombinedRaw as any,
+      }),
+    [createdEventsCombinedRaw, createdTrainingSessionsCombinedRaw]
+  );
+
+  const activeData = calendarMode === 'Hosting' ? hostingData : data;
+  
+  const weekDays = useMemo(() => getWeekDaysForOffset(weekOffset), [weekOffset]);
+
+  const monthLabel = useMemo(() => {
+    if (!weekDays.length) return '';
+    const start = parseIsoDateLocal(weekDays[0].fullDate);
+    const end = parseIsoDateLocal(weekDays[weekDays.length - 1].fullDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+
+    const startMonth = start.toLocaleString(undefined, { month: 'long' });
+    const endMonth = end.toLocaleString(undefined, { month: 'long' });
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+
+    if (start.getMonth() === end.getMonth() && startYear === endYear) {
+      return start.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    }
+    if (startYear === endYear) {
+      return `${startMonth} - ${endMonth} ${startYear}`;
+    }
+    return `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
+  }, [weekDays]);
+
+  const isLoading =
+    userIdLoading ||
+    (calendarMode === 'Hosting'
+      ? (createdEventsLoading || createdSessionsLoading)
+      : (courtLoading || eventLoading || trainingLoading));
+
   const getStatusStyle = (status: "Completed" | "Upcoming" | "Cancelled") => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return styles.completed;
-      case "upcoming":
-        return styles.upcoming;
-      case "cancelled":
-        return styles.cancelled;
-      default:
-        return {};
+    switch (status) {
+      case "Completed": return styles.completed;
+      case "Upcoming": return styles.upcoming;
+      case "Cancelled": return styles.cancelled;
+      default: return {};
     }
   };
 
-  // Render each item in the Activity List
-  const renderItem = ({ item }: { item: UnifiedBooking }) => (
-    <View style={styles.eventItem}>
-      {/* Render the icon dynamically */}
+  const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed';
+
+  const renderRecord = (item: UnifiedBooking) => (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() =>
+        router.push({
+          pathname: "/event/details",
+          params: { id: item.id },
+        })
+      }
+      style={styles.eventItem}
+    >
       <Image
-        source={ICONS[item.type]} // Dynamically pulling the icon from the ICONS object
-        style={[styles.eventImage, { tintColor: ICONS[item.type]?.color }]} // Apply color dynamically
+        source={ICONS[item.type]}
+        style={[
+          styles.eventImage,
+          { tintColor: ICONS[item.type]?.color },
+        ]}
       />
       <View style={styles.eventDetails}>
-        <Text style={styles.eventTitle}>{item.title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.eventTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <View style={[styles.statusPill, getStatusStyle(item.status)]}>
+            <Text style={styles.statusText}>{item.status}</Text>
+          </View>
+        </View>
+
         <Text style={styles.eventTime}>
-          Date: {item.date}, {item.time} - {item.day || "No Day Available"} {/* Show the assigned day */}
+          <Text style={styles.eventTimeLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || 'Unknown'}
         </Text>
-        <TouchableOpacity>
-          <Text style={styles.detailsText}>details</Text>
-        </TouchableOpacity>
+
+        {(item.activity === 'event' || item.activity === 'session') && (
+          <Text style={styles.eventTime}>
+            <Text style={styles.eventTimeLabel}>Court:</Text> {item.courtName || 'Unknown'}
+          </Text>
+        )}
+
+        <Text style={styles.eventTime}>
+          <Text style={styles.eventTimeLabel}>Time:</Text>{" "}
+          {(() => {
+            const start = parseTimestampLoose(item.startTimestamp ?? null);
+            const end = parseTimestampLoose(item.endTimestamp ?? null);
+            const startText = formatTimeHHMM(start);
+            const endText = formatTimeHHMM(end);
+            if (startText && endText) return `${startText} - ${endText}`;
+            if (startText) return startText;
+            return 'Unknown';
+          })()}
+        </Text>
       </View>
-      {/* Status Box */}
-      <View style={[styles.statusBox, getStatusStyle(item.status)]}>
-        <Text style={styles.statusText}>{item.status}</Text>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
+
+  const filteredData = activeData.filter((item) => {
+    if (statusFilter !== 'All' && item.status !== statusFilter) return false;
+
+    if (activityKindFilter !== 'All') {
+      if (activityKindFilter === 'Court' && item.activity !== 'court') return false;
+      if (activityKindFilter === 'Event' && item.activity !== 'event') return false;
+      if (activityKindFilter === 'TS' && item.activity !== 'session') return false;
+    }
+
+    return true;
+  });
+
+  if (isLoading) {
+    return (
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" />
+        </SafeAreaView>
+    )
+  }
+
+  const loadError = userIdError ||
+    (calendarMode === 'Hosting'
+      ? (createdEventsError || createdSessionsError)
+      : (courtError || eventError || trainingError));
+  if (loadError) {
+    return (
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: '#F9F9F9' }}>
+        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={{ marginTop: 10, color: '#DC3545' }}>
+          Failed to load activity records. Check Metro logs for request details.
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F9F9" }}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Activity</Text>
-        <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/event/history")}> 
+        <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/event/history")}>
           <View style={styles.historyButtonContainer}>
-            <Image
-              source={ICONS.clock} // History Icon
-              style={styles.historyIcon}
-            />
+            <Image source={ICONS.clock} style={styles.historyIcon} />
             <Text style={styles.historyText}>History</Text>
           </View>
         </TouchableOpacity>
       </View>
 
-      {/* Horizontal Line (divider) */}
       <View style={styles.divider} />
 
-      {/* Ongoing Activities Calendar */}
-      <View style={styles.calendarContainer}>
-        <Text style={styles.subHeader}>Ongoing activities</Text>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.calendarContainer}>
+          <Text style={styles.monthHeader}>{monthLabel || 'Calendar'}</Text>
+          <View style={styles.calendarControlsRow}>
+            <TouchableOpacity
+              disabled={weekOffset <= -2}
+              onPress={() => setWeekOffset((w) => (w <= -2 ? w : w - 1))}
+              style={[styles.weekNavBtn, weekOffset <= -2 && styles.weekNavBtnDisabled]}
+            >
+              <Image source={ICONS.arrowright} style={[styles.weekNavIcon, { transform: [{ rotate: '180deg' }] }]} />
+            </TouchableOpacity>
 
-        {/* Calendar - 7 days view */}
-        <View style={styles.calendar}>
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, index) => (
-            <View key={index} style={styles.dayContainer}>
-              <Text style={styles.dayText}>{day}</Text>
-              <View style={styles.bookingsContainer}>
-                {data
-                  .filter((item) => item.day === day) // Filter bookings by day
-                  .map((booking, index) => (
-                    <Image
-                      key={index}
-                      source={ICONS[booking.type]} // Dynamic icon based on type
-                      style={styles.bookingIcon}
-                    />
-                  ))}
-              </View>
+            <View style={styles.modeSegmentContainer}>
+              <TouchableOpacity
+                onPress={() => {
+                  setCalendarMode('Booking');
+                  setSelectedActivity(null);
+                }}
+                style={[styles.modeSegment, calendarMode === 'Booking' && styles.modeSegmentActive]}
+              >
+                <Text
+                  style={[styles.modeSegmentText, calendarMode === 'Booking' && styles.modeSegmentTextActive]}
+                >
+                  Booking
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setCalendarMode('Hosting');
+                  setSelectedActivity(null);
+                }}
+                style={[styles.modeSegment, calendarMode === 'Hosting' && styles.modeSegmentActive]}
+              >
+                <Text
+                  style={[styles.modeSegmentText, calendarMode === 'Hosting' && styles.modeSegmentTextActive]}
+                >
+                  Hosting
+                </Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      </View>
 
-      {/* Activity Records */}
-      <View style={styles.activityRecordsContainer}>
-        <View style={styles.recordsHeader}>
-          <Text style={styles.subHeader}>Activity Records</Text>
-          <TouchableOpacity onPress={() => setShowAll(!showAll)}>
-            <Text style={styles.viewAllText}>{showAll ? "Collapse" : "View All"}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              disabled={weekOffset >= 2}
+              onPress={() => setWeekOffset((w) => (w >= 2 ? w : w + 1))}
+              style={[styles.weekNavBtn, weekOffset >= 2 && styles.weekNavBtnDisabled]}
+            >
+              <Image source={ICONS.arrowright} style={styles.weekNavIcon} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.calendar}>
+            {weekDays.map((dayInfo, index) => (
+              <View key={index} style={[styles.dayContainer, dayInfo.isToday && styles.todayContainer]}>
+                <View style={[styles.dayHeader, dayInfo.isToday && styles.todayHeader]}>
+                  <Text style={styles.dateText}>{dayInfo.dateNumber}</Text>
+                  <Text style={styles.dayText}>{dayInfo.dayLetter}</Text>
+                </View>
+                <View style={styles.calendarDaySeparator} />
+                <View style={styles.bookingsContainer}>
+                  {activeData
+                    .filter(item => item.date === dayInfo.fullDate)
+                    .map((booking, idx) => (
+                      <TouchableOpacity
+                        key={booking.id}
+                        onPress={() =>
+                          setSelectedActivity((prev) => (prev?.id === booking.id ? null : booking))
+                        }
+                      >
+                        <Image
+                          source={ICONS[booking.type]}
+                          style={[styles.bookingIcon, isFadedStatus(booking.status) && styles.fadedIcon]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
-        <FlatList
-          data={showAll ? data : data.slice(0, 7)} // Show limited items unless "View All" is active
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id} // Using unique id
-        />
-      </View>
+
+        <View style={styles.upcomingSection}>
+          <View style={styles.upcomingHeader}>
+            <Text style={styles.subHeader}>Selected Record</Text>
+          </View>
+          {selectedActivity ? (
+            renderRecord(selectedActivity)
+          ) : (
+            <View style={{ paddingVertical: 6 }}>
+              <Text style={{ color: '#555' }}>Tap an icon to preview.</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.activityRecordsContainer}>
+          <Text style={styles.subHeader}>Activity Records</Text>
+
+          <View style={styles.expandFiltersContainer}>
+            <View style={styles.dropdownBarWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.dropdownBarRow}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setOpenFilter((v) => (v === 'status' ? null : 'status'))}
+                  style={[styles.dropdownTrigger, openFilter === 'status' && styles.dropdownTriggerActive]}
+                >
+                  <View style={styles.dropdownTriggerContent}>
+                    <Text style={styles.dropdownTriggerText}>{statusLabel}</Text>
+                    <Image
+                      source={ICONS.arrowright}
+                      style={[styles.dropdownCaret, openFilter === 'status' && styles.dropdownCaretOpen]}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setOpenFilter((v) => (v === 'activity' ? null : 'activity'))}
+                  style={[styles.dropdownTrigger, openFilter === 'activity' && styles.dropdownTriggerActive]}
+                >
+                  <View style={styles.dropdownTriggerContent}>
+                    <Text style={styles.dropdownTriggerText}>{activityLabel}</Text>
+                    <Image
+                      source={ICONS.arrowright}
+                      style={[styles.dropdownCaret, openFilter === 'activity' && styles.dropdownCaretOpen]}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setOpenFilter((v) => (v === 'type' ? null : 'type'))}
+                  style={[styles.dropdownTrigger, openFilter === 'type' && styles.dropdownTriggerActive]}
+                >
+                  <View style={styles.dropdownTriggerContent}>
+                    <Text style={styles.dropdownTriggerText}>{typeLabel}</Text>
+                    <Image
+                      source={ICONS.arrowright}
+                      style={[styles.dropdownCaret, openFilter === 'type' && styles.dropdownCaretOpen]}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </ScrollView>
+
+              {openFilter !== null && (
+                <View style={styles.dropdownMenu}>
+                  {(openFilter === 'status'
+                    ? (['All', 'Upcoming', 'Completed', 'Cancelled'] as const).map((opt) => ({
+                        key: opt,
+                        label: opt,
+                        selected: statusFilter === opt,
+                        onPress: () => {
+                          setStatusFilter(opt);
+                          setOpenFilter(null);
+                        },
+                      }))
+                    : openFilter === 'activity'
+                      ? (['All', 'Court', 'Event', 'TS'] as const).map((opt) => ({
+                          key: opt,
+                          label: opt,
+                          selected: activityKindFilter === opt,
+                          onPress: () => {
+                            setActivityKindFilter(opt);
+                            setOpenFilter(null);
+                          },
+                        }))
+                      : (['Booking', 'Hosting'] as const).map((opt) => ({
+                          key: opt,
+                          label: opt,
+                          selected: calendarMode === opt,
+                          onPress: () => {
+                            setCalendarMode(opt);
+                            setSelectedActivity(null);
+                            setOpenFilter(null);
+                          },
+                        }))
+                  ).map((row) => (
+                    <Pressable
+                      key={row.key}
+                      onPress={row.onPress}
+                      style={({ pressed }) => [
+                        styles.dropdownItem,
+                        row.selected && styles.dropdownItemSelected,
+                        pressed && styles.dropdownItemPressed,
+                      ]}
+                    >
+                      <Text style={styles.dropdownItemText}>{row.label}</Text>
+                      <View style={styles.tickBox}>
+                        {row.selected ? <Text style={styles.tickText}>✓</Text> : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {openFilter !== null && (
+              <Pressable style={styles.dropdownOverlay} onPress={() => setOpenFilter(null)} />
+            )}
+          </View>
+
+          {filteredData.length === 0 ? (
+            <View style={{ paddingVertical: 20 }}>
+              <Text style={{ color: '#555' }}>No activity records found.</Text>
+            </View>
+          ) : (
+            filteredData.map((item) => <View key={item.id}>{renderRecord(item)}</View>)
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -186,13 +840,13 @@ const styles = StyleSheet.create({
   historyButton: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,  
+    padding: 8,
   },
   historyButtonContainer: {
-    backgroundColor: "#a9a9a9",  
+    backgroundColor: "#a9a9a9",
     paddingHorizontal: 15,
     paddingVertical: 8,
-    borderRadius: 30,  
+    borderRadius: 30,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -200,15 +854,15 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     marginRight: 5,
-    tintColor: "#fff", 
+    tintColor: "#fff",
   },
   historyText: {
     fontSize: 16,
-    color: "#fff", 
+    color: "#fff",
   },
   divider: {
     height: 1,
-    backgroundColor: "#E0E0E0",  
+    backgroundColor: "#E0E0E0",
     marginVertical: 10,
   },
   calendarContainer: {
@@ -223,19 +877,50 @@ const styles = StyleSheet.create({
   },
   dayContainer: {
     alignItems: "center",
+    flex: 1,
+  },
+  todayContainer: {
+    backgroundColor: '#e0f7fa',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  dayHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    minWidth: 34,
+  },
+  todayHeader: {
+    backgroundColor: '#e0f7fa',
   },
   dayText: {
+    fontSize: 13,
+    color: "#444",
+  },
+  dateText: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#000",
+    fontWeight: 'bold',
+    color: "#111",
+  },
+  calendarDaySeparator: {
+    height: 1,
+    width: '80%',
+    backgroundColor: '#E0E0E0',
+    marginVertical: 5,
   },
   bookingsContainer: {
     marginTop: 5,
+    minHeight: 50,
   },
   bookingIcon: {
     width: 30,
     height: 30,
-    margin: 5,
+    marginVertical: 2,
+  },
+  fadedIcon: {
+    opacity: 0.35,
   },
   activityRecordsContainer: {
     flex: 1,
@@ -243,6 +928,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    position: 'relative',
   },
   recordsHeader: {
     flexDirection: "row",
@@ -254,6 +940,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  monthHeader: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111',
+  },
   viewAllText: {
     fontSize: 16,
     color: "#007BFF",
@@ -262,7 +953,7 @@ const styles = StyleSheet.create({
   },
   eventItem: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: 15,
     backgroundColor: "#F5F5F5",
     borderRadius: 10,
@@ -273,34 +964,38 @@ const styles = StyleSheet.create({
     height: 50,
     marginRight: 15,
   },
-  statusIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginRight: 10,
-  },
   eventDetails: {
     flex: 1,
   },
   eventTitle: {
     fontSize: 16,
     fontWeight: "bold",
+    flex: 1,
+    flexShrink: 1,
+    paddingRight: 6,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 6,
   },
   eventTime: {
     fontSize: 14,
     color: "#555",
     marginBottom: 5,
   },
-  detailsText: {
-    fontSize: 14,
-    color: "#007BFF",
-    textDecorationLine: 'underline',
+  eventTimeLabel: {
+    fontWeight: '900',
+    color: '#111',
   },
-  statusBox: {
+  statusPill: {
     paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: 5,
-    alignSelf: "flex-start",
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   statusText: {
     fontSize: 12,
@@ -315,5 +1010,251 @@ const styles = StyleSheet.create({
   },
   cancelled: {
     backgroundColor: "#DC3545",
+  },
+  calendarControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+    gap: 10,
+  },
+  weekNavBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EDEDED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekNavBtnDisabled: {
+    opacity: 0.35,
+  },
+  weekNavIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#333',
+    resizeMode: 'contain',
+  },
+  modeSegmentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 999,
+    padding: 4,
+  },
+  modeSegment: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeSegmentActive: {
+    backgroundColor: '#007BFF',
+  },
+  modeSegmentText: {
+    color: '#111',
+    fontWeight: '700',
+  },
+  modeSegmentTextActive: {
+    color: '#FFF',
+  },
+  upcomingSection: {
+    padding: 20,
+    backgroundColor: '#FFF',
+    marginBottom: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  upcomingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  activityFilterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 4,
+    marginTop: 10,
+    marginBottom: 6,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+  },
+  filterTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 999,
+    marginHorizontal: 4,
+  },
+  activeFilterTab: {
+    backgroundColor: '#007BFF',
+  },
+  filterTabText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  activeFilterTabText: {
+    color: '#FFF',
+  },
+
+  expandFiltersContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  dropdownBarWrapper: {
+    position: 'relative',
+    zIndex: 50,
+  },
+  dropdownBarRow: {
+    gap: 10,
+    paddingVertical: 2,
+    paddingRight: 2,
+  },
+  dropdownTrigger: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E3E3E3',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minWidth: 130,
+  },
+  dropdownTriggerActive: {
+    borderColor: '#007BFF',
+  },
+  dropdownTriggerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dropdownTriggerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111',
+    flexShrink: 1,
+  },
+  dropdownCaret: {
+    width: 16,
+    height: 16,
+    tintColor: '#444',
+    resizeMode: 'contain',
+    transform: [{ rotate: '90deg' }],
+  },
+  dropdownCaretOpen: {
+    transform: [{ rotate: '-90deg' }],
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 40,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    width: 240,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E3E3E3',
+    overflow: 'hidden',
+    elevation: 6,
+    zIndex: 60,
+  },
+  dropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownItemPressed: {
+    backgroundColor: '#F3F3F3',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#F3F3F3',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#111',
+    fontWeight: '700',
+  },
+  tickBox: {
+    width: 18,
+    alignItems: 'flex-end',
+  },
+  tickText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111',
+  },
+  expandFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+  },
+  expandFilterLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111',
+  },
+  expandFilterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  expandChevron: {
+    width: 16,
+    height: 16,
+    tintColor: '#333',
+    resizeMode: 'contain',
+    transform: [{ rotate: '0deg' }],
+  },
+  selectedChip: {
+    backgroundColor: '#E7E7E7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  selectedChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111',
+  },
+  expandOptionsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 4,
+    marginTop: 10,
+  },
+  optionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+  },
+  optionChipActive: {
+    backgroundColor: '#007BFF',
+  },
+  optionChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#333',
+  },
+  optionChipTextActive: {
+    color: '#FFF',
   },
 });

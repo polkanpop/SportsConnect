@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert, rest_delete, rest_insert
+from ..db import rest_select, rest_upsert, rest_delete, rest_insert, rest_update
 from ..auth import get_current_user
 from fastapi_cache.decorator import cache
 from typing import Any, Dict
@@ -238,3 +238,36 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
             pass
         raise HTTPException(status_code=500, detail="Eventinfo insert did not return representation")
     return {"event": event_row, "eventinfo": info_resp[0]}
+
+
+@router.patch("/{eventid}", response_model=dict)
+def update_event(eventid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Patch fields on an event (creator/organizer).
+
+    Used by the mobile app to cancel a created upcoming event by setting status.
+    """
+    try:
+        existing = rest_select("events", "eventid, organizerid", filters={PRIMARY_KEY: eventid}, single=True)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        try:
+            auth_userid = int(current_user)
+            if int(existing.get("organizerid")) != auth_userid:
+                raise HTTPException(status_code=403, detail="User does not own this event")
+        except ValueError:
+            pass
+
+        payload = dict(body or {})
+        payload.pop(PRIMARY_KEY, None)
+        if not payload:
+            raise HTTPException(status_code=422, detail="No fields to update")
+
+        resp = rest_update("events", {PRIMARY_KEY: eventid}, payload)
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        return payload
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))

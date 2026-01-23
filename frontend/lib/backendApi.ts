@@ -391,20 +391,77 @@ export async function createPayment(payload: { status: 'paid'|'pending'|'failed'
 	return request('/payments', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createPayment' }) as Promise<PaymentRow>
 }
 
-export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null }
+export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null; bookingstatus?: string }
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
 }
 
+export async function getCourtBooking(courtbookingid: number): Promise<CourtBookingRow | null> {
+	if (courtbookingid == null) throw new Error('courtbookingid required')
+	try {
+		const row = await request(`/courtbookings/${encodeURIComponent(courtbookingid)}`, { debugLabel: 'getCourtBooking' })
+		return (row as CourtBookingRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function updateCourtBooking(courtbookingid: number, data: Partial<CourtBookingRow>) {
+	if (courtbookingid == null) throw new Error('courtbookingid required')
+	return request(`/courtbookings/${encodeURIComponent(courtbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateCourtBooking'
+	}) as Promise<CourtBookingRow>
+}
+
 // ---- Event & Training Session Bookings (mirror court booking create pattern) ----
-export type EventBookingRow = { eventbookingid: number; eventid: number; userid: number; status: string; paymentid?: number | null; note?: string | null }
+export type EventBookingRow = { eventbookingid: number; eventid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createEventBooking(payload: Omit<EventBookingRow, 'eventbookingid'>) {
 	return request('/eventbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createEventBooking' }) as Promise<EventBookingRow>
 }
 
-export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null }
+export async function getEventBooking(eventbookingid: number): Promise<EventBookingRow | null> {
+	if (eventbookingid == null) throw new Error('eventbookingid required')
+	try {
+		const row = await request(`/eventbookings/${encodeURIComponent(eventbookingid)}`, { debugLabel: 'getEventBooking' })
+		return (row as EventBookingRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function updateEventBooking(eventbookingid: number, data: Partial<EventBookingRow>) {
+	if (eventbookingid == null) throw new Error('eventbookingid required')
+	return request(`/eventbookings/${encodeURIComponent(eventbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateEventBooking'
+	}) as Promise<EventBookingRow>
+}
+
+export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createTrainingSessionBooking(payload: Omit<TrainingSessionBookingRow, 'tsbookingid'>) {
 	return request('/tsbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createTrainingSessionBooking' }) as Promise<TrainingSessionBookingRow>
+}
+
+export async function getTrainingSessionBooking(tsbookingid: number): Promise<TrainingSessionBookingRow | null> {
+	if (tsbookingid == null) throw new Error('tsbookingid required')
+	try {
+		const row = await request(`/tsbookings/${encodeURIComponent(tsbookingid)}`, { debugLabel: 'getTrainingSessionBooking' })
+		return (row as TrainingSessionBookingRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function updateTrainingSessionBooking(tsbookingid: number, data: Partial<TrainingSessionBookingRow>) {
+	if (tsbookingid == null) throw new Error('tsbookingid required')
+	return request(`/tsbookings/${encodeURIComponent(tsbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateTrainingSessionBooking'
+	}) as Promise<TrainingSessionBookingRow>
 }
 
 // Prepare delete endpoint for future UI integration (optimistic removal supported in hook)
@@ -418,6 +475,19 @@ export async function listCourtBookings(params?: { userid?: number }) {
 	if (params?.userid !== undefined) qs.push(`userid=${encodeURIComponent(params.userid)}`)
 	const path = `/courtbookings${qs.length ? '?' + qs.join('&') : ''}`
 	return request(path, { debugLabel: 'listCourtBookings' }) as Promise<CourtBookingRow[]>
+}
+
+// New functions to fetch bookings by user ID
+export async function getCourtBookingsByUserId(userId: number) {
+	return request(`/courtbookings?userid=${userId}`, { debugLabel: 'getCourtBookingsByUserId' })
+}
+
+export async function getEventBookingsByUserId(userId: number) {
+	return request(`/eventbookings?userid=${userId}`, { debugLabel: 'getEventBookingsByUserId' })
+}
+
+export async function getTrainingSessionBookingsByUserId(userId: number) {
+	return request(`/tsbookings?userid=${userId}`, { debugLabel: 'getTrainingSessionBookingsByUserId' })
 }
 
 // --- Debug identity (backend /api/debug/identity) ---
@@ -434,6 +504,20 @@ export async function debugIdentity(): Promise<{ token_subject: string; numeric_
 export async function listCourtAvailability(courtid: number) {
 	const path = `/courtavailability?courtid=${encodeURIComponent(courtid)}`
 	return request(path, { debugLabel: 'listCourtAvailability' }) as Promise<any[]>
+}
+
+export type CourtAvailabilityRow = {
+	availabilityid: number
+	courtid: number
+	status: string
+	start_time: string
+	end_time: string
+	booking_date: any
+}
+
+export async function listCourtAvailabilityAll(): Promise<CourtAvailabilityRow[]> {
+	const data = await request('/courtavailability', { debugLabel: 'listCourtAvailabilityAll' })
+	return Array.isArray(data) ? (data as CourtAvailabilityRow[]) : []
 }
 
 // ---- Event & Training Session Aggregation Helpers ----
@@ -476,7 +560,87 @@ export type CombinedEvent = {
 }
 
 export type TrainingSessionRow = { sessionid: number; time: string; courtbookingid: number; status?: string; coachid: number }
-export type TrainingSessionInfoMeta = { sessioninfoid: number; sessionid: number; numberofpeople: number; description: string; title: string }
+
+export async function getEvent(eventid: number): Promise<EventRow | null> {
+	if (eventid == null) throw new Error('eventid required')
+	try {
+		const row = await request(`/events/${encodeURIComponent(eventid)}`, { debugLabel: 'getEvent' })
+		return (row as EventRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function updateEvent(eventid: number, data: Partial<EventRow>) {
+	if (eventid == null) throw new Error('eventid required')
+	return request(`/events/${encodeURIComponent(eventid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateEvent'
+	}) as Promise<EventRow>
+}
+
+export async function getTrainingSession(sessionid: number): Promise<TrainingSessionRow | null> {
+	if (sessionid == null) throw new Error('sessionid required')
+	try {
+		const row = await request(`/trainingsessions/${encodeURIComponent(sessionid)}`, { debugLabel: 'getTrainingSession' })
+		return (row as TrainingSessionRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function updateTrainingSession(sessionid: number, data: Partial<TrainingSessionRow>) {
+	if (sessionid == null) throw new Error('sessionid required')
+	return request(`/trainingsessions/${encodeURIComponent(sessionid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateTrainingSession'
+	}) as Promise<TrainingSessionRow>
+}
+
+export async function getEventInfoByEventId(eventid: number): Promise<EventInfoMeta | null> {
+	if (eventid == null) throw new Error('eventid required')
+	const rows = await request(`/eventinfo?eventid=${encodeURIComponent(eventid)}`, { debugLabel: 'getEventInfoByEventId' })
+	if (Array.isArray(rows) && rows.length) return rows[0] as EventInfoMeta
+	return null
+}
+
+export async function adjustEventParticipants(eventid: number, delta: number): Promise<EventInfoMeta> {
+	if (eventid == null) throw new Error('eventid required')
+	if (!Number.isFinite(delta)) throw new Error('delta must be a number')
+	return request(`/eventinfo/adjust/${encodeURIComponent(eventid)}?delta=${encodeURIComponent(delta)}`, {
+		method: 'POST',
+		debugLabel: 'adjustEventParticipants'
+	}) as Promise<EventInfoMeta>
+}
+
+export async function getTrainingSessionInfoBySessionId(sessionid: number): Promise<TrainingSessionInfoMeta | null> {
+	if (sessionid == null) throw new Error('sessionid required')
+	const rows = await request(`/trainingsessioninfo?sessionid=${encodeURIComponent(sessionid)}`, { debugLabel: 'getTrainingSessionInfoBySessionId' })
+	if (Array.isArray(rows) && rows.length) return rows[0] as TrainingSessionInfoMeta
+	return null
+}
+
+export async function adjustTrainingSessionParticipants(sessionid: number, delta: number): Promise<TrainingSessionInfoMeta> {
+	if (sessionid == null) throw new Error('sessionid required')
+	if (!Number.isFinite(delta)) throw new Error('delta must be a number')
+	return request(`/trainingsessioninfo/adjust/${encodeURIComponent(sessionid)}?delta=${encodeURIComponent(delta)}`, {
+		method: 'POST',
+		debugLabel: 'adjustTrainingSessionParticipants'
+	}) as Promise<TrainingSessionInfoMeta>
+}
+export type TrainingSessionInfoMeta = {
+	sessioninfoid: number
+	sessionid: number
+	numberofpeople: number
+	description: string
+	title: string
+	entry_fee?: number | null
+	support_payment_method?: string | null
+	participants_cap?: number | null
+	join_status?: boolean | null
+}
 export type CombinedTrainingSession = {
 	sessionid: number
 	time?: string
@@ -487,6 +651,8 @@ export type CombinedTrainingSession = {
 	title?: string
 	description?: string | null
 	numberofpeople?: number | null
+	start_timestamp?: string | null
+	end_timestamp?: string | null
 	courtid?: number
 	address?: string
 	court_name?: string | null
@@ -537,6 +703,71 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
 	// Batch userinfo single call then map by userid
+	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
+	const nameByUserId = new Map<number, string | null>()
+	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
+
+	return events.map(e => {
+		const booking = bookingById.get(e.courtbookingid)
+		const availability = booking ? availabilityById.get(booking.availabilityid) : null
+		const courtid = availability?.courtid
+		const ci = courtid != null ? courtInfoByCourtId.get(courtid) : undefined
+		const meta = infoByEventId.get(e.eventid)
+		return {
+			eventid: e.eventid,
+			time: e.time,
+			status: e.status,
+			courtbookingid: e.courtbookingid,
+			organizerid: e.organizerid,
+			organizerName: nameByUserId.get(e.organizerid) || null,
+			title: meta?.title,
+			description: meta?.description,
+			numberofpeople: meta?.numberofpeople ?? null,
+			start_timestamp: booking?.start_timestamp ?? null,
+			end_timestamp: booking?.end_timestamp ?? null,
+			entry_fee: meta?.entry_fee ?? null,
+			support_payment_method: meta?.support_payment_method ?? null,
+			participants_cap: meta?.participants_cap ?? null,
+			join_status: meta?.join_status ?? null,
+			courtid,
+			address: ci?.address,
+			court_name: (ci as any)?.name ?? null,
+			sport: ci?.sport,
+			venue: ci?.venue,
+		}
+	})
+}
+
+// Aggregate events created by a specific organizer.
+export async function listEventsCombinedByOrganizerId(organizerid: number): Promise<CombinedEvent[]> {
+	const eventsData = await request(`/events?organizerid=${encodeURIComponent(organizerid)}`, { debugLabel: 'listEventsByOrganizerId' })
+	if (!Array.isArray(eventsData)) return []
+	const events: EventRow[] = eventsData as EventRow[]
+
+	// Fetch event info in one call & map
+	const infoRowsRaw = await request('/eventinfo', { debugLabel: 'listEventInfoAll' })
+	const infoByEventId = new Map<number, EventInfoMeta>()
+	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as EventInfoMeta[]) infoByEventId.set(r.eventid, r)
+
+	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
+	const bookingById = new Map<number, any>()
+	if (Array.isArray(allCourtBookings))
+		for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
+
+	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
+	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
+	const availabilityById = new Map<number, any>()
+	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
+
+	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
+	let courtInfoRows: CourtInfoRow[] = []
+	if (courtIds.length) {
+		const ci = await safeGet(`/courtinfo?courtids=${courtIds.join(',')}`, 'listCourtInfoSubset')
+		if (Array.isArray(ci)) courtInfoRows = ci as CourtInfoRow[]
+	}
+	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
+	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
 	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
@@ -671,6 +902,71 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,
+			start_timestamp: booking?.start_timestamp ?? null,
+			end_timestamp: booking?.end_timestamp ?? null,
+			courtid,
+			address: ci?.address,
+			court_name: (ci as any)?.name ?? null,
+			sport: ci?.sport,
+			venue: ci?.venue,
+			entry_fee: meta?.entry_fee ?? null,
+			support_payment_method: meta?.support_payment_method ?? null,
+			participants_cap: (meta as any)?.participants_cap ?? null,
+			join_status: (meta as any)?.join_status ?? null,
+		}
+	})
+}
+
+// Aggregate training sessions created by a specific coach.
+export async function listTrainingSessionsCombinedByCoachId(coachid: number): Promise<CombinedTrainingSession[]> {
+	const tsData = await request(`/trainingsessions?coachid=${encodeURIComponent(coachid)}`, { debugLabel: 'listTrainingSessionsByCoachId' })
+	if (!Array.isArray(tsData)) return []
+	const sessions: TrainingSessionRow[] = tsData as TrainingSessionRow[]
+
+	const infoRowsRaw = await request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' })
+	const infoBySessionId = new Map<number, TrainingSessionInfoMeta>()
+	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as TrainingSessionInfoMeta[]) infoBySessionId.set(r.sessionid, r)
+
+	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
+	const bookingById = new Map<number, any>()
+	if (Array.isArray(allCourtBookings)) for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
+
+	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
+	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
+	const availabilityById = new Map<number, any>()
+	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
+
+	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
+	let courtInfoRows: CourtInfoRow[] = []
+	if (courtIds.length) {
+		const ci = await safeGet(`/courtinfo?courtids=${courtIds.join(',')}`, 'listCourtInfoSubset')
+		if (Array.isArray(ci)) courtInfoRows = ci as CourtInfoRow[]
+	}
+	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
+	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
+	const nameByUserId = new Map<number, string | null>()
+	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
+
+	return sessions.map(s => {
+		const booking = bookingById.get(s.courtbookingid)
+		const availability = booking ? availabilityById.get(booking.availabilityid) : null
+		const courtid = availability?.courtid
+		const ci = courtid != null ? courtInfoByCourtId.get(courtid) : undefined
+		const meta = infoBySessionId.get(s.sessionid)
+		return {
+			sessionid: s.sessionid,
+			time: s.time,
+			status: s.status,
+			courtbookingid: s.courtbookingid,
+			coachid: s.coachid,
+			coachName: nameByUserId.get(s.coachid) || null,
+			title: meta?.title,
+			description: meta?.description,
+			numberofpeople: meta?.numberofpeople ?? null,
+			start_timestamp: booking?.start_timestamp ?? null,
+			end_timestamp: booking?.end_timestamp ?? null,
 			courtid,
 			address: ci?.address,
 			court_name: (ci as any)?.name ?? null,

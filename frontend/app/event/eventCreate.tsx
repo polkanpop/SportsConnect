@@ -5,7 +5,20 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listCourtBookings, CourtBookingRow, listCourtInfoCached, CourtInfoRow, createEventWithInfo, CreateEventWithInfoPayload, listEventsCombinedCached, listTrainingSessionsCombined, CombinedEvent, CombinedTrainingSession } from '@/lib/backendApi'
+import {
+  adjustEventParticipants,
+  createEventBooking,
+  createEventWithInfo,
+  CreateEventWithInfoPayload,
+  listCourtBookings,
+  CourtBookingRow,
+  listCourtInfoCached,
+  CourtInfoRow,
+  listEventsCombinedCached,
+  listTrainingSessionsCombined,
+  CombinedEvent,
+  CombinedTrainingSession,
+} from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
 
@@ -63,6 +76,7 @@ export default function EventCreateScreen() {
   const [title, setTitle] = useState('')
   const [participantsCap, setParticipantsCap] = useState<string>('')
   const [description, setDescription] = useState('')
+  const [addMeToParticipants, setAddMeToParticipants] = useState(true)
   const [monetize, setMonetize] = useState<boolean>(false)
   const [entryFee, setEntryFee] = useState<string>('')
   const [payCash, setPayCash] = useState(false)
@@ -193,12 +207,34 @@ export default function EventCreateScreen() {
     },
     onSuccess: (data) => {
       setSuccessData(data)
+
+      // Optional: automatically join as a participant so the creator doesn't need to book again.
+      if (addMeToParticipants && typeof userId === 'number' && typeof data?.event?.eventid === 'number') {
+        const eventId = data.event.eventid
+        void (async () => {
+          try {
+            await createEventBooking({
+              eventid: eventId,
+              userid: userId,
+              status: 'pending',
+              bookingstatus: 'upcoming',
+              note: null,
+            } as any)
+          } catch {}
+
+          // Best-effort participant increment
+          try { await adjustEventParticipants(eventId, +1) } catch {}
+
+          qc.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
+        })()
+      }
+
       // Invalidate events list cache so new event appears
       qc.invalidateQueries({ queryKey: ['eventsCombined'] })
       // clear draft on success
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
       setTimeout(() => {
-        router.replace(`/event/eventBooking?eventid=${data.event.eventid}` as any)
+        router.replace({ pathname: '/event/CreationInfo', params: { type: 'event' } });
       }, 900)
     },
     onError: (err: any) => {
@@ -219,6 +255,7 @@ export default function EventCreateScreen() {
         if (typeof parsed.title === 'string') setTitle(parsed.title)
         if (typeof parsed.participantsCap === 'string') setParticipantsCap(parsed.participantsCap)
         if (typeof parsed.description === 'string') setDescription(parsed.description)
+        if (typeof parsed.addMeToParticipants === 'boolean') setAddMeToParticipants(parsed.addMeToParticipants)
         if (typeof parsed.monetize === 'boolean') setMonetize(parsed.monetize)
         if (typeof parsed.entryFee === 'string') setEntryFee(parsed.entryFee)
         if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
@@ -234,12 +271,12 @@ export default function EventCreateScreen() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId
+        title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId
       }
       try { AsyncStorage.setItem('@eventCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, monetize, entryFee, payCash, payVnPay, selectedBookingId])
+  }, [title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId])
 
   const onSubmit = () => {
     if (submitting) return
@@ -382,6 +419,17 @@ export default function EventCreateScreen() {
             <TextInput value={participantsCap} onChangeText={setParticipantsCap} keyboardType="number-pad" placeholder="e.g. 10" placeholderTextColor="#777" style={styles.input} />
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Describe the event details..." placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
+
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              activeOpacity={0.85}
+              onPress={() => setAddMeToParticipants(v => !v)}
+            >
+              <View style={[styles.checkboxBox, addMeToParticipants && styles.checkboxBoxChecked]}>
+                {addMeToParticipants && <Text style={styles.checkboxTick}>✓</Text>}
+              </View>
+              <Text style={styles.checkboxLabel}>Add me to participants list</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Monetization */}
@@ -518,6 +566,11 @@ const styles = StyleSheet.create({
   bookingTagTraining: { backgroundColor:'#6a5acd' },
   bookingTagText: { color:'#fff', fontSize:10, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#bbb', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  checkboxBoxChecked: { backgroundColor: '#FF5733', borderColor: '#FF5733' },
+  checkboxTick: { color: '#fff', fontWeight: '900', fontSize: 14, marginTop: -1 },
+  checkboxLabel: { marginLeft: 10, color: '#222', fontWeight: '700' },
   bookingMeta: { fontSize:11, color:'#555', marginTop:2 },
   bookingArrow: { width:16, height:16, tintColor:'#333' },
   selectedBookingBox: { backgroundColor:'#e9e9e9', padding:12, borderRadius:12, marginTop:6 },

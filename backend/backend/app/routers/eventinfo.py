@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/eventinfo", tags=["events"])
@@ -35,5 +35,53 @@ def create_event_info(body: dict, current_user: str = Depends(get_current_user))
     try:
         resp = rest_upsert("eventinfo", body)
         return resp[0] if isinstance(resp, list) and resp else body
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{eventinfoid}", response_model=dict)
+def update_event_info(eventinfoid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Patch eventinfo fields (used to update numberofpeople)."""
+    try:
+        payload = dict(body or {})
+        payload.pop(PRIMARY_KEY, None)
+        if not payload:
+            raise HTTPException(status_code=422, detail="No fields to update")
+
+        resp = rest_update("eventinfo", {PRIMARY_KEY: eventinfoid}, payload)
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        return payload
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/adjust/{eventid}", response_model=dict)
+def adjust_event_participants(eventid: int, delta: int = Query(..., ge=-1000, le=1000), current_user: str = Depends(get_current_user)):
+    """Adjust eventinfo.numberofpeople by delta (clamped at >= 0)."""
+    try:
+        row = rest_select("eventinfo", "*", filters={"eventid": eventid}, single=True)
+        if not row:
+            raise HTTPException(status_code=404, detail="Event info not found")
+
+        current = row.get("numberofpeople")
+        try:
+            current_n = int(current) if current is not None else 0
+        except Exception:
+            current_n = 0
+        new_n = current_n + int(delta)
+        if new_n < 0:
+            new_n = 0
+
+        resp = rest_update("eventinfo", {PRIMARY_KEY: row.get(PRIMARY_KEY)}, {"numberofpeople": new_n})
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        out = dict(row)
+        out["numberofpeople"] = new_n
+        return out
+    except HTTPException:
+        raise
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

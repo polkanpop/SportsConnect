@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_insert
+from ..db import rest_select, rest_insert, rest_update
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/courtbookings", tags=["bookings"])  # Route keeps plural for consistency, underlying table is singular
@@ -79,4 +79,38 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
     except RuntimeError as e:
         if "409" in str(e):
             raise HTTPException(status_code=409, detail="Duplicate primary key on insert; sequence likely misaligned")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{courtbookingid}", response_model=dict)
+def update_court_booking(courtbookingid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Patch fields on a court booking.
+
+    Used by the mobile app to cancel an upcoming booking by setting bookingstatus/status.
+    """
+    try:
+        existing = rest_select("courtbooking", "courtbookingid, userid", filters={PRIMARY_KEY: courtbookingid}, single=True)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Court booking not found")
+
+        # Best-effort ownership check when auth subject is numeric.
+        try:
+            auth_userid = int(current_user)
+            if int(existing.get("userid")) != auth_userid:
+                raise HTTPException(status_code=403, detail="User does not own this court booking")
+        except ValueError:
+            pass
+
+        payload = dict(body or {})
+        payload.pop(PRIMARY_KEY, None)
+        if not payload:
+            raise HTTPException(status_code=422, detail="No fields to update")
+
+        resp = rest_update("courtbooking", {PRIMARY_KEY: courtbookingid}, payload)
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        return payload
+    except HTTPException:
+        raise
+    except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

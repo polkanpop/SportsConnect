@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
-from ..db import rest_select
+from fastapi import APIRouter, HTTPException, Query, Depends
+from ..db import rest_select, rest_update
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/trainingsessions", tags=["training"])
 
@@ -152,6 +153,39 @@ def create_training_session_with_info(body: dict):
                 pass
             raise HTTPException(status_code=500, detail="Trainingsessioninfo insert did not return representation")
         return {"session": session_row, "sessioninfo": info_resp[0]}
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{sessionid}", response_model=dict)
+def update_training_session(sessionid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Patch fields on a training session (creator/coach).
+
+    Used by the mobile app to cancel a created upcoming session by setting status.
+    """
+    try:
+        existing = rest_select("trainingsessions", "sessionid, coachid", filters={PRIMARY_KEY: sessionid}, single=True)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Training session not found")
+
+        try:
+            auth_userid = int(current_user)
+            if int(existing.get("coachid")) != auth_userid:
+                raise HTTPException(status_code=403, detail="User does not own this training session")
+        except ValueError:
+            pass
+
+        payload = dict(body or {})
+        payload.pop(PRIMARY_KEY, None)
+        if not payload:
+            raise HTTPException(status_code=422, detail="No fields to update")
+
+        resp = rest_update("trainingsessions", {PRIMARY_KEY: sessionid}, payload)
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        return payload
     except HTTPException:
         raise
     except RuntimeError as e:

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/eventbookings", tags=["bookings"])  # Keep plural route, underlying table is singular 'eventbooking'
@@ -37,5 +37,38 @@ def create_event_booking(body: dict, current_user: str = Depends(get_current_use
         payload = {**body, "userid": body.get("userid") or current_user}
         resp = rest_upsert("eventbooking", payload)
         return resp[0] if isinstance(resp, list) and resp else payload
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{eventbookingid}", response_model=dict)
+def update_event_booking(eventbookingid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Patch fields on an event booking.
+
+    Used by the mobile app to cancel an upcoming event booking by setting bookingstatus/status.
+    """
+    try:
+        existing = rest_select("eventbooking", "eventbookingid, userid", filters={PRIMARY_KEY: eventbookingid}, single=True)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Event booking not found")
+
+        try:
+            auth_userid = int(current_user)
+            if int(existing.get("userid")) != auth_userid:
+                raise HTTPException(status_code=403, detail="User does not own this event booking")
+        except ValueError:
+            pass
+
+        payload = dict(body or {})
+        payload.pop(PRIMARY_KEY, None)
+        if not payload:
+            raise HTTPException(status_code=422, detail="No fields to update")
+
+        resp = rest_update("eventbooking", {PRIMARY_KEY: eventbookingid}, payload)
+        if isinstance(resp, list) and resp:
+            return resp[0]
+        return payload
+    except HTTPException:
+        raise
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

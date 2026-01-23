@@ -3,9 +3,18 @@ import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
-import { listEventsCombinedCached, CombinedEvent, createPayment, createEventBooking, PaymentRow, EventBookingRow, listEventsCombined } from '@/lib/backendApi'
+import {
+  adjustEventParticipants,
+  createEventBooking,
+  createPayment,
+  getEventBookingsByUserId,
+  listEventsCombined,
+  listEventsCombinedCached,
+  CombinedEvent,
+  EventBookingRow,
+} from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
 
@@ -43,6 +52,7 @@ function formatCurrency(n: number | null | undefined): string {
 
 export default function EventBooking() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const params = useLocalSearchParams()
   const eventid = params.eventid ? parseInt(String(params.eventid), 10) : NaN
   const { profile } = useAuthContext()
@@ -68,6 +78,25 @@ export default function EventBooking() {
   const loadingEvents = loadingCached && !eventsFresh
   const event: CombinedEvent | null = useMemo(() => allEvents.find(e => e.eventid === eventid) || null, [allEvents, eventid])
 
+  const { data: userEventBookingsRaw } = useQuery({
+    queryKey: ['eventBookingsByUserId', userId],
+    queryFn: () => getEventBookingsByUserId(userId as number),
+    enabled: typeof userId === 'number',
+    staleTime: 10_000,
+  })
+
+  const alreadyBooked = useMemo(() => {
+    if (typeof userId !== 'number') return false
+    if (!Number.isFinite(eventid)) return false
+    const rows = Array.isArray(userEventBookingsRaw) ? userEventBookingsRaw : []
+    return rows.some((b: any) => {
+      if (typeof b?.eventid !== 'number') return false
+      if (b.eventid !== eventid) return false
+      const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+      return !s.includes('cancel')
+    })
+  }, [userId, eventid, userEventBookingsRaw])
+
   // UI state
   // Court section no longer collapsible; mirror courtBooking visual layout
   const [courtExpanded] = useState(true)
@@ -79,6 +108,10 @@ export default function EventBooking() {
   const [confirmation, setConfirmation] = useState<EventBookingRow | null>(null)
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
 
+  React.useEffect(() => {
+    if (alreadyBooked && confirmModalVisible) setConfirmModalVisible(false)
+  }, [alreadyBooked, confirmModalVisible])
+
   const isFree = event?.entry_fee == null
   const allowedMethods: ('cash' | 'vnpay')[] = useMemo(() => {
     if (!event || isFree || !event.support_payment_method) return []
@@ -89,10 +122,14 @@ export default function EventBooking() {
     return []
   }, [event, isFree])
 
-  const canSubmit = !!event && !!userId && !submitting && !confirmation && (isFree || (!!paymentMethod))
+  const canSubmit = !!event && !!userId && !alreadyBooked && !submitting && !confirmation && (isFree || (!!paymentMethod))
 
   const handleSubmit = useCallback(async () => {
     if (!event || userId == null) return
+    if (alreadyBooked) {
+      setSubmitError('Already booked')
+      return
+    }
     // For paid events require selected method
     if (!isFree && !paymentMethod) return
     setSubmitting(true)
@@ -110,13 +147,22 @@ export default function EventBooking() {
         paymentid: payment.paymentid,
         note: noteText || null,
       })
+
+      // Best-effort participant increment
+      try {
+        await adjustEventParticipants(event.eventid, +1)
+        queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+        queryClient.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
+      } catch {
+        // Ignore count sync failures to avoid blocking booking
+      }
       
       router.replace({
         pathname: '/event/invoice',
         params: {
           title: event.title,
           subtitle: 'Event',
-          date: (() => { const d = new Date(event.start_timestamp || event.time); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
+          date: (() => { const d = new Date(event.start_timestamp || event.time || new Date()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
           time: formatRange(event),
           location: event.address || 'Unknown Location',
           price: isFree ? 0 : event.entry_fee,
@@ -130,7 +176,7 @@ export default function EventBooking() {
     } catch (e) {
       setSubmitError((e as any)?.message || 'Failed booking')
     } finally { setSubmitting(false) }
-  }, [event, userId, paymentMethod, noteText, isFree, router])
+  }, [event, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
 
   const sports = asArray(event?.sport)
   const venues = asArray(event?.venue)
@@ -292,7 +338,9 @@ export default function EventBooking() {
               disabled={!canSubmit}
               onPress={() => setConfirmModalVisible(true)}
             >
-              <Text style={styles.confirmUnifiedText}>{submitting ? 'Submitting...' : 'Confirm Booking'}</Text>
+              <Text style={styles.confirmUnifiedText}>
+                {alreadyBooked ? 'Already Booked' : (submitting ? 'Submitting...' : 'Confirm Booking')}
+              </Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -315,8 +363,10 @@ export default function EventBooking() {
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
                 setConfirmModalVisible(false)
                 handleSubmit()
-              }}>
-                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+              }} disabled={!canSubmit}>
+                <Text style={[styles.modalBtnText, {color: '#fff'}]}>
+                  {alreadyBooked ? 'Already Booked' : 'Confirm'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
