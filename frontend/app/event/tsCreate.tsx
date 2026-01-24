@@ -168,6 +168,47 @@ export default function TsCreate() {
 
       const createdSessionId = typeof data?.session?.sessionid === 'number' ? data.session.sessionid : null
 
+      // Make the created session show up immediately in lists + details.
+      if (typeof createdSessionId === 'number') {
+        const sessionRow: any = data?.session
+        const infoRow: any = data?.info
+        const combinedRow: any = {
+          sessionid: createdSessionId,
+          time: sessionRow?.time,
+          status: sessionRow?.status ?? 'upcoming',
+          courtbookingid: sessionRow?.courtbookingid,
+          coachid: sessionRow?.coachid ?? (typeof userId === 'number' ? userId : undefined),
+          coachName: null,
+          title: infoRow?.title ?? title.trim(),
+          description: infoRow?.description ?? (description.trim() || null),
+          numberofpeople: infoRow?.numberofpeople ?? 0,
+          participants_cap: infoRow?.participants_cap ?? participantsCapNum,
+          entry_fee: infoRow?.entry_fee ?? null,
+          support_payment_method: infoRow?.support_payment_method ?? null,
+          join_status: infoRow?.join_status ?? null,
+          start_timestamp: selectedBooking?.start_timestamp ?? null,
+          end_timestamp: selectedBooking?.end_timestamp ?? null,
+          address: selectedBooking?.address ?? undefined,
+          court_name: selectedBooking?.courtName ?? null,
+        }
+
+        qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
+          return [combinedRow, ...arr]
+        })
+        if (typeof userId === 'number') {
+          qc.setQueryData(['createdTrainingSessionsCombined', userId], (prev: any) => {
+            const arr = Array.isArray(prev) ? prev : []
+            if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
+            return [combinedRow, ...arr]
+          })
+        }
+
+        qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
+        qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], infoRow)
+      }
+
       const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
         qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
           if (!Array.isArray(prev)) return prev
@@ -223,7 +264,9 @@ export default function TsCreate() {
       qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
-      setTimeout(() => { router.replace({ pathname: '/event/CreationInfo', params: { type: 'training' } }) }, 900)
+
+      const detailsId = typeof createdSessionId === 'number' ? `created_session_${createdSessionId}` : undefined
+      setTimeout(() => { router.replace({ pathname: '/event/CreationInfo', params: { type: 'training', detailsId } }) }, 900)
     },
     onError: (err: any) => setSubmitError(err?.message || 'Create failed'),
     onSettled: () => setSubmitting(false)

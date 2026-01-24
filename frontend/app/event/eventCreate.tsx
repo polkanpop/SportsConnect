@@ -330,8 +330,10 @@ export default function EventCreateScreen() {
       qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       // clear draft on success
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
+
+      const detailsId = typeof createdEventId === 'number' ? `created_event_${createdEventId}` : undefined
       setTimeout(() => {
-        router.replace({ pathname: '/event/CreationInfo', params: { type: 'event' } });
+        router.replace({ pathname: '/event/CreationInfo', params: { type: 'event', detailsId } });
       }, 900)
     },
     onError: (err: any) => {

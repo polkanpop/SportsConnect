@@ -22,6 +22,18 @@ export default function Invoice() {
     type // 'court' | 'event' | 'session'
   } = params
 
+  const handleSeeDetails = () => {
+    const id = String(bookingId ?? '')
+    const n = Number(id)
+    if (!Number.isFinite(n) || n <= 0) return
+
+    const t = String(type ?? '').toLowerCase()
+    const prefix = t === 'court' ? 'court_' : (t === 'event' ? 'event_' : (t === 'session' ? 'session_' : ''))
+    if (!prefix) return
+
+    router.replace({ pathname: '/event/details', params: { id: `${prefix}${n}` } })
+  }
+
   const handleHome = () => {
     router.dismissAll()
     router.replace('/(tabs)/Home')
@@ -128,6 +140,9 @@ export default function Invoice() {
       </ScrollView>
 
       <View style={styles.footer}>
+        <TouchableOpacity style={styles.detailsBtn} onPress={handleSeeDetails}>
+          <Text style={styles.detailsBtnText}>See details</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.homeBtn} onPress={handleHome}>
           <Text style={styles.homeBtnText}>Back to Home</Text>
         </TouchableOpacity>
@@ -246,11 +261,31 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
+  detailsBtn: {
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
+    marginBottom: 12,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+  detailsBtnText: {
+    color: '#222',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   homeBtn: {
     backgroundColor: '#222',
     paddingVertical: 16,
     borderRadius: 30,
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   homeBtnText: {
     color: '#fff',

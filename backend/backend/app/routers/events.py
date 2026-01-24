@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from ..db import rest_select, rest_upsert, rest_delete, rest_insert, rest_update
 from ..auth import get_current_user
-from fastapi_cache.decorator import cache
 from typing import Any, Dict
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -9,7 +8,6 @@ router = APIRouter(prefix="/events", tags=["events"])
 PRIMARY_KEY = "eventid"
 
 @router.get("", response_model=list[dict])
-@cache(expire=5)
 def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int | str] = {}
