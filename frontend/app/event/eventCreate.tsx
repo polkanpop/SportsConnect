@@ -10,6 +10,7 @@ import {
   createEventBooking,
   createEventWithInfo,
   CreateEventWithInfoPayload,
+  invalidateEventsCombinedCache,
   listCourtBookings,
   CourtBookingRow,
   listCourtInfoCached,
@@ -19,6 +20,7 @@ import {
   CombinedEvent,
   CombinedTrainingSession,
 } from '@/lib/backendApi'
+import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
 
@@ -208,29 +210,124 @@ export default function EventCreateScreen() {
     onSuccess: (data) => {
       setSuccessData(data)
 
+      const createdEventId = typeof data?.event?.eventid === 'number' ? data.event.eventid : null
+
+      // Make the created event show up immediately in lists + details.
+      if (typeof createdEventId === 'number') {
+        const evRow: any = data?.event
+        const infoRow: any = data?.eventinfo
+        const combinedRow: any = {
+          eventid: createdEventId,
+          time: evRow?.time,
+          status: evRow?.status ?? 'upcoming',
+          courtbookingid: evRow?.courtbookingid,
+          organizerid: evRow?.organizerid ?? (typeof userId === 'number' ? userId : undefined),
+          organizerName: null,
+          title: infoRow?.title ?? title.trim(),
+          description: infoRow?.description ?? (description.trim() || null),
+          numberofpeople: infoRow?.numberofpeople ?? 0,
+          participants_cap: infoRow?.participants_cap ?? participantsCapNum,
+          entry_fee: infoRow?.entry_fee ?? null,
+          support_payment_method: infoRow?.support_payment_method ?? null,
+          join_status: infoRow?.join_status ?? null,
+          start_timestamp: selectedBooking?.start_timestamp ?? null,
+          end_timestamp: selectedBooking?.end_timestamp ?? null,
+          address: selectedBooking?.address ?? undefined,
+          court_name: selectedBooking?.courtName ?? null,
+        }
+
+        qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+          return [combinedRow, ...arr]
+        })
+        if (typeof userId === 'number') {
+          qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+            const arr = Array.isArray(prev) ? prev : []
+            if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+            return [combinedRow, ...arr]
+          })
+        }
+
+        qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)
+        qc.setQueryData(['details', 'createdEventInfo', createdEventId], infoRow)
+      }
+
+      const bumpParticipantsInEventsCombined = (eventId: number, delta: number) => {
+        qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.eventid !== eventId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
+      }
+
+      const upsertUserBookingCache = (booking: any) => {
+        if (typeof userId !== 'number') return
+        const upsert = (key: readonly unknown[]) => {
+          qc.setQueryData(key, (prev: any) => {
+            const arr = Array.isArray(prev) ? prev : []
+            const exists = arr.some((b: any) => {
+              if (typeof b?.eventid !== 'number') return false
+              if (b.eventid !== booking?.eventid) return false
+              const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+              return !s.includes('cancel')
+            })
+            return exists ? arr : [booking, ...arr]
+          })
+        }
+        upsert(['eventBookingsByUserId', userId])
+        upsert(['eventBookings', userId])
+      }
+
+      const bumpParticipantsInCreatedEventsCombined = (eventId: number, delta: number) => {
+        if (typeof userId !== 'number') return
+        qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.eventid !== eventId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
+      }
+
       // Optional: automatically join as a participant so the creator doesn't need to book again.
-      if (addMeToParticipants && typeof userId === 'number' && typeof data?.event?.eventid === 'number') {
-        const eventId = data.event.eventid
+      if (addMeToParticipants && typeof userId === 'number' && typeof createdEventId === 'number') {
+        const eventId = createdEventId
         void (async () => {
           try {
-            await createEventBooking({
+            const booking = await createEventBooking({
               eventid: eventId,
               userid: userId,
               status: 'pending',
               bookingstatus: 'upcoming',
               note: null,
             } as any)
+            upsertUserBookingCache(booking)
+            bumpParticipantsInEventsCombined(eventId, +1)
+            bumpParticipantsInCreatedEventsCombined(eventId, +1)
+
+            // Best-effort participant increment
+            try { await adjustEventParticipants(eventId, +1) } catch {}
+
+            // Ensure AsyncStorage cached combined list doesn't stick at 0
+            void invalidateEventsCombinedCache()
+            qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
           } catch {}
 
-          // Best-effort participant increment
-          try { await adjustEventParticipants(eventId, +1) } catch {}
-
           qc.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
+          qc.invalidateQueries({ queryKey: ['eventBookings', userId] })
         })()
       }
 
       // Invalidate events list cache so new event appears
-      qc.invalidateQueries({ queryKey: ['eventsCombined'] })
+      void invalidateEventsCombinedCache()
+      qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       // clear draft on success
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
       setTimeout(() => {

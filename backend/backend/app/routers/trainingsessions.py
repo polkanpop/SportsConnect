@@ -183,9 +183,20 @@ def update_training_session(sessionid: int, body: dict, current_user: str = Depe
             raise HTTPException(status_code=422, detail="No fields to update")
 
         resp = rest_update("trainingsessions", {PRIMARY_KEY: sessionid}, payload)
-        if isinstance(resp, list) and resp:
-            return resp[0]
-        return payload
+        out = resp[0] if isinstance(resp, list) and resp else payload
+
+        new_status = payload.get("status")
+        if isinstance(new_status, str) and "cancel" in new_status.lower():
+            try:
+                rest_update("tsbookings", {"sessionid": sessionid}, {"bookingstatus": "cancelled", "status": "cancelled"})
+            except Exception:
+                pass
+            try:
+                rest_update("trainingsessioninfo", {"sessionid": sessionid}, {"numberofpeople": 0})
+            except Exception:
+                pass
+
+        return out
     except HTTPException:
         raise
     except RuntimeError as e:

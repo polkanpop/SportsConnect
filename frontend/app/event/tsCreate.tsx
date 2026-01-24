@@ -10,6 +10,7 @@ import {
   createTrainingSessionBooking,
   createTrainingSessionWithInfo,
   CreateTrainingSessionWithInfoPayload,
+  invalidateTrainingSessionsCombinedCache,
   listCourtBookings,
   CourtBookingRow,
   listCourtInfoCached,
@@ -17,6 +18,7 @@ import {
   listTrainingSessionsCombinedCached,
   listEventsCombinedCached,
 } from '@/lib/backendApi'
+import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
 
@@ -164,27 +166,61 @@ export default function TsCreate() {
     onSuccess: (data) => {
       setSuccessData(data)
 
+      const createdSessionId = typeof data?.session?.sessionid === 'number' ? data.session.sessionid : null
+
+      const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
+        qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.sessionid !== sessionId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
+      }
+
+      const upsertUserBookingCache = (booking: any) => {
+        if (typeof userId !== 'number') return
+        qc.setQueryData(['trainingSessionBookingsByUserId', userId], (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          const exists = arr.some((b: any) => {
+            if (typeof b?.sessionid !== 'number') return false
+            if (b.sessionid !== booking?.sessionid) return false
+            const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+            return !s.includes('cancel')
+          })
+          return exists ? arr : [booking, ...arr]
+        })
+      }
+
       // Optional: automatically join as a participant so the creator doesn't need to book again.
-      if (addMeToParticipants && typeof userId === 'number' && typeof data?.session?.sessionid === 'number') {
-        const sessionId = data.session.sessionid
+      if (addMeToParticipants && typeof userId === 'number' && typeof createdSessionId === 'number') {
+        const sessionId = createdSessionId
         void (async () => {
           try {
-            await createTrainingSessionBooking({
+            const booking = await createTrainingSessionBooking({
               sessionid: sessionId,
               userid: userId,
               status: 'pending',
               bookingstatus: 'upcoming',
               note: null,
             } as any)
-          } catch {}
+            upsertUserBookingCache(booking)
+            bumpParticipantsInSessionsCombined(sessionId, +1)
 
-          try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
+            try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
+
+            void invalidateTrainingSessionsCombinedCache()
+            qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+          } catch {}
 
           qc.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
         })()
       }
 
-      qc.invalidateQueries({ queryKey: ['trainingSessionsCombined'] })
+      void invalidateTrainingSessionsCombinedCache()
+      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
       setTimeout(() => { router.replace({ pathname: '/event/CreationInfo', params: { type: 'training' } }) }, 900)

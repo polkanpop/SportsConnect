@@ -97,6 +97,11 @@ export default function EventBooking() {
     })
   }, [userId, eventid, userEventBookingsRaw])
 
+  const isCancelledEvent = useMemo(() => {
+    const s = String(event?.status ?? '').toLowerCase()
+    return s.includes('cancel')
+  }, [event?.status])
+
   // UI state
   // Court section no longer collapsible; mirror courtBooking visual layout
   const [courtExpanded] = useState(true)
@@ -122,10 +127,15 @@ export default function EventBooking() {
     return []
   }, [event, isFree])
 
-  const canSubmit = !!event && !!userId && !alreadyBooked && !submitting && !confirmation && (isFree || (!!paymentMethod))
+  const canSubmit = !!event && !!userId && !alreadyBooked && !isCancelledEvent && !submitting && !confirmation && (isFree || (!!paymentMethod))
 
   const handleSubmit = useCallback(async () => {
     if (!event || userId == null) return
+    const cancelled = String(event?.status ?? '').toLowerCase().includes('cancel')
+    if (cancelled) {
+      setSubmitError('Event was cancelled')
+      return
+    }
     if (alreadyBooked) {
       setSubmitError('Already booked')
       return
@@ -148,11 +158,35 @@ export default function EventBooking() {
         note: noteText || null,
       })
 
+      // Make Activity/details reflect the booking immediately
+      const upsert = (key: readonly unknown[]) => {
+        queryClient.setQueryData(key, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          const exists = arr.some((b: any) => {
+            if (typeof b?.eventid !== 'number') return false
+            if (b.eventid !== event.eventid) return false
+            const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+            return !s.includes('cancel')
+          })
+          return exists ? arr : [booking, ...arr]
+        })
+      }
+      upsert(['eventBookingsByUserId', userId])
+      upsert(['eventBookings', userId])
+
       // Best-effort participant increment
       try {
         await adjustEventParticipants(event.eventid, +1)
-        queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+        queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.eventid !== event.eventid) return row
+            const cur = typeof row?.numberofpeople === 'number' ? row.numberofpeople : (row?.numberofpeople == null ? 0 : Number(row.numberofpeople))
+            return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
+          })
+        })
         queryClient.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
+        queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] })
       } catch {
         // Ignore count sync failures to avoid blocking booking
       }
@@ -201,6 +235,12 @@ export default function EventBooking() {
         <View style={styles.sectionCard}>
           {loadingEvents && <Text style={styles.statusText}>Loading event...</Text>}
           {!loadingEvents && !event && <Text style={styles.errorText}>Event not found.</Text>}
+          {!loadingEvents && !!event && isCancelledEvent && (
+            <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
+              <Text style={{ color: '#cc0000', fontWeight: '700' }}>This event was cancelled.</Text>
+              <Text style={{ color: '#cc0000', marginTop: 2 }}>Booking is disabled.</Text>
+            </View>
+          )}
           {event && (
             <View style={styles.titleRowInline}>
               <Image source={ICONS.starCal} style={styles.leadingCalIcon} />

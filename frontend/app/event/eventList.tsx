@@ -89,6 +89,13 @@ const EventListScreen = () => {
   // Filtering
   const filteredEvents = useMemo(() => {
     return allEvents.filter(ev => {
+      const status = String((ev as any)?.status ?? '').toLowerCase()
+      if (status.includes('cancel')) {
+        const cancelledAt = typeof (ev as any)?._cancelledAt === 'number' ? (ev as any)._cancelledAt : 0
+        // Unlist cancelled events; allow a short grace window for freshly-cancelled items.
+        if (!cancelledAt) return false
+        if (Date.now() - cancelledAt >= 15_000) return false
+      }
       // text search
       const title = (ev.title || '').toLowerCase()
       const address = (ev.address || '').toLowerCase()

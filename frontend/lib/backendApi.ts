@@ -1,6 +1,5 @@
 import { API_BASE_URL } from '@/env'
-import { fetchWithCache } from '@/lib/cache'
-import { invalidateByPrefix } from '@/lib/cache'
+import { fetchWithCache, invalidateByPrefix, invalidateCache } from '@/lib/cache'
 import { queryClient } from '@/providers/query-provider'
 import { supabase } from './supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -812,6 +811,12 @@ export async function listEventsCombinedCached(): Promise<CombinedEvent[]> {
 	})
 }
 
+// Force refresh of the cached combined events list.
+// Useful after mutations (create/cancel) so the app doesn't wait for TTL.
+export async function invalidateEventsCombinedCache(): Promise<void> {
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+}
+
 // ---- Event Creation Helpers ----
 export type CreateEventWithInfoPayload = {
 	courtbookingid: number
@@ -987,6 +992,11 @@ export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrai
 		swrMs: 120 * 1000,
 		fetcher: () => listTrainingSessionsCombined()
 	})
+}
+
+// Force refresh of the cached combined training sessions list.
+export async function invalidateTrainingSessionsCombinedCache(): Promise<void> {
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
 }
 
 // ---- Session / Cache Purge ----

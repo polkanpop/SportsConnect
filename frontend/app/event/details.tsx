@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ICONS } from '@/constants/icons'
+import { queryKeys } from '@/hooks/query-keys'
 import {
   adjustEventParticipants,
   adjustTrainingSessionParticipants,
@@ -28,6 +29,8 @@ import {
   getEvent,
   listCourtAvailabilityAll,
   listCourtInfoCached,
+  invalidateEventsCombinedCache,
+  invalidateTrainingSessionsCombinedCache,
   listEventsCombinedCached,
   listTrainingSessionsCombinedCached,
   updateCourtBooking,
@@ -141,16 +144,21 @@ export default function DetailsPage() {
   const [busy, setBusy] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
 
+  const needsEventsCombined =
+    parsed.kind === 'event_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_event'
+  const needsSessionsCombined =
+    parsed.kind === 'session_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_session'
+
   const eventsCombinedQuery = useQuery({
-    queryKey: ['eventsCombinedCached'],
+    queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
-    enabled: parsed.kind === 'event_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_event',
+    enabled: needsEventsCombined,
     staleTime: 60_000,
   })
   const sessionsCombinedQuery = useQuery({
-    queryKey: ['trainingSessionsCombinedCached'],
+    queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombinedCached(),
-    enabled: parsed.kind === 'session_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_session',
+    enabled: needsSessionsCombined,
     staleTime: 60_000,
   })
 
@@ -233,10 +241,310 @@ export default function DetailsPage() {
       }
       throw new Error('Unsupported record type')
     },
+    onMutate: async () => {
+      type UndoItem = { key: readonly unknown[]; prev: any }
+      const undo: UndoItem[] = []
+
+      const save = (key: readonly unknown[]) => {
+        undo.push({ key, prev: queryClient.getQueryData(key) })
+      }
+
+      const patchObject = (key: readonly unknown[], patch: any) => {
+        queryClient.setQueryData(key, (prev: any) => ({ ...(prev || {}), ...patch }))
+      }
+
+      const patchList = <T extends { [k: string]: any }>(
+        key: readonly unknown[],
+        match: (row: T) => boolean,
+        patch: Partial<T>
+      ) => {
+        queryClient.setQueryData(key, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (match(row) ? { ...row, ...patch } : row))
+        })
+      }
+
+      if (parsed.kind === 'court_booking') {
+        const detailKey = ['details', 'courtBooking', parsed.id] as const
+        save(detailKey)
+        patchObject(detailKey, { bookingstatus: 'cancelled' })
+
+        const b: any = courtBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        if (typeof userid === 'number') {
+          const k1 = ['courtBookings', userid] as const
+          const k2 = ['courtbookings', 'user', userid] as const
+          save(k1)
+          save(k2)
+          patchList(k1, (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          patchList(k2, (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+      }
+
+      if (parsed.kind === 'event_booking') {
+        const detailKey = ['details', 'eventBooking', parsed.id] as const
+        save(detailKey)
+        patchObject(detailKey, { bookingstatus: 'cancelled' })
+
+        const b: any = eventBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        const evId = typeof b?.eventid === 'number' ? b.eventid : null
+        if (typeof userid === 'number') {
+          const k1 = ['eventBookings', userid] as const
+          const k2 = ['eventBookingsByUserId', userid] as const
+          save(k1)
+          save(k2)
+          patchList(k1, (row: any) => row?.eventbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          patchList(k2, (row: any) => row?.eventbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+
+        if (typeof evId === 'number') {
+          save(queryKeys.eventsCombined)
+          queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.eventid !== evId) return row
+              const cur = Number(row?.numberofpeople)
+              const curN = Number.isFinite(cur) ? cur : 0
+              return { ...row, numberofpeople: Math.max(0, curN - 1) }
+            })
+          })
+        }
+      }
+
+      if (parsed.kind === 'session_booking') {
+        const detailKey = ['details', 'sessionBooking', parsed.id] as const
+        save(detailKey)
+        patchObject(detailKey, { bookingstatus: 'cancelled' })
+
+        const b: any = sessionBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        const sessionId = typeof b?.sessionid === 'number' ? b.sessionid : null
+        if (typeof userid === 'number') {
+          const k1 = ['trainingSessionBookings', userid] as const
+          const k2 = ['trainingSessionBookingsByUserId', userid] as const
+          save(k1)
+          save(k2)
+          patchList(k1, (row: any) => row?.tsbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          patchList(k2, (row: any) => row?.tsbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+
+        if (typeof sessionId === 'number') {
+          save(queryKeys.trainingSessionsCombined)
+          queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.sessionid !== sessionId) return row
+              const cur = Number(row?.numberofpeople)
+              const curN = Number.isFinite(cur) ? cur : 0
+              return { ...row, numberofpeople: Math.max(0, curN - 1) }
+            })
+          })
+        }
+      }
+
+      if (parsed.kind === 'created_event') {
+        const detailKey = ['details', 'createdEvent', parsed.id] as const
+        save(detailKey)
+        const cancelledAt = Date.now()
+        patchObject(detailKey, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+
+        save(queryKeys.eventsCombined)
+        queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (row?.eventid === parsed.id ? { ...row, status: 'cancelled', _cancelledAt: cancelledAt } : row))
+        })
+
+        const ev: any = createdEventQuery.data
+        const organizerid = typeof ev?.organizerid === 'number' ? ev.organizerid : null
+        if (typeof organizerid === 'number') {
+          const k1 = ['createdEventsCombined', organizerid] as const
+          save(k1)
+          patchList(k1, (row: any) => row?.eventid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+        }
+      }
+
+      if (parsed.kind === 'created_session') {
+        const detailKey = ['details', 'createdSession', parsed.id] as const
+        save(detailKey)
+        const cancelledAt = Date.now()
+        patchObject(detailKey, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+
+        save(queryKeys.trainingSessionsCombined)
+        queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (row?.sessionid === parsed.id ? { ...row, status: 'cancelled', _cancelledAt: cancelledAt } : row))
+        })
+
+        const s: any = createdSessionQuery.data
+        const coachid = typeof s?.coachid === 'number' ? s.coachid : null
+        if (typeof coachid === 'number') {
+          const k1 = ['createdTrainingSessionsCombined', coachid] as const
+          save(k1)
+          patchList(k1, (row: any) => row?.sessionid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+        }
+      }
+
+      return { undo }
+    },
     onSuccess: async () => {
-      await queryClient.invalidateQueries()
+      const setInList = <T extends { [k: string]: any }>(
+        key: readonly unknown[],
+        match: (row: T) => boolean,
+        patch: Partial<T>
+      ) => {
+        queryClient.setQueryData(key, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (match(row) ? { ...row, ...patch } : row))
+        })
+      }
+
+      if (parsed.kind === 'court_booking') {
+        const b: any = courtBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        // Detail cache
+        queryClient.setQueryData(['details', 'courtBooking', parsed.id], (prev: any) => ({ ...(prev || {}), bookingstatus: 'cancelled' }))
+        // List caches used across the app
+        if (typeof userid === 'number') {
+          setInList(['courtBookings', userid], (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          setInList(['courtbookings', 'user', userid], (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+      }
+
+      if (parsed.kind === 'event_booking') {
+        const b: any = eventBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        const evId = typeof b?.eventid === 'number' ? b.eventid : null
+        queryClient.setQueryData(['details', 'eventBooking', parsed.id], (prev: any) => ({ ...(prev || {}), bookingstatus: 'cancelled' }))
+        if (typeof userid === 'number') {
+          setInList(['eventBookings', userid], (row: any) => row?.eventbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          setInList(['eventBookingsByUserId', userid], (row: any) => row?.eventbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+
+        if (typeof evId === 'number') {
+          queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.eventid !== evId) return row
+              const cur = Number(row?.numberofpeople)
+              const curN = Number.isFinite(cur) ? cur : 0
+              return { ...row, numberofpeople: Math.max(0, curN - 1) }
+            })
+          })
+          void invalidateEventsCombinedCache()
+        }
+      }
+
+      if (parsed.kind === 'session_booking') {
+        const b: any = sessionBookingQuery.data
+        const userid = typeof b?.userid === 'number' ? b.userid : null
+        const sessionId = typeof b?.sessionid === 'number' ? b.sessionid : null
+        queryClient.setQueryData(['details', 'sessionBooking', parsed.id], (prev: any) => ({ ...(prev || {}), bookingstatus: 'cancelled' }))
+        if (typeof userid === 'number') {
+          setInList(['trainingSessionBookings', userid], (row: any) => row?.tsbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+          setInList(['trainingSessionBookingsByUserId', userid], (row: any) => row?.tsbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+        }
+
+        if (typeof sessionId === 'number') {
+          queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.sessionid !== sessionId) return row
+              const cur = Number(row?.numberofpeople)
+              const curN = Number.isFinite(cur) ? cur : 0
+              return { ...row, numberofpeople: Math.max(0, curN - 1) }
+            })
+          })
+          void invalidateTrainingSessionsCombinedCache()
+        }
+      }
+
+      if (parsed.kind === 'created_event') {
+        const ev: any = createdEventQuery.data
+        const organizerid = typeof ev?.organizerid === 'number' ? ev.organizerid : null
+        const cancelledAt = Date.now()
+        queryClient.setQueryData(['details', 'createdEvent', parsed.id], (prev: any) => ({ ...(prev || {}), status: 'cancelled', _cancelledAt: cancelledAt }))
+        // Update combined cache immediately so the court cancel dependency check unlocks.
+        queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (row?.eventid === parsed.id ? { ...row, status: 'cancelled', _cancelledAt: cancelledAt } : row))
+        })
+        if (typeof organizerid === 'number') {
+          setInList(['createdEventsCombined', organizerid], (row: any) => row?.eventid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+        }
+        void invalidateEventsCombinedCache()
+
+        // After a short grace period, hide cancelled events from list caches.
+        setTimeout(() => {
+          queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.filter((row: any) => {
+              if (row?.eventid !== parsed.id) return true
+              const s = String(row?.status ?? '').toLowerCase()
+              const ts = typeof row?._cancelledAt === 'number' ? row._cancelledAt : 0
+              return !(s.includes('cancel') && ts && Date.now() - ts >= 15_000)
+            })
+          })
+          if (typeof organizerid === 'number') {
+            queryClient.setQueryData(['createdEventsCombined', organizerid], (prev: any) => {
+              if (!Array.isArray(prev)) return prev
+              return prev.filter((row: any) => {
+                if (row?.eventid !== parsed.id) return true
+                const s = String(row?.status ?? '').toLowerCase()
+                const ts = typeof row?._cancelledAt === 'number' ? row._cancelledAt : 0
+                return !(s.includes('cancel') && ts && Date.now() - ts >= 15_000)
+              })
+            })
+          }
+        }, 15_000)
+      }
+
+      if (parsed.kind === 'created_session') {
+        const s: any = createdSessionQuery.data
+        const coachid = typeof s?.coachid === 'number' ? s.coachid : null
+        const cancelledAt = Date.now()
+        queryClient.setQueryData(['details', 'createdSession', parsed.id], (prev: any) => ({ ...(prev || {}), status: 'cancelled', _cancelledAt: cancelledAt }))
+        queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => (row?.sessionid === parsed.id ? { ...row, status: 'cancelled', _cancelledAt: cancelledAt } : row))
+        })
+        if (typeof coachid === 'number') {
+          setInList(['createdTrainingSessionsCombined', coachid], (row: any) => row?.sessionid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
+        }
+        void invalidateTrainingSessionsCombinedCache()
+
+        setTimeout(() => {
+          queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.filter((row: any) => {
+              if (row?.sessionid !== parsed.id) return true
+              const st = String(row?.status ?? '').toLowerCase()
+              const ts = typeof row?._cancelledAt === 'number' ? row._cancelledAt : 0
+              return !(st.includes('cancel') && ts && Date.now() - ts >= 15_000)
+            })
+          })
+          if (typeof coachid === 'number') {
+            queryClient.setQueryData(['createdTrainingSessionsCombined', coachid], (prev: any) => {
+              if (!Array.isArray(prev)) return prev
+              return prev.filter((row: any) => {
+                if (row?.sessionid !== parsed.id) return true
+                const st = String(row?.status ?? '').toLowerCase()
+                const ts = typeof row?._cancelledAt === 'number' ? row._cancelledAt : 0
+                return !(st.includes('cancel') && ts && Date.now() - ts >= 15_000)
+              })
+            })
+          }
+        }, 15_000)
+      }
+
       Alert.alert('Cancelled', 'This record has been cancelled.')
       router.back()
+    },
+    onError: (_err, _vars, ctx) => {
+      const undo = (ctx as any)?.undo as Array<{ key: readonly unknown[]; prev: any }> | undefined
+      if (Array.isArray(undo)) {
+        for (const item of undo) queryClient.setQueryData(item.key, item.prev)
+      }
     },
   })
 
@@ -314,7 +622,9 @@ export default function DetailsPage() {
     createdSessionQuery.isLoading ||
     createdSessionInfoQuery.isLoading ||
     courtAvailabilityQuery.isLoading ||
-    courtInfoQuery.isLoading
+    courtInfoQuery.isLoading ||
+    (needsEventsCombined && eventsCombinedQuery.isLoading) ||
+    (needsSessionsCombined && sessionsCombinedQuery.isLoading)
 
   const loadError =
     courtBookingQuery.error ||
@@ -325,7 +635,9 @@ export default function DetailsPage() {
     createdSessionQuery.error ||
     createdSessionInfoQuery.error ||
     courtAvailabilityQuery.error ||
-    courtInfoQuery.error
+    courtInfoQuery.error ||
+    (needsEventsCombined ? eventsCombinedQuery.error : null) ||
+    (needsSessionsCombined ? sessionsCombinedQuery.error : null)
 
   const courtBookingCourt = useMemo(() => {
     if (parsed.kind !== 'court_booking') return null
@@ -397,8 +709,8 @@ export default function DetailsPage() {
 
   // Enable combined lists for created records too (court name/title/description convenience)
   React.useEffect(() => {
-    if (parsed.kind === 'created_event') void queryClient.prefetchQuery({ queryKey: ['eventsCombinedCached'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
-    if (parsed.kind === 'created_session') void queryClient.prefetchQuery({ queryKey: ['trainingSessionsCombinedCached'], queryFn: () => listTrainingSessionsCombinedCached(), staleTime: 60_000 })
+    if (parsed.kind === 'created_event') void queryClient.prefetchQuery({ queryKey: queryKeys.eventsCombined, queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
+    if (parsed.kind === 'created_session') void queryClient.prefetchQuery({ queryKey: queryKeys.trainingSessionsCombined, queryFn: () => listTrainingSessionsCombinedCached(), staleTime: 60_000 })
   }, [parsed.kind, queryClient])
 
   return (

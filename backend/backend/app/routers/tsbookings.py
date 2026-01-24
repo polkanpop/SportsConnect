@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert, rest_update
+from ..db import rest_select, rest_upsert, rest_update, rest_insert
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/tsbookings", tags=["training"])
@@ -37,8 +37,39 @@ def get_ts_booking(tsbookingid: int):
 def create_ts_booking(body: dict, current_user: str = Depends(get_current_user)):
     """Create a training session booking. Inject userid from auth if not provided."""
     try:
-        payload = {**body, "userid": body.get("userid") or current_user}
-        resp = rest_upsert("tsbookings", payload)
+        userid_raw = body.get("userid") or current_user
+        try:
+            userid = int(userid_raw)
+        except Exception:
+            raise HTTPException(status_code=400, detail="userid must be numeric")
+
+        sessionid = body.get("sessionid")
+        if sessionid is None:
+            raise HTTPException(status_code=422, detail="sessionid required")
+        try:
+            sessionid = int(sessionid)
+        except Exception:
+            raise HTTPException(status_code=400, detail="sessionid must be numeric")
+
+        sess = rest_select("trainingsessions", "sessionid,status", filters={"sessionid": sessionid}, single=True)
+        if not sess:
+            raise HTTPException(status_code=404, detail="Training session not found")
+        status = str(sess.get("status") or "").lower()
+        if "cancel" in status:
+            raise HTTPException(status_code=409, detail="Training session was cancelled")
+
+        existing = rest_select("tsbookings", "tsbookingid,bookingstatus,status", filters={"userid": userid, "sessionid": sessionid})
+        if isinstance(existing, list):
+            for row in existing:
+                s = str(row.get("bookingstatus") or row.get("status") or "").lower()
+                if "cancel" not in s:
+                    raise HTTPException(status_code=409, detail="Already booked")
+
+        payload = {**body, "userid": userid, "sessionid": sessionid}
+        try:
+            resp = rest_insert("tsbookings", payload)
+        except Exception:
+            resp = rest_upsert("tsbookings", payload)
         return resp[0] if isinstance(resp, list) and resp else payload
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

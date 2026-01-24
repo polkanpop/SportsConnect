@@ -144,7 +144,14 @@ export default function TrainingSessionBooking() {
       // Best-effort participant increment
       try {
         await adjustTrainingSessionParticipants(session.sessionid, +1)
-        queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+        queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.sessionid !== session.sessionid) return row
+            const cur = typeof row?.numberofpeople === 'number' ? row.numberofpeople : (row?.numberofpeople == null ? 0 : Number(row.numberofpeople))
+            return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
+          })
+        })
         queryClient.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
       } catch {
         // Ignore count sync failures to avoid blocking booking

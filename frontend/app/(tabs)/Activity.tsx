@@ -2,6 +2,8 @@ import {
   getCourtBookingsByUserId,
   getEventBookingsByUserId,
   getTrainingSessionBookingsByUserId,
+  invalidateEventsCombinedCache,
+  invalidateTrainingSessionsCombinedCache,
   listCourtAvailabilityAll,
   listCourtInfoCached,
   listEventsCombinedCached,
@@ -10,6 +12,7 @@ import {
   listTrainingSessionsCombinedByCoachId,
 } from "@/lib/backendApi";
 import { useUserId } from "@/hooks/use-user-id";
+import { queryKeys } from "@/hooks/query-keys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -325,6 +328,13 @@ export default function ActivityPage() {
       queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] });
       queryClient.invalidateQueries({ queryKey: ['trainingSessionBookings', userId] });
 
+      // Make Activity feel "sensitive": bust combined-list AsyncStorage caches and refetch
+      // so status/participant changes show up immediately when coming back.
+      void invalidateEventsCombinedCache();
+      void invalidateTrainingSessionsCombinedCache();
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined });
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined });
+
       // Refresh Hosting mode data as well.
 	  queryClient.invalidateQueries({ queryKey: ['createdEventsCombined', userId] });
 	  queryClient.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] });
@@ -353,14 +363,14 @@ export default function ActivityPage() {
     queryKey: ["createdEventsCombined", userId],
     queryFn: () => listEventsCombinedByOrganizerId(userId as number),
     enabled: calendarMode === 'Hosting' && typeof userId === 'number',
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   const { data: createdTrainingSessionsCombinedRaw, isLoading: createdSessionsLoading, error: createdSessionsError } = useQuery({
     queryKey: ["createdTrainingSessionsCombined", userId],
     queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
     enabled: calendarMode === 'Hosting' && typeof userId === 'number',
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   const courtBookingsData = useMemo(() => (Array.isArray(courtBookingsRaw) ? courtBookingsRaw : []), [courtBookingsRaw]);
@@ -371,17 +381,17 @@ export default function ActivityPage() {
   );
 
   const { data: eventsCombinedRaw } = useQuery({
-    queryKey: ["eventsCombined"],
+    queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
     enabled: eventBookingsData.length > 0,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const { data: sessionsCombinedRaw } = useQuery({
-    queryKey: ["trainingSessionsCombined"],
+    queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombinedCached(),
     enabled: trainingSessionBookingsData.length > 0,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const { data: courtAvailabilityRaw } = useQuery({

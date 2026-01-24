@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from ..db import rest_select, rest_upsert, rest_update
+from ..db import rest_select, rest_upsert, rest_update, rest_insert
 from ..auth import get_current_user
 
 router = APIRouter(prefix="/eventbookings", tags=["bookings"])  # Keep plural route, underlying table is singular 'eventbooking'
@@ -34,9 +34,43 @@ def get_event_booking(eventbookingid: int):
 @router.post("", response_model=dict)
 def create_event_booking(body: dict, current_user: str = Depends(get_current_user)):
     try:
-        payload = {**body, "userid": body.get("userid") or current_user}
-        resp = rest_upsert("eventbooking", payload)
+        userid_raw = body.get("userid") or current_user
+        try:
+            userid = int(userid_raw)
+        except Exception:
+            raise HTTPException(status_code=400, detail="userid must be numeric")
+
+        eventid = body.get("eventid")
+        if eventid is None:
+            raise HTTPException(status_code=422, detail="eventid required")
+        try:
+            eventid = int(eventid)
+        except Exception:
+            raise HTTPException(status_code=400, detail="eventid must be numeric")
+
+        ev = rest_select("events", "eventid,status", filters={"eventid": eventid}, single=True)
+        if not ev:
+            raise HTTPException(status_code=404, detail="Event not found")
+        status = str(ev.get("status") or "").lower()
+        if "cancel" in status:
+            raise HTTPException(status_code=409, detail="Event was cancelled")
+
+        existing = rest_select("eventbooking", "eventbookingid,bookingstatus,status", filters={"userid": userid, "eventid": eventid})
+        if isinstance(existing, list):
+            for row in existing:
+                s = str(row.get("bookingstatus") or row.get("status") or "").lower()
+                if "cancel" not in s:
+                    raise HTTPException(status_code=409, detail="Already booked")
+
+        payload = {**body, "userid": userid, "eventid": eventid}
+        # Prefer insert to avoid unintended upserts; fallback to upsert for legacy behavior.
+        try:
+            resp = rest_insert("eventbooking", payload)
+        except Exception:
+            resp = rest_upsert("eventbooking", payload)
         return resp[0] if isinstance(resp, list) and resp else payload
+    except HTTPException:
+        raise
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
