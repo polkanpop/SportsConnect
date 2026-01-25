@@ -21,6 +21,7 @@ import {
 import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
+import { appendHistory } from '@/storage/history'
 
 interface EnrichedBooking extends CourtBookingRow { courtName?: string; address?: string; courtid?: number }
 
@@ -101,6 +102,10 @@ export default function TsCreate() {
     }
   })
 
+  const selectedBooking = useMemo(() => {
+    return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
+  }, [enrichedBookings, selectedBookingId])
+
   const { data: sessionsCombined, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
   const { data: eventsCombined, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
   const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>s.courtbookingid)), [sessionsCombined])
@@ -168,10 +173,29 @@ export default function TsCreate() {
 
       const createdSessionId = typeof data?.session?.sessionid === 'number' ? data.session.sessionid : null
 
+      if (typeof userId === 'number' && typeof createdSessionId === 'number') {
+        const nameFromInfo = String(data?.sessioninfo?.title ?? '').trim()
+        const nameFromForm = String(title ?? '').trim()
+        const name = nameFromInfo || nameFromForm || `Session ${createdSessionId}`
+        void appendHistory(userId, {
+          kind: 'created_session',
+          title: `Session created: ${name}`,
+          subtitle: selectedBooking ? formatRange((selectedBooking as any)?.start_timestamp, (selectedBooking as any)?.end_timestamp) : null,
+          fromStatus: null,
+          toStatus: null,
+          meta: {
+            sessionid: createdSessionId,
+            courtbookingid: data?.session?.courtbookingid,
+            start_timestamp: (selectedBooking as any)?.start_timestamp ?? null,
+            end_timestamp: (selectedBooking as any)?.end_timestamp ?? null,
+          },
+        })
+      }
+
       // Make the created session show up immediately in lists + details.
       if (typeof createdSessionId === 'number') {
         const sessionRow: any = data?.session
-        const infoRow: any = data?.info
+        const infoRow: any = data?.sessioninfo
         const combinedRow: any = {
           sessionid: createdSessionId,
           time: sessionRow?.time,
@@ -247,6 +271,21 @@ export default function TsCreate() {
               bookingstatus: 'upcoming',
               note: null,
             } as any)
+
+            void appendHistory(userId, {
+              kind: 'session_booking',
+              title: `Joined your session: ${title.trim() || `Session ${sessionId}`}`,
+              subtitle: null,
+              fromStatus: 'pending',
+              toStatus: String(booking?.status ?? 'pending'),
+              meta: {
+                sessionid: sessionId,
+                tsbookingid: booking?.tsbookingid,
+                start_timestamp: (selectedBooking as any)?.start_timestamp ?? null,
+                end_timestamp: (selectedBooking as any)?.end_timestamp ?? null,
+              },
+            })
+
             upsertUserBookingCache(booking)
             bumpParticipantsInSessionsCombined(sessionId, +1)
 

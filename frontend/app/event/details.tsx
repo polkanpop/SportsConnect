@@ -17,6 +17,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ICONS } from '@/constants/icons'
 import { queryKeys } from '@/hooks/query-keys'
+import { useUserId } from '@/hooks/use-user-id'
+import { appendHistory } from '@/storage/history'
 import {
   adjustEventParticipants,
   adjustTrainingSessionParticipants,
@@ -141,6 +143,7 @@ export default function DetailsPage() {
   const queryClient = useQueryClient()
   const { id } = useLocalSearchParams<{ id?: string }>()
   const parsed = useMemo(() => parseUnifiedId(id), [id])
+  const { data: userId } = useUserId()
   const [busy, setBusy] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
 
@@ -279,6 +282,95 @@ export default function DetailsPage() {
           patchList(k1, (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
           patchList(k2, (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
         }
+      }
+
+      // Best-effort local history log
+      if (typeof userId === 'number') {
+        const lower = (v: any) => String(v ?? '').trim().toLowerCase()
+
+        const courtBooking: any = courtBookingQuery.data
+        const eventBooking: any = eventBookingQuery.data
+        const sessionBooking: any = sessionBookingQuery.data
+        const createdEvent: any = createdEventQuery.data
+        const createdSession: any = createdSessionQuery.data
+
+        const title =
+          parsed.kind === 'court_booking' ? 'Cancelled court booking' :
+          parsed.kind === 'event_booking' ? 'Cancelled event booking' :
+          parsed.kind === 'session_booking' ? 'Cancelled session booking' :
+          parsed.kind === 'created_event' ? 'Cancelled your event' :
+          parsed.kind === 'created_session' ? 'Cancelled your session' :
+          'Cancelled'
+
+        const kind =
+          parsed.kind === 'court_booking' ? 'court_booking' :
+          parsed.kind === 'event_booking' ? 'event_booking' :
+          parsed.kind === 'session_booking' ? 'session_booking' :
+          parsed.kind === 'created_event' ? 'created_event' :
+          parsed.kind === 'created_session' ? 'created_session' :
+          'status_change'
+
+        const meta: any = { detailsId: id }
+        if (parsed.kind === 'court_booking') {
+          meta.courtbookingid = parsed.id
+          meta.start_timestamp = courtBooking?.start_timestamp ?? null
+          meta.end_timestamp = courtBooking?.end_timestamp ?? null
+          meta.availabilityid = courtBooking?.availabilityid ?? null
+
+          // Best-effort court name lookup
+          const avId = courtBooking?.availabilityid
+          const avAll: any[] = Array.isArray(courtAvailabilityQuery.data) ? (courtAvailabilityQuery.data as any[]) : []
+          const infoAll: any[] = Array.isArray(courtInfoQuery.data) ? (courtInfoQuery.data as any[]) : []
+          const av = typeof avId === 'number' ? avAll.find((a: any) => a?.availabilityid === avId) : null
+          const courtId = av?.courtid
+          const info = typeof courtId === 'number' ? infoAll.find((c: any) => c?.courtid === courtId) : null
+          const courtName = info?.name
+          if (courtName) meta.court_name = courtName
+        }
+        if (parsed.kind === 'event_booking') {
+          meta.eventbookingid = parsed.id
+          meta.eventid = eventBooking?.eventid ?? null
+          meta.start_timestamp = eventBooking?.start_timestamp ?? null
+          meta.end_timestamp = eventBooking?.end_timestamp ?? null
+        }
+        if (parsed.kind === 'session_booking') {
+          meta.tsbookingid = parsed.id
+          meta.sessionid = sessionBooking?.sessionid ?? null
+          meta.start_timestamp = sessionBooking?.start_timestamp ?? null
+          meta.end_timestamp = sessionBooking?.end_timestamp ?? null
+        }
+        if (parsed.kind === 'created_event') {
+          meta.eventid = parsed.id
+          meta.courtbookingid = createdEvent?.courtbookingid ?? null
+          meta.start_timestamp = createdEvent?.start_timestamp ?? createdEvent?.time ?? null
+          meta.end_timestamp = createdEvent?.end_timestamp ?? null
+        }
+        if (parsed.kind === 'created_session') {
+          meta.sessionid = parsed.id
+          meta.courtbookingid = createdSession?.courtbookingid ?? null
+          meta.start_timestamp = createdSession?.start_timestamp ?? createdSession?.time ?? null
+          meta.end_timestamp = createdSession?.end_timestamp ?? null
+        }
+
+        const fromStatus = (() => {
+          if (parsed.kind === 'court_booking') return courtBooking?.bookingstatus ?? courtBooking?.status ?? 'upcoming'
+          if (parsed.kind === 'event_booking') return eventBooking?.bookingstatus ?? eventBooking?.status ?? 'upcoming'
+          if (parsed.kind === 'session_booking') return sessionBooking?.bookingstatus ?? sessionBooking?.status ?? 'upcoming'
+          if (parsed.kind === 'created_event') return createdEvent?.status ?? 'upcoming'
+          if (parsed.kind === 'created_session') return createdSession?.status ?? 'upcoming'
+          return 'upcoming'
+        })()
+
+        const toStatus = 'cancelled'
+
+        void appendHistory(userId, {
+          kind: kind as any,
+          title,
+          subtitle: null,
+          fromStatus: lower(fromStatus) || 'upcoming',
+          toStatus,
+          meta,
+        })
       }
 
       if (parsed.kind === 'event_booking') {

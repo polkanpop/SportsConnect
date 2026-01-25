@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useUserId } from '@/hooks/use-user-id'
+import { appendHistory } from '@/storage/history'
 
 type AvailabilityRow = {
   availabilityid: number
@@ -206,6 +207,40 @@ export default function CourtBooking() {
       note: noteText.trim() ? noteText.trim() : null,
     }, {
       onSuccess: (data) => {
+        if (typeof userId === 'number') {
+          const courtTitle = courtInfo?.name || 'Court Booking'
+          void appendHistory(userId, {
+            kind: 'payment',
+            title: `Payment for ${courtTitle}`,
+            subtitle: `Method: ${paymentMethod}`,
+            fromStatus: 'unpaid',
+            toStatus: String(data.payment?.status ?? 'pending'),
+            amount: typeof calculatedAmount === 'number' ? calculatedAmount : (calculatedAmount == null ? null : Number(calculatedAmount)),
+            meta: {
+              paymentid: data.payment?.paymentid,
+              type: 'court',
+              availabilityid: availability.availabilityid,
+              courtbookingid: data.booking?.courtbookingid,
+              start_timestamp: startTs,
+              end_timestamp: endTs,
+            },
+          })
+
+          void appendHistory(userId, {
+            kind: 'court_booking',
+            title: `Booked court: ${courtTitle}`,
+            subtitle: null,
+            fromStatus: 'pending',
+            toStatus: String(data.booking?.status ?? data.booking?.bookingstatus ?? 'approved'),
+            meta: {
+              courtbookingid: data.booking?.courtbookingid,
+              availabilityid: availability.availabilityid,
+              start_timestamp: startTs,
+              end_timestamp: endTs,
+            },
+          })
+        }
+
         // Redirect to Invoice
         router.replace({
           pathname: '/event/invoice',

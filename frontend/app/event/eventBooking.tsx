@@ -17,6 +17,7 @@ import {
 } from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
+import { appendHistory } from '@/storage/history'
 
 // Normalise sport/venue (duplicated helper to avoid import loops)
 function asArray(v: any): string[] {
@@ -157,6 +158,39 @@ export default function EventBooking() {
         paymentid: payment.paymentid,
         note: noteText || null,
       })
+
+      if (typeof userId === 'number') {
+        void appendHistory(userId, {
+          kind: 'payment',
+          title: `Payment for ${event.title || `Event ${event.eventid}`}`,
+          subtitle: isFree ? 'Free' : `Method: ${paymentMethod}`,
+          fromStatus: 'unpaid',
+          toStatus: payment.status,
+          amount: isFree ? 0 : (event.entry_fee! || 0),
+          meta: {
+            paymentid: payment.paymentid,
+            type: 'event',
+            eventid: event.eventid,
+            eventbookingid: booking.eventbookingid,
+            start_timestamp: event.start_timestamp || event.time || null,
+            end_timestamp: event.end_timestamp || null,
+          },
+        })
+
+        void appendHistory(userId, {
+          kind: 'event_booking',
+          title: `Booked event: ${event.title || `Event ${event.eventid}`}`,
+          subtitle: null,
+          fromStatus: 'pending',
+          toStatus: String(booking?.status ?? 'pending'),
+          meta: {
+            eventid: event.eventid,
+            eventbookingid: booking.eventbookingid,
+            start_timestamp: event.start_timestamp || event.time || null,
+            end_timestamp: event.end_timestamp || null,
+          },
+        })
+      }
 
       // Make Activity/details reflect the booking immediately
       const upsert = (key: readonly unknown[]) => {

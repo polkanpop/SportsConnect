@@ -17,6 +17,7 @@ import {
 } from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
+import { appendHistory } from '@/storage/history'
 
 function asArray(v: any): string[] {
   if (!v) return []
@@ -141,6 +142,39 @@ export default function TrainingSessionBooking() {
         note: noteText || null,
       })
 
+      if (typeof userId === 'number') {
+        void appendHistory(userId, {
+          kind: 'payment',
+          title: `Payment for ${session.title || `Session ${session.sessionid}`}`,
+          subtitle: isFree ? 'Free' : `Method: ${paymentMethod}`,
+          fromStatus: 'unpaid',
+          toStatus: payment.status,
+          amount: isFree ? 0 : (session.entry_fee! || 0),
+          meta: {
+            paymentid: payment.paymentid,
+            type: 'session',
+            sessionid: session.sessionid,
+            tsbookingid: booking.tsbookingid,
+            start_timestamp: (session as any).start_timestamp || session.time || null,
+            end_timestamp: (session as any).end_timestamp || null,
+          },
+        })
+
+        void appendHistory(userId, {
+          kind: 'session_booking',
+          title: `Booked session: ${session.title || `Session ${session.sessionid}`}`,
+          subtitle: null,
+          fromStatus: 'pending',
+          toStatus: String(booking?.status ?? 'pending'),
+          meta: {
+            sessionid: session.sessionid,
+            tsbookingid: booking.tsbookingid,
+            start_timestamp: (session as any).start_timestamp || session.time || null,
+            end_timestamp: (session as any).end_timestamp || null,
+          },
+        })
+      }
+
       // Best-effort participant increment
       try {
         await adjustTrainingSessionParticipants(session.sessionid, +1)
@@ -162,7 +196,7 @@ export default function TrainingSessionBooking() {
         params: {
           title: session.title,
           subtitle: 'Training Session',
-          date: (() => { const d = new Date(session.time); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
+          date: (() => { const d = new Date(session.time ?? new Date().toISOString()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
           time: formatTime(session),
           location: session.address || 'Unknown Location',
           price: isFree ? 0 : session.entry_fee,

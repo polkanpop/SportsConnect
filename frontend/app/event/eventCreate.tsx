@@ -23,6 +23,7 @@ import {
 import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
 import { useFocusEffect } from 'expo-router'
+import { appendHistory } from '@/storage/history'
 
 // Lightweight enrichment mapping booking -> court info
 interface EnrichedBooking extends CourtBookingRow { courtName?: string; address?: string; courtid?: number }
@@ -212,6 +213,27 @@ export default function EventCreateScreen() {
 
       const createdEventId = typeof data?.event?.eventid === 'number' ? data.event.eventid : null
 
+      if (typeof userId === 'number' && typeof createdEventId === 'number') {
+        const nameFromInfo = String(data?.eventinfo?.title ?? '').trim()
+        const nameFromForm = String(title ?? '').trim()
+        const name = nameFromInfo || nameFromForm || `Event ${createdEventId}`
+        void appendHistory(userId, {
+          kind: 'created_event',
+          title: `Event created: ${name}`,
+          subtitle: selectedBooking ? formatRange((selectedBooking as any)?.start_timestamp, (selectedBooking as any)?.end_timestamp) : null,
+          fromStatus: null,
+          toStatus: null,
+          meta: {
+            eventid: createdEventId,
+            courtbookingid: data?.event?.courtbookingid,
+            start_timestamp: (selectedBooking as any)?.start_timestamp ?? null,
+            end_timestamp: (selectedBooking as any)?.end_timestamp ?? null,
+            monetize,
+            court_name: (selectedBooking as any)?.courtName ?? (selectedBooking as any)?.court_name ?? null,
+          },
+        })
+      }
+
       // Make the created event show up immediately in lists + details.
       if (typeof createdEventId === 'number') {
         const evRow: any = data?.event
@@ -308,6 +330,22 @@ export default function EventCreateScreen() {
               bookingstatus: 'upcoming',
               note: null,
             } as any)
+
+            void appendHistory(userId, {
+              kind: 'event_booking',
+              title: `Joined your event: ${title.trim() || `Event ${eventId}`}`,
+              subtitle: null,
+              fromStatus: 'pending',
+              toStatus: String(booking?.status ?? 'pending'),
+              meta: {
+                eventid: eventId,
+                eventbookingid: booking?.eventbookingid,
+                payment_method: 'free',
+                start_timestamp: (selectedBooking as any)?.start_timestamp ?? null,
+                end_timestamp: (selectedBooking as any)?.end_timestamp ?? null,
+              },
+            })
+
             upsertUserBookingCache(booking)
             bumpParticipantsInEventsCombined(eventId, +1)
             bumpParticipantsInCreatedEventsCombined(eventId, +1)

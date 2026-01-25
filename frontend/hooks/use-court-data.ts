@@ -35,8 +35,10 @@ export function useCreateCourtBooking() {
   return useMutation({
     mutationFn: (payload: { availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string }) => createCourtBooking(payload),
     onSuccess: (_data, variables) => {
-      // Invalidate availability for this court only
-      queryClient.invalidateQueries({ queryKey: queryKeys.courtAvailability(variables.availabilityid) })
+      // Invalidate availability queries (cannot reliably map availabilityid -> courtid here)
+      queryClient.invalidateQueries({
+        predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
+      })
     },
   })
 }
@@ -60,7 +62,9 @@ export function useDeleteCourtBooking() {
     onSuccess: (_data, payload) => {
       qc.invalidateQueries({ queryKey: ['courtbookings','user', payload.userid] })
       // Invalidate availability to reflect freed slot
-      qc.invalidateQueries({ queryKey: ['courtavailability', payload.availabilityid] })
+      qc.invalidateQueries({
+        predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
+      })
     },
   })
 }
@@ -86,7 +90,9 @@ export function useCreateBookingWithPayment() {
     },
     onSuccess: (data) => {
       // After successful booking invalidate availability for re-fetch
-      qc.invalidateQueries({ queryKey: queryKeys.courtAvailability(data.booking.availabilityid) })
+      qc.invalidateQueries({
+        predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
+      })
       qc.invalidateQueries({ queryKey: ['courtbookings','user', data.booking.userid] })
     },
   })

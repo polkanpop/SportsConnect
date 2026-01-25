@@ -1,7 +1,7 @@
 import { ICONS } from "@/constants/icons";
 import { supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useState } from "react";
-import { fetchWithCache } from '@/lib/cache'
+import { hydrateThenRefresh, setCache } from '@/lib/cache'
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -26,20 +26,20 @@ export default function NotificationsPage() {
   const fetchNotifications = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const rows = await fetchWithCache<NotificationRow[]>({
-        key: 'cache:notifications:v1',
-        ttlMs: 30 * 1000, // 30s hard TTL
-        swrMs: 120 * 1000, // additional 2m background refresh window
-        fetcher: async () => {
+      await hydrateThenRefresh<NotificationRow[]>(
+        'cache:notifications:v1',
+        30 * 1000, // fresh TTL
+        60 * 1000, // allow cached fallback for a bit, but always refresh UI
+        async () => {
           const { data, error } = await supabase
             .from('notifications')
             .select('notificationid,status,userid,message,time,notificationtype,notificationtypeid,title')
             .order('time', { ascending: false })
           if (error || !data) throw new Error(error?.message || 'Failed notifications')
           return data as NotificationRow[]
-        }
-      })
-      setRows(rows)
+        },
+        (val) => setRows(Array.isArray(val) ? val : [])
+      )
     } catch (e: any) {
       setError(e.message || String(e))
     } finally { setLoading(false) }
@@ -81,6 +81,12 @@ export default function NotificationsPage() {
       copy[idx] = updated;
       return copy;
     });
+    // Best-effort cache sync
+    try {
+      const copy = [...rows]
+      copy[idx] = updated as any
+      await setCache('cache:notifications:v1', copy, 30 * 1000, 60 * 1000)
+    } catch {}
     const { error } = await supabase
       .from("notifications")
       .update({ status: "read" })
@@ -92,6 +98,11 @@ export default function NotificationsPage() {
         copy[idx] = original;
         return copy;
       });
+      try {
+        const copy = [...rows]
+        copy[idx] = original as any
+        await setCache('cache:notifications:v1', copy, 30 * 1000, 60 * 1000)
+      } catch {}
       setError(error.message);
     }
     setUpdating(null);

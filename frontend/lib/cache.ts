@@ -1,6 +1,9 @@
 // cache.ts
 // Lightweight AsyncStorage-based cache with TTL + stale-while-revalidate helper.
 // Keys are versioned externally; values stored as JSON envelope: { v: any, exp?: number, swrExp?: number }
+// Semantics:
+// - exp: hard expiry timestamp (remove after this)
+// - swrExp: soft expiry timestamp (after this, value is considered stale and will be refreshed in background)
 // Storing small JSON only. Large arrays ok but avoid huge blobs.
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -26,8 +29,15 @@ export async function getCache<T = any>(key: string): Promise<T | null> {
 export async function setCache<T = any>(key: string, value: T, ttlMs?: number, swrMs?: number): Promise<void> {
   const envelope: CacheEnvelope<T> = { v: value }
   const now = Date.now()
-  if (ttlMs && ttlMs > 0) envelope.exp = now + ttlMs
-  if (swrMs && swrMs > 0) envelope.swrExp = (envelope.exp || now) + swrMs
+  // If swrMs is provided, treat ttlMs as the "fresh" window and (ttlMs + swrMs) as the hard expiry.
+  if (ttlMs && ttlMs > 0) {
+    if (swrMs && swrMs > 0) {
+      envelope.swrExp = now + ttlMs
+      envelope.exp = now + ttlMs + swrMs
+    } else {
+      envelope.exp = now + ttlMs
+    }
+  }
   try { await AsyncStorage.setItem(key, JSON.stringify(envelope)) } catch {}
 }
 
@@ -48,7 +58,7 @@ export async function invalidateByPrefix(prefix: string): Promise<void> {
 // fetchWithCache: read-through caching with optional stale-while-revalidate
 // If hard TTL expired: fetcher() awaited & result cached.
 // If within hard TTL: returns cached immediately.
-// If hard TTL ok but stale window elapsed (swrExp exceeded): triggers background refresh (non-blocking).
+// If within hard TTL but past swrExp: triggers background refresh (non-blocking).
 export async function fetchWithCache<T = any>(opts: {
   key: string
   ttlMs: number

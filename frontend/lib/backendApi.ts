@@ -289,6 +289,8 @@ export async function addFavouriteCourt(userid: number, courtid: number) {
 		body: JSON.stringify(body),
 		debugLabel: 'addFavouriteCourt'
 	})
+	// Keep AsyncStorage cached favourites in sync for Map/courtList callers
+	try { await invalidateByPrefix(`cache:favouritecourts:user:${userid}:v1`) } catch {}
 	return data as FavouriteCourt
 }
 
@@ -297,6 +299,8 @@ export async function removeFavouriteCourt(favouriteid: number) {
 		method: 'DELETE',
 		debugLabel: 'removeFavouriteCourt'
 	})
+	// We don't have userid here; clear all favourites caches (small + safe)
+	try { await invalidateByPrefix('cache:favouritecourts:') } catch {}
 	return data as { deleted: boolean; count: number }
 }
 
@@ -320,6 +324,14 @@ export async function updateUserInfo(userid: number, data: Partial<UserInfoRow>)
 		body: JSON.stringify(data),
 		debugLabel: 'updateUserInfo'
 	})
+	// Invalidate AsyncStorage cached userinfo so cached callers (e.g. Settings) refresh immediately
+	try { await invalidateCache(`cache:userinfo:user:${userid}:v1`) } catch {}
+	// Also invalidate any react-query userinfo instances
+	try {
+		queryClient.invalidateQueries({
+			predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'userinfo' && q.queryKey[1] === userid
+		})
+	} catch {}
 	return res
 }
 
@@ -572,11 +584,14 @@ export async function getEvent(eventid: number): Promise<EventRow | null> {
 
 export async function updateEvent(eventid: number, data: Partial<EventRow>) {
 	if (eventid == null) throw new Error('eventid required')
-	return request(`/events/${encodeURIComponent(eventid)}`, {
+	const res = await request(`/events/${encodeURIComponent(eventid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateEvent'
 	}) as Promise<EventRow>
+	// Ensure combined list cache cannot stay stale after status changes
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export async function getTrainingSession(sessionid: number): Promise<TrainingSessionRow | null> {
@@ -591,11 +606,14 @@ export async function getTrainingSession(sessionid: number): Promise<TrainingSes
 
 export async function updateTrainingSession(sessionid: number, data: Partial<TrainingSessionRow>) {
 	if (sessionid == null) throw new Error('sessionid required')
-	return request(`/trainingsessions/${encodeURIComponent(sessionid)}`, {
+	const res = await request(`/trainingsessions/${encodeURIComponent(sessionid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateTrainingSession'
 	}) as Promise<TrainingSessionRow>
+	// Ensure combined list cache cannot stay stale after status changes
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 
 export async function getEventInfoByEventId(eventid: number): Promise<EventInfoMeta | null> {
@@ -801,12 +819,11 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 		}
 	})
 }
-// Cached variant (events moderately volatile: 60s TTL, 2m stale window)
+// Cached variant (events volatile): TTL-only so React Query refetches can break through.
 export async function listEventsCombinedCached(): Promise<CombinedEvent[]> {
 	return fetchWithCache<CombinedEvent[]>({
 		key: 'cache:events:combined:v1',
 		ttlMs: 60 * 1000,
-		swrMs: 120 * 1000,
 		fetcher: () => listEventsCombined()
 	})
 }
@@ -832,11 +849,13 @@ export type CreateEventWithInfoPayload = {
 
 export async function createEventWithInfo(payload: CreateEventWithInfoPayload) {
 	// Backend expects: courtbookingid,time?,title,description?,participants_cap,monetize,entry_fee?,payment_methods?
-	return request('/events/create_with_info', {
+	const res = await request('/events/create_with_info', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 		debugLabel: 'createEventWithInfo'
 	}) as Promise<{ event: EventRow; eventinfo: EventInfoMeta & { entry_fee?: number | null; support_payment_method?: string | null; participants_cap: number; join_status: boolean } }>
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export type CreateTrainingSessionWithInfoPayload = {
@@ -852,11 +871,13 @@ export type CreateTrainingSessionWithInfoPayload = {
 }
 
 export async function createTrainingSessionWithInfo(payload: CreateTrainingSessionWithInfoPayload) {
-	return request('/trainingsessions/create_with_info', {
+	const res = await request('/trainingsessions/create_with_info', {
 		method: 'POST',
 		body: JSON.stringify(payload),
 		debugLabel: 'createTrainingSessionWithInfo'
 	}) as Promise<{ session: any; sessioninfo: any }>
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 
 // Aggregate training sessions similarly.
@@ -984,12 +1005,11 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 		}
 	})
 }
-// Cached variant (sessions volatile similar to events)
+// Cached variant (sessions volatile): TTL-only so React Query refetches can break through.
 export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrainingSession[]> {
 	return fetchWithCache<CombinedTrainingSession[]>({
 		key: 'cache:trainingsessions:combined:v1',
 		ttlMs: 60 * 1000,
-		swrMs: 120 * 1000,
 		fetcher: () => listTrainingSessionsCombined()
 	})
 }
