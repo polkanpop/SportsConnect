@@ -90,7 +90,9 @@ export const ICONS = {
   signout: require('../assets/icons/signout.png'),
   bookingButton: require('../assets/icons/bookingButton.png'),
   createSuccessful: require('../assets/icons/createsuccessful.png'),
-
+  approve: require('../assets/icons/approve.png'),
+  reject: require('../assets/icons/reject.png'),
+  closeMenu: require('../assets/icons/close_menu.png'),
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   gmailButton: require('../assets/icons/gmail.png'),

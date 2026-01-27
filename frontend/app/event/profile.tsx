@@ -1,13 +1,15 @@
-import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, TextInput, Switch, Modal, FlatList, Alert, TouchableWithoutFeedback } from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, TextInput, Switch, Modal, FlatList, TouchableWithoutFeedback, ActivityIndicator } from 'react-native'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ICONS } from '@/constants/icons'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useUserInfo } from '@/hooks/use-user-info'
-import { updateUserInfo, UserInfoRow } from '@/lib/backendApi'
+import { cloudinarySignUpload, deleteMyProfilePicture, updateUserInfo, updateUserPfp } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
+import * as ImagePicker from 'expo-image-picker'
+import * as ImageManipulator from 'expo-image-manipulator'
 
 // Sport colors (copied from Map.tsx)
 const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
@@ -82,6 +84,26 @@ export default function Profile() {
   const [showBioSuccess, setShowBioSuccess] = useState(false)
   const [showUnsavedModal, setShowUnsavedModal] = useState(false)
   const bioSuccessTimerRef = useRef<any>(null)
+
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [actionModalTitle, setActionModalTitle] = useState<string>('')
+  const [actionModalMessage, setActionModalMessage] = useState<string | null>(null)
+  const [actionModalButtons, setActionModalButtons] = useState<Array<{ text: string; variant?: 'cancel' | 'confirm'; onPress: () => void }>>([])
+
+  const [uploadingPfp, setUploadingPfp] = useState(false)
+  const [pfpOverrideUri, setPfpOverrideUri] = useState<string | null>(null)
+
+  const closeActionModal = () => setShowActionModal(false)
+  const openActionModal = (opts: {
+    title: string
+    message?: string | null
+    buttons: Array<{ text: string; variant?: 'cancel' | 'confirm'; onPress: () => void }>
+  }) => {
+    setActionModalTitle(opts.title)
+    setActionModalMessage(typeof opts.message === 'string' ? opts.message : null)
+    setActionModalButtons(opts.buttons)
+    setShowActionModal(true)
+  }
 
   // Sync local state with fetched data
   useEffect(() => {
@@ -166,7 +188,11 @@ export default function Profile() {
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
     } catch (e) {
       console.error('Failed to update tags', e)
-      Alert.alert('Error', 'Failed to update tags')
+      openActionModal({
+        title: 'Error',
+        message: 'Failed to update tags',
+        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+      })
     }
   }
 
@@ -177,6 +203,178 @@ export default function Profile() {
     logTimerRef.current = setTimeout(() => {
       setShowContactLog(false)
     }, 5000)
+  }
+
+  const uploadToCloudinary = async (localUri: string) => {
+    if (!userid) throw new Error('Missing userid')
+
+    // Ensure manageable size: 512px wide, JPEG compressed
+    const resized = await ImageManipulator.manipulateAsync(
+      localUri,
+      [{ resize: { width: 512 } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+    )
+
+    const sign = await cloudinarySignUpload({
+      public_id: `pfp_user_${userid}`,
+      overwrite: true,
+    })
+
+    const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(sign.cloudName)}/image/upload`
+
+    const form = new FormData()
+    form.append('file', {
+      uri: resized.uri,
+      name: `pfp_user_${userid}.jpg`,
+      type: 'image/jpeg',
+    } as any)
+    form.append('api_key', sign.apiKey)
+    form.append('timestamp', String(sign.timestamp))
+    form.append('signature', sign.signature)
+    if (sign.uploadPreset) form.append('upload_preset', String(sign.uploadPreset))
+    if (sign.folder) form.append('folder', String(sign.folder))
+    form.append('public_id', `pfp_user_${userid}`)
+    form.append('overwrite', 'true')
+
+    const resp = await fetch(endpoint, { method: 'POST', body: form })
+    const json = await resp.json().catch(() => null)
+    if (!resp.ok) {
+      const msg = json?.error?.message || `Upload failed (HTTP ${resp.status})`
+      throw new Error(msg)
+    }
+    const secureUrl: string | undefined = json?.secure_url
+    if (!secureUrl) throw new Error('Upload succeeded but missing secure_url')
+    return secureUrl
+  }
+
+  const handleChangeProfilePictureFromResult = async (result: ImagePicker.ImagePickerResult) => {
+    if (!userid) {
+      openActionModal({
+        title: 'Not signed in',
+        message: 'Please log in again.',
+        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+      })
+      return
+    }
+    if (result.canceled) return
+    const uri = result.assets?.[0]?.uri
+    if (!uri) return
+
+    setUploadingPfp(true)
+    setPfpOverrideUri(uri)
+    try {
+      const remoteUrl = await uploadToCloudinary(uri)
+      await updateUserPfp(userid, remoteUrl)
+      setPfpOverrideUri(remoteUrl)
+      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+    } catch (e: any) {
+      console.error('PFP upload failed', e)
+      openActionModal({
+        title: 'Upload failed',
+        message: e?.message || 'Please try again',
+        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+      })
+      // Revert to server value
+      setPfpOverrideUri(null)
+    } finally {
+      setUploadingPfp(false)
+    }
+  }
+
+  const handlePickFromLibrary = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      openActionModal({
+        title: 'Permission needed',
+        message: 'Please allow photo library access to select a profile picture.',
+        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+      })
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    })
+    await handleChangeProfilePictureFromResult(result)
+  }
+
+  const handleTakePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync()
+    if (!perm.granted) {
+      openActionModal({
+        title: 'Permission needed',
+        message: 'Please allow camera access to take a profile picture.',
+        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+      })
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    })
+    await handleChangeProfilePictureFromResult(result)
+  }
+
+  const handlePressCamera = () => {
+    if (uploadingPfp) return
+    openActionModal({
+      title: 'Profile picture',
+      message: 'Choose a photo from your library or take a new one.',
+      buttons: [
+        {
+          text: 'Take photo',
+          variant: 'confirm',
+          onPress: () => {
+            closeActionModal()
+            void handleTakePhoto()
+          },
+        },
+        {
+          text: 'Choose from library',
+          variant: 'cancel',
+          onPress: () => {
+            closeActionModal()
+            void handlePickFromLibrary()
+          },
+        },
+        {
+          text: 'Delete profile picture',
+          variant: 'cancel',
+          onPress: () => {
+            closeActionModal()
+            void (async () => {
+              if (!userid) {
+                openActionModal({
+                  title: 'Not signed in',
+                  message: 'Please log in again.',
+                  buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+                })
+                return
+              }
+              setUploadingPfp(true)
+              setPfpOverrideUri(null)
+              try {
+                await deleteMyProfilePicture()
+                await updateUserPfp(userid, null)
+                queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+              } catch (e: any) {
+                console.error('Delete PFP failed', e)
+                openActionModal({
+                  title: 'Failed',
+                  message: e?.message || 'Could not delete profile picture',
+                  buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+                })
+              } finally {
+                setUploadingPfp(false)
+              }
+            })()
+          },
+        },
+      ],
+    })
   }
 
   return (
@@ -194,9 +392,17 @@ export default function Profile() {
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
-            <Image source={ICONS.accountCircle} style={styles.avatar} />
-            <TouchableOpacity style={styles.cameraBtn}>
-              <Image source={ICONS.camera} style={styles.cameraIcon} />
+            {pfpOverrideUri || userInfo?.pfp ? (
+              <Image source={{ uri: (pfpOverrideUri || userInfo?.pfp) as string }} style={styles.avatar} />
+            ) : (
+              <Image source={ICONS.accountCircle} style={styles.avatar} />
+            )}
+            <TouchableOpacity style={styles.cameraBtn} onPress={handlePressCamera} disabled={uploadingPfp}>
+              {uploadingPfp ? (
+                <ActivityIndicator size="small" color="#333" />
+              ) : (
+                <Image source={ICONS.camera} style={styles.cameraIcon} />
+              )}
             </TouchableOpacity>
           </View>
           <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
@@ -316,7 +522,7 @@ export default function Profile() {
       <Modal visible={showTagModal} transparent animationType="fade" onRequestClose={() => setShowTagModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTagModal(false)}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Sport</Text>
+            <Text style={styles.tagModalTitle}>Select Sport</Text>
             <View style={styles.modalTags}>
               {AVAILABLE_SPORTS.map(sport => {
                  const isSelected = tempTags.includes(sport)
@@ -367,7 +573,7 @@ export default function Profile() {
             <Text style={styles.modalTitle}>Your changes have not been saved. Are you sure you want to exit?</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+                style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
                 onPress={() => setShowUnsavedModal(false)}
                 activeOpacity={0.8}
               >
@@ -380,6 +586,57 @@ export default function Profile() {
               >
                 <Text style={styles.modalButtonConfirmText}>Exit</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Action / Info Modal (matches Settings logout modal style) */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showActionModal}
+        onRequestClose={closeActionModal}
+      >
+        <TouchableWithoutFeedback onPress={closeActionModal}>
+          <View style={styles.modalBackdrop} />
+        </TouchableWithoutFeedback>
+        <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{actionModalTitle}</Text>
+            {!!actionModalMessage && <Text style={styles.modalMessage}>{actionModalMessage}</Text>}
+            <View style={actionModalButtons.length === 2 ? styles.modalButtonsRow : undefined}>
+              {actionModalButtons.map((btn, idx) => {
+                const isConfirm = btn.variant === 'confirm'
+                const isRow = actionModalButtons.length === 2
+                const isFirstInRow = isRow && idx === 0
+                const isNotLastInColumn = !isRow && idx < actionModalButtons.length - 1
+                return (
+                  <TouchableOpacity
+                    key={`${btn.text}-${idx}`}
+                    style={[
+                      styles.modalButton,
+                      isConfirm ? styles.modalButtonConfirm : styles.modalButtonCancel,
+                      !isRow && { width: '100%', flex: 0 },
+                      isFirstInRow && { marginRight: 12 },
+                      isNotLastInColumn && { marginBottom: 10 },
+                    ]}
+                    onPress={btn.onPress}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={{
+                        color: isConfirm ? '#FFFFFF' : '#111111',
+                        fontWeight: '600',
+                        fontSize: 15,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {btn.text}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
           </View>
         </View>
@@ -430,7 +687,7 @@ const styles = StyleSheet.create({
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '80%', backgroundColor: '#fff', borderRadius: 16, padding: 20, maxHeight: '60%' },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
+  tagModalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center', color: '#111' },
   modalTags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: 20 },
   modalTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, margin: 6, elevation: 2 },
   confirmBtn: { 
@@ -473,16 +730,29 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
   modalButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
   },
   modalButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   modalButtonCancel: {
     backgroundColor: '#E5E7EB',

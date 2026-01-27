@@ -4,7 +4,11 @@ from typing import Any, Dict, Optional
 import httpx
 from dotenv import load_dotenv
 
-# Load backend .env first, then fallback to project root
+# Load env files in order of preference:
+# 1) backend/.env (repo's backend folder)
+# 2) backend/backend/.env (legacy nested backend folder)
+# 3) whatever python-dotenv finds from CWD
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 load_dotenv()
 

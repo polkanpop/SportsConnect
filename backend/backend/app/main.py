@@ -38,6 +38,7 @@ from .routers import (
     reviews,
     history,
     auth,
+    cloudinary,
 )
 from .routers import debug_identity
 from fastapi_cache import FastAPICache
@@ -94,6 +95,7 @@ app.include_router(payments.router, prefix="/api")
 app.include_router(reviews.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(cloudinary.router, prefix="/api")
 
 @app.on_event("startup")
 async def _init_cache():

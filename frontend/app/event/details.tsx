@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -146,6 +145,25 @@ export default function DetailsPage() {
   const { data: userId } = useUserId()
   const [busy, setBusy] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
+
+  const [showResultModal, setShowResultModal] = useState(false)
+  const [resultModalTitle, setResultModalTitle] = useState('')
+  const [resultModalMessage, setResultModalMessage] = useState<string | null>(null)
+  const [resultModalOnClose, setResultModalOnClose] = useState<(() => void) | null>(null)
+
+  const closeResultModal = () => {
+    setShowResultModal(false)
+    const cb = resultModalOnClose
+    setResultModalOnClose(null)
+    if (cb) cb()
+  }
+
+  const openResultModal = (title: string, message?: string | null, onClose?: () => void) => {
+    setResultModalTitle(title)
+    setResultModalMessage(typeof message === 'string' ? message : null)
+    setResultModalOnClose(typeof onClose === 'function' ? onClose : null)
+    setShowResultModal(true)
+  }
 
   const needsEventsCombined =
     parsed.kind === 'event_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_event'
@@ -629,8 +647,7 @@ export default function DetailsPage() {
         }, 15_000)
       }
 
-      Alert.alert('Cancelled', 'This record has been cancelled.')
-      router.back()
+      openResultModal('Cancelled', 'This record has been cancelled.', () => router.back())
     },
     onError: (_err, _vars, ctx) => {
       const undo = (ctx as any)?.undo as Array<{ key: readonly unknown[]; prev: any }> | undefined
@@ -759,7 +776,7 @@ export default function DetailsPage() {
       setBusy(true)
       await cancelMutation.mutateAsync()
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Could not cancel this record')
+      openResultModal('Failed', e?.message || 'Could not cancel this record')
     } finally {
       setBusy(false)
     }
@@ -845,6 +862,32 @@ export default function DetailsPage() {
                 disabled={busy || cancelMutation.isPending}
               >
                 <Text style={styles.modalButtonConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showResultModal}
+        onRequestClose={closeResultModal}
+      >
+        <TouchableWithoutFeedback onPress={closeResultModal}>
+          <View style={styles.modalBackdrop} />
+        </TouchableWithoutFeedback>
+        <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{resultModalTitle}</Text>
+            {!!resultModalMessage && <Text style={styles.modalMessage}>{resultModalMessage}</Text>}
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={closeResultModal}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalButtonCancelText}>OK</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1139,6 +1182,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#111',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#374151',
     textAlign: 'center',
     marginBottom: 18,
   },

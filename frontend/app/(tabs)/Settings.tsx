@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showSignOutModal, setShowSignOutModal] = useState<boolean>(false);
+  const [profilePfp, setProfilePfp] = useState<string | null>(null);
 
   const refreshName = useCallback(async (opts?: { showRefresh?: boolean }) => {
     const showRefresh = !!opts?.showRefresh;
@@ -40,10 +41,12 @@ export default function SettingsPage() {
           if (parsed?.userid) {
             const row = await getUserInfoByUserIdCached(parsed.userid);
             if (row?.name) setDisplayName(row.name);
+            setProfilePfp((row as any)?.pfp ?? null);
           }
         } catch {/* ignore parse errors */}
       } else {
         setDisplayName('Guest');
+        setProfilePfp(null);
       }
     } catch (e: any) {
       setError(e.message || 'Failed loading name');
@@ -110,7 +113,11 @@ export default function SettingsPage() {
           activeOpacity={0.8}
           onPress={() => router.push("/event/profile")}
         >
-          <Image source={ICONS.accountCircle} style={styles.profileIcon} />
+          {profilePfp ? (
+            <Image source={{ uri: profilePfp }} style={styles.profilePhoto} />
+          ) : (
+            <Image source={ICONS.accountCircle} style={styles.profileIcon} />
+          )}
           <Text style={styles.username}>{loadingName ? 'Loading...' : displayName || 'Guest'}</Text>
         </TouchableOpacity>
         {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
@@ -151,7 +158,7 @@ export default function SettingsPage() {
             <Text style={styles.modalTitle}>Are you sure you want to sign out ?</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+                style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
                 onPress={closeSignOutModal}
                 activeOpacity={0.8}
               >
@@ -214,6 +221,13 @@ const styles = StyleSheet.create({
     height: 95,
     tintColor: "#000000",
     marginTop: 0,
+  },
+  profilePhoto: {
+    width: 95,
+    height: 95,
+    borderRadius: 48,
+    marginTop: 0,
+    backgroundColor: '#E5E7EB',
   },
   username: {
     marginTop: 0,
@@ -290,7 +304,6 @@ const styles = StyleSheet.create({
   modalButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
   },
   modalButton: {
     flex: 1,

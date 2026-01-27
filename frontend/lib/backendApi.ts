@@ -81,7 +81,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		}
 	}
 	// Preflight: if this endpoint is protected (heuristic) ensure access token fresh
-	const isProtectedEndpoint = /^(?:\/courtbookings|\/events|\/trainingsessions|\/favouritecourts|\/courtavailability|\/courtinfo)/.test(path)
+	const isProtectedEndpoint = /^(?:\/courtbookings|\/events|\/trainingsessions|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
 	if (isProtectedEndpoint) {
 		const bt = await getLocalBackendToken()
 		const nowMs = Date.now()
@@ -308,7 +308,7 @@ export async function removeFavouriteCourt(favouriteid: number) {
 // ---- User Info API ----
 // GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
 // Helper to fetch first row by userid.
-export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null }
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null; pfp?: string | null }
 
 export async function getUserInfoByUserId(userid: number) {
 	if (userid == null) throw new Error('userid required')
@@ -334,6 +334,59 @@ export async function updateUserInfo(userid: number, data: Partial<UserInfoRow>)
 		})
 	} catch {}
 	return res
+}
+
+// ---- Cloudinary (signed uploads) ----
+export type CloudinarySignResponse = {
+	cloudName: string
+	apiKey: string
+	timestamp: number
+	signature: string
+	uploadPreset?: string | null
+	folder?: string | null
+}
+
+export async function cloudinarySignUpload(payload: {
+	public_id?: string
+	overwrite?: boolean
+	invalidate?: boolean
+	folder?: string
+	upload_preset?: string
+} = {}): Promise<CloudinarySignResponse> {
+	const data = await request('/cloudinary/sign', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'cloudinarySignUpload'
+	})
+	return data as CloudinarySignResponse
+}
+
+export async function updateUserPfp(userid: number, pfp: string | null) {
+	const res = await request(`/userinfo/${encodeURIComponent(userid)}/pfp`, {
+		method: 'PATCH',
+		body: JSON.stringify({ pfp }),
+		debugLabel: 'updateUserPfp'
+	})
+	// Keep cache/query in sync
+	try { await invalidateCache(`cache:userinfo:user:${userid}:v1`) } catch {}
+	try {
+		queryClient.invalidateQueries({
+			predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'userinfo' && q.queryKey[1] === userid
+		})
+	} catch {}
+	return res
+}
+
+export async function deleteMyProfilePicture(): Promise<{ cloudinaryResult: string; pfpCleared: boolean }> {
+	const res = await request('/cloudinary/pfp/delete', {
+		method: 'POST',
+		body: JSON.stringify({}),
+		debugLabel: 'deleteMyProfilePicture'
+	})
+	// Invalidate userinfo caches (userid unknown here; caller may also invalidate their specific key)
+	try { invalidateByPrefix('userinfo') } catch {}
+	try { queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'userinfo' }) } catch {}
+	return { cloudinaryResult: String((res as any)?.cloudinaryResult || ''), pfpCleared: !!(res as any)?.pfpCleared }
 }
 
 // Cached variant: user info display name rarely changes; short TTL

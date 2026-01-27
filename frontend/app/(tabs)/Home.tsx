@@ -2,16 +2,34 @@
 import { ICONS } from "@/constants/icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Image, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
 import { listFavouriteCourts, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from "@/lib/backendApi";
 import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAuthContext } from "@/hooks/use-auth-context";
+import { useUserInfo } from "@/hooks/use-user-info";
+import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Home() {
   const router = useRouter();
+
+  const [activeView, setActiveView] = useState<Exclude<ManagementPanelKey, 'court'>>('user');
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
+  const drawerW = Math.min(320, Math.max(260, Dimensions.get('window').width * 0.78));
+  const drawerX = React.useRef(new Animated.Value(-drawerW)).current;
+
+  const openMenu = () => {
+    setMenuVisible(true);
+    Animated.timing(drawerX, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+  };
+  const closeMenu = () => {
+    Animated.timing(drawerX, { toValue: -drawerW, duration: 180, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setMenuVisible(false);
+    });
+  };
 
   // Time logic
   const [now, setNow] = useState(new Date());
@@ -97,6 +115,8 @@ export default function Home() {
   const [favError, setFavError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const lastLoadAbortRef = React.useRef<AbortController | null>(null);
+
+  const { data: userInfo } = useUserInfo(currentUserId);
 
   // Unified numeric user id resolver (matches Map.tsx logic):
   // 1. Backend profile from AuthContext (login via /auth/login)
@@ -222,6 +242,7 @@ export default function Home() {
           {/* Menu Icon (Left) */}
           <TouchableOpacity
             activeOpacity={0.7}
+            onPress={openMenu}
           >
             <Image
               source={ICONS.homepageMenu}
@@ -246,26 +267,35 @@ export default function Home() {
             activeOpacity={0.7}
             onPress={() => router.push("/event/profile")}
           >
-            <Image
-              source={ICONS.accountCircle}
-              style={{ width: 42, height: 42 }}
-              resizeMode="contain"
-            />
+            {userInfo?.pfp ? (
+              <Image
+                source={{ uri: userInfo.pfp as string }}
+                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#E5E7EB' }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={ICONS.accountCircle}
+                style={{ width: 42, height: 42 }}
+                resizeMode="contain"
+              />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Scroll View Content */}
-        <ScrollView
-          style={{ flex: 1, backgroundColor: "#F0F0F0", paddingHorizontal: 8 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 10 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={loadingFavs}
-              onRefresh={() => loadFavorites(true)}
-            />
-          }
-        >
+        {/* Body */}
+        {activeView === 'user' ? (
+          <ScrollView
+            style={{ flex: 1, backgroundColor: "#F0F0F0", paddingHorizontal: 8 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 10 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={loadingFavs}
+                onRefresh={() => loadFavorites(true)}
+              />
+            }
+          >
           {/* Categories Section */}
           <View
             style={{
@@ -451,7 +481,66 @@ export default function Home() {
               ))}
             </ScrollView>
           </View>
-        </ScrollView>
+          </ScrollView>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: '#F0F0F0' }} />
+        )}
+
+        {/* Left Drawer Menu */}
+        <Modal visible={menuVisible} transparent animationType="none" onRequestClose={closeMenu}>
+          <View style={{ flex: 1 }}>
+            {/* Tap outside to close */}
+            <Pressable
+              onPress={closeMenu}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.35)',
+              }}
+            />
+
+            {/* Drawer */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: drawerW,
+                backgroundColor: '#FFFFFF',
+                paddingTop: 18,
+                paddingHorizontal: 16,
+                transform: [{ translateX: drawerX }],
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
+                <Text style={{ fontSize: 24, lineHeight: 28, fontWeight: '800', color: '#111' }}>Menu</Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={closeMenu}
+                  style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Image source={ICONS.closeMenu} style={{ width: 20, height: 20, tintColor: '#111' }} resizeMode="contain" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 22 }} />
+
+              <ManagementPanel
+                active={activeView as ManagementPanelKey}
+                expanded={managementPanelExpanded}
+                onExpandedChange={setManagementPanelExpanded}
+                onSelect={(key) => {
+                  setActiveView(key);
+                  closeMenu();
+                }}
+              />
+            </Animated.View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </SafeAreaProvider>
   );
