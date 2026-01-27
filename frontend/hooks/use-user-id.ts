@@ -16,11 +16,17 @@ async function resolveUserId(profile: any): Promise<number | null> {
       }
     } catch {}
   }
-  const dbg = await debugIdentity()
-  const numericSubject = dbg?.numeric_subject ?? null
-  // Only use numericSubject when no local backend userid is available.
-  if (local == null && numericSubject != null) return numericSubject
-  return local
+
+  // If we already have a backend userid locally, avoid network calls.
+  if (local != null) return local
+
+  // Last resort: ask backend who we are (may fail/hang; backendApi adds a timeout).
+  try {
+    const dbg = await debugIdentity()
+    const numericSubject = dbg?.numeric_subject ?? null
+    if (numericSubject != null) return numericSubject
+  } catch {}
+  return null
 }
 
 export function useUserId() {

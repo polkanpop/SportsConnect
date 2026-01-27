@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { getCache, setCache } from '@/lib/cache'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -24,16 +25,16 @@ function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue']): string[] {
 
 // Sport color map (extend as needed)
 const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  tennis: { bg: '#32CD32', color: '#fff' },
-  tabletennis: { bg: '#32CD32', color: '#fff' },
-  badminton: { bg: '#32CD32', color: '#fff' },
-  basketball: { bg: '#FFA500', color: '#111' },
-  volleyball: { bg: '#FFA500', color: '#111' },
-  golf: { bg: '#2e8b57', color: '#fff' },
-  running: { bg: '#4682B4', color: '#fff' },
-  pickleball: { bg: '#FF69B4', color: '#111' },
+  football: { bg: COLORS.neutral0, color: COLORS.neutral975, border: COLORS.neutral525 },
+  soccer: { bg: COLORS.neutral0, color: COLORS.neutral975, border: COLORS.neutral525 },
+  tennis: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
+  tabletennis: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
+  badminton: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
+  basketball: { bg: COLORS.orange500, color: COLORS.neutral975 },
+  volleyball: { bg: COLORS.orange500, color: COLORS.neutral975 },
+  golf: { bg: COLORS.seaGreen, color: COLORS.neutral0 },
+  running: { bg: COLORS.steelBlue, color: COLORS.neutral0 },
+  pickleball: { bg: COLORS.hotPink, color: COLORS.neutral975 },
 };
 
 const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase();
@@ -98,29 +99,30 @@ const CourtListScreen = () => {
     return null
   }, [profile])
 
+  const loadCourts = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      // Attempt cached value first
+      const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
+      if (cached && cached.length) {
+        setAllCourts(cached.filter(r => (r.availability || '').toLowerCase() === 'available'))
+      }
+      const rows = await listCourtInfoCached()
+      const available = rows.filter(r => (r.availability || '').toLowerCase() === 'available')
+      setAllCourts(available)
+      await setCache('cache:courtinfo:v1', rows, 5 * 60 * 1000, 5 * 60 * 1000)
+    } catch (e: any) {
+      setError(e.message || String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   // Fetch court info once
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        // Attempt cached value first
-        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
-        if (cached && cached.length) {
-          setAllCourts(cached.filter(r => (r.availability || '').toLowerCase() === 'available'))
-        }
-        const rows = await listCourtInfoCached()
-        const available = rows.filter(r => (r.availability || '').toLowerCase() === 'available')
-        setAllCourts(available)
-        await setCache('cache:courtinfo:v1', rows, 5 * 60 * 1000, 5 * 60 * 1000)
-      } catch (e: any) {
-        setError(e.message || String(e))
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+    loadCourts()
+  }, [loadCourts])
 
   // Load favourites for current user
   const loadFavourites = useCallback(async () => {
@@ -209,6 +211,13 @@ const CourtListScreen = () => {
     if (openFilter) setOpenFilter(null)
   }
 
+  const onPullToRefresh = useCallback(async () => {
+    await Promise.all([
+      loadCourts(),
+      loadFavourites(),
+    ])
+  }, [loadCourts, loadFavourites])
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Back button row (moved above search bar) */}
@@ -223,7 +232,7 @@ const CourtListScreen = () => {
           <Image source={ICONS.search} style={styles.searchIcon} />
           <TextInput
             placeholder='Search for courts...'
-            placeholderTextColor={'#777'}
+            placeholderTextColor={COLORS.neutral750}
             value={search}
             onChangeText={setSearch}
             style={styles.searchInput}
@@ -235,36 +244,36 @@ const CourtListScreen = () => {
         {/* Filter buttons row */}
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
-          <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterButtonActive]}
-            onPress={() => setOpenFilter(openFilter === 'sport' ? null : 'sport')}
-          >
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterTextActive]}>Sport</Text>
-            {selectedSports.length > 0 && <Text style={styles.countBadge}>{selectedSports.length}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
-            onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
-          >
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>Venue</Text>
-            {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, showFavouritesOnly && styles.filterButtonActive]}
-            onPress={() => setShowFavouritesOnly(prev => !prev)}
-          >
-            <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
-            <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>Favourite</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, (minPriceK || maxPriceK || openFilter === 'price') && styles.filterButtonActive]}
-            onPress={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
-          >
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterTextActive]}>Price</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterButtonActive]}
+              onPress={() => setOpenFilter(openFilter === 'sport' ? null : 'sport')}
+            >
+              <Image source={ICONS.menu} style={styles.filterIcon} />
+              <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterTextActive]}>Sport</Text>
+              {selectedSports.length > 0 && <Text style={styles.countBadge}>{selectedSports.length}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
+              onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
+            >
+              <Image source={ICONS.menu} style={styles.filterIcon} />
+              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>Venue</Text>
+              {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, showFavouritesOnly && styles.filterButtonActive]}
+              onPress={() => setShowFavouritesOnly(prev => !prev)}
+            >
+              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
+              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>Favourite</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, (minPriceK || maxPriceK || openFilter === 'price') && styles.filterButtonActive]}
+              onPress={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
+            >
+              <Image source={ICONS.menu} style={styles.filterIcon} />
+              <Text style={[styles.filterText, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterTextActive]}>Price</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
         {/* Subheader */}
@@ -299,7 +308,7 @@ const CourtListScreen = () => {
                     value={minPriceK}
                     onChangeText={t => setMinPriceK(t.replace(/[^0-9]/g, ''))}
                     placeholder="e.g. 50"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={COLORS.neutral650}
                     keyboardType="numeric"
                     style={styles.priceInput}
                   />
@@ -310,7 +319,7 @@ const CourtListScreen = () => {
                     value={maxPriceK}
                     onChangeText={t => setMaxPriceK(t.replace(/[^0-9]/g, ''))}
                     placeholder="e.g. 120"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={COLORS.neutral650}
                     keyboardType="numeric"
                     style={styles.priceInput}
                   />
@@ -338,9 +347,15 @@ const CourtListScreen = () => {
           contentContainerStyle={{ paddingBottom: 40 }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={onPullToRefresh}
+            />
+          }
         >
           {loading && <Text style={styles.statusText}>Loading courts...</Text>}
-          {error && <Text style={[styles.statusText, { color: 'red' }]}>Failed: {error}</Text>}
+          {error && <Text style={[styles.statusText, { color: COLORS.danger }]}>Failed: {error}</Text>}
           {!loading && !error && filteredCourts.length === 0 && (
             <Text style={styles.statusText}>No courts match your filters.</Text>
           )}
@@ -377,7 +392,7 @@ const CourtListScreen = () => {
                       return (
                         <View
                           key={s}
-                          style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
+                          style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || COLORS.transparent, borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
                         >
                           <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{s}</Text>
                         </View>
@@ -385,7 +400,7 @@ const CourtListScreen = () => {
                     })}
                     {venueDisplay.map(v => (
                       <View key={v} style={[styles.tag, styles.venueTag]}>
-                        <Text style={[styles.tagText, { color: '#fff' }]}>{v}</Text>
+                        <Text style={[styles.tagText, { color: COLORS.neutral0 }]}>{v}</Text>
                       </View>
                     ))}
                   </View>
@@ -413,85 +428,85 @@ const CourtListScreen = () => {
 export default CourtListScreen
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#ffffff' },
+  safe: { flex: 1, backgroundColor: COLORS.neutral0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, marginBottom: 13 },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 4 },
-  backButton: { padding: 8, marginRight: 8, borderRadius: 28, backgroundColor: '#f2f2f2' },
-  backIcon: { width: 24, height: 24, tintColor: '#333', resizeMode: 'contain' },
-  searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', borderRadius: 24, paddingHorizontal: 14, paddingVertical: 10 },
-  searchIcon: { width: 18, height: 18, tintColor: '#666', marginRight: 8, resizeMode: 'contain' },
+  backButton: { padding: 8, marginRight: 8, borderRadius: 28, backgroundColor: COLORS.neutral175 },
+  backIcon: { width: 24, height: 24, tintColor: COLORS.neutral925, resizeMode: 'contain' },
+  searchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.neutral125, borderRadius: 24, paddingHorizontal: 14, paddingVertical: 10 },
+  searchIcon: { width: 18, height: 18, tintColor: COLORS.neutral800, marginRight: 8, resizeMode: 'contain' },
   container: { flex: 1, paddingHorizontal: 12, paddingTop: 4 },
   // Increased spacing below search bar
   searchWrapper: { marginBottom: 10 },
-  searchInput: { flex: 1, color: '#111', fontSize: 15, paddingVertical: 0 },
+  searchInput: { flex: 1, color: COLORS.neutral975, fontSize: 15, paddingVertical: 0 },
   // More space below filters
   filterRow: { marginBottom: 12 },
   filtersInner: { flexDirection: 'row', gap: 10, paddingRight: 4 },
-  sectionTitle: { fontSize: 22, fontWeight: '500', color: '#222', marginBottom: 12, marginLeft: 4, marginTop: 15 },
+  sectionTitle: { fontSize: 22, fontWeight: '500', color: COLORS.neutral950, marginBottom: 12, marginLeft: 4, marginTop: 15 },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.neutral125,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
-  filterIcon: { width: 16, height: 16, tintColor: '#666', marginRight: 6, resizeMode: 'contain' },
-  filterText: { color: '#222', fontSize: 13, fontWeight: '600' },
-  favStarActive: { tintColor: '#fff' },
-  countBadge: { marginLeft: 6, backgroundColor: '#ddd', color: '#111', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, fontSize: 11, overflow: 'hidden', fontWeight: '600' },
+  filterIcon: { width: 16, height: 16, tintColor: COLORS.neutral800, marginRight: 6, resizeMode: 'contain' },
+  filterText: { color: COLORS.neutral950, fontSize: 13, fontWeight: '600' },
+  favStarActive: { tintColor: COLORS.neutral0 },
+  countBadge: { marginLeft: 6, backgroundColor: COLORS.neutral525, color: COLORS.neutral975, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, fontSize: 11, overflow: 'hidden', fontWeight: '600' },
   dropdownWrapper: { position: 'absolute', top: 100, left: 12, right: 12, zIndex: 20 },
   priceDropdownWrapper: { position: 'absolute', top: 45, left: 12, right: 12, zIndex: 30 },
-  dropdown: { maxHeight: 200, backgroundColor: '#ffffff', borderRadius: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#e5e5e5' },
+  dropdown: { maxHeight: 200, backgroundColor: COLORS.neutral0, borderRadius: 8, paddingVertical: 4, borderWidth: 1, borderColor: COLORS.neutral350 },
   dropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
-  dropdownItemText: { color: '#222', fontSize: 14 },
-  tickBox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: '#bbb', alignItems: 'center', justifyContent: 'center' },
-  tickBoxSelected: { backgroundColor: '#32CD32', borderColor: '#32CD32' },
-  tickText: { color: '#fff', fontSize: 14 },
+  dropdownItemText: { color: COLORS.neutral950, fontSize: 14 },
+  tickBox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: COLORS.neutral550, alignItems: 'center', justifyContent: 'center' },
+  tickBoxSelected: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
+  tickText: { color: COLORS.neutral0, fontSize: 14 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // Push list a bit further down
   list: { flex: 1, marginTop: 14 },
-  statusText: { color: '#666', fontSize: 12, paddingVertical: 12, textAlign: 'center' },
+  statusText: { color: COLORS.neutral800, fontSize: 12, paddingVertical: 12, textAlign: 'center' },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: COLORS.surfaceDark,
     borderRadius: 14,
     padding: 18,
     marginBottom: 16,
     alignItems: 'center',
     minHeight: 140,
   },
-  bookmarkIcon: { position: 'absolute', top: 36, right: 10, width: 26, height: 26, tintColor: '#FFD700', zIndex: 5, resizeMode: 'contain' },
+  bookmarkIcon: { position: 'absolute', top: 36, right: 10, width: 26, height: 26, tintColor: COLORS.gold, zIndex: 5, resizeMode: 'contain' },
   cardLeft: { flex: 1, paddingRight: 12 },
-  cardTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  cardAddress: { color: '#ccc', fontSize: 13 },
+  cardTitle: { color: COLORS.neutral0, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  cardAddress: { color: COLORS.neutral500, fontSize: 13 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
-  tag: { backgroundColor: '#333', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
-  tagFallback: { backgroundColor: '#444' },
-  venueTag: { backgroundColor: '#6a5acd' },
-  tagText: { color: '#ddd', fontSize: 11, fontWeight: '600' },
+  tag: { backgroundColor: COLORS.neutral925, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
+  tagFallback: { backgroundColor: COLORS.neutral900 },
+  venueTag: { backgroundColor: COLORS.slateBlue },
+  tagText: { color: COLORS.neutral525, fontSize: 11, fontWeight: '600' },
   cardRight: { alignItems: 'center' },
   // Slightly larger placeholder image to match the subtly bigger card
-  placeholderImg: { width: 74, height: 74, backgroundColor: '#2d2d2d', borderRadius: 10, marginBottom: 6 },
-  arrowIcon: { width: 22, height: 22, tintColor: '#888', position: 'absolute',  left:58,top:80 },
+  placeholderImg: { width: 74, height: 74, backgroundColor: COLORS.surfaceDarker, borderRadius: 10, marginBottom: 6 },
+  arrowIcon: { width: 22, height: 22, tintColor: COLORS.neutral700, position: 'absolute',  left:58,top:80 },
   // Price filter & tag styles
-  priceFilterTitle: { fontSize: 13, fontWeight: '700', color: '#222', marginBottom: 8 },
+  priceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8 },
   priceInputsRow: { flexDirection: 'row', gap: 12 },
   priceInputWrapper: { flex: 1 },
-  priceLabel: { fontSize: 12, fontWeight: '600', color: '#444', marginBottom: 4 },
-  priceInput: { backgroundColor: '#f5f5f5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: '#111' },
-  clearPriceBtn: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#eee', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  clearPriceBtnText: { fontSize: 12, fontWeight: '600', color: '#333' },
+  priceLabel: { fontSize: 12, fontWeight: '600', color: COLORS.neutral900, marginBottom: 4 },
+  priceInput: { backgroundColor: COLORS.neutral125, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: COLORS.neutral975 },
+  clearPriceBtn: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: COLORS.lightgrey, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  clearPriceBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.neutral925 },
   // header layout for price dropdown (title + optional close)
   priceDropdownHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  priceTag: { backgroundColor: '#ffe9d9', borderColor: '#ff6b3b', borderWidth: 1 },
-  priceTagText: { color: '#7c2d12', fontWeight: '700' },
+  priceTag: { backgroundColor: COLORS.orangeSoft, borderColor: COLORS.orangeAccent, borderWidth: 1 },
+  priceTagText: { color: COLORS.brown900, fontWeight: '700' },
   // Generic active filter appearance (green)
-  filterButtonActive: { backgroundColor: '#32CD32' },
-  filterTextActive: { color: '#fff' },
+  filterButtonActive: { backgroundColor: COLORS.limeGreen },
+  filterTextActive: { color: COLORS.neutral0 },
   // Price dropdown additions
-  priceCloseBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#f2f2f2', borderRadius: 8 },
-  priceCloseText: { fontSize: 12, fontWeight: '700', color: '#333' },
+  priceCloseBtn: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: COLORS.neutral175, borderRadius: 8 },
+  priceCloseText: { fontSize: 12, fontWeight: '700', color: COLORS.neutral925 },
   priceFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   entryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginBottom: 6 },
   entryTagRow: { paddingHorizontal: 10, paddingVertical: 6 },

@@ -494,6 +494,28 @@ export default function HistoryPage() {
 
           const courtType = item.kind === 'court_booking' ? (paymentMethod || '') : ''
 
+          const detailsId = (() => {
+            if (item.kind === 'court_booking' && typeof meta?.courtbookingid === 'number') return `court_${meta.courtbookingid}`
+            if (item.kind === 'event_booking' && typeof meta?.eventbookingid === 'number') return `event_${meta.eventbookingid}`
+            if (item.kind === 'session_booking' && typeof meta?.tsbookingid === 'number') return `session_${meta.tsbookingid}`
+            if (item.kind === 'created_event' && typeof meta?.eventid === 'number') return `created_event_${meta.eventid}`
+            if (item.kind === 'created_session' && typeof meta?.sessionid === 'number') return `created_session_${meta.sessionid}`
+            if (item.kind === 'payment') {
+              // Prefer linking payment to the booking it belongs to.
+              if (typeof meta?.courtbookingid === 'number') return `court_${meta.courtbookingid}`
+              if (typeof meta?.eventbookingid === 'number') return `event_${meta.eventbookingid}`
+              if (typeof meta?.tsbookingid === 'number') return `session_${meta.tsbookingid}`
+              if (typeof meta?.eventid === 'number') return `created_event_${meta.eventid}`
+              if (typeof meta?.sessionid === 'number') return `created_session_${meta.sessionid}`
+            }
+            return ''
+          })()
+
+          const handlePress = () => {
+            if (!detailsId) return
+            router.push({ pathname: '/event/details', params: { id: detailsId } } as any)
+          }
+
           return (
             <View>
               {showDate && (
@@ -505,7 +527,12 @@ export default function HistoryPage() {
                   <View style={[styles.dot, { backgroundColor: statusColors.dot }]} />
                 </View>
 
-                <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={handlePress}
+                  disabled={!detailsId}
+                  activeOpacity={detailsId ? 0.7 : 1}
+                >
                   <View style={styles.cardTop}>
                     <View style={styles.badgeRow}>
                       {badges.map((b) => {
@@ -571,7 +598,7 @@ export default function HistoryPage() {
                   {typeof item.amount === 'number' && (
                     <Text style={styles.amount}>Amount: {Math.round(item.amount).toLocaleString()}₫</Text>
                   )}
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
           )

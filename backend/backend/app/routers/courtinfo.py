@@ -11,7 +11,7 @@ async def list_courts(courtids: str | None = Query(default=None)):
     """List courtinfo rows. Optional filter: ?courtids=1,2,3
     (Client-side subset until REST helper supports IN filter)."""
     try:
-        select_cols = "courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability"
+        select_cols = "courtinfoid,courtid,name,address,latitude,longitude,sport,venue,images,availability"
         data_all = rest_select(
             "courtinfo",
             select_cols,
@@ -34,7 +34,7 @@ async def get_court(courtinfoid: int):
     try:
         data = rest_select(
             "courtinfo",
-            "courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability",
+            "courtinfoid,courtid,name,address,latitude,longitude,sport,venue,images,availability",
             filters={"courtinfoid": courtinfoid},
             single=True,
         )

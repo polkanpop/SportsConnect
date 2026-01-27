@@ -15,9 +15,10 @@ import { useUserId } from "@/hooks/use-user-id";
 import { queryKeys } from "@/hooks/query-keys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
+import { COLORS } from "@/constants/colors";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -311,6 +312,7 @@ export default function ActivityPage() {
   const [statusFilter, setStatusFilter] = useState<"All" | "Upcoming" | "Completed" | "Cancelled">("All");
   const [activityKindFilter, setActivityKindFilter] = useState<"All" | "Court" | "Event" | "TS">("All");
   const [openFilter, setOpenFilter] = useState<null | 'status' | 'activity' | 'type'>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const statusLabel = statusFilter === 'All' ? 'Status' : statusFilter;
   const activityLabel = activityKindFilter === 'All' ? 'Activity' : activityKindFilter;
@@ -319,6 +321,34 @@ export default function ActivityPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: userId, isLoading: userIdLoading, error: userIdError } = useUserId();
+
+  const onPullToRefresh = useCallback(async () => {
+    if (typeof userId !== 'number') return;
+    setRefreshing(true);
+    try {
+      // Bust combined-list caches so refetch returns fresh.
+      await Promise.all([
+        invalidateEventsCombinedCache(),
+        invalidateTrainingSessionsCombinedCache(),
+      ]);
+
+      // Refetch booking + enrichment queries.
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['courtBookings', userId] }),
+        queryClient.refetchQueries({ queryKey: ['eventBookings', userId] }),
+        queryClient.refetchQueries({ queryKey: ['trainingSessionBookings', userId] }),
+        queryClient.refetchQueries({ queryKey: queryKeys.eventsCombined }),
+        queryClient.refetchQueries({ queryKey: queryKeys.trainingSessionsCombined }),
+        queryClient.refetchQueries({ queryKey: ['courtAvailabilityAll'] }),
+        queryClient.refetchQueries({ queryKey: ['courtInfoAll'] }),
+        // Hosting-mode queries (safe to call; refetches only if query exists)
+        queryClient.refetchQueries({ queryKey: ['createdEventsCombined', userId] }),
+        queryClient.refetchQueries({ queryKey: ['createdTrainingSessionsCombined', userId] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [queryClient, userId]);
 
   // Ensure bookings refresh when returning to this tab after creating a booking.
   useFocusEffect(
@@ -590,15 +620,26 @@ export default function ActivityPage() {
     )
   }
 
+  if (!userIdLoading && typeof userId !== 'number') {
+    return (
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral75, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={{ marginTop: 10, color: COLORS.neutral850, textAlign: 'center' }}>
+          Please log in to view your activity.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
   const loadError = userIdError ||
     (calendarMode === 'Hosting'
       ? (createdEventsError || createdSessionsError)
       : (courtError || eventError || trainingError));
   if (loadError) {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: '#F9F9F9' }}>
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral75 }}>
         <Text style={styles.headerTitle}>Activity</Text>
-        <Text style={{ marginTop: 10, color: '#DC3545' }}>
+        <Text style={{ marginTop: 10, color: COLORS.danger }}>
           Failed to load activity records. Check Metro logs for request details.
         </Text>
       </SafeAreaView>
@@ -606,7 +647,7 @@ export default function ActivityPage() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F9F9" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral75 }}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Activity</Text>
         <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/event/history")}>
@@ -619,7 +660,12 @@ export default function ActivityPage() {
 
       <View style={styles.divider} />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 160 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullToRefresh} />}
+      >
         <View style={styles.calendarContainer}>
           <Text style={styles.monthHeader}>{monthLabel || 'Calendar'}</Text>
           <View style={styles.calendarControlsRow}>
@@ -707,7 +753,7 @@ export default function ActivityPage() {
             renderRecord(selectedActivity)
           ) : (
             <View style={{ paddingVertical: 6 }}>
-              <Text style={{ color: '#555' }}>Tap an icon to preview.</Text>
+              <Text style={{ color: COLORS.neutral850 }}>Tap an icon to preview.</Text>
             </View>
           )}
         </View>
@@ -824,7 +870,7 @@ export default function ActivityPage() {
 
           {filteredData.length === 0 ? (
             <View style={{ paddingVertical: 20 }}>
-              <Text style={{ color: '#555' }}>No activity records found.</Text>
+              <Text style={{ color: COLORS.neutral850 }}>No activity records found.</Text>
             </View>
           ) : (
             filteredData.map((item) => <View key={item.id}>{renderRecord(item)}</View>)
@@ -841,7 +887,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: COLORS.neutral200,
   },
   headerTitle: {
     fontSize: 24,
@@ -853,7 +899,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   historyButtonContainer: {
-    backgroundColor: "#a9a9a9",
+    backgroundColor: COLORS.darkGray,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 30,
@@ -864,20 +910,20 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     marginRight: 5,
-    tintColor: "#fff",
+    tintColor: COLORS.white,
   },
   historyText: {
     fontSize: 16,
-    color: "#fff",
+    color: COLORS.white,
   },
   divider: {
     height: 1,
-    backgroundColor: "#E0E0E0",
+    backgroundColor: COLORS.neutral425,
     marginVertical: 10,
   },
   calendarContainer: {
     padding: 20,
-    backgroundColor: "#FFF",
+    backgroundColor: COLORS.white,
     marginBottom: 10,
   },
   calendar: {
@@ -890,7 +936,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   todayContainer: {
-    backgroundColor: '#e0f7fa',
+    backgroundColor: COLORS.cyan50,
     borderRadius: 10,
     overflow: 'hidden',
   },
@@ -903,21 +949,21 @@ const styles = StyleSheet.create({
     minWidth: 34,
   },
   todayHeader: {
-    backgroundColor: '#e0f7fa',
+    backgroundColor: COLORS.cyan50,
   },
   dayText: {
     fontSize: 13,
-    color: "#444",
+    color: COLORS.neutral900,
   },
   dateText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: "#111",
+    color: COLORS.neutral975,
   },
   calendarDaySeparator: {
     height: 1,
     width: '80%',
-    backgroundColor: '#E0E0E0',
+    backgroundColor: COLORS.neutral425,
     marginVertical: 5,
   },
   bookingsContainer: {
@@ -935,7 +981,7 @@ const styles = StyleSheet.create({
   activityRecordsContainer: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#FFF",
+    backgroundColor: COLORS.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     position: 'relative',
@@ -953,11 +999,11 @@ const styles = StyleSheet.create({
   monthHeader: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111',
+    color: COLORS.neutral975,
   },
   viewAllText: {
     fontSize: 16,
-    color: "#007BFF",
+    color: COLORS.bootstrapBlue,
     textDecorationLine: 'underline',
     fontStyle: 'italic',
   },
@@ -965,7 +1011,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     padding: 15,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: COLORS.neutral125,
     borderRadius: 10,
     marginBottom: 10,
   },
@@ -993,12 +1039,12 @@ const styles = StyleSheet.create({
   },
   eventTime: {
     fontSize: 14,
-    color: "#555",
+    color: COLORS.neutral850,
     marginBottom: 5,
   },
   eventTimeLabel: {
     fontWeight: '900',
-    color: '#111',
+    color: COLORS.neutral975,
   },
   statusPill: {
     paddingVertical: 5,
@@ -1010,16 +1056,16 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: "bold",
-    color: "#FFF",
+    color: COLORS.white,
   },
   completed: {
-    backgroundColor: "#28A745",
+    backgroundColor: COLORS.success,
   },
   upcoming: {
-    backgroundColor: "#007BFF",
+    backgroundColor: COLORS.bootstrapBlue,
   },
   cancelled: {
-    backgroundColor: "#DC3545",
+    backgroundColor: COLORS.danger,
   },
   calendarControlsRow: {
     flexDirection: 'row',
@@ -1032,7 +1078,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#EDEDED',
+    backgroundColor: COLORS.neutral250,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1042,13 +1088,13 @@ const styles = StyleSheet.create({
   weekNavIcon: {
     width: 20,
     height: 20,
-    tintColor: '#333',
+    tintColor: COLORS.neutral925,
     resizeMode: 'contain',
   },
   modeSegmentContainer: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.neutral200,
     borderRadius: 999,
     padding: 4,
   },
@@ -1060,22 +1106,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modeSegmentActive: {
-    backgroundColor: '#007BFF',
+    backgroundColor: COLORS.bootstrapBlue,
   },
   modeSegmentText: {
-    color: '#111',
+    color: COLORS.neutral975,
     fontWeight: '700',
   },
   modeSegmentTextActive: {
-    color: '#FFF',
+    color: COLORS.white,
   },
   upcomingSection: {
     padding: 20,
-    backgroundColor: '#FFF',
+    backgroundColor: COLORS.white,
     marginBottom: 10,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: COLORS.neutral425,
   },
   upcomingHeader: {
     flexDirection: 'row',
@@ -1089,7 +1135,7 @@ const styles = StyleSheet.create({
     padding: 4,
     marginTop: 10,
     marginBottom: 6,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.neutral200,
     borderRadius: 12,
   },
   filterTab: {
@@ -1100,15 +1146,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeFilterTab: {
-    backgroundColor: '#007BFF',
+    backgroundColor: COLORS.bootstrapBlue,
   },
   filterTabText: {
     fontSize: 14,
-    color: '#333',
+    color: COLORS.neutral925,
     fontWeight: '600',
   },
   activeFilterTabText: {
-    color: '#FFF',
+    color: COLORS.white,
   },
 
   expandFiltersContainer: {
@@ -1125,16 +1171,16 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   dropdownTrigger: {
-    backgroundColor: '#FFF',
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#E3E3E3',
+    borderColor: COLORS.neutral375,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     minWidth: 130,
   },
   dropdownTriggerActive: {
-    borderColor: '#007BFF',
+    borderColor: COLORS.bootstrapBlue,
   },
   dropdownTriggerContent: {
     flexDirection: 'row',
@@ -1145,13 +1191,13 @@ const styles = StyleSheet.create({
   dropdownTriggerText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111',
+    color: COLORS.neutral975,
     flexShrink: 1,
   },
   dropdownCaret: {
     width: 16,
     height: 16,
-    tintColor: '#444',
+    tintColor: COLORS.neutral900,
     resizeMode: 'contain',
     transform: [{ rotate: '90deg' }],
   },
@@ -1171,10 +1217,10 @@ const styles = StyleSheet.create({
     top: 52,
     left: 0,
     width: 240,
-    backgroundColor: '#FFF',
+    backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E3E3E3',
+    borderColor: COLORS.neutral375,
     overflow: 'hidden',
     elevation: 6,
     zIndex: 60,
@@ -1187,14 +1233,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   dropdownItemPressed: {
-    backgroundColor: '#F3F3F3',
+    backgroundColor: COLORS.neutral150,
   },
   dropdownItemSelected: {
-    backgroundColor: '#F3F3F3',
+    backgroundColor: COLORS.neutral150,
   },
   dropdownItemText: {
     fontSize: 14,
-    color: '#111',
+    color: COLORS.neutral975,
     fontWeight: '700',
   },
   tickBox: {
@@ -1204,7 +1250,7 @@ const styles = StyleSheet.create({
   tickText: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#111',
+    color: COLORS.neutral975,
   },
   expandFilterHeader: {
     flexDirection: 'row',
@@ -1212,13 +1258,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.neutral200,
     borderRadius: 12,
   },
   expandFilterLabel: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#111',
+    color: COLORS.neutral975,
   },
   expandFilterRight: {
     flexDirection: 'row',
@@ -1228,12 +1274,12 @@ const styles = StyleSheet.create({
   expandChevron: {
     width: 16,
     height: 16,
-    tintColor: '#333',
+    tintColor: COLORS.neutral925,
     resizeMode: 'contain',
     transform: [{ rotate: '0deg' }],
   },
   selectedChip: {
-    backgroundColor: '#E7E7E7',
+    backgroundColor: COLORS.neutral340,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1241,7 +1287,7 @@ const styles = StyleSheet.create({
   selectedChipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#111',
+    color: COLORS.neutral975,
   },
   expandOptionsWrap: {
     flexDirection: 'row',
@@ -1254,17 +1300,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: COLORS.neutral200,
   },
   optionChipActive: {
-    backgroundColor: '#007BFF',
+    backgroundColor: COLORS.bootstrapBlue,
   },
   optionChipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#333',
+    color: COLORS.neutral925,
   },
   optionChipTextActive: {
-    color: '#FFF',
+    color: COLORS.white,
   },
 });

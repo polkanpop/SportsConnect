@@ -8,8 +8,6 @@ class CourtInfo(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    latitudedelta: Optional[float] = None
-    longitudedelta: Optional[float] = None
     sport: Optional[Union[List[str], str]] = None
     venue: Optional[Union[List[str], str]] = None
     images: Optional[List[str]] = None

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import { listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
@@ -19,16 +20,16 @@ function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | 
 }
 const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
 const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  tennis: { bg: '#32CD32', color: '#fff' },
-  tabletennis: { bg: '#32CD32', color: '#fff' },
-  badminton: { bg: '#32CD32', color: '#fff' },
-  basketball: { bg: '#FFA500', color: '#111' },
-  volleyball: { bg: '#FFA500', color: '#111' },
-  golf: { bg: '#2e8b57', color: '#fff' },
-  running: { bg: '#4682B4', color: '#fff' },
-  pickleball: { bg: '#FF69B4', color: '#111' },
+  football: { bg: COLORS.white, color: COLORS.neutral975, border: COLORS.neutral525 },
+  soccer: { bg: COLORS.white, color: COLORS.neutral975, border: COLORS.neutral525 },
+  tennis: { bg: COLORS.limeGreen, color: COLORS.white },
+  tabletennis: { bg: COLORS.limeGreen, color: COLORS.white },
+  badminton: { bg: COLORS.limeGreen, color: COLORS.white },
+  basketball: { bg: COLORS.orange500, color: COLORS.neutral975 },
+  volleyball: { bg: COLORS.orange500, color: COLORS.neutral975 },
+  golf: { bg: COLORS.seaGreen, color: COLORS.white },
+  running: { bg: COLORS.steelBlue, color: COLORS.white },
+  pickleball: { bg: COLORS.hotPink, color: COLORS.neutral975 },
 }
 
 const TrainingSessionListScreen = () => {
@@ -128,7 +129,7 @@ const TrainingSessionListScreen = () => {
       <View style={styles.searchRow}>
         <View style={styles.searchContainer}>
           <Image source={ICONS.search} style={styles.searchIcon} />
-          <TextInput placeholder='Search sessions...' placeholderTextColor={'#777'} value={search} onChangeText={setSearch} style={styles.searchInput} />
+          <TextInput placeholder='Search sessions...' placeholderTextColor={COLORS.neutral750} value={search} onChangeText={setSearch} style={styles.searchInput} />
         </View>
       </View>
       <View style={styles.container}>
@@ -153,8 +154,8 @@ const TrainingSessionListScreen = () => {
             onPress={togglePaymentPanel}
             disabled={freeOnly}
           >
-            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor:'#aaa' }]} />
-            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color:'#999' }]}>Payment</Text>
+            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor: COLORS.neutral600 }]} />
+            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>Payment</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
           </ScrollView>
@@ -187,7 +188,7 @@ const TrainingSessionListScreen = () => {
                   </Pressable>
                 )
               })}
-              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color:'#555' }}>Select payment methods to filter sessions.</Text>}
+              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color: COLORS.neutral850 }}>Select payment methods to filter sessions.</Text>}
               
             </ScrollView>
           </View>
@@ -198,9 +199,15 @@ const TrainingSessionListScreen = () => {
           contentContainerStyle={{ paddingBottom: 100 }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading || isFetching}
+              onRefresh={() => refetch()}
+            />
+          }
         >
           {loading && <Text style={styles.statusText}>Loading sessions...</Text>}
-          {error && <Text style={[styles.statusText,{color:'red'}]}>Failed: {error}</Text>}
+          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
           {!loading && !error && filteredSessions.length === 0 && (
             <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading sessions...</Text>
           )}
@@ -237,7 +244,7 @@ const TrainingSessionListScreen = () => {
                         </View>
                       )
                     })}
-                    {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color:'#fff'}]}>{v}</Text></View>)}
+                    {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color: COLORS.white}]}>{v}</Text></View>)}
                   </View>
                   {/* Entry fee + payment methods displayed on their own line (match events layout) */}
                   <View style={styles.entryRow}>
@@ -285,70 +292,70 @@ const TrainingSessionListScreen = () => {
 export default TrainingSessionListScreen
 
 const styles = StyleSheet.create({
-  safe:{flex:1,backgroundColor:'#ffffff'},
+  safe:{flex:1,backgroundColor:COLORS.white},
   headerRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:12,paddingTop:6,marginBottom:13},
-  backButton:{padding:8,marginRight:8,borderRadius:28,backgroundColor:'#f2f2f2'},
-  backIcon:{width:24,height:24,tintColor:'#333',resizeMode:'contain'},
+  backButton:{padding:8,marginRight:8,borderRadius:28,backgroundColor:COLORS.neutral175},
+  backIcon:{width:24,height:24,tintColor:COLORS.neutral925,resizeMode:'contain'},
   searchRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:12,paddingBottom:4},
-  searchContainer:{flex:1,flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',borderRadius:24,paddingHorizontal:14,paddingVertical:10},
-  searchIcon:{width:18,height:18,tintColor:'#666',marginRight:8,resizeMode:'contain'},
-  searchInput:{flex:1,color:'#111',fontSize:15,paddingVertical:0},
+  searchContainer:{flex:1,flexDirection:'row',alignItems:'center',backgroundColor:COLORS.neutral125,borderRadius:24,paddingHorizontal:14,paddingVertical:10},
+  searchIcon:{width:18,height:18,tintColor:COLORS.neutral800,marginRight:8,resizeMode:'contain'},
+  searchInput:{flex:1,color:COLORS.neutral975,fontSize:15,paddingVertical:0},
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
   filterRow:{marginBottom:12},
   filtersInner:{flexDirection:'row',gap:10,paddingRight:4},
-  filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:'#f5f5f5',paddingHorizontal:12,paddingVertical:6,borderRadius:20},
-  filterButtonActive:{backgroundColor:'#32CD32'},
-  filterButtonDisabled:{backgroundColor:'#f0f0f0',opacity:0.6},
-  filterIcon:{width:16,height:16,tintColor:'#666',marginRight:6,resizeMode:'contain'},
-  filterText:{color:'#222',fontSize:13,fontWeight:'600'},
-  filterTextActive:{ color:'#fff' },
-  countBadge:{marginLeft:6,backgroundColor:'#ddd',color:'#111',paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden',fontWeight:'600'},
-  sectionTitle:{fontSize:22,fontWeight:'500',color:'#222',marginBottom:12,marginLeft:4,marginTop:15},
+  filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:COLORS.neutral125,paddingHorizontal:12,paddingVertical:6,borderRadius:20},
+  filterButtonActive:{backgroundColor:COLORS.limeGreen},
+  filterButtonDisabled:{backgroundColor:COLORS.neutral200,opacity:0.6},
+  filterIcon:{width:16,height:16,tintColor:COLORS.neutral800,marginRight:6,resizeMode:'contain'},
+  filterText:{color:COLORS.neutral950,fontSize:13,fontWeight:'600'},
+  filterTextActive:{ color:COLORS.white },
+  countBadge:{marginLeft:6,backgroundColor:COLORS.neutral525,color:COLORS.neutral975,paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden',fontWeight:'600'},
+  sectionTitle:{fontSize:22,fontWeight:'500',color:COLORS.neutral950,marginBottom:12,marginLeft:4,marginTop:15},
   dropdownWrapper:{position:'absolute',top:100,left:12,right:12,zIndex:20},
-  dropdown:{maxHeight:200,backgroundColor:'#ffffff',borderRadius:8,paddingVertical:4,borderWidth:1,borderColor:'#e5e5e5'},
+  dropdown:{maxHeight:200,backgroundColor:COLORS.white,borderRadius:8,paddingVertical:4,borderWidth:1,borderColor:COLORS.neutral350},
   dropdownItem:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:12,paddingVertical:8},
-  dropdownItemText:{color:'#222',fontSize:14},
-  tickBox:{width:20,height:20,borderRadius:4,borderWidth:1,borderColor:'#bbb',alignItems:'center',justifyContent:'center'},
-  tickBoxSelected:{backgroundColor:'#32CD32',borderColor:'#32CD32'},
-  tickText:{color:'#fff',fontSize:14},
+  dropdownItemText:{color:COLORS.neutral950,fontSize:14},
+  tickBox:{width:20,height:20,borderRadius:4,borderWidth:1,borderColor:COLORS.neutral550,alignItems:'center',justifyContent:'center'},
+  tickBoxSelected:{backgroundColor:COLORS.limeGreen,borderColor:COLORS.limeGreen},
+  tickText:{color:COLORS.white,fontSize:14},
   overlay:{position:'absolute',top:0,left:0,right:0,bottom:0},
   list:{flex:1,marginTop:14},
-  statusText:{color:'#666',fontSize:12,paddingVertical:12,textAlign:'center'},
-  card:{flexDirection:'row',backgroundColor:'#1e1e1e',borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140},
+  statusText:{color:COLORS.neutral800,fontSize:12,paddingVertical:12,textAlign:'center'},
+  card:{flexDirection:'row',backgroundColor:COLORS.surfaceDark,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140},
   cardExpanded:{minHeight:180},
   cardLeft:{flex:1,paddingRight:12},
   titleRow:{flexDirection:'row',alignItems:'center'},
   expandButton:{padding:4,marginLeft:6},
-  expandIcon:{width:18,height:18,tintColor:'#ccc'},
-  cardTitle:{color:'#fff',fontSize:16,fontWeight:'700',flexShrink:1},
-  dateText:{color:'#ccc',fontSize:12,marginTop:2},
+  expandIcon:{width:18,height:18,tintColor:COLORS.neutral500},
+  cardTitle:{color:COLORS.white,fontSize:16,fontWeight:'700',flexShrink:1},
+  dateText:{color:COLORS.neutral500,fontSize:12,marginTop:2},
   tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
-  tag:{backgroundColor:'#333',paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
-  tagFallback:{backgroundColor:'#444'},
-  freeTag:{backgroundColor:'#e9f9ef', borderColor:'#2e8b57', borderWidth:1},
-  entryTag:{backgroundColor:'#ffe9d9', borderColor:'#ff6b3b', borderWidth:1},
-  methodTag:{backgroundColor:'#eef6ff', borderColor:'#3b82f6', borderWidth:1},
+  tag:{backgroundColor:COLORS.neutral925,paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
+  tagFallback:{backgroundColor:COLORS.neutral900},
+  freeTag:{backgroundColor:COLORS.greenSoft, borderColor:COLORS.seaGreen, borderWidth:1},
+  entryTag:{backgroundColor:COLORS.orangeSoft, borderColor:COLORS.orangeAccent, borderWidth:1},
+  methodTag:{backgroundColor:COLORS.blue50, borderColor:COLORS.blue500, borderWidth:1},
   methodIcons:{flexDirection:'row',alignItems:'center'},
   methodIconImg:{width:16,height:16,resizeMode:'contain',marginHorizontal:2},
-  freeTagText:{color:'#14532d',fontSize:11,fontWeight:'700'},
-  entryTagText:{color:'#7c2d12',fontSize:11,fontWeight:'700'},
+  freeTagText:{color:COLORS.green900,fontSize:11,fontWeight:'700'},
+  entryTagText:{color:COLORS.brown900,fontSize:11,fontWeight:'700'},
   entryRow:{flexDirection:'row',alignItems:'center',marginTop:6,marginBottom:6},
   entryTagRow:{paddingHorizontal:10,paddingVertical:6},
   methodIconsRow:{flexDirection:'row',alignItems:'center',marginLeft:8},
-  venueTag:{backgroundColor:'#6a5acd'},
-  tagText:{color:'#ddd',fontSize:11,fontWeight:'600'},
+  venueTag:{backgroundColor:COLORS.slateBlue},
+  tagText:{color:COLORS.neutral525,fontSize:11,fontWeight:'600'},
   participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
-  participantsIcon:{width:14,height:14,tintColor:'#ddd',marginRight:4,resizeMode:'contain'},
-  participantsIconLarge:{width:18,height:18,tintColor:'#ddd',marginRight:6,resizeMode:'contain'},
-  participantsText:{color:'#ddd',fontSize:12,fontWeight:'600'},
+  participantsIcon:{width:14,height:14,tintColor:COLORS.neutral525,marginRight:4,resizeMode:'contain'},
+  participantsIconLarge:{width:18,height:18,tintColor:COLORS.neutral525,marginRight:6,resizeMode:'contain'},
+  participantsText:{color:COLORS.neutral525,fontSize:12,fontWeight:'600'},
   expandedContent:{marginTop:10},
-  expandedLine:{color:'#bbb',fontSize:12,marginBottom:4},
-  expandedDescLabel:{color:'#bbb',fontSize:12,marginTop:4,fontWeight:'700'},
-  expandedDesc:{color:'#ddd',fontSize:12,marginTop:4},
+  expandedLine:{color:COLORS.neutral550,fontSize:12,marginBottom:4},
+  expandedDescLabel:{color:COLORS.neutral550,fontSize:12,marginTop:4,fontWeight:'700'},
+  expandedDesc:{color:COLORS.neutral525,fontSize:12,marginTop:4},
   cardRight:{alignItems:'center'},
-  placeholderImg:{width:70,height:70,backgroundColor:'#2d2d2d',borderRadius:10,marginBottom:6},
-  arrowIcon:{width:22,height:22,tintColor:'#888',position:'absolute',left:53,top:80},
-  fab:{position:'absolute',right:20,bottom:30,backgroundColor:'#ff6b3b',paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:'#000',shadowOpacity:0.3,shadowRadius:6,elevation:5},
-  fabIcon:{width:22,height:22,tintColor:'#fff',marginRight:8,resizeMode:'contain'},
-  fabText:{color:'#fff',fontSize:14,fontWeight:'700'},
+  placeholderImg:{width:70,height:70,backgroundColor:COLORS.surfaceDarker,borderRadius:10,marginBottom:6},
+  arrowIcon:{width:22,height:22,tintColor:COLORS.neutral700,position:'absolute',left:53,top:80},
+  fab:{position:'absolute',right:20,bottom:30,backgroundColor:COLORS.orangeAccent,paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:COLORS.black,shadowOpacity:0.3,shadowRadius:6,elevation:5},
+  fabIcon:{width:22,height:22,tintColor:COLORS.white,marginRight:8,resizeMode:'contain'},
+  fabText:{color:COLORS.white,fontSize:14,fontWeight:'700'},
 })

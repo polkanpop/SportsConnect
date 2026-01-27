@@ -22,6 +22,7 @@ import {
   Linking,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -42,8 +43,6 @@ type MarkerType = {
   courtid: number; // foreign key to courts (REAL court id for favourites)
   latitude: number;
   longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
   name: string;
   address: string;
   images: string[];
@@ -209,7 +208,7 @@ export default function App() {
   // 1. Backend profile from AuthContext (login via /auth/login)
   // 2. Cached @backendProfile in AsyncStorage (in case provider not yet hydrated)
   // 3. Attempt to parse supabase session user id IF it is numeric (rare; usually UUID -> will fail gracefully)
-  const getCurrentNumericUserId = async (): Promise<number | null> => {
+  const getCurrentNumericUserId = useCallback(async (): Promise<number | null> => {
     // Backend remembered profile (preferred)
     if (profile && typeof (profile as any).userid === 'number') {
       return (profile as any).userid;
@@ -232,7 +231,65 @@ export default function App() {
       }
     } catch {}
     return null;
-  };
+  }, [profile]);
+
+  const fetchMarkers = useCallback(async () => {
+    setLoadingMarkers(true);
+    setErrorMarkers(null);
+    try {
+      // Fetch via backend API
+      // Hydrate markers from cache first for snappy load
+      const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
+      let rows: CourtInfoRow[] = []
+      if (cached) rows = cached
+      // Always fetch fresh (cached variant handles TTL)
+      try {
+        const fresh = await listCourtInfoCached();
+        rows = fresh
+        // refresh cache TTL
+        setCache('cache:courtinfo:v1', fresh, 5 * 60 * 1000, 5 * 60 * 1000)
+      } catch (e) {
+        if (!cached) throw e // only surface if we had nothing cached
+      }
+      let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => ({
+        id: m.courtinfoid,
+        courtid: m.courtid,
+        latitude: m.latitude ?? 0,
+        longitude: m.longitude ?? 0,
+        name: m.name || m.address || `Court #${m.courtinfoid}`,
+        address: m.address || "Unknown",
+        images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
+        sport: Array.isArray(m.sport) ? m.sport : (m.sport ? [m.sport].flat() : []),
+        venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
+        availability: m.availability || "Available",
+        isFavorite: false,
+      }));
+      setMarkers(normalized);
+
+      // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
+      const numericUserId = await getCurrentNumericUserId();
+      let favIds: number[] = [];
+      if (numericUserId !== null) {
+        try {
+          const rowsFav = await listFavouriteCourtsCached({ userid: numericUserId });
+          const favRows: FavouriteCourt[] = Array.isArray(rowsFav) ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
+          setFavouriteRecords(favRows);
+          favIds = favRows.map(r => r.courtid);
+          setFavoriteIds(favIds);
+        } catch (e) {
+          console.warn('[Map] failed to load favouritecourts', e);
+        }
+      }
+      normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
+      setMarkers(normalized);
+      setFilteredMarkers(normalized);
+    } catch (e: any) {
+      setErrorMarkers(e.message || String(e));
+      setMarkers([]);
+      setFilteredMarkers([]);
+    }
+    setLoadingMarkers(false);
+  }, [getCurrentNumericUserId]);
 
   // derive sport options from markers (unique)
   const sportOptions = useMemo(() => {
@@ -256,66 +313,8 @@ export default function App() {
   }, [markers]);
   // Fetch markers from backend /courtinfo API (architecture shift away from direct Supabase client)
   useEffect(() => {
-    const fetchMarkers = async () => {
-      setLoadingMarkers(true);
-      setErrorMarkers(null);
-      try {
-        // Fetch via backend API
-        // Hydrate markers from cache first for snappy load
-        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
-        let rows: CourtInfoRow[] = []
-        if (cached) rows = cached
-        // Always fetch fresh (cached variant handles TTL)
-        try {
-          const fresh = await listCourtInfoCached();
-          rows = fresh
-          // refresh cache TTL
-          setCache('cache:courtinfo:v1', fresh, 5 * 60 * 1000, 5 * 60 * 1000)
-        } catch (e) {
-          if (!cached) throw e // only surface if we had nothing cached
-        }
-        let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => ({
-          id: m.courtinfoid,
-          courtid: m.courtid,
-          latitude: m.latitude ?? 0,
-          longitude: m.longitude ?? 0,
-          latitudeDelta: m.latitudedelta ?? 0.05,
-          longitudeDelta: m.longitudedelta ?? 0.05,
-          name: m.name || m.address || `Court #${m.courtinfoid}`,
-          address: m.address || "Unknown",
-          images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
-          sport: Array.isArray(m.sport) ? m.sport : (m.sport ? [m.sport].flat() : []),
-          venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
-          availability: m.availability || "Available",
-          isFavorite: false,
-        }));
-  setMarkers(normalized);
-  // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
-        const numericUserId = await getCurrentNumericUserId();
-        let favIds: number[] = [];
-        if (numericUserId !== null) {
-          try {
-            const rowsFav = await listFavouriteCourtsCached({ userid: numericUserId });
-            const favRows: FavouriteCourt[] = Array.isArray(rowsFav) ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
-            setFavouriteRecords(favRows);
-            favIds = favRows.map(r => r.courtid);
-            setFavoriteIds(favIds);
-          } catch (e) {
-            console.warn('[Map] failed to load favouritecourts', e);
-          }
-        }
-        normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
-        setMarkers(normalized);
-        setFilteredMarkers(normalized);
-      } catch (e: any) {
-        setErrorMarkers(e.message || String(e));
-        setMarkers([]);
-        setFilteredMarkers([]);
-      }
-      setLoadingMarkers(false);
-    };
     fetchMarkers();
-  }, []);
+  }, [fetchMarkers]);
 
   const availabilityOptions = ["Available", "Unavailable"];
 
@@ -860,6 +859,8 @@ export default function App() {
                   )}
                   style={styles.searchResults}
                   keyboardShouldPersistTaps="handled"
+                  refreshing={loadingMarkers}
+                  onRefresh={fetchMarkers}
                 />
               )}
 
@@ -922,7 +923,10 @@ export default function App() {
                 onChange={handleSheetChange} // Listen to sheet index change
               >
                 {selectedMarker ? (
-                  <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
+                  <BottomSheetScrollView
+                    contentContainerStyle={styles.bottomSheetContent}
+                    refreshControl={<RefreshControl refreshing={loadingMarkers} onRefresh={fetchMarkers} />}
+                  >
                     {/* ...existing code... */}
                     {/* Title & actions row (layout adjusted for single-line names) */}
                     <View style={styles.titleRow}> 

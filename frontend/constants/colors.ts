@@ -1,22 +1,151 @@
-// constants/colors.js
-
 export const COLORS = {
-  yellow: '#ffff00',
+  // Legacy names (keep for compatibility)
+  yellow: '#FFFF00',
   bio: '#EEEEEE',
   green: '#0EF553',
   darkgreen: '#008000',
   lightgreen: '#5CFF9F',
-  white: '#ffffff',
+  white: '#FFFFFF',
   black: '#000000',
   red: '#FF0000',
   darkgrey: '#D9D9D9',
-  grey: '#d3d3d3',
+  grey: '#D3D3D3',
   lightgrey: '#EEEEEE',
   orange: '#FFBA0A',
   cyan: '#00FFFF',
   lightblue: '#99CDDB',
   blue: '#0EA5CE',
   darkblue: '#0785A8',
+  tintLight: '#0A7EA4',
   purple: '#A30CCD',
   darkpurple: '#740194',
+
+  // Neutrals used across the app
+  neutral0: '#FFFFFF',
+  neutral50: '#FAFAFA',
+  neutral75: '#F9F9F9',
+  neutral100: '#F8F8F8',
+  neutral125: '#F5F5F5',
+  neutral150: '#F3F3F3',
+  neutral175: '#F2F2F2',
+  neutral200: '#F0F0F0',
+  neutral225: '#EFEFEF',
+  neutral250: '#EDEDED',
+  neutral275: '#EAEAEA',
+  neutral300: '#E9E9E9',
+  neutral325: '#E6E6E6',
+  neutral350: '#E5E5E5',
+  neutral375: '#E3E3E3',
+  neutral400: '#E2E2E2',
+  neutral425: '#E0E0E0',
+  neutral340: '#E7E7E7',
+  neutral450: '#D4D4D4',
+  neutral500: '#CCCCCC',
+  neutral525: '#DDDDDD',
+  neutral550: '#BBBBBB',
+  neutral600: '#AAAAAA',
+  neutral650: '#999999',
+  neutral700: '#888888',
+  neutral750: '#777777',
+  neutral800: '#666666',
+  neutral850: '#555555',
+  neutral900: '#444444',
+  neutral925: '#333333',
+  neutral950: '#222222',
+  neutral975: '#111111',
+
+  // Slate/gray-ish (Tailwind-ish) values already used in many screens
+  slate900: '#0F172A',
+  slate600: '#475569',
+  slate500: '#64748B',
+  slate400: '#94A3B8',
+  slate200: '#E2E8F0',
+  gray800: '#1F2937',
+  gray200: '#E5E7EB',
+
+  // Brand-ish blues in the project
+  sky500: '#0EA5E9',
+  indigo500: '#6366F1',
+  indigo700: '#3730A3',
+  blue500: '#3B82F6',
+  blue600: '#2563EB',
+  bootstrapBlue: '#007BFF',
+
+  // Dark surfaces
+  surfaceDark: '#1E1E1E',
+  surfaceDarker: '#2D2D2D',
+
+  // Status colors seen in screens
+  success: '#28A745',
+  danger: '#DC3545',
+  danger500: '#EF4444',
+  warning: '#F59E0B',
+
+  // Common “named” colors used in Map/list markers etc.
+  seaGreen: '#2E8B57',
+  limeGreen: '#32CD32',
+  steelBlue: '#4682B4',
+  slateBlue: '#6A5ACD',
+  darkGray: '#A9A9A9',
+  hotPink: '#FF69B4',
+  orange500: '#FFA500',
+  gold: '#FFD700',
+  coral: '#FF5733',
+
+  cyan50: '#E0F7FA',
+
+  searchBarBg: '#D8DAD9',
+
+  // Pastel/background chips used in History
+  emerald50: '#DCFCE7',
+  emerald500: '#22C55E',
+  green900: '#14532D',
+  sky50: '#E0F2FE',
+  sky100: '#BAE6FD',
+  blue50: '#EEF6FF',
+  indigo50: '#EEF2FF',
+  amber50: '#FFFBEB',
+  amber100: '#FEF3C7',
+  amber200: '#FDE047',
+  yellow100: '#FEF9C3',
+  rose50: '#FFF1F2',
+  rose100: '#FFE4E6',
+  rose200: '#FECDD3',
+  red100: '#FEE2E2',
+  orange100: '#FFEDD5',
+  orange200: '#FED7AA',
+  orangeSoft: '#FFE9D9',
+  orangeAccent: '#FF6B3B',
+  greenSoft: '#E9F9EF',
+  brown900: '#7C2D12',
+
+  // Alpha overlays
+  black05: 'rgba(0,0,0,0.05)',
+  black35: 'rgba(0,0,0,0.35)',
+  black40: 'rgba(0,0,0,0.4)',
+  black50: 'rgba(0,0,0,0.5)',
+  white25: 'rgba(255,255,255,0.25)',
+
+  // Keywords
+  transparent: 'transparent',
 };
+
+// Theme split (so we can migrate away from colors_import.ts)
+export const APP_THEME_COLORS = {
+  light: {
+    text: COLORS.neutral975,
+    background: COLORS.neutral0,
+    tint: COLORS.darkblue,
+    icon: '#687076',
+    tabIconDefault: '#687076',
+    tabIconSelected: COLORS.darkblue,
+  },
+  dark: {
+    text: '#ECEDEE',
+    background: '#151718',
+    tint: COLORS.neutral0,
+    icon: '#9BA1A6',
+    tabIconDefault: '#9BA1A6',
+    tabIconSelected: COLORS.neutral0,
+  },
+} as const;

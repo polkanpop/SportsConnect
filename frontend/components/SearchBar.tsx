@@ -18,7 +18,7 @@ export const SearchBar = ({ placeholder, onChangeText }: Props) => {
         borderRadius: 40,
         overflow: "hidden",
         paddingHorizontal: 8,
-        backgroundColor:"#D8DAD9"
+        backgroundColor: COLORS.searchBarBg,
       }}
     >
       <TouchableOpacity

@@ -2,7 +2,7 @@
 import { ICONS } from "@/constants/icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
 import { listFavouriteCourts, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from "@/lib/backendApi";
@@ -259,6 +259,12 @@ export default function Home() {
           style={{ flex: 1, backgroundColor: "#F0F0F0", paddingHorizontal: 8 }}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 10 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={loadingFavs}
+              onRefresh={() => loadFavorites(true)}
+            />
+          }
         >
           {/* Categories Section */}
           <View

@@ -91,6 +91,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	}
 	const res = await fetch(url, {
 		method: options.method || 'GET',
+		signal: options.signal,
 		headers: {
 			'Content-Type': 'application/json',
 			...authHeader,
@@ -347,7 +348,7 @@ export async function getUserInfoByUserIdCached(userid: number) {
 
 // ---- Court Info API ----
 // Existing backend endpoint: GET /courtinfo returns list of courtinfo rows.
-// Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,latitudedelta,longitudedelta,sport,venue,images,availability
+// Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,sport,venue,images,availability
 export type CourtInfoRow = {
 	courtinfoid: number
 	courtid: number
@@ -355,8 +356,6 @@ export type CourtInfoRow = {
 	address: string
 	latitude?: number | null
 	longitude?: number | null
-	latitudedelta?: number | null
-	longitudedelta?: number | null
 	sport?: string[] | string | null
 	venue?: string[] | string | null
 	images?: string[] | null
@@ -504,7 +503,10 @@ export async function getTrainingSessionBookingsByUserId(userId: number) {
 // --- Debug identity (backend /api/debug/identity) ---
 export async function debugIdentity(): Promise<{ token_subject: string; numeric_subject: number | null; userinfo: any } | null> {
 	try {
-		const data = await request('/debug/identity', { debugLabel: 'debugIdentity' })
+		const controller = new AbortController()
+		const timeout = setTimeout(() => controller.abort(), 2500)
+		const data = await request('/debug/identity', { debugLabel: 'debugIdentity', signal: controller.signal })
+		clearTimeout(timeout)
 		return data || null
 	} catch (e) {
 		console.warn('[debugIdentity] failed', (e as any)?.message)

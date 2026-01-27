@@ -5,6 +5,7 @@ import {
   Alert,
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,11 +21,14 @@ import { supabase } from '@/lib/supabase';
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState<string>('Guest');
   const [loadingName, setLoadingName] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showSignOutModal, setShowSignOutModal] = useState<boolean>(false);
 
-  const refreshName = useCallback(async () => {
+  const refreshName = useCallback(async (opts?: { showRefresh?: boolean }) => {
+    const showRefresh = !!opts?.showRefresh;
     setError(null);
+    if (showRefresh) setRefreshing(true);
     setLoadingName(true);
     try {
       const raw = await AsyncStorage.getItem('@backendProfile');
@@ -45,6 +49,7 @@ export default function SettingsPage() {
       setError(e.message || 'Failed loading name');
     } finally {
       setLoadingName(false);
+      if (showRefresh) setRefreshing(false);
     }
   }, []);
 
@@ -82,13 +87,19 @@ export default function SettingsPage() {
   }, [handleSignOut, closeSignOutModal]);
 
   // Refresh when screen focused
-  useFocusEffect(useCallback(() => { refreshName(); }, [refreshName]));
+  useFocusEffect(useCallback(() => { refreshName({ showRefresh: false }); }, [refreshName]));
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => refreshName({ showRefresh: true })}
+          />
+        }
       >
         {/* Title */}
         <Text style={styles.title}>Settings</Text>
