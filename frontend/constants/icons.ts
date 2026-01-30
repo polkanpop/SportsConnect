@@ -1,7 +1,5 @@
 // constants/icons.ts
 
-import { ZoomOut } from "react-native-reanimated";
-
 export const ICONS = {
   accountCircle: require('../assets/icons/account_circle.png'),
   activity: require('../assets/icons/Activity.png'),
@@ -74,6 +72,17 @@ export const ICONS = {
   x: require('../assets/icons/x.png'),
   tick: require('../assets/icons/tick.png'),
   edit: require('../assets/icons/edit.png'),
+  //silhouette
+  sillBasketball: require('../assets/icons/sill_basketball.png'),
+  sillFootball: require('../assets/icons/sill_soccer.png'),
+  sillRunning: require('../assets/icons/sill_running.png'),
+  sillTableTennis: require('../assets/icons/sill_tabletennis.png'),
+  sillVolleyball: require('../assets/icons/sill_volleyball.png'),
+  sillBadminton: require('../assets/icons/sill_badminton.png'),
+  sillGolf: require('../assets/icons/sill_golf.png'),
+  sillPickleball: require('../assets/icons/sill_pickleball.png'),
+  sillTennis: require('../assets/icons/sill_tennis.png'),
+  ///
   cancelEdit: require('../assets/icons/cancel_edit.png'),
   participants: require('../assets/icons/participants.png'),
   supportCentre: require('../assets/icons/support_centre.png'),
@@ -83,6 +92,7 @@ export const ICONS = {
   event_category: require('../assets/icons/event.png'),
   smallArrowLeft: require('../assets/icons/small_arrow_left.png'),
   cashIcon: require('../assets/icons/cash_icon.png'),
+  dotdotdot: require('../assets/icons/3dot.png'),
   vnpayIcon: require('../assets/icons/vnpay_icon.png'),
   booking: require('../assets/icons/bookings.png'),
   zoomIn: require('../assets/icons/Zoomin.png'),
@@ -93,10 +103,17 @@ export const ICONS = {
   approve: require('../assets/icons/approve.png'),
   reject: require('../assets/icons/reject.png'),
   closeMenu: require('../assets/icons/close_menu.png'),
+  eventDeco: require('../assets/icons/eventdeco.png'),
+  vietnamIcon: require('../assets/icons/vietnamese_icon.png'),
+  englishIcon: require('../assets/icons/english_icon.png'),
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   gmailButton: require('../assets/icons/gmail.png'),
   bookMark: require('../assets/icons/bookmark.png'),
+  eventIllustration: require('../assets/icons/event_illustration.png'),
+  coachIllustration: require('../assets/icons/coach_illustration.png'),
+  courtIllustration: require('../assets/icons/court_illustration.png'),
+  pending: require('../assets/icons/pending.png'),
   menu: require('../assets/icons/menu.png'),
   homepageMenu: require('../assets/icons/homepage_menu.png'),
   acc1: require('../assets/icons/account_placeholder1.png'),

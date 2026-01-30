@@ -75,7 +75,7 @@ export default function Profile() {
   const [bio, setBio] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tempTags, setTempTags] = useState<string[]>([])
-  const [contactVisible, setContactVisible] = useState(true) // Default true, no DB field yet
+  const [contactVisible, setContactVisible] = useState(true)
   const [showTagModal, setShowTagModal] = useState(false)
   const [showContactLog, setShowContactLog] = useState(false)
   const logTimerRef = useRef<any>(null)
@@ -122,6 +122,10 @@ export default function Profile() {
       const uiTags = parsedTags.map(t => DB_TO_UI_SPORT[t] || t.toLowerCase()).filter(t => SPORT_COLORS[t])
       // Deduplicate
       setTags([...new Set(uiTags)])
+
+    // Persisted privacy: if backend provides a boolean, respect it
+    const persisted = (userInfo as any)?.contactvisiblestatus
+		if (typeof persisted === 'boolean') setContactVisible(persisted)
     }
   }, [userInfo])
 
@@ -196,13 +200,21 @@ export default function Profile() {
     }
   }
 
-  const handleToggleContact = () => {
-    setContactVisible(prev => !prev)
+  const handleToggleContact = async () => {
+    if (!userid) return
+	const next = !contactVisible
+    setContactVisible(next)
     setShowContactLog(true)
     if (logTimerRef.current) clearTimeout(logTimerRef.current)
     logTimerRef.current = setTimeout(() => {
       setShowContactLog(false)
     }, 5000)
+  try {
+    await updateUserInfo(userid, { contactvisiblestatus: next } as any)
+		queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+	} catch (e) {
+		console.warn('Failed to persist contact visibility', (e as any)?.message)
+	}
   }
 
   const uploadToCloudinary = async (localUri: string) => {

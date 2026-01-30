@@ -125,19 +125,33 @@ def create_training_session_with_info(body: dict):
         if not sessionid:
             raise HTTPException(status_code=500, detail="Missing sessionid after insert")
         # Build trainingsessioninfo payload and insert
+        auto_approve_raw = body.get("auto_approve")
+        auto_approve = bool(auto_approve_raw) if isinstance(auto_approve_raw, bool) else str(auto_approve_raw).lower() in {"1", "true", "yes", "y", "on"}
         info_payload = {
             "sessionid": sessionid,
             "title": title,
             "description": body.get("description"),
             "participants_cap": participants_cap,
-            "numberofpeople": 0
+            "numberofpeople": 0,
+            "join_status": True,
         }
+        # trainingsessioninfo may or may not have auto_approve yet. We'll try and gracefully fallback.
+        info_payload_with_auto = {**info_payload, "auto_approve": auto_approve}
         if monetize:
             info_payload["entry_fee"] = entry_fee
             info_payload["support_payment_method"] = support_payment_method
+            info_payload_with_auto["entry_fee"] = entry_fee
+            info_payload_with_auto["support_payment_method"] = support_payment_method
         try:
             from ..db import rest_insert as _rest_insert, rest_delete as _rest_delete
-            info_resp = _rest_insert("trainingsessioninfo", info_payload)
+            try:
+                info_resp = _rest_insert("trainingsessioninfo", info_payload_with_auto)
+            except RuntimeError as e:
+                # If auto_approve column doesn't exist yet, retry without it.
+                if "auto_approve" in str(e).lower() and ("column" in str(e).lower() or "unknown" in str(e).lower()):
+                    info_resp = _rest_insert("trainingsessioninfo", info_payload)
+                else:
+                    raise
         except RuntimeError as e:
             try:
                 _rest_delete("trainingsessions", {"sessionid": sessionid})

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 
-export default function Invoice() {
+export default function InvoicePending() {
   const router = useRouter()
   const params = useLocalSearchParams()
 
@@ -56,6 +56,7 @@ export default function Invoice() {
     }
     return raw
   })()
+
   const bookingStatusText = (() => {
     if (!showBookingStatus) return ''
     const raw = bookingStatus ?? ''
@@ -97,32 +98,26 @@ export default function Invoice() {
   const formatDate = (val: string | string[]) => {
     if (!val) return '---'
     const str = String(val)
-    // Handle YYYY-MM-DD (from courtBooking)
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
       const [y, m, d] = str.split('-')
       return `${d}/${m}/${y}`
     }
-    // If it's already formatted or different, return as is
     return str
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        
-        {/* Success Header */}
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Image source={ICONS.checkSquare} style={styles.checkIcon} />
+            <Image source={ICONS.pending} style={styles.headerIcon} />
           </View>
-          <Text style={styles.successTitle}>Booking Successful!</Text>
-          <Text style={styles.successSub}>Your booking has been confirmed.</Text>
+          <Text style={styles.title}>Your request has been Submitted</Text>
+          <Text style={styles.subTitle}>Waiting for host approval.</Text>
         </View>
 
-        {/* Invoice Card */}
         <View style={styles.card}>
-          <Text style={styles.cardHeader}>INVOICE DETAILS</Text>
-          
+          <Text style={styles.cardHeader}>REQUEST DETAILS</Text>
           <View style={styles.divider} />
 
           <View style={styles.row}>
@@ -182,7 +177,7 @@ export default function Invoice() {
 
           {showBookingStatus ? (
             <View style={styles.row}>
-              <Text style={styles.label}>Booking Status</Text>
+              <Text style={styles.label}>Approve Status</Text>
               <Text style={[styles.value, { textTransform: 'capitalize', color: bookingStatusColor }]}>
                 {bookingStatusText}
               </Text>
@@ -201,7 +196,6 @@ export default function Invoice() {
             <Text style={styles.totalValue}>{formatPrice(price)}đ</Text>
           </View>
         </View>
-
       </ScrollView>
 
       <View style={styles.footer}>
@@ -229,31 +223,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
     marginTop: 20,
+    paddingHorizontal: 12,
   },
   iconCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#e9ffe9',
+    backgroundColor: '#fff3cd',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
-  checkIcon: {
+  headerIcon: {
     width: 40,
     height: 40,
-    tintColor: '#28a745',
+    tintColor: '#FF5733',
     resizeMode: 'contain',
   },
-  successTitle: {
-    fontSize: 24,
+  title: {
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#222',
     marginBottom: 8,
+    textAlign: 'center',
+    width: '100%',
+    maxWidth: 360,
+    lineHeight: 30,
   },
-  successSub: {
+  subTitle: {
     fontSize: 16,
     color: '#666',
+    textAlign: 'center',
+    width: '100%',
+    maxWidth: 360,
+    lineHeight: 22,
   },
   card: {
     width: '100%',
@@ -298,63 +301,47 @@ const styles = StyleSheet.create({
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    paddingTop: 14,
+    marginTop: 10,
   },
   totalLabel: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#222',
+    fontWeight: '700',
+    color: '#111',
   },
   totalValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#FF5733',
-  },
-  footerNote: {
-    marginTop: 24,
-    fontSize: 13,
-    color: '#888',
-    textAlign: 'center',
-    lineHeight: 20,
   },
   footer: {
     padding: 20,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
+    gap: 10,
   },
   detailsBtn: {
-    backgroundColor: '#fff',
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#222',
-    marginBottom: 12,
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
+    borderColor: '#111',
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
   detailsBtnText: {
-    color: '#222',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#111',
   },
   homeBtn: {
-    backgroundColor: '#222',
-    paddingVertical: 16,
-    borderRadius: 30,
+    borderRadius: 999,
+    paddingVertical: 14,
     alignItems: 'center',
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
+    backgroundColor: '#111',
   },
   homeBtnText: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    color: '#fff',
   },
 })

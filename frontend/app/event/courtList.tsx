@@ -413,7 +413,9 @@ const CourtListScreen = () => {
                   )}
                 </View>
                 <View style={styles.cardRight}>
-                  <View style={styles.placeholderImg} />
+                  <View style={styles.placeholderImg}>
+                    <Image source={ICONS.courtIllustration} style={styles.placeholderImgInner} />
+                  </View>
                   <Image source={ICONS.arrowright} style={styles.arrowIcon} />
                 </View>
               </TouchableOpacity>
@@ -487,7 +489,8 @@ const styles = StyleSheet.create({
   tagText: { color: COLORS.neutral525, fontSize: 11, fontWeight: '600' },
   cardRight: { alignItems: 'center' },
   // Slightly larger placeholder image to match the subtly bigger card
-  placeholderImg: { width: 74, height: 74, backgroundColor: COLORS.surfaceDarker, borderRadius: 10, marginBottom: 6 },
+  placeholderImg: { width: 74, height: 74, backgroundColor: COLORS.surfaceDarker, borderRadius: 10, marginBottom: 6, overflow: 'hidden' },
+  placeholderImgInner: { width: '100%', height: '100%', resizeMode: 'cover', bottom: 8, transform: [{ translateY: 8 }] },
   arrowIcon: { width: 22, height: 22, tintColor: COLORS.neutral700, position: 'absolute',  left:58,top:80 },
   // Price filter & tag styles
   priceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8 },

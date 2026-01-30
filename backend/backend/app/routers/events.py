@@ -200,6 +200,8 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
     if not eventid:
         raise HTTPException(status_code=500, detail="Missing eventid after insert")
     # Build eventinfo payload
+    auto_approve_raw = body.get("auto_approve")
+    auto_approve = bool(auto_approve_raw) if isinstance(auto_approve_raw, bool) else str(auto_approve_raw).lower() in {"1", "true", "yes", "y", "on"}
     eventinfo_payload: Dict[str, Any] = {
         "eventid": eventid,
         "title": title,
@@ -207,6 +209,7 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         "participants_cap": participants_cap,
         "numberofpeople": 0,
         "join_status": True,
+        "auto_approve": auto_approve,
     }
     if monetize:
         eventinfo_payload["entry_fee"] = entry_fee

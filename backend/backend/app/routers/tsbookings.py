@@ -58,6 +58,14 @@ def create_ts_booking(body: dict, current_user: str = Depends(get_current_user))
         if "cancel" in status:
             raise HTTPException(status_code=409, detail="Training session was cancelled")
 
+        # Join controls live in trainingsessioninfo
+        info = rest_select("trainingsessioninfo", "*", filters={"sessionid": sessionid}, single=True)
+        if info and info.get("join_status") is False:
+            raise HTTPException(status_code=409, detail="Training session is not accepting participants")
+        auto_approve_val = info.get("auto_approve") if isinstance(info, dict) else False
+        should_auto = bool(auto_approve_val) if isinstance(auto_approve_val, bool) else str(auto_approve_val).lower() in {"1", "true", "yes", "y", "on"}
+        desired_status = "joined" if should_auto else "pending"
+
         existing = rest_select("tsbookings", "tsbookingid,bookingstatus,status", filters={"userid": userid, "sessionid": sessionid})
         if isinstance(existing, list):
             for row in existing:
@@ -66,6 +74,9 @@ def create_ts_booking(body: dict, current_user: str = Depends(get_current_user))
                     raise HTTPException(status_code=409, detail="Already booked")
 
         payload = {**body, "userid": userid, "sessionid": sessionid}
+        payload["status"] = desired_status
+        if "bookingstatus" not in payload:
+            payload["bookingstatus"] = "upcoming"
         try:
             resp = rest_insert("tsbookings", payload)
         except Exception:

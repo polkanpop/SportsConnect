@@ -275,7 +275,12 @@ const TrainingSessionListScreen = () => {
                     </View>
                   )}
                 </View>
-                <View style={styles.cardRight}><View style={styles.placeholderImg} /><Image source={ICONS.arrowright} style={styles.arrowIcon} /></View>
+                <View style={styles.cardRight}>
+                  <View style={styles.placeholderImg}>
+                    <Image source={ICONS.coachIllustration} style={styles.placeholderImgInner} />
+                  </View>
+                  <Image source={ICONS.arrowright} style={styles.arrowIcon} />
+                </View>
               </TouchableOpacity>
             )
           })}
@@ -353,7 +358,8 @@ const styles = StyleSheet.create({
   expandedDescLabel:{color:COLORS.neutral550,fontSize:12,marginTop:4,fontWeight:'700'},
   expandedDesc:{color:COLORS.neutral525,fontSize:12,marginTop:4},
   cardRight:{alignItems:'center'},
-  placeholderImg:{width:70,height:70,backgroundColor:COLORS.surfaceDarker,borderRadius:10,marginBottom:6},
+  placeholderImg:{width:70,height:70,backgroundColor:COLORS.surfaceDarker,borderRadius:10,marginBottom:6,overflow:'hidden'},
+  placeholderImgInner:{width:'100%',height:'100%',resizeMode:'cover', bottom: -3},
   arrowIcon:{width:22,height:22,tintColor:COLORS.neutral700,position:'absolute',left:53,top:80},
   fab:{position:'absolute',right:20,bottom:30,backgroundColor:COLORS.orangeAccent,paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:COLORS.black,shadowOpacity:0.3,shadowRadius:6,elevation:5},
   fabIcon:{width:22,height:22,tintColor:COLORS.white,marginRight:8,resizeMode:'contain'},

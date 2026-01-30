@@ -239,20 +239,24 @@ export default function DetailsPage() {
         return updateCourtBooking(parsed.id, { bookingstatus: 'cancelled' } as any)
       }
       if (parsed.kind === 'event_booking') {
-		const evId = eventBookingQuery.data?.eventid
-		const out = await updateEventBooking(parsed.id, { bookingstatus: 'cancelled' } as any)
-		if (typeof evId === 'number') {
-			try { await adjustEventParticipants(evId, -1) } catch {}
-		}
-		return out
+    const evId = eventBookingQuery.data?.eventid
+    const approveStatus = String((eventBookingQuery.data as any)?.status ?? '').toLowerCase()
+    const wasApprovedJoin = approveStatus.includes('join') || approveStatus.includes('approve')
+    const out = await updateEventBooking(parsed.id, { bookingstatus: 'cancelled' } as any)
+    if (wasApprovedJoin && typeof evId === 'number') {
+      try { await adjustEventParticipants(evId, -1) } catch {}
+    }
+    return out
       }
       if (parsed.kind === 'session_booking') {
-		const sessionId = sessionBookingQuery.data?.sessionid
-		const out = await updateTrainingSessionBooking(parsed.id, { bookingstatus: 'cancelled' } as any)
-		if (typeof sessionId === 'number') {
-			try { await adjustTrainingSessionParticipants(sessionId, -1) } catch {}
-		}
-		return out
+    const sessionId = sessionBookingQuery.data?.sessionid
+    const approveStatus = String((sessionBookingQuery.data as any)?.status ?? '').toLowerCase()
+    const wasApprovedJoin = approveStatus.includes('join') || approveStatus.includes('approve')
+    const out = await updateTrainingSessionBooking(parsed.id, { bookingstatus: 'cancelled' } as any)
+    if (wasApprovedJoin && typeof sessionId === 'number') {
+      try { await adjustTrainingSessionParticipants(sessionId, -1) } catch {}
+    }
+    return out
       }
       if (parsed.kind === 'created_event') {
         return updateEvent(parsed.id, { status: 'cancelled' } as any)
@@ -939,7 +943,8 @@ export default function DetailsPage() {
               <>
                 <Section title="Event">
                   <Row label="Title" value={ev?.title || `Event #${eventid}`} />
-                  <Row label="Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
+                  <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
+                  <Row label="Event Status" value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
                   <Row label="Court" value={eventCourtName || ev?.court_name || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
@@ -959,7 +964,8 @@ export default function DetailsPage() {
               <>
                 <Section title="Training Session">
                   <Row label="Title" value={s?.title || `Session #${sessionid}`} />
-                  <Row label="Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
+                  <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
+                  <Row label="Training Session Status" value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
                   <Row label="Court" value={sessionCourtName || s?.court_name || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
@@ -977,7 +983,7 @@ export default function DetailsPage() {
               <>
                 <Section title="Event">
                   <Row label="Title" value={meta?.title || `Event #${ev.eventid}`} />
-                  <Row label="Status" value={formatStatusTitleCase(ev.status)} />
+                  <Row label="Event Status" value={formatStatusTitleCase(ev.status)} />
                   <Row label="Court" value={createdEventCourtName || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={formatTimeHHMM(start) || 'Unknown'} />
@@ -997,7 +1003,7 @@ export default function DetailsPage() {
               <>
                 <Section title="Training Session">
                   <Row label="Title" value={meta?.title || `Session #${s.sessionid}`} />
-                  <Row label="Status" value={formatStatusTitleCase(s.status)} />
+                  <Row label="Training Session Status" value={formatStatusTitleCase(s.status)} />
                   <Row label="Court" value={createdSessionCourtName || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={formatTimeHHMM(start) || 'Unknown'} />

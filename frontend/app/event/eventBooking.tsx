@@ -209,26 +209,35 @@ export default function EventBooking() {
       upsert(['eventBookings', userId])
 
       // Best-effort participant increment
-      try {
-        await adjustEventParticipants(event.eventid, +1)
-        queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
-          if (!Array.isArray(prev)) return prev
-          return prev.map((row: any) => {
-            if (row?.eventid !== event.eventid) return row
-            const cur = typeof row?.numberofpeople === 'number' ? row.numberofpeople : (row?.numberofpeople == null ? 0 : Number(row.numberofpeople))
-            return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
+      const approvalStatus = String((booking as any)?.status ?? '').toLowerCase()
+      const isApprovedJoin = approvalStatus.includes('join') || approvalStatus.includes('approve')
+      if (isApprovedJoin) {
+        try {
+          await adjustEventParticipants(event.eventid, +1)
+          queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.eventid !== event.eventid) return row
+              const cur = typeof row?.numberofpeople === 'number' ? row.numberofpeople : (row?.numberofpeople == null ? 0 : Number(row.numberofpeople))
+              return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
+            })
           })
-        })
-        queryClient.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
-        queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] })
-      } catch {
-        // Ignore count sync failures to avoid blocking booking
+          queryClient.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
+          queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] })
+        } catch {
+          // Ignore count sync failures to avoid blocking booking
+        }
       }
       
+      const invoicePath = String((booking as any)?.status ?? 'pending').toLowerCase().includes('pend')
+        ? '/event/invoicePending'
+        : '/event/invoice'
+
       router.replace({
-        pathname: '/event/invoice',
+        pathname: invoicePath,
         params: {
           title: event.title,
+          courtName: event.court_name || '',
           subtitle: 'Event',
           date: (() => { const d = new Date(event.start_timestamp || event.time || new Date()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
           time: formatRange(event),
@@ -236,6 +245,7 @@ export default function EventBooking() {
           price: isFree ? 0 : event.entry_fee,
           paymentMethod: isFree ? 'Free' : paymentMethod,
           paymentStatus: payment.status,
+          bookingStatus: String((booking as any)?.status ?? 'pending'),
           bookingId: booking.eventbookingid,
           note: noteText.trim(),
           type: 'event'

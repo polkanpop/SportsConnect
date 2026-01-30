@@ -308,7 +308,7 @@ export async function removeFavouriteCourt(favouriteid: number) {
 // ---- User Info API ----
 // GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
 // Helper to fetch first row by userid.
-export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null; pfp?: string | null }
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null; pfp?: string | null; contactvisiblestatus?: boolean | null }
 
 export async function getUserInfoByUserId(userid: number) {
 	if (userid == null) throw new Error('userid required')
@@ -454,6 +454,16 @@ export async function createPayment(payload: { status: 'paid'|'pending'|'failed'
 	return request('/payments', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createPayment' }) as Promise<PaymentRow>
 }
 
+export async function getPayment(paymentid: number): Promise<PaymentRow | null> {
+	if (paymentid == null) throw new Error('paymentid required')
+	try {
+		const row = await request(`/payments/${encodeURIComponent(paymentid)}`, { debugLabel: 'getPayment' })
+		return (row as PaymentRow) || null
+	} catch {
+		return null
+	}
+}
+
 export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null; bookingstatus?: string }
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
@@ -547,6 +557,22 @@ export async function getCourtBookingsByUserId(userId: number) {
 
 export async function getEventBookingsByUserId(userId: number) {
 	return request(`/eventbookings?userid=${userId}`, { debugLabel: 'getEventBookingsByUserId' })
+}
+
+export async function getEventBookingsByEventId(eventid: number, params?: { status?: string }) {
+	if (eventid == null) throw new Error('eventid required')
+	const qs: string[] = [`eventid=${encodeURIComponent(eventid)}`]
+	if (params?.status) qs.push(`status=${encodeURIComponent(params.status)}`)
+	return request(`/eventbookings?${qs.join('&')}`, { debugLabel: 'getEventBookingsByEventId' }) as Promise<EventBookingRow[]>
+}
+
+export async function approveEventBooking(eventbookingid: number) {
+	return updateEventBooking(eventbookingid, { status: 'joined' })
+}
+
+export async function rejectEventBooking(eventbookingid: number) {
+	// Keep bookingstatus in sync so user UIs that read bookingstatus still behave.
+	return updateEventBooking(eventbookingid, { status: 'rejected', bookingstatus: 'cancelled' })
 }
 
 export async function getTrainingSessionBookingsByUserId(userId: number) {
@@ -676,6 +702,15 @@ export async function getEventInfoByEventId(eventid: number): Promise<EventInfoM
 	const rows = await request(`/eventinfo?eventid=${encodeURIComponent(eventid)}`, { debugLabel: 'getEventInfoByEventId' })
 	if (Array.isArray(rows) && rows.length) return rows[0] as EventInfoMeta
 	return null
+}
+
+export async function updateEventInfo(eventinfoid: number, data: Partial<EventInfoMeta>) {
+	if (eventinfoid == null) throw new Error('eventinfoid required')
+	return request(`/eventinfo/${encodeURIComponent(eventinfoid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateEventInfo'
+	}) as Promise<EventInfoMeta>
 }
 
 export async function adjustEventParticipants(eventid: number, delta: number): Promise<EventInfoMeta> {
@@ -896,6 +931,7 @@ export type CreateEventWithInfoPayload = {
 	title: string
 	description?: string
 	participants_cap: number
+	auto_approve?: boolean
 	monetize: boolean
 	entry_fee?: number
 	payment_methods?: ("cash" | "vnpay" | "both")[] | string
@@ -919,6 +955,7 @@ export type CreateTrainingSessionWithInfoPayload = {
 	title: string
 	description?: string
 	participants_cap: number
+	auto_approve?: boolean
 	monetize: boolean
 	entry_fee?: number
 	payment_methods?: ("cash"|"vnpay"|"both")[] | string

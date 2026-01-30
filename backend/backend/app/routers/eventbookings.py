@@ -7,11 +7,19 @@ router = APIRouter(prefix="/eventbookings", tags=["bookings"])  # Keep plural ro
 PRIMARY_KEY = "eventbookingid"
 
 @router.get("", response_model=list[dict])
-def list_event_bookings(userid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+def list_event_bookings(
+    userid: int | None = Query(None),
+    eventid: int | None = Query(None),
+    status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
     try:
         filters = {}
         if userid is not None:
             filters["userid"] = userid
+        if eventid is not None:
+            filters["eventid"] = eventid
         if status is not None:
             filters["status"] = status
         data = rest_select("eventbooking", "*", filters=filters or None, order={"column": PRIMARY_KEY})
@@ -55,6 +63,18 @@ def create_event_booking(body: dict, current_user: str = Depends(get_current_use
         if "cancel" in status:
             raise HTTPException(status_code=409, detail="Event was cancelled")
 
+        # Join controls live in eventinfo
+        info = rest_select("eventinfo", "join_status,auto_approve", filters={"eventid": eventid}, single=True)
+        if info:
+            if info.get("join_status") is False:
+                raise HTTPException(status_code=409, detail="Event is not accepting participants")
+            auto_approve_val = info.get("auto_approve")
+        else:
+            auto_approve_val = False
+
+        should_auto = bool(auto_approve_val) if isinstance(auto_approve_val, bool) else str(auto_approve_val).lower() in {"1", "true", "yes", "y", "on"}
+        desired_status = "joined" if should_auto else "pending"
+
         existing = rest_select("eventbooking", "eventbookingid,bookingstatus,status", filters={"userid": userid, "eventid": eventid})
         if isinstance(existing, list):
             for row in existing:
@@ -63,6 +83,11 @@ def create_event_booking(body: dict, current_user: str = Depends(get_current_use
                     raise HTTPException(status_code=409, detail="Already booked")
 
         payload = {**body, "userid": userid, "eventid": eventid}
+        # Override/ensure status based on auto-approve rule.
+        payload["status"] = desired_status
+        # Keep bookingstatus as upcoming unless explicitly provided.
+        if "bookingstatus" not in payload:
+            payload["bookingstatus"] = "upcoming"
         # Prefer insert to avoid unintended upserts; fallback to upsert for legacy behavior.
         try:
             resp = rest_insert("eventbooking", payload)
@@ -82,21 +107,80 @@ def update_event_booking(eventbookingid: int, body: dict, current_user: str = De
     Used by the mobile app to cancel an upcoming event booking by setting bookingstatus/status.
     """
     try:
-        existing = rest_select("eventbooking", "eventbookingid, userid", filters={PRIMARY_KEY: eventbookingid}, single=True)
+        existing = rest_select(
+            "eventbooking",
+            "eventbookingid, userid, eventid, status",
+            filters={PRIMARY_KEY: eventbookingid},
+            single=True,
+        )
         if not existing:
             raise HTTPException(status_code=404, detail="Event booking not found")
 
+        auth_userid: int | None
         try:
             auth_userid = int(current_user)
-            if int(existing.get("userid")) != auth_userid:
-                raise HTTPException(status_code=403, detail="User does not own this event booking")
-        except ValueError:
-            pass
+        except Exception:
+            auth_userid = None
+
+        is_owner = auth_userid is not None and int(existing.get("userid")) == auth_userid
+        is_organizer = False
+        if not is_owner and auth_userid is not None:
+            try:
+                ev = rest_select(
+                    "events",
+                    "eventid, organizerid",
+                    filters={"eventid": int(existing.get("eventid"))},
+                    single=True,
+                )
+                if ev and int(ev.get("organizerid")) == auth_userid:
+                    is_organizer = True
+            except Exception:
+                is_organizer = False
+
+        if not (is_owner or is_organizer):
+            raise HTTPException(status_code=403, detail="Not allowed to update this event booking")
 
         payload = dict(body or {})
         payload.pop(PRIMARY_KEY, None)
+        if is_organizer and not is_owner:
+            # Organizer moderation: limit surface area to approval/reject.
+            payload = {k: v for k, v in payload.items() if k in {"status", "bookingstatus"}}
         if not payload:
             raise HTTPException(status_code=422, detail="No fields to update")
+
+        # Organizer moderation: make participant counting idempotent server-side.
+        # Only adjust counts when a booking transitions between pending/joined/cancelled states.
+        if is_organizer and not is_owner and "status" in payload:
+            try:
+                old_status = str(existing.get("status") or "").lower()
+                new_status = str(payload.get("status") or "").lower()
+                eventid = int(existing.get("eventid"))
+
+                delta = 0
+                if old_status == "pending" and new_status == "joined":
+                    delta = 1
+                elif old_status == "joined" and new_status in {"rejected", "cancelled", "canceled"}:
+                    delta = -1
+
+                if delta != 0:
+                    info = rest_select(
+                        "eventinfo",
+                        "eventinfoid, numberofpeople",
+                        filters={"eventid": eventid},
+                        single=True,
+                    )
+                    if info and info.get("eventinfoid") is not None:
+                        try:
+                            current_n = int(info.get("numberofpeople") or 0)
+                        except Exception:
+                            current_n = 0
+                        new_n = current_n + delta
+                        if new_n < 0:
+                            new_n = 0
+                        rest_update("eventinfo", {"eventinfoid": int(info.get("eventinfoid"))}, {"numberofpeople": new_n})
+            except Exception:
+                # Never block the booking update due to counter issues; UI will refresh from source of truth.
+                pass
 
         resp = rest_update("eventbooking", {PRIMARY_KEY: eventbookingid}, payload)
         if isinstance(resp, list) and resp:

@@ -80,6 +80,7 @@ export default function EventCreateScreen() {
   const [participantsCap, setParticipantsCap] = useState<string>('')
   const [description, setDescription] = useState('')
   const [addMeToParticipants, setAddMeToParticipants] = useState(true)
+  const [autoApprove, setAutoApprove] = useState<boolean>(false)
   const [monetize, setMonetize] = useState<boolean>(false)
   const [entryFee, setEntryFee] = useState<string>('')
   const [payCash, setPayCash] = useState(false)
@@ -198,6 +199,7 @@ export default function EventCreateScreen() {
         title: title.trim(),
         description: description.trim() || undefined,
         participants_cap: participantsCapNum,
+        auto_approve: autoApprove,
         monetize,
         organizerid: typeof userId === 'number' ? userId : undefined,
       }
@@ -393,6 +395,7 @@ export default function EventCreateScreen() {
         if (typeof parsed.participantsCap === 'string') setParticipantsCap(parsed.participantsCap)
         if (typeof parsed.description === 'string') setDescription(parsed.description)
         if (typeof parsed.addMeToParticipants === 'boolean') setAddMeToParticipants(parsed.addMeToParticipants)
+        if (typeof parsed.autoApprove === 'boolean') setAutoApprove(parsed.autoApprove)
         if (typeof parsed.monetize === 'boolean') setMonetize(parsed.monetize)
         if (typeof parsed.entryFee === 'string') setEntryFee(parsed.entryFee)
         if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
@@ -408,12 +411,12 @@ export default function EventCreateScreen() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId
+        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId
       }
       try { AsyncStorage.setItem('@eventCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, addMeToParticipants, monetize, entryFee, payCash, payVnPay, selectedBookingId])
+  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId])
 
   const onSubmit = () => {
     if (submitting) return
@@ -566,6 +569,17 @@ export default function EventCreateScreen() {
                 {addMeToParticipants && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
               <Text style={styles.checkboxLabel}>Add me to participants list</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              activeOpacity={0.85}
+              onPress={() => setAutoApprove(v => !v)}
+            >
+              <View style={[styles.checkboxBox, autoApprove && styles.checkboxBoxChecked]}>
+                {autoApprove && <Text style={styles.checkboxTick}>✓</Text>}
+              </View>
+              <Text style={styles.checkboxLabel}>Auto-approved (event participants will be automatically accepted)</Text>
             </TouchableOpacity>
           </View>
 
