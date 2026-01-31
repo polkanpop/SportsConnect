@@ -729,6 +729,15 @@ export async function getTrainingSessionInfoBySessionId(sessionid: number): Prom
 	return null
 }
 
+export async function updateTrainingSessionInfo(sessioninfoid: number, data: Partial<TrainingSessionInfoMeta>) {
+	if (sessioninfoid == null) throw new Error('sessioninfoid required')
+	return request(`/trainingsessioninfo/${encodeURIComponent(sessioninfoid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(data),
+		debugLabel: 'updateTrainingSessionInfo'
+	}) as Promise<TrainingSessionInfoMeta>
+}
+
 export async function adjustTrainingSessionParticipants(sessionid: number, delta: number): Promise<TrainingSessionInfoMeta> {
 	if (sessionid == null) throw new Error('sessionid required')
 	if (!Number.isFinite(delta)) throw new Error('delta must be a number')

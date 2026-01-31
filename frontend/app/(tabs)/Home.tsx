@@ -17,12 +17,14 @@ import { useUserInfo } from "@/hooks/use-user-info";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventPanel from "@/app/event/eventPanel";
+import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 
 export default function Home() {
   const router = useRouter();
 
   const [activeView, setActiveView] = useState<Exclude<ManagementPanelKey, 'court'>>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
+  const [trainingSessionPanelMounted, setTrainingSessionPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
   const [uiLanguage, setUiLanguage] = useState<'en' | 'vi'>('en');
@@ -245,6 +247,11 @@ export default function Home() {
   // Avoid remounting EventPanel on every hop into "Event" view (prevents constant refetch/refresh UX)
   useEffect(() => {
     if (activeView === 'event') setEventPanelMounted(true);
+  }, [activeView]);
+
+  // Avoid remounting TrainingSessionPanel on every hop into "Training Session" view
+  useEffect(() => {
+    if (activeView === 'trainingSession') setTrainingSessionPanelMounted(true);
   }, [activeView]);
 
 
@@ -512,7 +519,11 @@ export default function Home() {
           {eventPanelMounted && <EventPanel organizerId={currentUserId} />}
         </View>
 
-        {activeView !== 'user' && activeView !== 'event' && (
+        <View style={{ flex: 1, display: activeView === 'trainingSession' ? 'flex' : 'none' }}>
+          {trainingSessionPanelMounted && <TrainingSessionPanel coachId={currentUserId} />}
+        </View>
+
+        {activeView !== 'user' && activeView !== 'event' && activeView !== 'trainingSession' && (
           <View style={{ flex: 1, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ color: '#666' }}>This panel is coming soon.</Text>
           </View>

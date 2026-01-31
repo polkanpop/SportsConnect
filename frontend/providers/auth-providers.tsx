@@ -1,7 +1,7 @@
 import { AuthContext } from '@/hooks/use-auth-context'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import { PropsWithChildren, useEffect, useState, useRef } from 'react'
+import { PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react'
 import { AUTO_EMAIL_LOGIN } from '@/env'
 import { AppState } from 'react-native'
 import { authSessionClose } from '@/lib/backendApi'
@@ -15,6 +15,59 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [rememberProfile, setRememberProfile] = useState<any | null>(null)
   const [rememberFlag, setRememberFlag] = useState<boolean>(false)
   const [backendAuthPresent, setBackendAuthPresent] = useState<boolean>(false)
+
+  const backendSnapshotRef = useRef<{
+    rememberAuth: string | null
+    backendProfile: string | null
+    backendAuth: string | null
+  }>({
+    rememberAuth: null,
+    backendProfile: null,
+    backendAuth: null,
+  })
+
+  const didBootstrapRememberRef = useRef<boolean>(false)
+
+  const applyBackendRememberSnapshot = useCallback((snap: {
+    rememberAuth: string | null
+    backendProfile: string | null
+    backendAuth: string | null
+  }) => {
+    backendSnapshotRef.current = snap
+    const nextBackendAuthPresent = !!snap.backendAuth
+    setBackendAuthPresent(nextBackendAuthPresent)
+
+    const nextRememberFlag = snap.rememberAuth === 'true'
+    setRememberFlag(nextRememberFlag)
+
+    if (nextRememberFlag && snap.backendProfile) {
+      try {
+        setRememberProfile(JSON.parse(snap.backendProfile))
+      } catch {
+        setRememberProfile(null)
+      }
+    } else {
+      setRememberProfile(null)
+    }
+  }, [])
+
+  const refreshBackendRemember = useCallback(async (opts?: { setLoading?: boolean }) => {
+    const setLoading = !!opts?.setLoading
+    if (setLoading) setIsLoadingRemember(true)
+    try {
+      const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth'])
+      const nextSnap = {
+        rememberAuth: pairs[0]?.[1] ?? null,
+        backendProfile: pairs[1]?.[1] ?? null,
+        backendAuth: pairs[2]?.[1] ?? null,
+      }
+      applyBackendRememberSnapshot(nextSnap)
+    } catch (e) {
+      console.warn('[AuthProvider] failed loading remember auth', (e as any)?.message)
+    } finally {
+      if (setLoading) setIsLoadingRemember(false)
+    }
+  }, [applyBackendRememberSnapshot])
 
   // --- Supabase session bootstrap & subscription ---
   useEffect(() => {
@@ -33,29 +86,59 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // --- Backend "remember me" bootstrap ---
+  // --- Backend "remember me" bootstrap & refresh ---
   useEffect(() => {
-    const loadRemember = async () => {
+    refreshBackendRemember({ setLoading: true }).finally(() => {
+      didBootstrapRememberRef.current = true
+    })
+  }, [refreshBackendRemember])
+
+  // Keep backend remember/profile in sync when app comes to foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        refreshBackendRemember()
+      }
+    })
+    return () => { sub.remove() }
+  }, [refreshBackendRemember])
+
+  // Lightweight polling to avoid cross-account stale profile in long-lived providers.
+  useEffect(() => {
+    // Only relevant for backend-auth path (no supabase session)
+    if (session) return
+    if (!didBootstrapRememberRef.current) return
+
+    let cancelled = false
+    const tick = async () => {
       try {
-        const flag = await AsyncStorage.getItem('@rememberAuth')
-        const rawProfile = await AsyncStorage.getItem('@backendProfile')
-        const rawBackendAuth = await AsyncStorage.getItem('@backendAuth')
-        setBackendAuthPresent(!!rawBackendAuth)
-        if (flag === 'true' && rawProfile) {
-          setRememberFlag(true)
-          try { setRememberProfile(JSON.parse(rawProfile)) } catch { setRememberProfile(null) }
-        } else {
-          setRememberFlag(false)
-          setRememberProfile(null)
+        const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth'])
+        const nextSnap = {
+          rememberAuth: pairs[0]?.[1] ?? null,
+          backendProfile: pairs[1]?.[1] ?? null,
+          backendAuth: pairs[2]?.[1] ?? null,
         }
-      } catch (e) {
-        console.warn('[AuthProvider] failed loading remember auth', (e as any)?.message)
-      } finally {
-        setIsLoadingRemember(false)
+        const prev = backendSnapshotRef.current
+        const changed =
+          prev.rememberAuth !== nextSnap.rememberAuth ||
+          prev.backendProfile !== nextSnap.backendProfile ||
+          prev.backendAuth !== nextSnap.backendAuth
+        if (!cancelled && changed) {
+          applyBackendRememberSnapshot(nextSnap)
+        }
+      } catch {
+        // ignore polling errors
       }
     }
-    loadRemember()
-  }, [])
+
+    // Run once quickly, then poll.
+    tick()
+    const id = setInterval(tick, 1500)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [applyBackendRememberSnapshot, session])
 
   // --- Supabase profile fetch (only if supabase session present) ---
   useEffect(() => {

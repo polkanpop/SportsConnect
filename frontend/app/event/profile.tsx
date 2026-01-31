@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, TextInput, Switch, Modal, FlatList, TouchableWithoutFeedback, ActivityIndicator } from 'react-native'
-import React, { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'expo-router'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ICONS } from '@/constants/icons'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -10,6 +10,7 @@ import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 // Sport colors (copied from Map.tsx)
 const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
@@ -67,8 +68,33 @@ const DB_TO_UI_SPORT: Record<string, string> = {
 
 export default function Profile() {
   const router = useRouter()
-  const { profile } = useAuthContext()
-  const userid = profile && typeof (profile as any).userid === 'number' ? (profile as any).userid : null
+  const { profile, session } = useAuthContext()
+  const [userid, setUserid] = useState<number | null>(null)
+
+  const resolveUserId = useCallback(async () => {
+    // Supabase path: backend userid might not exist
+    if (session) {
+      const ctxId = profile && typeof (profile as any).userid === 'number' ? (profile as any).userid : null
+      setUserid(ctxId)
+      return
+    }
+
+    // Backend-auth path: prefer AsyncStorage since AuthProvider can be long-lived and stale across account switches
+    let next: number | null = profile && typeof (profile as any).userid === 'number' ? (profile as any).userid : null
+    try {
+      const raw = await AsyncStorage.getItem('@backendProfile')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (typeof parsed?.userid === 'number') next = parsed.userid
+      }
+    } catch {
+      // ignore storage/parse issues
+    }
+    setUserid(next)
+  }, [profile, session])
+
+  useEffect(() => { resolveUserId() }, [resolveUserId])
+  useFocusEffect(useCallback(() => { resolveUserId() }, [resolveUserId]))
   
   const { data: userInfo, isLoading, error } = useUserInfo(userid)
   
