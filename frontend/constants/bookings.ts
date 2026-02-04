@@ -9,7 +9,6 @@ export const courtBookings = [
     paymentid: 101,
     start_timestamp: "2025-11-01T09:00:00",
     end_timestamp: "2025-11-01T10:00:00",
-    sport: "Basketball",
     court: "Court A",
     type: "stadiumCal",
     day: "Mon"
@@ -22,7 +21,6 @@ export const courtBookings = [
     paymentid: 102,
     start_timestamp: "2025-11-02T11:00:00",
     end_timestamp: "2025-11-02T12:00:00",
-    sport: "Badminton",
     court: "Court B",
     type: "stadiumCal",
     day:""
@@ -35,7 +33,6 @@ export const courtBookings = [
     paymentid: 103,
     start_timestamp: "2025-11-03T13:00:00",
     end_timestamp: "2025-11-03T14:00:00",
-    sport: "Tennis",
     court: "Court C",
     type: "stadiumCal",
     day:"Fri"
@@ -48,7 +45,6 @@ export const courtBookings = [
     paymentid: 104,
     start_timestamp: "2025-11-04T15:00:00",
     end_timestamp: "2025-11-04T16:00:00",
-    sport: "Table Tennis",
     court: "Court D",
     type: "stadiumCal",
     day:""
@@ -61,7 +57,6 @@ export const courtBookings = [
     paymentid: 105,
     start_timestamp: "2025-11-05T17:00:00",
     end_timestamp: "2025-11-05T18:00:00",
-    sport: "Basketball",
     court: "Court E",
     type: "stadiumCal",
     day:""
@@ -74,7 +69,6 @@ export const courtBookings = [
     paymentid: 106,
     start_timestamp: "2025-11-06T19:00:00",
     end_timestamp: "2025-11-06T20:00:00",
-    sport: "Football",
     court: "Court F",
     type: "stadiumCal",
     day:"Thu"
@@ -87,7 +81,6 @@ export const courtBookings = [
     paymentid: 107,
     start_timestamp: "2025-11-07T21:00:00",
     end_timestamp: "2025-11-07T22:00:00",
-    sport: "Pickleball",
     court: "Court G",
     type: "stadiumCal",
     day:"Sat"
@@ -105,7 +98,7 @@ export const eventBookings = [
     event: "Event A",
     date: "2025-11-01",
     time: "09:00",
-    message: "Annual Sports Event",
+    message: "Annual community event",
     type: "starCal",
     day:""
   },

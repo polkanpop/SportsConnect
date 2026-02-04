@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ICONS } from '@/constants/icons'
 
-export type ManagementPanelKey = 'user' | 'event' | 'trainingSession' | 'court'
+export type ManagementPanelKey = 'user' | 'event' | 'court'
 
 export default function ManagementPanel(props: {
   active: ManagementPanelKey
@@ -34,8 +34,7 @@ export default function ManagementPanel(props: {
     () =>
       [
         { key: 'user', label: 'User' },
-        { key: 'event', label: 'Event' },
-        { key: 'trainingSession', label: 'Training Session' },
+        { key: 'event', label: 'Event/Training Session' },
         { key: 'court', label: 'Court', disabled: true },
       ] as Array<{
         key: ManagementPanelKey
@@ -121,7 +120,7 @@ const styles = StyleSheet.create({
   },
   row: {
     paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     backgroundColor: 'transparent',

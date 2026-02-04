@@ -12,60 +12,6 @@ import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-// Sport colors (copied from Map.tsx)
-const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  tennis: { bg: '#32CD32', color: '#fff' },
-  tabletennis: { bg: '#32CD32', color: '#fff' },
-  badminton: { bg: '#32CD32', color: '#fff' },
-  basketball: { bg: '#FFA500', color: '#111' },
-  volleyball: { bg: '#FFA500', color: '#111' },
-  golf: { bg: '#2e8b57', color: '#fff' },
-  running: { bg: '#4682B4', color: '#fff' },
-  pickleball: { bg: '#FF69B4', color: '#111' },
-};
-
-// Icon mapping for sports
-const SPORT_ICONS: Record<string, any> = {
-  football: ICONS.football,
-  tennis: ICONS.sportCategory, // Fallback if no specific icon
-  tabletennis: ICONS.tableTennis,
-  badminton: ICONS.badminton,
-  basketball: ICONS.basketball,
-  volleyball: ICONS.volleyball,
-  golf: ICONS.golf,
-  running: ICONS.running,
-  pickleball: ICONS.pickleball,
-};
-
-const AVAILABLE_SPORTS = Object.keys(SPORT_COLORS);
-
-// Mapping from UI keys (lowercase) to DB Enum values (Capitalized)
-const UI_TO_DB_SPORT: Record<string, string> = {
-  football: 'Football',
-  tennis: 'Tennis',
-  tabletennis: 'TableTennis',
-  badminton: 'Badminton',
-  basketball: 'Basketball',
-  volleyball: 'Volleyball',
-  golf: 'Golf',
-  running: 'Running',
-  pickleball: 'Pickleball',
-};
-
-// Mapping from DB Enum values to UI keys
-const DB_TO_UI_SPORT: Record<string, string> = {
-  'Football': 'football',
-  'Tennis': 'tennis',
-  'TableTennis': 'tabletennis',
-  'Badminton': 'badminton',
-  'Basketball': 'basketball',
-  'Volleyball': 'volleyball',
-  'Golf': 'golf',
-  'Running': 'running',
-  'Pickleball': 'pickleball',
-};
-
 export default function Profile() {
   const router = useRouter()
   const { profile, session } = useAuthContext()
@@ -99,10 +45,7 @@ export default function Profile() {
   const { data: userInfo, isLoading, error } = useUserInfo(userid)
   
   const [bio, setBio] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [tempTags, setTempTags] = useState<string[]>([])
   const [contactVisible, setContactVisible] = useState(true)
-  const [showTagModal, setShowTagModal] = useState(false)
   const [showContactLog, setShowContactLog] = useState(false)
   const logTimerRef = useRef<any>(null)
   
@@ -135,20 +78,6 @@ export default function Profile() {
   useEffect(() => {
     if (userInfo) {
       setBio(userInfo.biography || '')
-      // Parse tags if they are stored as array or string
-      let parsedTags: string[] = []
-      if (Array.isArray(userInfo.sport)) {
-        parsedTags = userInfo.sport
-      } else if (typeof userInfo.sport === 'string') {
-        // Handle potential string format like "{football,basketball}" or "football,basketball"
-        const clean = (userInfo.sport as string).replace(/^\{|\}$/g, '')
-        if (clean) parsedTags = clean.split(',')
-      }
-      // Map DB values back to UI keys
-      const uiTags = parsedTags.map(t => DB_TO_UI_SPORT[t] || t.toLowerCase()).filter(t => SPORT_COLORS[t])
-      // Deduplicate
-      setTags([...new Set(uiTags)])
-
     // Persisted privacy: if backend provides a boolean, respect it
     const persisted = (userInfo as any)?.contactvisiblestatus
 		if (typeof persisted === 'boolean') setContactVisible(persisted)
@@ -192,39 +121,6 @@ export default function Profile() {
     }
   }
 
-  const handleOpenTagModal = () => {
-    setTempTags([...tags])
-    setShowTagModal(true)
-  }
-
-  const handleToggleTempTag = (sport: string) => {
-    if (tempTags.includes(sport)) {
-      setTempTags(tempTags.filter(t => t !== sport))
-    } else {
-      setTempTags([...tempTags, sport])
-    }
-  }
-
-  const handleConfirmTags = async () => {
-    setTags(tempTags)
-    setShowTagModal(false)
-    if (!userid) return
-    try {
-      // Map UI keys to DB Enum values
-      const dbTags = tempTags.map(t => UI_TO_DB_SPORT[t] || t)
-      // Deduplicate DB tags
-      const uniqueDbTags = [...new Set(dbTags)]
-      await updateUserInfo(userid, { sport: uniqueDbTags as any }) 
-      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
-    } catch (e) {
-      console.error('Failed to update tags', e)
-      openActionModal({
-        title: 'Error',
-        message: 'Failed to update tags',
-        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
-      })
-    }
-  }
 
   const handleToggleContact = async () => {
     if (!userid) return
@@ -444,23 +340,6 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
           <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
-          
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {tags.map(tag => {
-              const style = SPORT_COLORS[tag] || { bg: '#eee', color: '#333' }
-              const icon = SPORT_ICONS[tag]
-              return (
-                <TouchableOpacity key={tag} style={[styles.tag, { backgroundColor: style.bg, borderColor: style.border, borderWidth: style.border ? 1 : 0 }]} onPress={handleOpenTagModal}>
-                  {icon && <Image source={icon} style={[styles.tagIcon, { tintColor: style.color }]} />}
-                  <Text style={[styles.tagText, { color: style.color }]}>{tag.charAt(0).toUpperCase() + tag.slice(1)}</Text>
-                </TouchableOpacity>
-              )
-            })}
-            <TouchableOpacity style={[styles.tag, styles.addTagBtn]} onPress={handleOpenTagModal}>
-              <Text style={styles.addTagText}>+ Add Sport</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View style={styles.divider} />
@@ -555,46 +434,6 @@ export default function Profile() {
         </View>
 
       </ScrollView>
-
-      {/* Tag Selection Modal */}
-      <Modal visible={showTagModal} transparent animationType="fade" onRequestClose={() => setShowTagModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTagModal(false)}>
-          <View style={styles.modalContent}>
-            <Text style={styles.tagModalTitle}>Select Sport</Text>
-            <View style={styles.modalTags}>
-              {AVAILABLE_SPORTS.map(sport => {
-                 const isSelected = tempTags.includes(sport)
-                 const style = SPORT_COLORS[sport]
-                 const icon = SPORT_ICONS[sport]
-                 return (
-                   <TouchableOpacity 
-                    key={sport} 
-                    style={[
-                      styles.modalTag, 
-                      { 
-                        backgroundColor: style.bg, 
-                        borderColor: isSelected ? '#32CD32' : (style.border || 'transparent'), 
-                        borderWidth: isSelected ? 2 : (style.border ? 1 : 0) 
-                      }
-                    ]} 
-                    onPress={() => handleToggleTempTag(sport)}
-                   >
-                      {icon && <Image source={icon} style={[styles.tagIcon, { tintColor: style.color }]} />}
-                      <Text style={[styles.tagText, { color: style.color }]}>{sport.charAt(0).toUpperCase() + sport.slice(1)}</Text>
-                      {isSelected && (
-                        <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: 'green', marginLeft: 6 }} />
-                      )}
-                   </TouchableOpacity>
-                 )
-              })}
-            </View>
-            <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirmTags}>
-              <Image source={ICONS.tick} style={styles.confirmBtnIcon} />
-              <Text style={styles.confirmBtnText}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Unsaved Changes Modal */}
       <Modal

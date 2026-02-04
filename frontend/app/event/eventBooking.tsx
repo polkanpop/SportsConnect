@@ -19,7 +19,7 @@ import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { appendHistory } from '@/storage/history'
 
-// Normalise sport/venue (duplicated helper to avoid import loops)
+// Normalise array-ish fields (duplicated helper to avoid import loops)
 function asArray(v: any): string[] {
   if (!v) return []
   if (Array.isArray(v)) return v.filter(Boolean).map(String)
@@ -256,7 +256,6 @@ export default function EventBooking() {
     } finally { setSubmitting(false) }
   }, [event, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
 
-  const sports = asArray(event?.sport)
   const venues = asArray(event?.venue)
   let venueDisplay: string[] = []
   if (venues.length) {
@@ -287,7 +286,6 @@ export default function EventBooking() {
           )}
           {event && (
             <View style={styles.titleRowInline}>
-              <Image source={ICONS.starCal} style={styles.leadingCalIcon} />
               <Text style={styles.eventTitle}>{event.title || `Event ${event.eventid}`}</Text>
             </View>
           )}
@@ -315,40 +313,6 @@ export default function EventBooking() {
               })()}
               <Text style={styles.courtNameText}>{event.court_name || 'Court'}</Text>
             </View>
-            {(() => {
-              const sportTokens = sports
-              const tags = sportTokens.map(t => String(t).trim()).filter(t => t.length)
-              if (!tags.length) return null
-              const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-                football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                tennis: { bg: '#32CD32', color: '#fff' },
-                tabletennis: { bg: '#32CD32', color: '#fff' },
-                badminton: { bg: '#32CD32', color: '#fff' },
-                basketball: { bg: '#FFA500', color: '#111' },
-                volleyball: { bg: '#FFA500', color: '#111' },
-                golf: { bg: '#2e8b57', color: '#fff' },
-                running: { bg: '#4682B4', color: '#fff' },
-                pickleball: { bg: '#FF69B4', color: '#111' },
-              }
-              const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-              return (
-                <View style={styles.tagsRow}>
-                  {tags.map(tag => {
-                    const key = normaliseKey(tag)
-                    const cfg = SPORT_COLORS[key]
-                    return (
-                      <View
-                        key={tag}
-                        style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
-                      >
-                        <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{tag}</Text>
-                      </View>
-                    )
-                  })}
-                </View>
-              )
-            })()}
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />
               <Text style={styles.courtAddress}>{event.address || 'Address N/A'}</Text>
@@ -477,8 +441,6 @@ const styles = StyleSheet.create({
   eventFee: { fontSize: 13, color: '#333', marginTop: 6, fontWeight: '600' },
   eventDesc: { fontSize: 12, color: '#444', lineHeight: 18, marginTop: 8 },
   titleRowInline: { flexDirection: 'row', alignItems: 'center' },
-  starCalIcon: { width: 22, height: 22, tintColor: '#FFB703', marginLeft: 8, resizeMode: 'contain' },
-  leadingCalIcon: { width: 24, height: 24, tintColor: '#FFB703', marginRight: 10, resizeMode: 'contain' },
   courtNameText: { fontSize: 18, fontWeight: '700', color: '#222' },
   courtHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   expandIcon: { width: 18, height: 18, tintColor: '#333', resizeMode: 'contain' },

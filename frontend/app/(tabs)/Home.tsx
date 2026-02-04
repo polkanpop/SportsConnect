@@ -17,28 +17,15 @@ import { useUserInfo } from "@/hooks/use-user-info";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventPanel from "@/app/event/eventPanel";
-import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 
 export default function Home() {
   const router = useRouter();
 
   const [activeView, setActiveView] = useState<Exclude<ManagementPanelKey, 'court'>>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
-  const [trainingSessionPanelMounted, setTrainingSessionPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
   const [uiLanguage, setUiLanguage] = useState<'en' | 'vi'>('en');
-
-  // Split animation: translateX can use native driver, but color interpolation cannot.
-  const langAnimX = React.useRef(new Animated.Value(uiLanguage === 'vi' ? 1 : 0)).current;
-  const langAnimColor = React.useRef(new Animated.Value(uiLanguage === 'vi' ? 1 : 0)).current;
-  useEffect(() => {
-    const to = uiLanguage === 'vi' ? 1 : 0;
-    Animated.parallel([
-      Animated.timing(langAnimX, { toValue: to, duration: 180, useNativeDriver: true }),
-      Animated.timing(langAnimColor, { toValue: to, duration: 180, useNativeDriver: false }),
-    ]).start();
-  }, [langAnimColor, langAnimX, uiLanguage]);
   const drawerW = Math.min(320, Math.max(260, Dimensions.get('window').width * 0.78));
   const drawerX = React.useRef(new Animated.Value(-drawerW)).current;
 
@@ -247,11 +234,6 @@ export default function Home() {
   // Avoid remounting EventPanel on every hop into "Event" view (prevents constant refetch/refresh UX)
   useEffect(() => {
     if (activeView === 'event') setEventPanelMounted(true);
-  }, [activeView]);
-
-  // Avoid remounting TrainingSessionPanel on every hop into "Training Session" view
-  useEffect(() => {
-    if (activeView === 'trainingSession') setTrainingSessionPanelMounted(true);
   }, [activeView]);
 
 
@@ -519,11 +501,7 @@ export default function Home() {
           {eventPanelMounted && <EventPanel organizerId={currentUserId} />}
         </View>
 
-        <View style={{ flex: 1, display: activeView === 'trainingSession' ? 'flex' : 'none' }}>
-          {trainingSessionPanelMounted && <TrainingSessionPanel coachId={currentUserId} />}
-        </View>
-
-        {activeView !== 'user' && activeView !== 'event' && activeView !== 'trainingSession' && (
+        {activeView !== 'user' && activeView !== 'event' && (
           <View style={{ flex: 1, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ color: '#666' }}>This panel is coming soon.</Text>
           </View>
@@ -572,115 +550,59 @@ export default function Home() {
 
               {/* Language switch (UI only for now) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginTop: 6, marginBottom: 12 }}>
-                <Text style={{ fontSize: 20, lineHeight: 28, fontWeight: '800', color: '#111' }}>Language</Text>
+                <Text style={{ flex: 1, marginRight: 12, fontSize: 20, lineHeight: 28, fontWeight: '800', color: '#111' }} numberOfLines={1}>Language</Text>
 
-                {(() => {
-                  const TRACK_W = 120;
-                  const TRACK_H = 44;
-                  const P = 4;
-                  const THUMB = TRACK_H - P * 2;
-                  const translateX = langAnimX.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [P, TRACK_W - THUMB - P],
-                  });
-                  const trackBg = langAnimColor.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['#2563EB', '#DC2626'],
-                  });
-                  const trackBorder = langAnimColor.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['#2563EB', '#DC2626'],
-                  });
-
-                  const enOpacity = langAnimColor.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-                  const viOpacity = langAnimColor.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-
-                  // Current assets:
-                  // - english_icon.png: no transparent padding (scale 1)
-                  // - vietnamese_icon.png: heavy padding (needs ~1.67x to fill)
-                  const EN_SCALE = 1;
-                  const VI_SCALE = 1.67;
-
-                  return (
-                    <Pressable
-                      onPress={() => setUiLanguage((prev) => (prev === 'en' ? 'vi' : 'en'))}
-                      style={{
-                        width: TRACK_W,
-                        height: TRACK_H,
-                        borderRadius: TRACK_H / 2,
-                        padding: P,
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Animated.View
-                        pointerEvents="none"
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          top: 0,
-                          bottom: 0,
-                          borderRadius: TRACK_H / 2,
-                          backgroundColor: trackBg as any,
-                          borderWidth: 1,
-                          borderColor: trackBorder as any,
-                        }}
-                      />
-                      {/* Icons on track */}
-                      <View pointerEvents="none" style={{ position: 'absolute', left: 10, right: 14, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <View style={{ width: 22, height: 22, borderRadius: 11, overflow: 'hidden', opacity: 0.9, backgroundColor: 'rgba(255,255,255,0.85)' }}>
-                          <Image source={ICONS.englishIcon} style={{ width: '100%', height: '100%', transform: [{ scale: EN_SCALE }] }} resizeMode="cover" />
-                        </View>
-                        <View style={{ width: 22, height: 22, borderRadius: 11, overflow: 'hidden', opacity: 0.9, backgroundColor: 'rgba(255,255,255,0.85)' }}>
-                          <Image source={ICONS.vietnamIcon} style={{ width: '100%', height: '100%', transform: [{ scale: VI_SCALE }] }} resizeMode="cover" />
-                        </View>
-                      </View>
-
-                      {/* Sliding thumb */}
-                      <Animated.View
-                        style={{
-                          width: THUMB,
-                          height: THUMB,
-                          borderRadius: THUMB / 2,
-                          backgroundColor: '#FFFFFF',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transform: [{ translateX }],
-                          overflow: 'hidden',
-                          shadowColor: '#000',
-                          shadowOpacity: 0.18,
-                          shadowRadius: 6,
-                          shadowOffset: { width: 0, height: 2 },
-                          elevation: 4,
-                        }}
-                      >
-                        {/* Crossfade flags so the icon stays in sync while animating */}
-                        <Animated.Image
-                          source={ICONS.englishIcon}
-                          style={{
-                            position: 'absolute',
-                            width: '100%',
-                            height: '100%',
-                            opacity: enOpacity as any,
-                            transform: [{ scale: EN_SCALE }],
-                          }}
-                          resizeMode="cover"
-                        />
-                        <Animated.Image
-                          source={ICONS.vietnamIcon}
-                          style={{
-                            position: 'absolute',
-                            width: '100%',
-                            height: '100%',
-                            opacity: viOpacity as any,
-                            transform: [{ scale: VI_SCALE }],
-                          }}
-                          resizeMode="cover"
-                        />
-                      </Animated.View>
-                    </Pressable>
-                  );
-                })()}
+                <View
+                  style={{
+                    width: 132,
+                    flexDirection: 'row',
+                    backgroundColor: '#F3F4F6',
+                    borderRadius: 999,
+                    padding: 2,
+                    borderWidth: 1,
+                    borderColor: '#E5E7EB',
+                  }}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setUiLanguage('vi')}
+                    style={{
+                      flex: 1,
+                      height: 30,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: uiLanguage === 'vi' ? '#FFFFFF' : 'transparent',
+                      shadowColor: '#000',
+                      shadowOpacity: uiLanguage === 'vi' ? 0.08 : 0,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: uiLanguage === 'vi' ? 2 : 0,
+                    }}
+                  >
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: uiLanguage === 'vi' ? '#2563EB' : '#9CA3AF' }}>Vi</Text>
+                  </TouchableOpacity>
+                  <View pointerEvents="none" style={{ width: 1, backgroundColor: '#E5E7EB', marginVertical: 6, opacity: 0.8 }} />
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setUiLanguage('en')}
+                    style={{
+                      flex: 1,
+                      height: 30,
+                      borderRadius: 999,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: uiLanguage === 'en' ? '#FFFFFF' : 'transparent',
+                      shadowColor: '#000',
+                      shadowOpacity: uiLanguage === 'en' ? 0.08 : 0,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: uiLanguage === 'en' ? 2 : 0,
+                    }}
+                  >
+                    <Text style={{ fontWeight: '600', fontSize: 14, color: uiLanguage === 'en' ? '#2563EB' : '#9CA3AF' }}>En</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 16 }} />

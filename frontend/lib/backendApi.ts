@@ -81,7 +81,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		}
 	}
 	// Preflight: if this endpoint is protected (heuristic) ensure access token fresh
-	const isProtectedEndpoint = /^(?:\/courtbookings|\/events|\/trainingsessions|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
+	const isProtectedEndpoint = /^(?:\/courtbookings|\/courts|\/events|\/eventbookings|\/trainingsessions|\/trainingsessioninfo|\/tsbookings|\/blocklist|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
 	if (isProtectedEndpoint) {
 		const bt = await getLocalBackendToken()
 		const nowMs = Date.now()
@@ -117,6 +117,51 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		throw new Error(detail)
 	}
 	return data
+}
+
+export type CourtGeocode = {
+	formatted_address?: string | null
+	latitude: number
+	longitude: number
+	location_type?: string | null
+	place_id?: string | null
+	types?: string[]
+	city?: string | null
+	state?: string | null
+	postal_code?: string | null
+	accuracy_type?: string | null
+	accuracy_score?: number | null
+	warnings?: string[]
+}
+
+export async function geocodeCourtAddress(address: string): Promise<CourtGeocode> {
+	return request(`/courts/geocode?address=${encodeURIComponent(address)}`, {
+		method: 'GET',
+		debugLabel: 'courts.geocode',
+	})
+}
+
+export type CourtRegisterRequest = {
+	name: string
+	address: string
+	ownerid: number
+	price?: number
+	venue: 'Indoor' | 'Outdoor' | 'Both'
+	images: string[]
+}
+
+export type CourtRegisterResponse = {
+	courtid: number
+	courtinfoid: number
+	geocode: CourtGeocode
+}
+
+export async function registerCourt(payload: CourtRegisterRequest): Promise<CourtRegisterResponse> {
+	return request('/courts/register', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'courts.register',
+	})
 }
 
 // Centralized persistence of backend auth/session related data.
@@ -308,7 +353,7 @@ export async function removeFavouriteCourt(favouriteid: number) {
 // ---- User Info API ----
 // GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
 // Helper to fetch first row by userid.
-export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; sport?: string | string[] | null; biography?: string | null; pfp?: string | null; contactvisiblestatus?: boolean | null }
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; biography?: string | null; pfp?: string | null; contactvisiblestatus?: boolean | null }
 
 export async function getUserInfoByUserId(userid: number) {
 	if (userid == null) throw new Error('userid required')
@@ -401,7 +446,7 @@ export async function getUserInfoByUserIdCached(userid: number) {
 
 // ---- Court Info API ----
 // Existing backend endpoint: GET /courtinfo returns list of courtinfo rows.
-// Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,sport,venue,images,availability
+// Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability
 export type CourtInfoRow = {
 	courtinfoid: number
 	courtid: number
@@ -409,7 +454,6 @@ export type CourtInfoRow = {
 	address: string
 	latitude?: number | null
 	longitude?: number | null
-	sport?: string[] | string | null
 	venue?: string[] | string | null
 	images?: string[] | null
 	availability?: string | null
@@ -515,7 +559,11 @@ export async function updateEventBooking(eventbookingid: number, data: Partial<E
 
 export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createTrainingSessionBooking(payload: Omit<TrainingSessionBookingRow, 'tsbookingid'>) {
-	return request('/tsbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createTrainingSessionBooking' }) as Promise<TrainingSessionBookingRow>
+	const res = await request('/tsbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createTrainingSessionBooking' }) as Promise<TrainingSessionBookingRow>
+	// Training session lists are rendered via listTrainingSessionsCombinedCached() (fetchWithCache),
+	// so bust that cache whenever bookings change to avoid stale UI.
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 
 export async function getTrainingSessionBooking(tsbookingid: number): Promise<TrainingSessionBookingRow | null> {
@@ -530,11 +578,13 @@ export async function getTrainingSessionBooking(tsbookingid: number): Promise<Tr
 
 export async function updateTrainingSessionBooking(tsbookingid: number, data: Partial<TrainingSessionBookingRow>) {
 	if (tsbookingid == null) throw new Error('tsbookingid required')
-	return request(`/tsbookings/${encodeURIComponent(tsbookingid)}`, {
+	const res = await request(`/tsbookings/${encodeURIComponent(tsbookingid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateTrainingSessionBooking'
 	}) as Promise<TrainingSessionBookingRow>
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 
 // Prepare delete endpoint for future UI integration (optimistic removal supported in hook)
@@ -577,6 +627,50 @@ export async function rejectEventBooking(eventbookingid: number) {
 
 export async function getTrainingSessionBookingsByUserId(userId: number) {
 	return request(`/tsbookings?userid=${userId}`, { debugLabel: 'getTrainingSessionBookingsByUserId' })
+}
+
+export async function getTrainingSessionBookingsBySessionId(sessionid: number, params?: { status?: string }) {
+	if (sessionid == null) throw new Error('sessionid required')
+	const qs: string[] = [`sessionid=${encodeURIComponent(sessionid)}`]
+	if (params?.status) qs.push(`status=${encodeURIComponent(params.status)}`)
+	return request(`/tsbookings?${qs.join('&')}`, { debugLabel: 'getTrainingSessionBookingsBySessionId' }) as Promise<TrainingSessionBookingRow[]>
+}
+
+export async function approveTrainingSessionBooking(tsbookingid: number) {
+	return updateTrainingSessionBooking(tsbookingid, { status: 'joined' })
+}
+
+export async function rejectTrainingSessionBooking(tsbookingid: number) {
+	return updateTrainingSessionBooking(tsbookingid, { status: 'rejected', bookingstatus: 'cancelled' })
+}
+
+export type BlockTargetType = 'event' | 'trainingsession'
+
+export type BlockListRow = {
+	blockid: number
+	targettype: BlockTargetType
+	targetid: number
+	blocked_userid: number
+	blocked_by_userid: number
+	blocked_at?: string | null
+}
+
+export async function listBlockList(params: { targettype: BlockTargetType; targetid: number }) {
+	const qs = `targettype=${encodeURIComponent(params.targettype)}&targetid=${encodeURIComponent(params.targetid)}`
+	return request(`/blocklist?${qs}`, { debugLabel: 'listBlockList' }) as Promise<BlockListRow[]>
+}
+
+export async function createBlock(params: { targettype: BlockTargetType; targetid: number; blocked_userid: number }) {
+	return request('/blocklist', {
+		method: 'POST',
+		body: JSON.stringify(params),
+		debugLabel: 'createBlock',
+	}) as Promise<BlockListRow>
+}
+
+export async function removeBlock(params: { targettype: BlockTargetType; targetid: number; blocked_userid: number }) {
+	const qs = `targettype=${encodeURIComponent(params.targettype)}&targetid=${encodeURIComponent(params.targetid)}&blocked_userid=${encodeURIComponent(params.blocked_userid)}`
+	return request(`/blocklist?${qs}`, { method: 'DELETE', debugLabel: 'removeBlock' }) as Promise<{ deleted: boolean; rows?: any[] }>
 }
 
 // --- Debug identity (backend /api/debug/identity) ---
@@ -647,7 +741,6 @@ export type CombinedEvent = {
 	courtid?: number
 	address?: string
 	court_name?: string | null
-	sport?: string[] | string | null
 	venue?: string[] | string | null
 }
 
@@ -772,7 +865,6 @@ export type CombinedTrainingSession = {
 	courtid?: number
 	address?: string
 	court_name?: string | null
-	sport?: string[] | string | null
 	venue?: string[] | string | null
 	entry_fee?: number | null
 	support_payment_method?: string | null
@@ -848,7 +940,6 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			courtid,
 			address: ci?.address,
 			court_name: (ci as any)?.name ?? null,
-			sport: ci?.sport,
 			venue: ci?.venue,
 		}
 	})
@@ -913,7 +1004,6 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			courtid,
 			address: ci?.address,
 			court_name: (ci as any)?.name ?? null,
-			sport: ci?.sport,
 			venue: ci?.venue,
 		}
 	})
@@ -1034,7 +1124,6 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			courtid,
 			address: ci?.address,
 			court_name: (ci as any)?.name ?? null,
-			sport: ci?.sport,
 			venue: ci?.venue,
 			entry_fee: meta?.entry_fee ?? null,
 			support_payment_method: meta?.support_payment_method ?? null,
@@ -1097,7 +1186,6 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			courtid,
 			address: ci?.address,
 			court_name: (ci as any)?.name ?? null,
-			sport: ci?.sport,
 			venue: ci?.venue,
 			entry_fee: meta?.entry_fee ?? null,
 			support_payment_method: meta?.support_payment_method ?? null,

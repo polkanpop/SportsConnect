@@ -15,7 +15,6 @@ export type FavoriteMarker = {
   latitude: number;
   longitude: number;
   images?: string[];
-  sport?: string[] | string;
   venue?: string[] | string;
   availability?: string;
 };

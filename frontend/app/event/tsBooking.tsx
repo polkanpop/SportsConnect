@@ -10,6 +10,7 @@ import {
   createPayment,
   createTrainingSessionBooking,
   getTrainingSessionBookingsByUserId,
+  invalidateTrainingSessionsCombinedCache,
   listTrainingSessionsCombined,
   listTrainingSessionsCombinedCached,
   CombinedTrainingSession,
@@ -142,6 +143,12 @@ export default function TrainingSessionBooking() {
         note: noteText || null,
       })
 
+      // Avoid "caching" feeling: refresh both the user's bookings and the cached session list immediately.
+      // (listTrainingSessionsCombinedCached uses fetchWithCache, so invalidate that too.)
+      try { await invalidateTrainingSessionsCombinedCache() } catch {}
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      queryClient.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+
       if (typeof userId === 'number') {
         void appendHistory(userId, {
           kind: 'payment',
@@ -222,7 +229,6 @@ export default function TrainingSessionBooking() {
     } finally { setSubmitting(false) }
   }, [session, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
 
-  const sports = asArray(session?.sport)
   const venues = asArray(session?.venue)
   let venueDisplay: string[] = []
   if (venues.length) {
@@ -247,7 +253,6 @@ export default function TrainingSessionBooking() {
           {!loadingSessions && !session && <Text style={styles.errorText}>Session not found.</Text>}
           {session && (
             <View style={styles.titleRowInline}>
-              <Image source={ICONS.coach} style={styles.leadingCalIcon} />
               <Text style={styles.sessionTitle}>{session.title || `Session ${session.sessionid}`}</Text>
             </View>
           )}
@@ -275,40 +280,6 @@ export default function TrainingSessionBooking() {
               })()}
               <Text style={styles.courtNameText}>{session.court_name || 'Court'}</Text>
             </View>
-            {(() => {
-              const sportTokens = sports
-              const tags = sportTokens.map(t => String(t).trim()).filter(t => t.length)
-              if (!tags.length) return null
-              const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-                football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                tennis: { bg: '#32CD32', color: '#fff' },
-                tabletennis: { bg: '#32CD32', color: '#fff' },
-                badminton: { bg: '#32CD32', color: '#fff' },
-                basketball: { bg: '#FFA500', color: '#111' },
-                volleyball: { bg: '#FFA500', color: '#111' },
-                golf: { bg: '#2e8b57', color: '#fff' },
-                running: { bg: '#4682B4', color: '#fff' },
-                pickleball: { bg: '#FF69B4', color: '#111' },
-              }
-              const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-              return (
-                <View style={styles.tagsRow}>
-                  {tags.map(tag => {
-                    const key = normaliseKey(tag)
-                    const cfg = SPORT_COLORS[key]
-                    return (
-                      <View
-                        key={tag}
-                        style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
-                      >
-                        <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{tag}</Text>
-                      </View>
-                    )
-                  })}
-                </View>
-              )
-            })()}
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />
               <Text style={styles.courtAddress}>{session.address || 'Address N/A'}</Text>
@@ -431,8 +402,6 @@ const styles = StyleSheet.create({
   sessionFee:{fontSize:13,color:'#333',marginTop:6,fontWeight:'600'},
   sessionDesc:{fontSize:12,color:'#444',lineHeight:18,marginTop:8},
   titleRowInline:{flexDirection:'row',alignItems:'center'},
-  starCalIcon:{width:22,height:22,tintColor:'#FFB703',marginLeft:8,resizeMode:'contain'},
-  leadingCalIcon:{width:24,height:24,marginRight:10,resizeMode:'contain'},
   courtNameText:{fontSize:18,fontWeight:'700',color:'#222'},
   courtHeaderRow:{flexDirection:'row',alignItems:'center',marginBottom:4},
   expandIcon:{width:18,height:18,tintColor:'#333',resizeMode:'contain'},

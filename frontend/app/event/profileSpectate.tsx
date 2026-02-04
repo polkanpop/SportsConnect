@@ -5,56 +5,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { getUserInfoByUserIdCached, type UserInfoRow } from '@/lib/backendApi'
 
-// Copied from profile.tsx to keep layout/appearance identical
-const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  tennis: { bg: '#32CD32', color: '#fff' },
-  tabletennis: { bg: '#32CD32', color: '#fff' },
-  badminton: { bg: '#32CD32', color: '#fff' },
-  basketball: { bg: '#FFA500', color: '#111' },
-  volleyball: { bg: '#FFA500', color: '#111' },
-  golf: { bg: '#2e8b57', color: '#fff' },
-  running: { bg: '#4682B4', color: '#fff' },
-  pickleball: { bg: '#FF69B4', color: '#111' },
-}
-
-const SPORT_ICONS: Record<string, any> = {
-  football: ICONS.football,
-  tennis: ICONS.sportCategory,
-  tabletennis: ICONS.tableTennis,
-  badminton: ICONS.badminton,
-  basketball: ICONS.basketball,
-  volleyball: ICONS.volleyball,
-  golf: ICONS.golf,
-  running: ICONS.running,
-  pickleball: ICONS.pickleball,
-}
-
-const DB_TO_UI_SPORT: Record<string, string> = {
-  Football: 'football',
-  Tennis: 'tennis',
-  TableTennis: 'tabletennis',
-  Badminton: 'badminton',
-  Basketball: 'basketball',
-  Volleyball: 'volleyball',
-  Golf: 'golf',
-  Running: 'running',
-  Pickleball: 'pickleball',
-}
-
-function parseUserSports(userInfo: UserInfoRow | null): string[] {
-  if (!userInfo?.sport) return []
-  let parsedTags: string[] = []
-  if (Array.isArray(userInfo.sport)) {
-    parsedTags = userInfo.sport
-  } else if (typeof userInfo.sport === 'string') {
-    const clean = userInfo.sport.replace(/^\{|\}$/g, '')
-    if (clean) parsedTags = clean.split(',')
-  }
-  const uiTags = parsedTags.map((t) => DB_TO_UI_SPORT[t] || String(t).toLowerCase()).filter((t) => SPORT_COLORS[t])
-  return [...new Set(uiTags)]
-}
-
 export default function ProfileSpectate() {
   const router = useRouter()
   const { userid } = useLocalSearchParams<{ userid?: string }>()
@@ -94,7 +44,6 @@ export default function ProfileSpectate() {
     }
   }, [numericUserId])
 
-  const tags = useMemo(() => parseUserSports(userInfo), [userInfo])
   const contactVisible = useMemo(() => {
 		const v = (userInfo as any)?.contactvisiblestatus
 		return typeof v === 'boolean' ? v : true
@@ -127,23 +76,6 @@ export default function ProfileSpectate() {
             )}
           </View>
           <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
-
-          {/* Tags */}
-          <View style={styles.tagsRow}>
-            {tags.map((tag) => {
-              const style = SPORT_COLORS[tag] || { bg: '#eee', color: '#333' }
-              const icon = SPORT_ICONS[tag]
-              return (
-                <View
-                  key={tag}
-                  style={[styles.tag, { backgroundColor: style.bg, borderColor: style.border, borderWidth: style.border ? 1 : 0 }]}
-                >
-                  {icon && <Image source={icon} style={[styles.tagIcon, { tintColor: style.color }]} />}
-                  <Text style={[styles.tagText, { color: style.color }]}>{tag.charAt(0).toUpperCase() + tag.slice(1)}</Text>
-                </View>
-              )
-            })}
-          </View>
         </View>
 
         <View style={styles.divider} />

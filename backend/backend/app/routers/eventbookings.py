@@ -6,6 +6,22 @@ router = APIRouter(prefix="/eventbookings", tags=["bookings"])  # Keep plural ro
 
 PRIMARY_KEY = "eventbookingid"
 
+
+def _sync_event_participant_count(eventid: int) -> None:
+    """Recompute eventinfo.numberofpeople from joined bookings.
+
+    This avoids counter drift if approvals/rejections/cancellations happen out of order,
+    or if eventinfo rows were duplicated.
+    """
+    joined_rows = rest_select(
+        "eventbooking",
+        "eventbookingid",
+        filters={"eventid": eventid, "status": "joined"},
+    )
+    joined_count = len(joined_rows) if isinstance(joined_rows, list) else 0
+    # Update by eventid (not eventinfoid) to handle potential duplicate eventinfo rows.
+    rest_update("eventinfo", {"eventid": eventid}, {"numberofpeople": joined_count})
+
 @router.get("", response_model=list[dict])
 def list_event_bookings(
     userid: int | None = Query(None),
@@ -93,6 +109,14 @@ def create_event_booking(body: dict, current_user: str = Depends(get_current_use
             resp = rest_insert("eventbooking", payload)
         except Exception:
             resp = rest_upsert("eventbooking", payload)
+
+        # If auto-approved, keep event participant count consistent.
+        if desired_status == "joined":
+            try:
+                _sync_event_participant_count(eventid)
+            except Exception as e:
+                print("[eventbookings] failed to sync numberofpeople on create:", str(e))
+
         return resp[0] if isinstance(resp, list) and resp else payload
     except HTTPException:
         raise
@@ -148,41 +172,15 @@ def update_event_booking(eventbookingid: int, body: dict, current_user: str = De
         if not payload:
             raise HTTPException(status_code=422, detail="No fields to update")
 
-        # Organizer moderation: make participant counting idempotent server-side.
-        # Only adjust counts when a booking transitions between pending/joined/cancelled states.
-        if is_organizer and not is_owner and "status" in payload:
-            try:
-                old_status = str(existing.get("status") or "").lower()
-                new_status = str(payload.get("status") or "").lower()
-                eventid = int(existing.get("eventid"))
-
-                delta = 0
-                if old_status == "pending" and new_status == "joined":
-                    delta = 1
-                elif old_status == "joined" and new_status in {"rejected", "cancelled", "canceled"}:
-                    delta = -1
-
-                if delta != 0:
-                    info = rest_select(
-                        "eventinfo",
-                        "eventinfoid, numberofpeople",
-                        filters={"eventid": eventid},
-                        single=True,
-                    )
-                    if info and info.get("eventinfoid") is not None:
-                        try:
-                            current_n = int(info.get("numberofpeople") or 0)
-                        except Exception:
-                            current_n = 0
-                        new_n = current_n + delta
-                        if new_n < 0:
-                            new_n = 0
-                        rest_update("eventinfo", {"eventinfoid": int(info.get("eventinfoid"))}, {"numberofpeople": new_n})
-            except Exception:
-                # Never block the booking update due to counter issues; UI will refresh from source of truth.
-                pass
-
         resp = rest_update("eventbooking", {PRIMARY_KEY: eventbookingid}, payload)
+
+        # Keep eventinfo.numberofpeople consistent whenever status changes.
+        if "status" in payload:
+            try:
+                _sync_event_participant_count(int(existing.get("eventid")))
+            except Exception as e:
+                # Never block booking updates due to counter sync issues.
+                print("[eventbookings] failed to sync numberofpeople:", str(e))
         if isinstance(resp, list) and resp:
             return resp[0]
         return payload

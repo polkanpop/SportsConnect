@@ -11,8 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useAuthContext } from '@/hooks/use-auth-context'
 
-// Helper to normalise sport/venue value to array of strings
-function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue']): string[] {
+// Helper to normalise venue value to array of strings
+function asArray(v: CourtInfoRow['venue'] | undefined | null): string[] {
   if (!v) return []
   if (Array.isArray(v)) return v.filter(Boolean).map(String)
   if (typeof v === 'string') {
@@ -23,21 +23,7 @@ function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue']): string[] {
   return []
 }
 
-// Sport color map (extend as needed)
-const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: COLORS.neutral0, color: COLORS.neutral975, border: COLORS.neutral525 },
-  soccer: { bg: COLORS.neutral0, color: COLORS.neutral975, border: COLORS.neutral525 },
-  tennis: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
-  tabletennis: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
-  badminton: { bg: COLORS.limeGreen, color: COLORS.neutral0 },
-  basketball: { bg: COLORS.orange500, color: COLORS.neutral975 },
-  volleyball: { bg: COLORS.orange500, color: COLORS.neutral975 },
-  golf: { bg: COLORS.seaGreen, color: COLORS.neutral0 },
-  running: { bg: COLORS.steelBlue, color: COLORS.neutral0 },
-  pickleball: { bg: COLORS.hotPink, color: COLORS.neutral975 },
-};
-
-const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+const LIST_ACCENT = '#2563eb' // Courts
 
 const CourtListScreen = () => {
   const router = useRouter()
@@ -45,7 +31,7 @@ const CourtListScreen = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | 'price' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'venue' | 'price' | null>(null)
     // Price filter state (inputs interpret value as thousands: 50 => 50,000 VND)
     const [minPriceK, setMinPriceK] = useState<string>('')
     const [maxPriceK, setMaxPriceK] = useState<string>('')
@@ -69,7 +55,6 @@ const CourtListScreen = () => {
       const s = String(Math.round(Number(n)))
       return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     }
-  const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [favouriteCourtIds, setFavouriteCourtIds] = useState<number[]>([])
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false)
@@ -144,15 +129,6 @@ const CourtListScreen = () => {
 
   useEffect(() => { loadFavourites() }, [profile, loadFavourites])
 
-  // Derive unique sport options
-  const sportOptions = useMemo(() => {
-    const set = new Set<string>()
-    allCourts.forEach(c => {
-      asArray(c.sport).forEach(s => set.add(s))
-    })
-    return Array.from(set).sort((a, b) => a.localeCompare(b))
-  }, [allCourts])
-
   // Derive unique venue options
   const venueOptions = useMemo(() => {
     const set = new Set<string>()
@@ -169,26 +145,24 @@ const CourtListScreen = () => {
       const address = (c.address || '').toLowerCase()
       const queryOk = !search || name.includes(search.toLowerCase()) || address.includes(search.toLowerCase())
       if (!queryOk) return false
-      const sportArr = asArray(c.sport)
       const venueArr = asArray(c.venue)
-      const sportOk = selectedSports.length === 0 || sportArr.some(s => selectedSports.includes(s))
       const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venueArr.includes(sel))
       const favOk = !showFavouritesOnly || favouriteCourtIds.includes(c.courtid)
-      if (!(sportOk && venueOk && favOk)) return false
+      if (!(venueOk && favOk)) return false
       // Price filter
       const price = priceByCourtId[c.courtid]
       if (minPrice != null && (price == null || price < minPrice)) return false
       if (maxPrice != null && (price == null || price > maxPrice)) return false
       return true
     })
-  }, [allCourts, search, selectedSports, selectedVenues, showFavouritesOnly, favouriteCourtIds, minPrice, maxPrice, priceByCourtId])
+  }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds, minPrice, maxPrice, priceByCourtId])
 
   // Incremental rendering (pagination) state
   const BATCH_SIZE = 15
   const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
 
   // Reset visible items when filters/search/favourite toggle change
-  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedSports, selectedVenues, showFavouritesOnly])
+  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedVenues, showFavouritesOnly])
 
   const handleScroll = useCallback((e: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
@@ -199,9 +173,6 @@ const CourtListScreen = () => {
   }, [filteredCourts])
 
   // Toggle selections
-  const toggleSport = (s: string) => {
-    setSelectedSports(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
-  }
   const toggleVenue = (v: string) => {
     setSelectedVenues(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
   }
@@ -245,14 +216,6 @@ const CourtListScreen = () => {
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
             <TouchableOpacity
-              style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterButtonActive]}
-              onPress={() => setOpenFilter(openFilter === 'sport' ? null : 'sport')}
-            >
-              <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length > 0) && styles.filterTextActive]}>Sport</Text>
-              {selectedSports.length > 0 && <Text style={styles.countBadge}>{selectedSports.length}</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
@@ -280,13 +243,13 @@ const CourtListScreen = () => {
         <Text style={styles.sectionTitle}>Court</Text>
 
         {/* Dropdown */}
-        {(openFilter === 'sport' || openFilter === 'venue') && (
+        {openFilter === 'venue' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
-              {(openFilter === 'sport' ? sportOptions : venueOptions).map(opt => {
-                const selected = openFilter === 'sport' ? selectedSports.includes(opt) : selectedVenues.includes(opt)
+              {venueOptions.map(opt => {
+                const selected = selectedVenues.includes(opt)
                 return (
-                  <Pressable key={opt} onPress={() => openFilter === 'sport' ? toggleSport(opt) : toggleVenue(opt)} style={styles.dropdownItem}>
+                  <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{opt}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
@@ -360,7 +323,6 @@ const CourtListScreen = () => {
             <Text style={styles.statusText}>No courts match your filters.</Text>
           )}
           {filteredCourts.slice(0, visibleCount).map(c => {
-            const sports = asArray(c.sport)
             const venues = asArray(c.venue)
             // Venue tag logic: if both indoor & outdoor present, show In/Outdoor single tag
             let venueDisplay: string[] = []
@@ -372,53 +334,39 @@ const CourtListScreen = () => {
             }
             const isFav = favouriteCourtIds.includes(c.courtid)
             return (
-              <TouchableOpacity
-                key={c.courtinfoid}
-                activeOpacity={0.7}
-                style={styles.card}
-                onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
-              >
-                {isFav && (
-                  <Image source={ICONS.bookMark} style={styles.bookmarkIcon} />
-                )}
-                <View style={styles.cardLeft}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
-                  <Text style={styles.cardAddress} numberOfLines={1}>{c.address || 'Unknown address'}</Text>
-                  <View style={styles.tagRow}>
-                    {sports.length === 0 && <View style={[styles.tag, styles.tagFallback]}><Text style={styles.tagText}>Sport N/A</Text></View>}
-                    {sports.map(s => {
-                      const key = normaliseKey(s)
-                      const cfg = SPORT_COLORS[key]
-                      return (
-                        <View
-                          key={s}
-                          style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || COLORS.transparent, borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
-                        >
-                          <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{s}</Text>
+              <View key={c.courtinfoid} style={styles.cardWrap}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  style={styles.card}
+                  onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
+                >
+                  <Image source={ICONS.sillball} style={styles.cardSilhouette} />
+                  <View style={styles.cardLeft}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
+                    <Text style={styles.cardAddress} numberOfLines={1}>{c.address || 'Unknown address'}</Text>
+                    <View style={styles.tagRow}>
+                      {venueDisplay.map(v => (
+                        <View key={v} style={[styles.tag, styles.venueTag]}>
+                          <Text style={[styles.tagText, { color: COLORS.neutral0 }]}>{v}</Text>
                         </View>
-                      )
-                    })}
-                    {venueDisplay.map(v => (
-                      <View key={v} style={[styles.tag, styles.venueTag]}>
-                        <Text style={[styles.tagText, { color: COLORS.neutral0 }]}>{v}</Text>
-                      </View>
-                    ))}
-                  </View>
-                  {priceByCourtId[c.courtid] != null && (
-                    <View style={styles.entryRow}>
-                      <View style={[styles.tag, styles.priceTag, styles.entryTagRow]}>
-                        <Text style={[styles.tagText, styles.priceTagText]}>{`${formatCurrency(priceByCourtId[c.courtid])}₫/hr`}</Text>
-                      </View>
+                      ))}
                     </View>
-                  )}
-                </View>
-                <View style={styles.cardRight}>
-                  <View style={styles.placeholderImg}>
-                    <Image source={ICONS.courtIllustration} style={styles.placeholderImgInner} />
+                    {priceByCourtId[c.courtid] != null && (
+                      <View style={styles.entryRow}>
+                        <View style={[styles.tag, styles.priceTag, styles.entryTagRow]}>
+                          <Text style={[styles.tagText, styles.priceTagText]}>{`${formatCurrency(priceByCourtId[c.courtid])}₫/hr`}</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  <Image source={ICONS.arrowright} style={styles.arrowIcon} />
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+
+                {isFav && (
+                  <View pointerEvents="none" style={styles.bookmarkWrap}>
+                    <Image source={ICONS.bookMark} style={styles.bookmarkIcon} />
+                  </View>
+                )}
+              </View>
             )
           })}
         </ScrollView>
@@ -469,29 +417,31 @@ const styles = StyleSheet.create({
   // Push list a bit further down
   list: { flex: 1, marginTop: 14 },
   statusText: { color: COLORS.neutral800, fontSize: 12, paddingVertical: 12, textAlign: 'center' },
+  cardWrap: { position: 'relative', overflow: 'visible', marginBottom: 16 },
   card: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surfaceDark,
+    backgroundColor: COLORS.neutral0,
     borderRadius: 14,
     padding: 18,
-    marginBottom: 16,
     alignItems: 'center',
     minHeight: 140,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderLeftWidth: 5,
+    borderLeftColor: LIST_ACCENT,
+    overflow: 'hidden',
   },
-  bookmarkIcon: { position: 'absolute', top: 36, right: 10, width: 26, height: 26, tintColor: COLORS.gold, zIndex: 5, resizeMode: 'contain' },
-  cardLeft: { flex: 1, paddingRight: 12 },
-  cardTitle: { color: COLORS.neutral0, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  bookmarkWrap: { position: 'absolute', top: -3, right: -6, zIndex: 50, elevation: 50 },
+  bookmarkIcon: { width: 32, height: 32, tintColor: COLORS.gold, resizeMode: 'contain' },
+  cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
+  cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
+  cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },
   cardAddress: { color: COLORS.neutral500, fontSize: 13 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
-  tag: { backgroundColor: COLORS.neutral925, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
-  tagFallback: { backgroundColor: COLORS.neutral900 },
+  tag: { backgroundColor: COLORS.neutral125, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
+  tagFallback: { backgroundColor: COLORS.neutral125 },
   venueTag: { backgroundColor: COLORS.slateBlue },
-  tagText: { color: COLORS.neutral525, fontSize: 11, fontWeight: '600' },
-  cardRight: { alignItems: 'center' },
-  // Slightly larger placeholder image to match the subtly bigger card
-  placeholderImg: { width: 74, height: 74, backgroundColor: COLORS.surfaceDarker, borderRadius: 10, marginBottom: 6, overflow: 'hidden' },
-  placeholderImgInner: { width: '100%', height: '100%', resizeMode: 'cover', bottom: 8, transform: [{ translateY: 8 }] },
-  arrowIcon: { width: 22, height: 22, tintColor: COLORS.neutral700, position: 'absolute',  left:58,top:80 },
+  tagText: { color: COLORS.neutral900, fontSize: 11, fontWeight: '700' },
   // Price filter & tag styles
   priceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8 },
   priceInputsRow: { flexDirection: 'row', gap: 12 },

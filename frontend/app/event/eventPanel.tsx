@@ -1,14 +1,19 @@
 import { ICONS } from "@/constants/icons";
+import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {
 	approveEventBooking,
 	type CombinedEvent,
 	type EventBookingRow,
+	createBlock,
 	getEventBookingsByEventId,
 	getEventInfoByEventId,
 	getPayment,
 	getUserInfoByUserIdCached,
+	listBlockList,
 	listEventsCombinedByOrganizerId,
+	removeBlock,
 	rejectEventBooking,
+	type BlockListRow,
 	updateEventInfo,
 } from "@/lib/backendApi";
 import { useRouter } from "expo-router";
@@ -16,7 +21,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	Dimensions,
 	Image,
+	Modal,
+	Pressable,
 	RefreshControl,
 	ScrollView,
 	Text,
@@ -71,52 +79,17 @@ function asStringArray(v: unknown): string[] {
 	return [s];
 }
 
-function normaliseSportKey(s: string) {
-	return s.toLowerCase().replace(/[^a-z]/g, "");
-}
-
-function sportAccentColor(sportKey: string | null) {
-	const k = sportKey || "";
-	if (k.includes("basket")) return "#f97316"; // orange
-	if (k.includes("soccer") || k.includes("football")) return "#16a34a"; // green
-	if (k.includes("running") || k.includes("run")) return "#2563eb"; // blue
-	if (k.includes("tabletennis") || (k.includes("table") && k.includes("tennis"))) return "#7c3aed"; // purple
-	if (k.includes("volley")) return "#db2777"; // pink
-	if (k.includes("badminton")) return "#0d9488"; // teal
-	if (k.includes("golf")) return "#65a30d"; // lime
-	if (k.includes("pickle")) return "#ea580c"; // amber-ish
-	if (k.includes("tennis")) return "#0891b2"; // cyan
-	return "#16a34a";
-}
-
-function silhouetteForSport(sportKey: string | null) {
-	const k = sportKey || "";
-	if (k.includes("basket")) return ICONS.sillBasketball;
-	if (k.includes("soccer") || k.includes("football")) return ICONS.sillFootball;
-	if (k.includes("running") || k.includes("run")) return ICONS.sillRunning;
-	if (k.includes("tabletennis") || (k.includes("table") && k.includes("tennis"))) return ICONS.sillTableTennis;
-	if (k.includes("volley")) return ICONS.sillVolleyball;
-	if (k.includes("badminton")) return ICONS.sillBadminton;
-	if (k.includes("golf")) return ICONS.sillGolf;
-	if (k.includes("pickle")) return ICONS.sillPickleball;
-	if (k.includes("tennis")) return ICONS.sillTennis;
-	return null;
-}
+const BASKETBALL_SILHOUETTES = [
+	ICONS.sillBasketball,
+	ICONS.sillBasketball1,
+	ICONS.sillBasketball2,
+	ICONS.sillBasketball3,
+	ICONS.sillBasketball4,
+];
 
 function fallbackSilhouetteByEventId(eventid: number) {
-	const all = [
-		ICONS.sillBasketball,
-		ICONS.sillFootball,
-		ICONS.sillRunning,
-		ICONS.sillTableTennis,
-		ICONS.sillVolleyball,
-		ICONS.sillBadminton,
-		ICONS.sillGolf,
-		ICONS.sillPickleball,
-		ICONS.sillTennis,
-	];
-	const idx = Math.abs(Number(eventid) || 0) % all.length;
-	return all[idx];
+	const idx = Math.abs(Number(eventid) || 0) % BASKETBALL_SILHOUETTES.length;
+	return BASKETBALL_SILHOUETTES[idx];
 }
 
 type EnrichedBooking = {
@@ -157,23 +130,8 @@ function FreeBadge() {
 
 export default function EventPanel({ organizerId }: Props) {
 	const router = useRouter();
+	const [managementMode, setManagementMode] = useState<'event' | 'trainingSession'>('event');
 	const preferredSelectedEventIdRef = useRef<number | null>(null);
-	const sportPickByEventIdRef = useRef<Record<number, string>>({});
-
-	const getPickedSportKey = useCallback((ev: CombinedEvent) => {
-		const existing = sportPickByEventIdRef.current[ev.eventid];
-		if (existing) return existing;
-		const sports = asStringArray(ev.sport);
-		if (sports.length === 0) {
-			sportPickByEventIdRef.current[ev.eventid] = "";
-			return "";
-		}
-		// Deterministic pick so it doesn't change between renders/restarts.
-		const idx = Math.abs((ev.eventid * 9301 + 49297) % 233280) % sports.length;
-		const picked = normaliseSportKey(sports[idx] || "");
-		sportPickByEventIdRef.current[ev.eventid] = picked;
-		return picked;
-	}, []);
 
 	const [hostEvents, setHostEvents] = useState<CombinedEvent[]>([]);
 	const [hostEventsLoading, setHostEventsLoading] = useState(false);
@@ -189,6 +147,20 @@ export default function EventPanel({ organizerId }: Props) {
 	const [participants, setParticipants] = useState<EnrichedBooking[]>([]);
 	const [bookingsLoading, setBookingsLoading] = useState(false);
 	const [bookingsError, setBookingsError] = useState<string | null>(null);
+	const [hosts, setHosts] = useState<Array<{ userid: number; name: string; pfp: string | null }>>([]);
+	const [hostsLoading, setHostsLoading] = useState(false);
+	const [hostsError, setHostsError] = useState<string | null>(null);
+	const [blocked, setBlocked] = useState<BlockListRow[]>([]);
+	const [blockedLoading, setBlockedLoading] = useState(false);
+	const [blockedError, setBlockedError] = useState<string | null>(null);
+	const [blockedNameByUserId, setBlockedNameByUserId] = useState<Record<number, string>>({});
+	const [actionMenuVisible, setActionMenuVisible] = useState(false);
+	const [actionUser, setActionUser] = useState<{ userid: number; name: string } | null>(null);
+	const [actionMenuPos, setActionMenuPos] = useState<{ x: number; y: number } | null>(null);
+	const [confirmBlockVisible, setConfirmBlockVisible] = useState(false);
+	const [blocking, setBlocking] = useState(false);
+	const [confirmRemoveVisible, setConfirmRemoveVisible] = useState(false);
+	const [removeCandidate, setRemoveCandidate] = useState<{ userid: number; name: string } | null>(null);
 
 	const [editTitle, setEditTitle] = useState("");
 	const [editDescription, setEditDescription] = useState("");
@@ -298,6 +270,20 @@ export default function EventPanel({ organizerId }: Props) {
 		[enrichBookings, hostEvents]
 	);
 
+	const loadBlockedForTarget = useCallback(async (eventid: number) => {
+		setBlockedLoading(true);
+		setBlockedError(null);
+		try {
+			const rows = await listBlockList({ targettype: "event", targetid: eventid });
+			setBlocked(Array.isArray(rows) ? rows : []);
+		} catch (e: any) {
+			setBlocked([]);
+			setBlockedError(e?.message || String(e));
+		} finally {
+			setBlockedLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		if (organizerId == null) return;
 		let cancelled = false;
@@ -329,7 +315,127 @@ export default function EventPanel({ organizerId }: Props) {
 		setEditDescription(String(meta?.description || ""));
 		setEditCap(meta?.participants_cap != null ? String(meta?.participants_cap) : "");
 		loadBookingsForEvent(selectedHostEventId);
-	}, [loadBookingsForEvent, selectedHostEventId]);
+		loadBlockedForTarget(selectedHostEventId);
+	}, [loadBlockedForTarget, loadBookingsForEvent, selectedHostEventId]);
+
+	const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {
+		setActionUser({ userid, name });
+		setActionMenuPos(pos || null);
+		setActionMenuVisible(true);
+	}, []);
+
+	const onConfirmBlock = useCallback(async () => {
+		if (selectedHostEventId == null || !actionUser) return;
+		setBlocking(true);
+		setBlockedError(null);
+		try {
+			await createBlock({ targettype: "event", targetid: selectedHostEventId, blocked_userid: actionUser.userid });
+			setConfirmBlockVisible(false);
+			setActionMenuVisible(false);
+			await loadBlockedForTarget(selectedHostEventId);
+		} catch (e: any) {
+			setBlockedError(e?.message || String(e));
+		} finally {
+			setBlocking(false);
+		}
+	}, [actionUser, loadBlockedForTarget, selectedHostEventId]);
+
+	const onRequestRemoveBlockedUser = useCallback(
+		(userid: number) => {
+			const name = blockedNameByUserId[userid] || `User ${userid}`;
+			setRemoveCandidate({ userid, name });
+			setConfirmRemoveVisible(true);
+		},
+		[blockedNameByUserId]
+	);
+
+	const onConfirmRemoveBlockedUser = useCallback(async () => {
+		if (selectedHostEventId == null || !removeCandidate) return;
+		setBlockedError(null);
+		try {
+			await removeBlock({ targettype: "event", targetid: selectedHostEventId, blocked_userid: removeCandidate.userid });
+			setConfirmRemoveVisible(false);
+			setRemoveCandidate(null);
+			await loadBlockedForTarget(selectedHostEventId);
+		} catch (e: any) {
+			setBlockedError(e?.message || String(e));
+		}
+	}, [loadBlockedForTarget, removeCandidate, selectedHostEventId]);
+
+	useEffect(() => {
+		if (!blocked.length) return;
+		let cancelled = false;
+
+		const missing = blocked
+			.map((b) => b.blocked_userid)
+			.filter((id) => id != null)
+			.filter((id) => blockedNameByUserId[id] == null)
+			.slice(0, 25);
+
+		if (!missing.length) return;
+
+		(async () => {
+			const entries = await Promise.all(
+				missing.map(async (id) => {
+					try {
+						const ui = await getUserInfoByUserIdCached(id);
+						const nm = (ui?.name as string) || null;
+						return { id, name: nm || `User ${id}` };
+					} catch {
+						return { id, name: `User ${id}` };
+					}
+				})
+			);
+			if (cancelled) return;
+			setBlockedNameByUserId((prev) => {
+				const next = { ...prev };
+				for (const e of entries) next[e.id] = e.name;
+				return next;
+			});
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [blocked, blockedNameByUserId]);
+
+	useEffect(() => {
+		if (selectedHostEventId == null) return;
+		let cancelled = false;
+
+		setHosts([]);
+		setHostsError(null);
+		setHostsLoading(true);
+		(async () => {
+			try {
+				const meta = hostEvents.find((e) => e.eventid === selectedHostEventId);
+				const hostUserId = (meta as any)?.organizerid ?? organizerId;
+				if (hostUserId == null) {
+					if (!cancelled) setHosts([]);
+					return;
+				}
+				const ui = await getUserInfoByUserIdCached(hostUserId);
+				if (cancelled) return;
+				setHosts([
+					{
+						userid: hostUserId,
+						name: (ui?.name as string) || `User ${hostUserId}`,
+						pfp: (ui?.pfp as string) || null,
+					},
+				]);
+			} catch (e: any) {
+				if (cancelled) return;
+				setHostsError(e?.message || String(e));
+			} finally {
+				if (cancelled) return;
+				setHostsLoading(false);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [hostEvents, organizerId, selectedHostEventId]);
 
 	const onApproveApplicant = useCallback(
 		async (eventid: number, booking: EventBookingRow) => {
@@ -395,20 +501,78 @@ export default function EventPanel({ organizerId }: Props) {
 		}
 	}, [editCap, editDescription, editTitle, loadHostEvents, selectedHostEventId]);
 
-	const refreshing = hostEventsLoading || bookingsLoading;
+	const refreshing = hostEventsLoading || bookingsLoading || blockedLoading;
 	const isFree = (selectedEvent?.entry_fee ?? 0) <= 0;
 
-	return (
-		<ScrollView
-			style={{ flex: 1, backgroundColor: "#F0F0F0" }}
-			contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 140 }}
-			refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => {
-				loadHostEvents();
-				if (selectedHostEventId != null) loadBookingsForEvent(selectedHostEventId);
-			}} />}
-			keyboardShouldPersistTaps="handled"
+	const toggle = (
+		<View
+			style={{
+				paddingHorizontal: 12,
+				paddingTop: 12,
+				paddingBottom: 6,
+				backgroundColor: '#F0F0F0',
+			}}
 		>
-			<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>My Event</Text>
+			<View
+				style={{
+					flexDirection: 'row',
+					backgroundColor: '#fff',
+					borderRadius: 14,
+					padding: 4,
+					borderWidth: 1,
+					borderColor: '#BFDBFE',
+				}}
+			>
+				<TouchableOpacity
+					activeOpacity={0.85}
+					onPress={() => setManagementMode('event')}
+					style={{
+						flex: 1,
+						height: 42,
+						borderRadius: 12,
+						alignItems: 'center',
+						justifyContent: 'center',
+						backgroundColor: managementMode === 'event' ? '#60A5FA' : 'transparent',
+					}}
+				>
+					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'event' ? '#fff' : '#60A5FA' }}>Event</Text>
+				</TouchableOpacity>
+				<TouchableOpacity
+					activeOpacity={0.85}
+					onPress={() => setManagementMode('trainingSession')}
+					style={{
+						flex: 1,
+						height: 42,
+						borderRadius: 12,
+						alignItems: 'center',
+						justifyContent: 'center',
+						backgroundColor: managementMode === 'trainingSession' ? '#60A5FA' : 'transparent',
+					}}
+				>
+					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'trainingSession' ? '#fff' : '#60A5FA' }}>Training Session</Text>
+				</TouchableOpacity>
+			</View>
+		</View>
+	);
+
+	return (
+		<View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+			{toggle}
+			<View style={{ flex: 1 }}>
+				<View style={{ flex: 1, display: managementMode === 'event' ? 'flex' : 'none' }}>
+					<ScrollView
+				style={{ flex: 1, backgroundColor: "#F0F0F0" }}
+				contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 140 }}
+				refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => {
+					loadHostEvents();
+					if (selectedHostEventId != null) {
+						loadBookingsForEvent(selectedHostEventId);
+						loadBlockedForTarget(selectedHostEventId);
+					}
+				}} />}
+				keyboardShouldPersistTaps="handled"
+					>
+				<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>My Event</Text>
 
 			{organizerId == null && (
 				<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
@@ -446,9 +610,8 @@ export default function EventPanel({ organizerId }: Props) {
 				>
 					{hostEvents.map((ev) => {
 						const selected = ev.eventid === selectedHostEventId;
-						const sportKey = getPickedSportKey(ev);
-						const accent = sportAccentColor(sportKey);
-						const silhouette = silhouetteForSport(sportKey) || fallbackSilhouetteByEventId(ev.eventid);
+						const accent = "#16a34a";
+						const silhouette = fallbackSilhouetteByEventId(ev.eventid);
 						return (
 							<View key={ev.eventid} style={{ width: 288, marginRight: 18, overflow: "visible" }}>
 								{selected && (
@@ -664,17 +827,14 @@ export default function EventPanel({ organizerId }: Props) {
 										</TouchableOpacity>
 										<TouchableOpacity
 											activeOpacity={0.7}
-											onPress={() => {
-												// placeholder for future actions menu
+											onPress={(e) => {
+												openActionMenuForUser(a.booking.userid, a.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
 											}}
 											style={{
-												width: 36,
-												height: 36,
-												borderRadius: 18,
-												backgroundColor: "#f3f4f6",
+												padding: 6,
 												alignItems: "center",
 												justifyContent: "center",
-												marginLeft: 10,
+												marginLeft: 8,
 											}}
 										>
 											<Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: "#111827" }} resizeMode="contain" />
@@ -736,14 +896,11 @@ export default function EventPanel({ organizerId }: Props) {
 										</TouchableOpacity>
 									<TouchableOpacity
 										activeOpacity={0.7}
-										onPress={() => {
-											// placeholder for future actions menu
+										onPress={(e) => {
+											openActionMenuForUser(p.booking.userid, p.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
 										}}
 										style={{
-											width: 36,
-											height: 36,
-											borderRadius: 18,
-											backgroundColor: "#f3f4f6",
+											padding: 6,
 											alignItems: "center",
 											justifyContent: "center",
 										}}
@@ -754,6 +911,97 @@ export default function EventPanel({ organizerId }: Props) {
 							))}
 						</View>
 					)}
+
+					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Host List</Text>
+					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
+						{hostsError ? (
+							<Text style={{ color: "#B91C1C", fontWeight: "700" }}>{hostsError}</Text>
+						) : hostsLoading ? (
+							<View style={{ paddingVertical: 12 }}>
+								<ActivityIndicator />
+							</View>
+						) : hosts.length === 0 ? (
+							<Text style={{ color: "#555" }}>No hosts yet.</Text>
+						) : (
+							<View>
+								{hosts.map((h) => (
+									<TouchableOpacity
+										key={h.userid}
+										activeOpacity={0.75}
+										onPress={() => router.push({ pathname: "/event/profileSpectate", params: { userid: String(h.userid) } } as any)}
+										style={{ flexDirection: "row", alignItems: "center" }}
+									>
+										{h.pfp ? (
+											<Image source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }} />
+										) : (
+											<Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
+										)}
+										<View style={{ marginLeft: 10, flex: 1 }}>
+											<Text style={{ fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+												{h.name}
+											</Text>
+											<Text style={{ color: "#555", marginTop: 2 }} numberOfLines={1}>
+												Host
+											</Text>
+										</View>
+									</TouchableOpacity>
+								))}
+							</View>
+						)}
+					</View>
+
+					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Staff List</Text>
+					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
+						<Text style={{ color: "#555" }}>No staff yet.</Text>
+					</View>
+
+					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Block List</Text>
+					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
+						<View style={{ flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e5e7eb" }}>
+							<Text style={{ flex: 1.2, fontWeight: "800", color: "#111827" }}>User</Text>
+							<Text style={{ flex: 1.4, fontWeight: "800", color: "#111827" }}>Blocked At</Text>
+							<Text style={{ flex: 1.0, fontWeight: "800", color: "#111827", textAlign: "right" }} />
+						</View>
+
+						{!!blockedError && <Text style={{ color: "#B91C1C", fontWeight: "700", marginTop: 10 }}>{blockedError}</Text>}
+
+						{blockedLoading ? (
+							<View style={{ paddingVertical: 12 }}>
+								<ActivityIndicator />
+							</View>
+						) : blocked.length === 0 ? (
+							<Text style={{ color: "#555", marginTop: 10 }}>No blocked users.</Text>
+						) : (
+							<View style={{ marginTop: 8 }}>
+								{blocked.map((b) => (
+									<View
+										key={b.blockid}
+										style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" }}
+									>
+										<TouchableOpacity
+											activeOpacity={0.75}
+											onPress={() => router.push({ pathname: "/event/profileSpectate", params: { userid: String(b.blocked_userid) } } as any)}
+											style={{ flex: 1.2 }}
+										>
+											<Text style={{ fontSize: 14, fontWeight: "800", color: "#111827" }} numberOfLines={1}>
+												{blockedNameByUserId[b.blocked_userid] || `User ${b.blocked_userid}`}
+											</Text>
+										</TouchableOpacity>
+										<Text style={{ flex: 1.4, fontSize: 14, fontWeight: "800", color: "#111827" }} numberOfLines={1}>
+											{b.blocked_at ? String(b.blocked_at).slice(0, 10) : "-"}
+										</Text>
+										<TouchableOpacity
+											activeOpacity={0.8}
+											onPress={() => onRequestRemoveBlockedUser(b.blocked_userid)}
+											style={{ flex: 1.0, alignItems: "flex-end" }}
+										>
+											<Text style={{ color: "#2563eb", fontWeight: "900", textDecorationLine: "underline" }}>Remove</Text>
+										</TouchableOpacity>
+									</View>
+								))}
+							</View>
+						)}
+					</View>
 
 					<View
 						style={{
@@ -824,6 +1072,115 @@ export default function EventPanel({ organizerId }: Props) {
 					</View>
 				</>
 			)}
-		</ScrollView>
+					</ScrollView>
+				</View>
+				<View style={{ flex: 1, display: managementMode === 'trainingSession' ? 'flex' : 'none' }}>
+					<TrainingSessionPanel coachId={organizerId} />
+				</View>
+			</View>
+
+			<Modal transparent visible={actionMenuVisible} animationType="fade" onRequestClose={() => setActionMenuVisible(false)}>
+				<Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.01)" }} onPress={() => setActionMenuVisible(false)}>
+					{(() => {
+						const { width, height } = Dimensions.get("window");
+						const MENU_W = 170;
+						const MENU_H = 92;
+						const x = actionMenuPos?.x ?? 16;
+						const y = actionMenuPos?.y ?? 120;
+						const left = Math.min(Math.max(x - MENU_W + 18, 12), Math.max(12, width - MENU_W - 12));
+						const top = Math.min(y + 10, Math.max(12, height - MENU_H - 12));
+						return (
+							<Pressable
+								style={{
+									position: "absolute",
+									left,
+									top,
+									width: MENU_W,
+									backgroundColor: "#fff",
+									borderRadius: 12,
+									paddingVertical: 6,
+									shadowColor: "#000",
+									shadowOpacity: 0.15,
+									shadowRadius: 12,
+									elevation: 6,
+								}}
+								onPress={() => {}}
+							>
+								<TouchableOpacity activeOpacity={0.75} onPress={() => setActionMenuVisible(false)} style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
+									<Text style={{ fontWeight: "800", color: "#111827" }}>Report</Text>
+								</TouchableOpacity>
+								<View style={{ height: 1, backgroundColor: "#e5e7eb" }} />
+								<TouchableOpacity
+									activeOpacity={0.75}
+									onPress={() => {
+										setActionMenuVisible(false);
+										setConfirmBlockVisible(true);
+									}}
+									style={{ paddingVertical: 10, paddingHorizontal: 12 }}
+								>
+									<Text style={{ fontWeight: "900", color: "#B91C1C" }}>Block</Text>
+								</TouchableOpacity>
+							</Pressable>
+						);
+					})()}
+				</Pressable>
+			</Modal>
+
+			<Modal transparent visible={confirmBlockVisible} animationType="fade" onRequestClose={() => setConfirmBlockVisible(false)}>
+				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
+					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
+						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Block</Text>
+						<Text style={{ marginTop: 8, color: "#374151" }}>Are you sure you want to block this user ?</Text>
+						<View style={{ flexDirection: "row", marginTop: 14 }}>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={() => setConfirmBlockVisible(false)}
+								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
+								disabled={blocking}
+							>
+								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={onConfirmBlock}
+								style={{ flex: 1, backgroundColor: blocking ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
+								disabled={blocking}
+							>
+								<Text style={{ fontWeight: "900", color: "#fff" }}>{blocking ? "Blocking..." : "Block"}</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			</Modal>
+
+			<Modal transparent visible={confirmRemoveVisible} animationType="fade" onRequestClose={() => setConfirmRemoveVisible(false)}>
+				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
+					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
+						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Remove</Text>
+						<Text style={{ marginTop: 8, color: "#374151" }}>Remove this user from block list ?</Text>
+						<View style={{ flexDirection: "row", marginTop: 14 }}>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={() => {
+									setConfirmRemoveVisible(false);
+									setRemoveCandidate(null);
+								}}
+								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
+							>
+								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={onConfirmRemoveBlockedUser}
+								style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
+								disabled={removeCandidate == null}
+							>
+								<Text style={{ fontWeight: "900", color: "#fff" }}>Remove</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			</Modal>
+		</View>
 	);
 }

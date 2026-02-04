@@ -46,24 +46,9 @@ type MarkerType = {
   name: string;
   address: string;
   images: string[];
-  sport: string[] | string;
   venue: string | string[];
   availability: string;
   isFavorite?: boolean; // client-side instantaneous favorite flag
-};
-
-// Sport color map (larger tags for bottom sheet)
-const SHEET_SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-  tennis: { bg: '#32CD32', color: '#fff' },
-  tabletennis: { bg: '#32CD32', color: '#fff' },
-  badminton: { bg: '#32CD32', color: '#fff' },
-  basketball: { bg: '#FFA500', color: '#111' },
-  volleyball: { bg: '#FFA500', color: '#111' },
-  golf: { bg: '#2e8b57', color: '#fff' },
-  running: { bg: '#4682B4', color: '#fff' },
-  pickleball: { bg: '#FF69B4', color: '#111' },
 };
 
 // Memoized marker component – only re-renders if favorite state, selection, or coordinates change.
@@ -151,8 +136,7 @@ export default function App() {
   const ZOOM_LEVELS = useRef<number[]>([10, 13.5, 16]); // corresponds to camera zoom values
 
   // Filter states
-  const [openDropdown, setOpenDropdown] = useState<"sport" | "venue" | "availability" | null>(null);
-  const [selectedSports, setSelectedSports] = useState<string[]>([]); // multi-select
+  const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<string[]>([]); // multi-select
   const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null); // single-select
 
@@ -259,7 +243,6 @@ export default function App() {
         name: m.name || m.address || `Court #${m.courtinfoid}`,
         address: m.address || "Unknown",
         images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
-        sport: Array.isArray(m.sport) ? m.sport : (m.sport ? [m.sport].flat() : []),
         venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
         availability: m.availability || "Available",
         isFavorite: false,
@@ -290,17 +273,6 @@ export default function App() {
     }
     setLoadingMarkers(false);
   }, [getCurrentNumericUserId]);
-
-  // derive sport options from markers (unique)
-  const sportOptions = useMemo(() => {
-    const set = new Set<string>();
-    markers.forEach((m) => {
-      const s = m.sport;
-      if (Array.isArray(s)) s.forEach((x) => set.add(x));
-      else if (s) set.add(s as string);
-    });
-    return Array.from(set);
-  }, [markers]);
 
   const venueOptions = useMemo(() => {
     const set = new Set<string>();
@@ -497,25 +469,6 @@ export default function App() {
   // Compute dynamic button visibility
   const isButtonVisible = bottomSheetIndex < 3;
 
-  // Utility to get sport icon (fallback to sport_category)
-  const getSportIcon = (sport: string) => {
-    const key = sport.toLowerCase().replace(/\s+/g, "_"); // football, table_tennis -> maybe undefined
-    // Try exact key, then lowercase without spaces
-    if ((ICONS as any)[key]) return (ICONS as any)[key];
-    if ((ICONS as any)[sport.toLowerCase()]) return (ICONS as any)[sport.toLowerCase()];
-    return ICONS.sportCategory;
-  };
-
-  // Toggle sport in multi-select
-  const toggleSport = (sport: string) => {
-    setSelectedSports((prev) => {
-      if (prev.includes(sport)) {
-        return prev.filter((s) => s !== sport);
-      }
-      return [...prev, sport];
-    });
-  };
-
   // Toggle venue in multi-select
   const toggleVenue = (venue: string) => {
     setSelectedVenue((prev) => {
@@ -539,7 +492,6 @@ export default function App() {
     showFavoritesOnly,
     favoriteIdsCount: favoriteIds.length,
     markersCount: markers.length,
-    selectedSports,
     selectedVenue,
     selectedAvailability,
     searchQueryLength: searchQuery.length,
@@ -554,17 +506,6 @@ export default function App() {
           m.name.toLowerCase().includes(q) ||
           m.address.toLowerCase().includes(q)
       );
-    }
-
-    // Filter by sports (multi)
-    if (selectedSports.length > 0) {
-      results = results.filter((m) => {
-        const mSports = Array.isArray(m.sport) ? m.sport : [m.sport];
-        // check if any selectedSports exists in mSports
-        return selectedSports.some((s) =>
-          mSports.map((x) => x.toLowerCase()).includes(s.toLowerCase())
-        );
-      });
     }
 
     // Filter by venue (multi)
@@ -596,7 +537,8 @@ export default function App() {
       resultingCount: results.length,
       durationMs: Date.now() - t0,
     });
-  }, [selectedSports, selectedVenue, selectedAvailability, searchQuery, markers, showFavoritesOnly, favoriteIds]);
+  }, [selectedVenue, selectedAvailability, searchQuery, markers, showFavoritesOnly, favoriteIds]);
+
 
   // Dismiss dropdowns when tapping outside - we'll render a full-screen overlay when a dropdown is open
   const handleOverlayPress = () => {
@@ -643,27 +585,6 @@ export default function App() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.filterBarScroll}
                 >
-                  {/* Sport */}
-                  <TouchableOpacity
-                    style={styles.filterChip}
-                    activeOpacity={0.8}
-                    onPress={() => setOpenDropdown((prev) => (prev === "sport" ? null : "sport"))}
-                  >
-                    <View style={styles.filterChipLeft}>
-                      <Image source={ICONS.sportCategory} style={styles.filterIcon} />
-                      <Text style={styles.filterChipText}>
-                        Sport{selectedSports.length > 0 ? ` (${selectedSports.length})` : ""}
-                      </Text>
-                    </View>
-                    <Image
-                      source={ICONS.arrowdown}
-                      style={[
-                        styles.filterArrow,
-                        openDropdown === "sport" ? styles.arrowOpen : null,
-                      ]}
-                    />
-                  </TouchableOpacity>
-
                   {/* Venue */}
                   <TouchableOpacity
                     style={styles.filterChip}
@@ -717,45 +638,6 @@ export default function App() {
                   <Pressable style={styles.overlay} onPress={handleOverlayPress} />
 
                   <View style={styles.dropdownContainer}>
-                    {openDropdown === "sport" && (
-                      <View style={styles.dropdown}>
-                        <FlatList
-                          data={sportOptions}
-                          keyExtractor={(item) => item}
-                          renderItem={({ item }) => {
-                            const selected = selectedSports.includes(item);
-                            return (
-                              <TouchableOpacity
-                                style={styles.dropdownItem}
-                                onPress={() => toggleSport(item)}
-                              >
-                                <View style={styles.dropdownItemLeft}>
-                                  <Image source={getSportIcon(item) as any} style={styles.optionIcon} />
-                                  <Text style={styles.dropdownItemText}>{item}</Text>
-                                </View>
-                                <Image
-                                  source={selected ? ICONS.tick : ""}
-                                  style={styles.optionCheck}
-                                />
-                              </TouchableOpacity>
-                            );
-                          }}
-                          ItemSeparatorComponent={() => <View style={styles.sep} />}
-                          style={{ maxHeight: 220 }}
-                        />
-                        <View style={styles.dropdownFooter}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              setSelectedSports([]);
-                            }}
-                            style={styles.clearButton}
-                          >
-                            <Text style={styles.clearText}>Clear All</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-
                     {openDropdown === "venue" && (
                       <View style={styles.dropdown}>
                         <FlatList
@@ -1004,35 +886,8 @@ export default function App() {
                     {/* Location Address */}
                     <Text style={styles.markerAddress}>Address: {selectedMarker.address}</Text>
 
-                    {/* Sport & Venue Tags (moved under address) */}
+                    {/* Venue Tags (moved under address) */}
                     <View style={styles.sheetTagRow}>
-                      {/* Sports */}
-                      {(() => {
-                        const sportsRaw = Array.isArray(selectedMarker.sport) ? selectedMarker.sport : [selectedMarker.sport].filter(Boolean)
-                        const sports = sportsRaw.filter(Boolean).map(s => String(s))
-                        if (sports.length === 0) {
-                          return (
-                            <View key="sport-na" style={[styles.sheetTag, styles.sheetTagFallback]}>
-                              <Text style={styles.sheetTagText}>Sport N/A</Text>
-                            </View>
-                          )
-                        }
-                        return sports.map(s => {
-                          const key = s.replace(/\s+/g,'').toLowerCase()
-                          const cfg = SHEET_SPORT_COLORS[key]
-                          return (
-                            <View
-                              key={s}
-                              style={[
-                                styles.sheetTag,
-                                cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.sheetTagFallback,
-                              ]}
-                            >
-                              <Text style={[styles.sheetTagText, cfg && { color: cfg.color }]}>{s}</Text>
-                            </View>
-                          )
-                        })
-                      })()}
                       {/* Venue */}
                       {(() => {
                         const venueRaw = Array.isArray(selectedMarker.venue) ? selectedMarker.venue : [selectedMarker.venue].filter(Boolean)

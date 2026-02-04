@@ -6,11 +6,11 @@ export const notifications = [
     notificationid: 1,
     status: 'unread',
     userid: 1,
-    message: "Join us for this football event! Get the best deals of the season.",
+    message: "Join us for this event! Get the best deals of the season.",
     time: "2023-10-18 12:00:00",
     notificationtype: 'Event',
     notificationtypeid: 1,
-    title: "Football Event"
+    title: "Featured Event"
   },
   {
     notificationid: 2,
@@ -20,17 +20,17 @@ export const notifications = [
     time: "2023-10-18 14:00:00",
     notificationtype: 'Event',
     notificationtypeid: 1,
-    title: "Pickleball Tournament"
+    title: "Weekend Tournament"
   },
   {
     notificationid: 3,
     status: 'unread',
     userid: 1,
-    message: "Get ready for a special running event next Friday. Register now!",
+    message: "Get ready for a special event next Friday. Register now!",
     time: "2023-10-19 16:00:00",
     notificationtype: 'Event',
     notificationtypeid: 1,
-    title: "Marathon Event"
+    title: "Community Run"
   },
   {
     notificationid: 4,
@@ -40,7 +40,7 @@ export const notifications = [
     time: "2023-10-20 10:00:00",
     notificationtype: 'Event',
     notificationtypeid: 1,
-    title: "New Sport Series"
+    title: "New Event Series"
   },
   {
     notificationid: 5,

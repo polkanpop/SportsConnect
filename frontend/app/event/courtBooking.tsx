@@ -38,7 +38,7 @@ function formatRange(start?: string | null, end?: string | null) {
   }
 }
 
-// Helper to normalise sport/venue value to array of strings (matches courtList.tsx)
+// Helper to normalise venue value to array of strings (matches courtList.tsx)
 function asArray(v: any): string[] {
   if (!v) return []
   if (Array.isArray(v)) return v.filter(Boolean).map(String)
@@ -246,7 +246,7 @@ export default function CourtBooking() {
           pathname: '/event/invoice',
           params: {
             title: courtInfo?.name || 'Court Booking',
-            subtitle: courtInfo?.sport ? (Array.isArray(courtInfo.sport) ? courtInfo.sport.join(', ') : courtInfo.sport) : '',
+            subtitle: '',
             date: selectedDateStr,
             time: `${startSlot} - ${endSlot}`,
             location: courtInfo?.address,
@@ -323,40 +323,7 @@ export default function CourtBooking() {
               <Text style={styles.courtName}>{courtInfo?.name || `Court ${courtid}`}</Text>
             </View>
             {(() => {
-              // Sport-only tags with shared color scheme from court list
-              const sportRaw = courtInfo?.sport
-              const sportTokens = asArray(sportRaw)
-              const tags = sportTokens.map(t => String(t).trim()).filter(t => t.length)
-              if (!tags.length) return null
-              const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-                football: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                soccer: { bg: '#ffffff', color: '#111', border: '#ddd' },
-                tennis: { bg: '#32CD32', color: '#fff' },
-                tabletennis: { bg: '#32CD32', color: '#fff' },
-                badminton: { bg: '#32CD32', color: '#fff' },
-                basketball: { bg: '#FFA500', color: '#111' },
-                volleyball: { bg: '#FFA500', color: '#111' },
-                golf: { bg: '#2e8b57', color: '#fff' },
-                running: { bg: '#4682B4', color: '#fff' },
-                pickleball: { bg: '#FF69B4', color: '#111' },
-              }
-              const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-              return (
-                <View style={styles.tagsRow}>
-                  {tags.map(tag => {
-                    const key = normaliseKey(tag)
-                    const cfg = SPORT_COLORS[key]
-                    return (
-                      <View
-                        key={tag}
-                        style={[styles.tag, cfg ? { backgroundColor: cfg.bg, borderColor: cfg.border || 'transparent', borderWidth: cfg.border ? 1 : 0 } : styles.tagFallback]}
-                      >
-                        <Text style={[styles.tagText, cfg && { color: cfg.color }]}>{tag}</Text>
-                      </View>
-                    )
-                  })}
-                </View>
-              )
+              return null
             })()}
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />

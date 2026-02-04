@@ -9,7 +9,7 @@ import { listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoR
 import { useQuery } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
 
-function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | null): string[] {
+function asArray(v: CourtInfoRow['venue'] | undefined | null): string[] {
   if (!v) return []
   if (Array.isArray(v)) return v.filter(Boolean).map(String)
   if (typeof v === 'string') {
@@ -18,19 +18,8 @@ function asArray(v: CourtInfoRow['sport'] | CourtInfoRow['venue'] | undefined | 
   }
   return []
 }
-const normaliseKey = (s: string) => s.replace(/\s+/g, '').toLowerCase()
-const SPORT_COLORS: Record<string, { bg: string; color: string; border?: string }> = {
-  football: { bg: COLORS.white, color: COLORS.neutral975, border: COLORS.neutral525 },
-  soccer: { bg: COLORS.white, color: COLORS.neutral975, border: COLORS.neutral525 },
-  tennis: { bg: COLORS.limeGreen, color: COLORS.white },
-  tabletennis: { bg: COLORS.limeGreen, color: COLORS.white },
-  badminton: { bg: COLORS.limeGreen, color: COLORS.white },
-  basketball: { bg: COLORS.orange500, color: COLORS.neutral975 },
-  volleyball: { bg: COLORS.orange500, color: COLORS.neutral975 },
-  golf: { bg: COLORS.seaGreen, color: COLORS.white },
-  running: { bg: COLORS.steelBlue, color: COLORS.white },
-  pickleball: { bg: COLORS.hotPink, color: COLORS.neutral975 },
-}
+
+const LIST_ACCENT = '#7c3aed' // Training sessions
 
 const TrainingSessionListScreen = () => {
   const router = useRouter()
@@ -38,8 +27,7 @@ const TrainingSessionListScreen = () => {
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'sport' | 'venue' | 'payment' | null>(null)
-  const [selectedSports, setSelectedSports] = useState<string[]>([])
+  const [openFilter, setOpenFilter] = useState<'venue' | 'payment' | null>(null)
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [freeOnly, setFreeOnly] = useState(false)
@@ -54,10 +42,6 @@ const TrainingSessionListScreen = () => {
   useEffect(() => { if(!loading && !sessionsData) setError('Failed loading sessions') }, [loading, sessionsData])
   useFocusEffect(useCallback(()=>{ refetch() },[refetch]))
 
-  const sportOptions = useMemo(() => {
-    const s = new Set<string>(); allSessions.forEach(r => asArray(r.sport).forEach(x => s.add(x)))
-    return [...s].sort((a,b)=>a.localeCompare(b))
-  }, [allSessions])
   const venueOptions = useMemo(() => {
     const s = new Set<string>(); allSessions.forEach(r => asArray(r.venue).forEach(x => s.add(x)))
     return [...s].sort((a,b)=>a.localeCompare(b))
@@ -68,10 +52,9 @@ const TrainingSessionListScreen = () => {
       const title = (s.title||'').toLowerCase(); const address=(s.address||'').toLowerCase()
       const queryOk = !search || title.includes(search.toLowerCase()) || address.includes(search.toLowerCase())
       if(!queryOk) return false
-      const sports = asArray(s.sport); const venues = asArray(s.venue)
-      const sportOk = selectedSports.length===0 || sports.some(sp => selectedSports.includes(sp))
+      const venues = asArray(s.venue)
       const venueOk = selectedVenues.length===0 || selectedVenues.every(sel => venues.includes(sel))
-      if(!sportOk || !venueOk) return false
+      if(!venueOk) return false
       // Free filter logic (assumes entry_fee meta similar to events; if absent treat as free)
       const entryFee = (s as any).entry_fee
       const supportMethod = ((s as any).support_payment_method||'').toLowerCase()
@@ -89,7 +72,7 @@ const TrainingSessionListScreen = () => {
       }
       return true
     })
-  }, [allSessions, search, selectedSports, selectedVenues, freeOnly, paymentSelections])
+  }, [allSessions, search, selectedVenues, freeOnly, paymentSelections])
 
   const toggleFree = () => {
     setFreeOnly(f => { const next=!f; if (next) setPaymentSelections([]); return next })
@@ -105,7 +88,7 @@ const TrainingSessionListScreen = () => {
   // Incremental rendering state (pagination)
   const BATCH_SIZE = 15
   const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
-  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedSports, selectedVenues])
+  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedVenues])
   const handleScroll = useCallback((e: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
     const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
@@ -114,7 +97,6 @@ const TrainingSessionListScreen = () => {
     }
   }, [filteredSessions])
 
-  const toggleSport = (s: string) => setSelectedSports(p => p.includes(s)?p.filter(x=>x!==s):[...p,s])
   const toggleVenue = (v: string) => setSelectedVenues(p => p.includes(v)?p.filter(x=>x!==v):[...p,v])
   const toggleExpand = (id: number) => setExpandedIds(prev => { const n=new Set(prev); if(n.has(id)) n.delete(id); else n.add(id); return n })
   const handleOutsidePress = () => { if(openFilter) setOpenFilter(null) }
@@ -135,11 +117,6 @@ const TrainingSessionListScreen = () => {
       <View style={styles.container}>
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
-          <TouchableOpacity style={[styles.filterButton, (openFilter === 'sport' || selectedSports.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='sport'?null:'sport')}>
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'sport' || selectedSports.length>0) && styles.filterTextActive]}>Sport</Text>
-            {selectedSports.length>0 && <Text style={styles.countBadge}>{selectedSports.length}</Text>}
-          </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
             <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>Venue</Text>
@@ -164,10 +141,10 @@ const TrainingSessionListScreen = () => {
         {openFilter && openFilter!=='payment' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
-              {(openFilter==='sport'?sportOptions:venueOptions).map(opt => {
-                const selected = openFilter==='sport'?selectedSports.includes(opt):selectedVenues.includes(opt)
+              {venueOptions.map(opt => {
+                const selected = selectedVenues.includes(opt)
                 return (
-                  <Pressable key={opt} onPress={() => openFilter==='sport'?toggleSport(opt):toggleVenue(opt)} style={styles.dropdownItem}>
+                  <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{opt}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
@@ -212,7 +189,6 @@ const TrainingSessionListScreen = () => {
             <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading sessions...</Text>
           )}
           {filteredSessions.slice(0, visibleCount).map(s => {
-            const sports = asArray(s.sport)
             const venues = asArray(s.venue)
             let venueDisplay:string[]=[]
             const lowerVenues = venues.map(v=>v.toLowerCase())
@@ -226,6 +202,7 @@ const TrainingSessionListScreen = () => {
                 style={[styles.card, expanded && styles.cardExpanded]}
                 onPress={() => router.push(`/event/tsBooking?sessionid=${s.sessionid}` as any)}
               >
+                <Image source={ICONS.sillball} style={styles.cardSilhouette} />
                 <View style={styles.cardLeft}>
                   <View style={styles.titleRow}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{s.title || `Session ${s.sessionid}`}</Text>
@@ -235,15 +212,6 @@ const TrainingSessionListScreen = () => {
                   </View>
                   <Text style={styles.dateText}>{s.time ? new Date(s.time).toLocaleString() : 'Unknown date'}</Text>
                   <View style={styles.tagRow}>
-                    {sports.length===0 && <View style={[styles.tag, styles.tagFallback]}><Text style={styles.tagText}>Sport N/A</Text></View>}
-                    {sports.map(sp => {
-                      const key=normaliseKey(sp); const cfg=SPORT_COLORS[key]
-                      return (
-                        <View key={sp} style={[styles.tag, cfg?{backgroundColor:cfg.bg,borderColor:cfg.border||'transparent',borderWidth:cfg.border?1:0}:styles.tagFallback]}>
-                          <Text style={[styles.tagText, cfg && {color:cfg.color}]}>{sp}</Text>
-                        </View>
-                      )
-                    })}
                     {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color: COLORS.white}]}>{v}</Text></View>)}
                   </View>
                   {/* Entry fee + payment methods displayed on their own line (match events layout) */}
@@ -274,12 +242,6 @@ const TrainingSessionListScreen = () => {
                       <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || 'No description'}</Text>
                     </View>
                   )}
-                </View>
-                <View style={styles.cardRight}>
-                  <View style={styles.placeholderImg}>
-                    <Image source={ICONS.coachIllustration} style={styles.placeholderImgInner} />
-                  </View>
-                  <Image source={ICONS.arrowright} style={styles.arrowIcon} />
                 </View>
               </TouchableOpacity>
             )
@@ -326,17 +288,18 @@ const styles = StyleSheet.create({
   overlay:{position:'absolute',top:0,left:0,right:0,bottom:0},
   list:{flex:1,marginTop:14},
   statusText:{color:COLORS.neutral800,fontSize:12,paddingVertical:12,textAlign:'center'},
-  card:{flexDirection:'row',backgroundColor:COLORS.surfaceDark,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140},
+  card:{flexDirection:'row',backgroundColor:COLORS.white,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140,borderWidth:1,borderColor:'#e5e7eb',borderLeftWidth:5,borderLeftColor:LIST_ACCENT,overflow:'hidden'},
   cardExpanded:{minHeight:180},
-  cardLeft:{flex:1,paddingRight:12},
+  cardLeft:{flex:1,paddingRight:78,zIndex:1},
+  cardSilhouette:{position:'absolute',top:-14,right:-18,width:128,height:128,opacity:0.14,tintColor:LIST_ACCENT,resizeMode:'contain',zIndex:0},
   titleRow:{flexDirection:'row',alignItems:'center'},
   expandButton:{padding:4,marginLeft:6},
   expandIcon:{width:18,height:18,tintColor:COLORS.neutral500},
-  cardTitle:{color:COLORS.white,fontSize:16,fontWeight:'700',flexShrink:1},
+  cardTitle:{color:COLORS.neutral950,fontSize:16,fontWeight:'800',flexShrink:1},
   dateText:{color:COLORS.neutral500,fontSize:12,marginTop:2},
   tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
-  tag:{backgroundColor:COLORS.neutral925,paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
-  tagFallback:{backgroundColor:COLORS.neutral900},
+  tag:{backgroundColor:COLORS.neutral125,paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
+  tagFallback:{backgroundColor:COLORS.neutral125},
   freeTag:{backgroundColor:COLORS.greenSoft, borderColor:COLORS.seaGreen, borderWidth:1},
   entryTag:{backgroundColor:COLORS.orangeSoft, borderColor:COLORS.orangeAccent, borderWidth:1},
   methodTag:{backgroundColor:COLORS.blue50, borderColor:COLORS.blue500, borderWidth:1},
@@ -348,7 +311,7 @@ const styles = StyleSheet.create({
   entryTagRow:{paddingHorizontal:10,paddingVertical:6},
   methodIconsRow:{flexDirection:'row',alignItems:'center',marginLeft:8},
   venueTag:{backgroundColor:COLORS.slateBlue},
-  tagText:{color:COLORS.neutral525,fontSize:11,fontWeight:'600'},
+  tagText:{color:COLORS.neutral900,fontSize:11,fontWeight:'700'},
   participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
   participantsIcon:{width:14,height:14,tintColor:COLORS.neutral525,marginRight:4,resizeMode:'contain'},
   participantsIconLarge:{width:18,height:18,tintColor:COLORS.neutral525,marginRight:6,resizeMode:'contain'},
@@ -357,10 +320,6 @@ const styles = StyleSheet.create({
   expandedLine:{color:COLORS.neutral550,fontSize:12,marginBottom:4},
   expandedDescLabel:{color:COLORS.neutral550,fontSize:12,marginTop:4,fontWeight:'700'},
   expandedDesc:{color:COLORS.neutral525,fontSize:12,marginTop:4},
-  cardRight:{alignItems:'center'},
-  placeholderImg:{width:70,height:70,backgroundColor:COLORS.surfaceDarker,borderRadius:10,marginBottom:6,overflow:'hidden'},
-  placeholderImgInner:{width:'100%',height:'100%',resizeMode:'cover', bottom: -3},
-  arrowIcon:{width:22,height:22,tintColor:COLORS.neutral700,position:'absolute',left:53,top:80},
   fab:{position:'absolute',right:20,bottom:30,backgroundColor:COLORS.orangeAccent,paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:COLORS.black,shadowOpacity:0.3,shadowRadius:6,elevation:5},
   fabIcon:{width:22,height:22,tintColor:COLORS.white,marginRight:8,resizeMode:'contain'},
   fabText:{color:COLORS.white,fontSize:14,fontWeight:'700'},
