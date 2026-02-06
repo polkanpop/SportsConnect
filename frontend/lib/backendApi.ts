@@ -148,6 +148,9 @@ export type CourtRegisterRequest = {
 	price?: number
 	venue: 'Indoor' | 'Outdoor' | 'Both'
 	images: string[]
+	latitude?: number
+	longitude?: number
+	accuracy_type?: string
 }
 
 export type CourtRegisterResponse = {

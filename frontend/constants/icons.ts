@@ -87,6 +87,7 @@ export const ICONS = {
   sillGolf: require('../assets/icons/sill_golf.png'),
   sillPickleball: require('../assets/icons/sill_pickleball.png'),
   sillTennis: require('../assets/icons/sill_tennis.png'),
+  touch: require('../assets/icons/touch.png'),
   ///
   cancelEdit: require('../assets/icons/cancel_edit.png'),
   participants: require('../assets/icons/participants.png'),

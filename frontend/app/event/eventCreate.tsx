@@ -78,11 +78,13 @@ export default function EventCreateScreen() {
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
   const [participantsCap, setParticipantsCap] = useState<string>('')
+  const [participantsCapError, setParticipantsCapError] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [addMeToParticipants, setAddMeToParticipants] = useState(true)
   const [autoApprove, setAutoApprove] = useState<boolean>(false)
   const [monetize, setMonetize] = useState<boolean>(false)
   const [entryFee, setEntryFee] = useState<string>('')
+  const [entryFeeError, setEntryFeeError] = useState<string | null>(null)
   const [payCash, setPayCash] = useState(false)
   const [payVnPay, setPayVnPay] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -183,12 +185,14 @@ export default function EventCreateScreen() {
     if (!selectedBookingId) return false
     if (!title.trim()) return false
     if (participantsCapNum <= 0) return false
+    if (participantsCapError) return false
     if (monetize) {
       if (entryFeeNum <= 0) return false
+      if (entryFeeError) return false
       if (!paymentMethodsValue || paymentMethodsValue.length === 0) return false
     }
     return true
-  }, [selectedBookingId, title, participantsCapNum, monetize, entryFeeNum, paymentMethodsValue])
+  }, [selectedBookingId, title, participantsCapNum, participantsCapError, monetize, entryFeeNum, entryFeeError, paymentMethodsValue])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -556,7 +560,25 @@ export default function EventCreateScreen() {
             <Text style={styles.fieldLabel}>Title</Text>
             <TextInput value={title} onChangeText={setTitle} placeholder="Event title" placeholderTextColor="#777" style={styles.input} />
             <Text style={styles.fieldLabel}>Max participants</Text>
-            <TextInput value={participantsCap} onChangeText={setParticipantsCap} keyboardType="number-pad" placeholder="e.g. 10" placeholderTextColor="#777" style={styles.input} />
+            <TextInput
+              value={participantsCap}
+              onChangeText={(raw) => {
+                if (!raw) {
+                  setParticipantsCap('')
+                  setParticipantsCapError(null)
+                  return
+                }
+                const digits = raw.replace(/[^\d]/g, '')
+                setParticipantsCap(digits)
+                const hasLetters = /[A-Za-z]/.test(raw)
+                setParticipantsCapError(hasLetters ? 'Please type in number' : null)
+              }}
+              keyboardType="number-pad"
+              placeholder="e.g. 10"
+              placeholderTextColor="#777"
+              style={[styles.input, participantsCapError && styles.inputError]}
+            />
+            {!!participantsCapError && <Text style={styles.inlineErrorText}>{participantsCapError}</Text>}
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Describe the event details..." placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
 
@@ -601,7 +623,25 @@ export default function EventCreateScreen() {
             {monetize && (
               <View style={{ marginTop: 12 }}>
                 <Text style={styles.fieldLabel}>Entry Fee (VND)</Text>
-                <TextInput value={entryFee} onChangeText={setEntryFee} keyboardType="number-pad" placeholder="e.g. 30,000" placeholderTextColor="#777" style={styles.input} />
+                <TextInput
+                  value={entryFee}
+                  onChangeText={(raw) => {
+                    if (!raw) {
+                      setEntryFee('')
+                      setEntryFeeError(null)
+                      return
+                    }
+                    const digits = raw.replace(/[^\d]/g, '')
+                    setEntryFee(digits)
+                    const hasLetters = /[A-Za-z]/.test(raw)
+                    setEntryFeeError(hasLetters ? 'Please type in number' : null)
+                  }}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 30000"
+                  placeholderTextColor="#777"
+                  style={[styles.input, entryFeeError && styles.inputError]}
+                />
+                {!!entryFeeError && <Text style={styles.inlineErrorText}>{entryFeeError}</Text>}
                 <Text style={[styles.fieldLabel,{marginTop:12}]}>Payment Methods</Text>
                 <View style={styles.paymentRow}>
                   <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, payCash && styles.payMethodActive]}>
@@ -707,6 +747,8 @@ const styles = StyleSheet.create({
   expandIcon: { width:18, height:18, tintColor:'#555', resizeMode:'contain' },
   smallText: { fontSize:12, fontWeight:'600', color:'#555', marginTop:4 },
   errorText: { color:'#c00', fontSize:12, marginTop:8 },
+  inputError: { borderColor: '#c00' },
+  inlineErrorText: { color:'#c00', fontSize:12, marginTop:-8, marginBottom:10 },
   bookingList: { marginTop:12, maxHeight:260 },
   bookingItem: { flexDirection:'row', alignItems:'center', backgroundColor:'#eee', padding:12, borderRadius:12, marginBottom:10 },
   bookingItemSelected: { backgroundColor:'#FFD700' },

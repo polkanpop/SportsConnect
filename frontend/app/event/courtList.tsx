@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
   cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
   cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  cardAddress: { color: COLORS.neutral500, fontSize: 13 },
+  cardAddress: { color: COLORS.neutral500, fontSize: 13, fontWeight: '600' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
   tag: { backgroundColor: COLORS.neutral125, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
   tagFallback: { backgroundColor: COLORS.neutral125 },

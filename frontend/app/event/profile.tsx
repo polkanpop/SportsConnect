@@ -58,6 +58,7 @@ export default function Profile() {
   const [actionModalTitle, setActionModalTitle] = useState<string>('')
   const [actionModalMessage, setActionModalMessage] = useState<string | null>(null)
   const [actionModalButtons, setActionModalButtons] = useState<Array<{ text: string; variant?: 'cancel' | 'confirm'; onPress: () => void }>>([])
+  const [actionModalLayout, setActionModalLayout] = useState<'row' | 'column' | null>(null)
 
   const [uploadingPfp, setUploadingPfp] = useState(false)
   const [pfpOverrideUri, setPfpOverrideUri] = useState<string | null>(null)
@@ -67,10 +68,12 @@ export default function Profile() {
     title: string
     message?: string | null
     buttons: Array<{ text: string; variant?: 'cancel' | 'confirm'; onPress: () => void }>
+    layout?: 'row' | 'column'
   }) => {
     setActionModalTitle(opts.title)
     setActionModalMessage(typeof opts.message === 'string' ? opts.message : null)
     setActionModalButtons(opts.buttons)
+    setActionModalLayout(opts.layout ?? null)
     setShowActionModal(true)
   }
 
@@ -197,6 +200,22 @@ export default function Profile() {
     setUploadingPfp(true)
     setPfpOverrideUri(uri)
     try {
+      // If the user already has a profile picture, delete the previous Cloudinary asset first
+      // (requirement: change/delete should remove the previous one from Cloudinary).
+      if (userInfo?.pfp) {
+        try {
+          await deleteMyProfilePicture()
+        } catch (e: any) {
+          console.error('Delete previous PFP failed', e)
+          openActionModal({
+            title: 'Failed',
+            message: e?.message || 'Could not delete previous profile picture',
+            buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+          })
+          setPfpOverrideUri(null)
+          return
+        }
+      }
       const remoteUrl = await uploadToCloudinary(uri)
       await updateUserPfp(userid, remoteUrl)
       setPfpOverrideUri(remoteUrl)
@@ -254,24 +273,51 @@ export default function Profile() {
 
   const handlePressCamera = () => {
     if (uploadingPfp) return
+    const hasPfp = !!(pfpOverrideUri || userInfo?.pfp)
+
+    const openChangePicker = () => {
+      openActionModal({
+        title: 'Change profile picture',
+        message: 'Choose a photo from your library or take a new one.',
+        buttons: [
+          {
+            text: 'Take photo',
+            variant: 'confirm',
+            onPress: () => {
+              closeActionModal()
+              void handleTakePhoto()
+            },
+          },
+          {
+            text: 'Choose from library',
+            variant: 'cancel',
+            onPress: () => {
+              closeActionModal()
+              void handlePickFromLibrary()
+            },
+          },
+        ],
+      })
+    }
+
+    if (!hasPfp) {
+      // No existing photo: go straight to pick/take
+      openChangePicker()
+      return
+    }
+
+    // Existing photo: only show the two required options
     openActionModal({
       title: 'Profile picture',
-      message: 'Choose a photo from your library or take a new one.',
+      message: null,
+      layout: 'column',
       buttons: [
         {
-          text: 'Take photo',
+          text: 'Change profile picture',
           variant: 'confirm',
           onPress: () => {
             closeActionModal()
-            void handleTakePhoto()
-          },
-        },
-        {
-          text: 'Choose from library',
-          variant: 'cancel',
-          onPress: () => {
-            closeActionModal()
-            void handlePickFromLibrary()
+            openChangePicker()
           },
         },
         {
@@ -292,7 +338,6 @@ export default function Profile() {
               setPfpOverrideUri(null)
               try {
                 await deleteMyProfilePicture()
-                await updateUserPfp(userid, null)
                 queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
               } catch (e: any) {
                 console.error('Delete PFP failed', e)
@@ -482,10 +527,10 @@ export default function Profile() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{actionModalTitle}</Text>
             {!!actionModalMessage && <Text style={styles.modalMessage}>{actionModalMessage}</Text>}
-            <View style={actionModalButtons.length === 2 ? styles.modalButtonsRow : undefined}>
+            <View style={actionModalLayout === 'row' || (actionModalLayout == null && actionModalButtons.length === 2) ? styles.modalButtonsRow : undefined}>
               {actionModalButtons.map((btn, idx) => {
                 const isConfirm = btn.variant === 'confirm'
-                const isRow = actionModalButtons.length === 2
+                const isRow = actionModalLayout === 'row' || (actionModalLayout == null && actionModalButtons.length === 2)
                 const isFirstInRow = isRow && idx === 0
                 const isNotLastInColumn = !isRow && idx < actionModalButtons.length - 1
                 return (

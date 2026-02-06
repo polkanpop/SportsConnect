@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -41,6 +42,9 @@ class CourtRegisterRequest(BaseModel):
     price: float = Field(default=0, ge=0)
     venue: str  # Indoor | Outdoor | Both
     images: list[str] = Field(default_factory=list)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_type: Optional[str] = None
 
 
 class CourtRegisterResponse(BaseModel):
@@ -56,6 +60,11 @@ def _require_env(name: str) -> str:
     return v
 
 
+def _get_env(name: str) -> Optional[str]:
+    v = os.getenv(name)
+    return v if v and str(v).strip() else None
+
+
 def _extract_component(components: list[dict[str, Any]], want: str) -> Optional[str]:
     for c in components or []:
         types = c.get("types") or []
@@ -64,16 +73,25 @@ def _extract_component(components: list[dict[str, Any]], want: str) -> Optional[
     return None
 
 
-def _geocode_address(address: str) -> GeocodeResponse:
-    key = _require_env("GEOCODIO_API_KEY").strip().strip('"').strip("'")
+def _geocode_goong(address: str) -> GeocodeResponse:
+    key_raw = _get_env("GOONG_API_KEY")
+    if not key_raw:
+        raise HTTPException(status_code=500, detail="Missing env var: GOONG_API_KEY")
+    key = key_raw.strip().strip('"').strip("'")
+
     client = get_http_client()
-    r = client.get(
-        "https://api.geocod.io/v1.7/geocode",
-        params={"q": address, "api_key": key, "limit": 1},
-    )
+
+    def _call(url: str):
+        return client.get(url, params={"address": address, "api_key": key})
+
+    # Goong docs/examples commonly use /Geocode; some deployments are case-sensitive.
+    r = _call("https://rsapi.goong.io/Geocode")
+    if r.status_code == 404:
+        r = _call("https://rsapi.goong.io/geocode")
+
     if r.status_code >= 400:
         logger.warning(
-            "[geocode] http_error provider=geocodio status=%s address=%r body=%s",
+            "[geocode] http_error provider=goong status=%s address=%r body=%s",
             r.status_code,
             address,
             (r.text or "")[:500],
@@ -81,46 +99,298 @@ def _geocode_address(address: str) -> GeocodeResponse:
         raise HTTPException(status_code=502, detail=f"Geocoding provider error (HTTP {r.status_code})")
 
     data = r.json() or {}
+    status = str(data.get("status") or "").upper()
+    if status and status != "OK":
+        if status in {"ZERO_RESULTS", "NOT_FOUND"}:
+            raise HTTPException(status_code=400, detail="Geocoding returned no results")
+        raise HTTPException(status_code=502, detail=f"Geocoding provider error (status={status})")
+
     results = data.get("results") or []
-    first = results[0] if results else None
-    if not first:
+    first = results[0] if isinstance(results, list) and results else None
+    if not isinstance(first, dict):
         raise HTTPException(status_code=400, detail="Geocoding returned no results")
 
-    loc = (first.get("location") or {})
-    lat = loc.get("lat")
-    lng = loc.get("lng")
+    geometry = first.get("geometry") or {}
+    location = geometry.get("location") if isinstance(geometry, dict) else None
+    location = location if isinstance(location, dict) else {}
+    lat = location.get("lat")
+    lng = location.get("lng")
     if lat is None or lng is None:
         raise HTTPException(status_code=400, detail="Geocoding result missing lat/lng")
 
-    ac = first.get("address_components") or {}
-    city = ac.get("city") or ac.get("town") or ac.get("village")
-    state = ac.get("state")
-    postal_code = ac.get("zip") or ac.get("postal_code")
+    formatted_address = first.get("formatted_address") or None
+    place_id = first.get("place_id") or None
+    types = first.get("types") if isinstance(first.get("types"), list) else []
 
-    accuracy = first.get("accuracy")
-    accuracy_type = first.get("accuracy_type")
+    components = first.get("address_components") if isinstance(first.get("address_components"), list) else []
+    city = (
+        _extract_component(components, "locality")
+        or _extract_component(components, "administrative_area_level_2")
+        or None
+    )
+    state = _extract_component(components, "administrative_area_level_1") or None
+    postal_code = _extract_component(components, "postal_code") or None
 
+    location_type = geometry.get("location_type") if isinstance(geometry, dict) else None
     warnings: list[str] = []
-    if accuracy_type and str(accuracy_type).lower() not in {"rooftop", "point"}:
-        warnings.append(f"Low geocode precision (accuracy_type={accuracy_type})")
-    if isinstance(accuracy, (int, float)) and float(accuracy) < 0.8:
-        warnings.append(f"Low geocode confidence (accuracy={accuracy})")
+    if location_type and str(location_type).lower() not in {"rooftop", "premise", "street_address"}:
+        warnings.append(f"Low geocode precision (location_type={location_type})")
 
-    # Geocodio does not provide Google-like place types/place_id; keep shape compatible.
     return GeocodeResponse(
-        formatted_address=first.get("formatted_address") or None,
+        formatted_address=formatted_address,
         latitude=float(lat),
         longitude=float(lng),
-        location_type=str(accuracy_type) if accuracy_type else None,
-        place_id=None,
-        types=[],
+        location_type=str(location_type) if location_type else None,
+        place_id=str(place_id) if place_id else None,
+        types=[str(t) for t in types if t is not None],
         city=str(city) if city else None,
         state=str(state) if state else None,
         postal_code=str(postal_code) if postal_code else None,
-        accuracy_type=str(accuracy_type) if accuracy_type else None,
-        accuracy_score=float(accuracy) if isinstance(accuracy, (int, float)) else None,
+        accuracy_type="goong",
+        accuracy_score=None,
         warnings=warnings,
     )
+
+
+def _geocode_nominatim(address: str) -> GeocodeResponse:
+    """Global geocoding via OpenStreetMap Nominatim.
+
+    Notes:
+    - Must send a descriptive User-Agent per Nominatim usage policy.
+    - Results are best-effort and may still be low precision for vague inputs.
+    """
+    client = get_http_client()
+    user_agent = _get_env("NOMINATIM_USER_AGENT") or "sport_app/1.0"
+
+    def _search(q: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        r = client.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": q,
+                "format": "jsonv2",
+                "addressdetails": 1,
+                "extratags": 1,
+                "namedetails": 1,
+                # Restrict to Vietnam only
+                "countrycodes": "vn",
+                # Do not dedupe so we can pick the best match ourselves
+                "dedupe": 0,
+                "limit": max(1, min(int(limit), 10)),
+            },
+            headers={
+                "User-Agent": user_agent,
+                "Accept-Language": "en",
+            },
+        )
+        if r.status_code >= 400:
+            logger.warning(
+                "[geocode] http_error provider=nominatim status=%s address=%r body=%s",
+                r.status_code,
+                q,
+                (r.text or "")[:500],
+            )
+            raise HTTPException(status_code=502, detail=f"Geocoding provider error (HTTP {r.status_code})")
+        data = r.json() or []
+        return data if isinstance(data, list) else []
+
+    def _simplify_query(q: str) -> Optional[str]:
+        raw = (q or "").strip()
+        if not raw:
+            return None
+        tokens = raw.split()
+        if len(tokens) < 6:
+            return None
+        # Heuristic: Nominatim can return 0 results when users add building/complex names.
+        # For Vietnam addresses, dropping district/complex words often makes it resolvable.
+        stopwords = {
+            "the",
+            "avenue",
+            "tower",
+            "block",
+            "building",
+            "apartment",
+            "complex",
+            "thap",
+            "tháp",
+            "quan",
+            "quận",
+            "phuong",
+            "phường",
+            "ward",
+            "district",
+            "city",
+            "tp",
+            "hcm",
+            "hochiminh",
+            "saigon",
+            "sai",
+            "gon",
+        }
+        cut = None
+        for i, t in enumerate(tokens):
+            if i <= 3:
+                continue
+            if t.strip(".,-").lower() in stopwords:
+                cut = i
+                break
+        if cut is None:
+            # Fallback: keep a conservative street-ish prefix.
+            cut = 4 if tokens[0].isdigit() else 6
+        simplified = " ".join(tokens[:cut]).strip()
+        return simplified if simplified and simplified != raw else None
+
+    def _has_building_hint(q: str) -> bool:
+        ql = (q or "").lower()
+        return any(k in ql for k in ("thap", "tháp", "tower", "block", "building", "apartment", "chung cu", "chung cư"))
+
+    def _starts_with_house_number(q: str) -> bool:
+        q = (q or "").strip()
+        return bool(q) and bool(re.match(r"^\d+[a-zA-Z]?\b", q))
+
+    def _score_candidate(q: str, cand: dict[str, Any]) -> int:
+        score = 0
+        addr_d = cand.get("address") or {}
+        cls = str(cand.get("class") or "").lower()
+        typ = str(cand.get("type") or "").lower()
+        addresstype = str(cand.get("addresstype") or "").lower()
+        house_number = str(addr_d.get("house_number") or "").strip()
+
+        if _has_building_hint(q):
+            if cls in {"building", "amenity", "tourism"}:
+                score += 40
+            if typ in {"building", "apartments", "house", "residential"}:
+                score += 30
+            if addresstype in {"building", "amenity"}:
+                score += 20
+
+        # If user starts with a number, prefer candidates with a house_number.
+        if _starts_with_house_number(q):
+            score += 25 if house_number else -10
+
+        # Prefer smaller, more specific ranks when available.
+        try:
+            place_rank = int(cand.get("place_rank"))
+            # Higher place_rank in Nominatim usually means more specific.
+            score += min(max(place_rank, 0), 30)
+        except Exception:
+            pass
+
+        # Prefer candidates that actually mention more of the query tokens.
+        display_name = str(cand.get("display_name") or "").lower()
+        tokens = [t.strip(" ,.-").lower() for t in (q or "").split()]
+        tokens = [t for t in tokens if t and len(t) >= 3]
+        if tokens:
+            hits = sum(1 for t in tokens if t in display_name)
+            score += int(20 * (hits / max(len(tokens), 1)))
+
+        return score
+
+    warnings: list[str] = []
+    data = _search(address, limit=5)
+    candidates = [c for c in data if isinstance(c, dict)]
+
+    if not candidates:
+        simplified = _simplify_query(address)
+        if simplified:
+            data2 = _search(simplified, limit=5)
+            candidates = [c for c in data2 if isinstance(c, dict)]
+            if candidates:
+                warnings.append("No results for full address; used simplified street query")
+        if not candidates:
+            raise HTTPException(status_code=400, detail="Geocoding returned no results")
+
+    # Pick best candidate by heuristic scoring.
+    first = max(candidates, key=lambda c: _score_candidate(address, c))
+
+    lat = first.get("lat")
+    lon = first.get("lon")
+    if lat is None or lon is None:
+        raise HTTPException(status_code=400, detail="Geocoding result missing lat/lng")
+
+    addr = first.get("address") or {}
+    country_code = (addr.get("country_code") or "").strip().lower()
+    if country_code and country_code != "vn":
+        raise HTTPException(status_code=400, detail="Geocoding result is outside Vietnam")
+
+    # Extra safety warnings for "exact location" needs.
+    q_has_building_hint = _has_building_hint(address)
+    q_has_house_number = _starts_with_house_number(address)
+    cls = str(first.get("class") or "").lower()
+    typ = str(first.get("type") or "").lower()
+    house_number = str(addr.get("house_number") or "").strip()
+    formatted_lc = str(first.get("display_name") or "").lower()
+    if q_has_house_number and not house_number:
+        warnings.append("Query includes a house number, but result has no house_number; location may be approximate")
+    if q_has_building_hint and cls not in {"building", "amenity", "tourism"} and typ not in {"building", "apartments", "house", "residential"}:
+        warnings.append("Building/tower info not resolved; result is likely street-level")
+
+    # If user specified a tower/block number, but the formatted address doesn't contain it, flag it.
+    # Example: "thap 4" but result is "Tháp S06" -> not the same tower.
+    ql = (address or "").lower()
+    m_tower = re.search(r"\b(?:thap|tháp)\s*([0-9]{1,3})\b", ql)
+    if m_tower:
+        want_num = m_tower.group(1)
+        if want_num and want_num not in formatted_lc:
+            warnings.append("Requested tower/block number not reflected in geocode result; cannot guarantee exact building")
+
+    # If user specified District 2 (Quan 2), but the result doesn't mention it, warn.
+    if re.search(r"\b(?:quan|quận)\s*2\b", ql) and ("quan 2" not in formatted_lc and "quận 2" not in formatted_lc and "district 2" not in formatted_lc):
+        warnings.append("Requested district (Quan 2) not reflected in geocode result; location may be generalized")
+    city = addr.get("city") or addr.get("town") or addr.get("village")
+    state = addr.get("state")
+    postal_code = addr.get("postcode")
+
+    # Nominatim doesn't provide a single "accuracy score"; expose basic type info.
+    cls = first.get("class")
+    typ = first.get("type")
+    types: list[str] = []
+    if cls:
+        types.append(str(cls))
+    if typ and typ not in types:
+        types.append(str(typ))
+
+    return GeocodeResponse(
+        formatted_address=first.get("display_name") or None,
+        latitude=float(lat),
+        longitude=float(lon),
+        location_type=str(typ) if typ else None,
+        place_id=str(first.get("place_id")) if first.get("place_id") is not None else None,
+        types=types,
+        city=str(city) if city else None,
+        state=str(state) if state else None,
+        postal_code=str(postal_code) if postal_code else None,
+        accuracy_type="nominatim",
+        accuracy_score=None,
+        warnings=warnings,
+    )
+
+
+_VIETNAMESE_HINT_RE = re.compile(r"\b(viet\s*nam|vietnam|vn)\b", re.IGNORECASE)
+
+
+def _looks_non_us_address(address: str) -> bool:
+    a = (address or "").strip()
+    if not a:
+        return False
+    # Non-ASCII is a strong hint this isn't a typical US street address.
+    if any(ord(ch) > 127 for ch in a):
+        return True
+    # Explicit Vietnam hints.
+    if _VIETNAMESE_HINT_RE.search(a):
+        return True
+    return False
+
+
+def _geocode_address(address: str) -> GeocodeResponse:
+    """Geocode address restricted to Vietnam only.
+
+    This prevents false positives where foreign geocoders return an unrelated US/other
+    location for Vietnamese inputs.
+    """
+    # Prefer Goong when configured; fallback to Nominatim.
+    if _get_env("GOONG_API_KEY"):
+        return _geocode_goong(address)
+    return _geocode_nominatim(address)
 
 
 @router.get("/geocode", response_model=GeocodeResponse)
@@ -187,15 +457,30 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
 
     geocode = _geocode_address(address)
 
+    has_user_coords = req.latitude is not None and req.longitude is not None
+    latitude = float(req.latitude) if has_user_coords else geocode.latitude
+    longitude = float(req.longitude) if has_user_coords else geocode.longitude
+    accuracy_type = (req.accuracy_type or ("user_selected" if has_user_coords else None) or geocode.accuracy_type or geocode.location_type)
+
     try:
-        created_court = rest_insert(
-            "courts",
-            {
-                "courtinfo": address,
-                "ownerid": req.ownerid,
-                "price": req.price,
-            },
-        )
+        court_insert_payload: dict[str, Any] = {
+            "courtinfo": address,
+            "ownerid": req.ownerid,
+            "price": req.price,
+            # New registrations should be reviewed.
+            "status": "pending",
+        }
+        try:
+            created_court = rest_insert("courts", court_insert_payload)
+        except Exception as e:
+            # Some environments may not have a 'status' column on courts.
+            # Fall back gracefully to avoid breaking registrations.
+            msg = str(e).lower()
+            if "status" in msg and ("column" in msg or "unknown" in msg or "does not exist" in msg):
+                court_insert_payload.pop("status", None)
+                created_court = rest_insert("courts", court_insert_payload)
+            else:
+                raise
         court_row = created_court[0] if isinstance(created_court, list) and created_court else created_court
         courtid = int(court_row.get("courtid"))
     except Exception as e:
@@ -205,16 +490,12 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
         "courtid": courtid,
         "name": name,
         "address": geocode.formatted_address or address,
-        "latitude": geocode.latitude,
-        "longitude": geocode.longitude,
+        "latitude": latitude,
+        "longitude": longitude,
         "venue": venues,
         "images": req.images or [],
         "availability": "Available",
-        "city": geocode.city,
-        "state": geocode.state,
-        "postal_code": geocode.postal_code,
-        "accuracy_type": geocode.accuracy_type or geocode.location_type,
-        "accuracy_score": geocode.accuracy_score,
+        "accuracy_type": accuracy_type,
     }
     # Remove Nones to reduce REST errors on NOT NULL / unknown columns
     courtinfo_payload = {k: v for k, v in courtinfo_payload.items() if v is not None}
