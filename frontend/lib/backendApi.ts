@@ -141,6 +141,268 @@ export async function geocodeCourtAddress(address: string): Promise<CourtGeocode
 	})
 }
 
+export type CourtAddressSuggestion = {
+	description: string
+	place_id: string
+	main_text?: string | null
+	secondary_text?: string | null
+}
+
+export async function autocompleteCourtAddress(input: string, limit: number = 5): Promise<CourtAddressSuggestion[]> {
+	return request(
+		`/courts/autocomplete?input=${encodeURIComponent(input)}&limit=${encodeURIComponent(String(limit))}`,
+		{ method: 'GET', debugLabel: 'courts.autocomplete' }
+	)
+}
+
+export async function geocodeCourtPlaceId(placeId: string): Promise<CourtGeocode> {
+	return request(`/courts/geocode-place?place_id=${encodeURIComponent(placeId)}`, {
+		method: 'GET',
+		debugLabel: 'courts.geocodePlace',
+	})
+}
+
+export type DistanceMatrixResult = {
+	distance_meters?: number | null
+	duration_seconds?: number | null
+	distance_text?: string | null
+	duration_text?: string | null
+	warnings?: string[]
+}
+
+type DistanceMatrixCacheStatus = 'loading' | 'loaded' | 'error'
+type DistanceMatrixCacheEntry = {
+	status: DistanceMatrixCacheStatus
+	result: DistanceMatrixResult
+	updatedAt: number
+}
+
+const distanceMatrixCache = new Map<string, DistanceMatrixCacheEntry>()
+const distanceMatrixInFlight = new Map<string, Promise<DistanceMatrixResult>>()
+const distanceMatrixListeners = new Set<() => void>()
+
+function notifyDistanceMatrixListeners() {
+	for (const l of distanceMatrixListeners) {
+		try { l() } catch {}
+	}
+}
+
+export function subscribeDistanceMatrixCache(listener: () => void) {
+	distanceMatrixListeners.add(listener)
+	return () => {
+		distanceMatrixListeners.delete(listener)
+	}
+}
+
+function roundCoord(n: number) {
+	// 4 decimals ~= 11m; reduces key churn while staying accurate enough for caching.
+	return Math.round(n * 10_000) / 10_000
+}
+
+export function makeDistanceMatrixCacheKey(payload: {
+	origin_lat: number
+	origin_lng: number
+	dest_lat: number
+	dest_lng: number
+}) {
+	const oLat = roundCoord(payload.origin_lat)
+	const oLng = roundCoord(payload.origin_lng)
+	const dLat = roundCoord(payload.dest_lat)
+	const dLng = roundCoord(payload.dest_lng)
+	return `${oLat},${oLng}|${dLat},${dLng}`
+}
+
+export function peekDistanceMatrixCached(payload: {
+	origin_lat: number
+	origin_lng: number
+	dest_lat: number
+	dest_lng: number
+}): DistanceMatrixCacheEntry | undefined {
+	const key = makeDistanceMatrixCacheKey(payload)
+	return distanceMatrixCache.get(key)
+}
+
+export async function getDistanceMatrix(payload: {
+	origin_lat: number
+	origin_lng: number
+	dest_lat: number
+	dest_lng: number
+}): Promise<DistanceMatrixResult> {
+	const q = new URLSearchParams({
+		origin_lat: String(payload.origin_lat),
+		origin_lng: String(payload.origin_lng),
+		dest_lat: String(payload.dest_lat),
+		dest_lng: String(payload.dest_lng),
+	})
+	return request(`/courts/distance-matrix?${q.toString()}`, {
+		method: 'GET',
+		debugLabel: 'courts.distanceMatrix',
+	})
+}
+
+export async function getDistanceMatrixBatch(payload: {
+	origin_lat: number
+	origin_lng: number
+	destinations: { dest_lat: number; dest_lng: number }[]
+}): Promise<DistanceMatrixResult[]> {
+	const body = {
+		origin_lat: payload.origin_lat,
+		origin_lng: payload.origin_lng,
+		destinations: payload.destinations.map(d => ({ dest_lat: d.dest_lat, dest_lng: d.dest_lng })),
+	}
+	const data = await request(`/courts/distance-matrix/batch`, {
+		method: 'POST',
+		body: JSON.stringify(body),
+		debugLabel: 'courts.distanceMatrixBatch',
+	})
+	const results = Array.isArray(data?.results) ? data.results : []
+	return results
+}
+
+// Cached variant: ensures a given origin/destination pair is fetched only once per app runtime.
+// This reduces Goong costs and also allows different screens to reuse already-fetched results.
+export async function getDistanceMatrixCached(payload: {
+	origin_lat: number
+	origin_lng: number
+	dest_lat: number
+	dest_lng: number
+}): Promise<DistanceMatrixResult> {
+	const key = makeDistanceMatrixCacheKey(payload)
+	const existing = distanceMatrixCache.get(key)
+	if (existing && (existing.status === 'loaded' || existing.status === 'error')) {
+		return existing.result
+	}
+	const inflight = distanceMatrixInFlight.get(key)
+	if (inflight) return inflight
+
+	const p = (async () => {
+		distanceMatrixCache.set(key, {
+			status: 'loading',
+			result: { distance_meters: null, duration_seconds: null },
+			updatedAt: Date.now(),
+		})
+		notifyDistanceMatrixListeners()
+		try {
+			const result = await getDistanceMatrix(payload)
+			distanceMatrixCache.set(key, {
+				status: 'loaded',
+				result,
+				updatedAt: Date.now(),
+			})
+			notifyDistanceMatrixListeners()
+			return result
+		} catch {
+			const result: DistanceMatrixResult = { distance_meters: null, duration_seconds: null }
+			distanceMatrixCache.set(key, {
+				status: 'error',
+				result,
+				updatedAt: Date.now(),
+			})
+			notifyDistanceMatrixListeners()
+			return result
+		} finally {
+			distanceMatrixInFlight.delete(key)
+		}
+	})()
+
+	distanceMatrixInFlight.set(key, p)
+	return p
+}
+
+// Batch-prefetch variant: fetches up to 25 destinations in one request and populates the same runtime cache
+// entries used by getDistanceMatrixCached/peekDistanceMatrixCached.
+export async function prefetchDistanceMatrixBatchCached(payload: {
+	origin_lat: number
+	origin_lng: number
+	destinations: { dest_lat: number; dest_lng: number }[]
+}): Promise<void> {
+	const origin_lat = payload.origin_lat
+	const origin_lng = payload.origin_lng
+	const destinations = Array.isArray(payload.destinations) ? payload.destinations : []
+	if (!destinations.length) return
+
+	const waiters: Promise<any>[] = []
+
+	// De-dupe and keep only destinations that are not already resolved or in-flight.
+	const unique: { dest_lat: number; dest_lng: number; key: string }[] = []
+	const seen = new Set<string>()
+	for (const d of destinations) {
+		if (typeof d?.dest_lat !== 'number' || typeof d?.dest_lng !== 'number') continue
+		const key = makeDistanceMatrixCacheKey({ origin_lat, origin_lng, dest_lat: d.dest_lat, dest_lng: d.dest_lng })
+		if (seen.has(key)) continue
+		seen.add(key)
+		const existing = distanceMatrixCache.get(key)
+		if (existing && (existing.status === 'loaded' || existing.status === 'error')) continue
+		const inflight = distanceMatrixInFlight.get(key)
+		if (inflight) {
+			waiters.push(inflight)
+			continue
+		}
+		unique.push({ dest_lat: d.dest_lat, dest_lng: d.dest_lng, key })
+	}
+	if (!unique.length) {
+		if (waiters.length) await Promise.allSettled(waiters)
+		return
+	}
+
+	// Chunk to respect provider limits (25 destinations per request).
+	for (let i = 0; i < unique.length; i += 25) {
+		const chunk = unique.slice(i, i + 25)
+		for (const item of chunk) {
+			distanceMatrixCache.set(item.key, {
+				status: 'loading',
+				result: { distance_meters: null, duration_seconds: null },
+				updatedAt: Date.now(),
+			})
+		}
+		notifyDistanceMatrixListeners()
+
+		const chunkPromise = (async () => {
+			try {
+				const results = await getDistanceMatrixBatch({
+					origin_lat,
+					origin_lng,
+					destinations: chunk.map(c => ({ dest_lat: c.dest_lat, dest_lng: c.dest_lng })),
+				})
+				for (let j = 0; j < chunk.length; j++) {
+					const item = chunk[j]
+					const result: DistanceMatrixResult = (results && results[j]) ? results[j] : { distance_meters: null, duration_seconds: null }
+					distanceMatrixCache.set(item.key, {
+						status: 'loaded',
+						result,
+						updatedAt: Date.now(),
+					})
+				}
+				notifyDistanceMatrixListeners()
+			} catch {
+				for (const item of chunk) {
+					distanceMatrixCache.set(item.key, {
+						status: 'error',
+						result: { distance_meters: null, duration_seconds: null },
+						updatedAt: Date.now(),
+					})
+				}
+				notifyDistanceMatrixListeners()
+			} finally {
+				for (const item of chunk) {
+					distanceMatrixInFlight.delete(item.key)
+				}
+			}
+		})()
+		waiters.push(chunkPromise)
+
+		for (const item of chunk) {
+			// Per-destination in-flight promise (so other call sites can dedupe).
+			distanceMatrixInFlight.set(
+				item.key,
+				chunkPromise.then(() => distanceMatrixCache.get(item.key)?.result ?? { distance_meters: null, duration_seconds: null })
+			)
+		}
+	}
+
+	if (waiters.length) await Promise.allSettled(waiters)
+}
+
 export type CourtRegisterRequest = {
 	name: string
 	address: string
@@ -743,6 +1005,8 @@ export type CombinedEvent = {
 	join_status?: boolean | null
 	courtid?: number
 	address?: string
+	latitude?: number | null
+	longitude?: number | null
 	court_name?: string | null
 	venue?: string[] | string | null
 }
@@ -867,6 +1131,8 @@ export type CombinedTrainingSession = {
 	end_timestamp?: string | null
 	courtid?: number
 	address?: string
+	latitude?: number | null
+	longitude?: number | null
 	court_name?: string | null
 	venue?: string[] | string | null
 	entry_fee?: number | null
@@ -942,6 +1208,8 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			join_status: meta?.join_status ?? null,
 			courtid,
 			address: ci?.address,
+			latitude: (ci as any)?.latitude ?? null,
+			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
 		}
@@ -1126,6 +1394,8 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			end_timestamp: booking?.end_timestamp ?? null,
 			courtid,
 			address: ci?.address,
+			latitude: (ci as any)?.latitude ?? null,
+			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
 			entry_fee: meta?.entry_fee ?? null,
@@ -1188,6 +1458,8 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			end_timestamp: booking?.end_timestamp ?? null,
 			courtid,
 			address: ci?.address,
+			latitude: (ci as any)?.latitude ?? null,
+			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
 			entry_fee: meta?.entry_fee ?? null,

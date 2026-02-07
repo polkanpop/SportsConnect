@@ -15,6 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
+import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import {
   approveTrainingSessionBooking,
   type CombinedTrainingSession,
@@ -163,6 +164,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const [blockedLoading, setBlockedLoading] = useState(false)
   const [blockedError, setBlockedError] = useState<string | null>(null)
   const [blockedNameByUserId, setBlockedNameByUserId] = useState<Record<number, string>>({})
+
+  const [pullRefreshing, setPullRefreshing] = useState(false)
 
   const [actionMenuVisible, setActionMenuVisible] = useState(false)
   const [actionUser, setActionUser] = useState<{ userid: number; name: string } | null>(null)
@@ -477,12 +480,21 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     }
   }
 
-  const onRefresh = useCallback(() => {
-    if (selectedSessionId != null) {
-      void Promise.all([loadSessions(selectedSessionId), loadBookingsForSession(selectedSessionId), loadBlockedForTarget(selectedSessionId)])
-      return
+  const onRefresh = useCallback(async () => {
+    setPullRefreshing(true)
+    try {
+      if (selectedSessionId != null) {
+        await Promise.all([
+          loadSessions(selectedSessionId),
+          loadBookingsForSession(selectedSessionId),
+          loadBlockedForTarget(selectedSessionId),
+        ])
+        return
+      }
+      await loadSessions(null)
+    } finally {
+      setPullRefreshing(false)
     }
-    void loadSessions(null)
   }, [loadBlockedForTarget, loadBookingsForSession, loadSessions, selectedSessionId])
 
   const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {
@@ -573,7 +585,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       <ScrollView
         style={{ flex: 1, backgroundColor: '#F0F0F0' }}
         contentContainerStyle={{ padding: 12, paddingBottom: 140 }}
-        refreshControl={<RefreshControl refreshing={sessionsLoading || bookingsLoading} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={onRefresh} />}
       >
       <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 10, marginBottom: 8 }}>My Training Session</Text>
 
@@ -592,9 +604,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       )}
 
       {sessionsLoading ? (
-        <View style={{ paddingVertical: 18 }}>
-          <ActivityIndicator />
-        </View>
+        <SkeletonPulse>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            removeClippedSubviews={false}
+            style={{ overflow: 'visible' }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 18, paddingBottom: 12 }}
+          >
+            {Array.from({ length: 2 }).map((_, idx) => (
+              <SkeletonBox key={idx} width={288} height={148} radius={14} style={{ marginRight: 18 }} />
+            ))}
+          </ScrollView>
+        </SkeletonPulse>
       ) : sessions.length === 0 ? (
         <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
           <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>No training sessions yet</Text>
@@ -729,9 +751,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           {bookingsError && <Text style={{ color: 'red', marginBottom: 8 }}>Failed to load applicants: {bookingsError}</Text>}
 
           {bookingsLoading ? (
-            <View style={{ paddingVertical: 18 }}>
-              <ActivityIndicator />
-            </View>
+            <SkeletonPulse>
+              <View style={{ paddingVertical: 12 }}>
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <SkeletonBox key={idx} width={'100%'} height={72} radius={12} style={{ marginBottom: 10 }} />
+                ))}
+              </View>
+            </SkeletonPulse>
           ) : applicants.length === 0 ? (
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
               <Text style={{ color: '#555' }}>No pending requests.</Text>
@@ -840,9 +866,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
           <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Participant List</Text>
           {bookingsLoading ? (
-            <View style={{ paddingVertical: 18 }}>
-              <ActivityIndicator />
-            </View>
+            <SkeletonPulse>
+              <View style={{ paddingVertical: 12 }}>
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <SkeletonBox key={idx} width={'100%'} height={72} radius={12} style={{ marginBottom: 10 }} />
+                ))}
+              </View>
+            </SkeletonPulse>
           ) : participants.length === 0 ? (
             <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
               <Text style={{ color: '#555' }}>No participants yet.</Text>
@@ -909,9 +939,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             {hostsError ? (
               <Text style={{ color: '#B91C1C', fontWeight: '700' }}>{hostsError}</Text>
             ) : hostsLoading ? (
-              <View style={{ paddingVertical: 12 }}>
-                <ActivityIndicator />
-              </View>
+              <SkeletonPulse>
+                <View>
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <SkeletonBox
+                      key={idx}
+                      width={'100%'}
+                      height={56}
+                      radius={12}
+                      style={{ marginBottom: idx < 2 ? 10 : 0 }}
+                    />
+                  ))}
+                </View>
+              </SkeletonPulse>
             ) : hosts.length === 0 ? (
               <Text style={{ color: '#555' }}>No hosts yet.</Text>
             ) : (
@@ -958,9 +998,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             {!!blockedError && <Text style={{ color: '#B91C1C', fontWeight: '700', marginTop: 10 }}>{blockedError}</Text>}
 
             {blockedLoading ? (
-              <View style={{ paddingVertical: 12 }}>
-                <ActivityIndicator />
-              </View>
+              <SkeletonPulse>
+                <View style={{ paddingTop: 10 }}>
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <SkeletonBox
+                      key={idx}
+                      width={'100%'}
+                      height={44}
+                      radius={10}
+                      style={{ marginBottom: idx < 2 ? 10 : 0 }}
+                    />
+                  ))}
+                </View>
+              </SkeletonPulse>
             ) : blocked.length === 0 ? (
               <Text style={{ color: '#555', marginTop: 10 }}>No blocked users.</Text>
             ) : (
@@ -1014,9 +1064,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
           <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12 }}>
             {infoLoading ? (
-              <View style={{ paddingVertical: 18 }}>
-                <ActivityIndicator />
-              </View>
+              <SkeletonPulse>
+                <View style={{ paddingVertical: 6 }}>
+                  <SkeletonBox width={120} height={16} radius={8} style={{ marginBottom: 10 }} />
+                  <SkeletonBox width={'100%'} height={44} radius={10} style={{ marginBottom: 14 }} />
+                  <SkeletonBox width={140} height={16} radius={8} style={{ marginBottom: 10 }} />
+                  <SkeletonBox width={'100%'} height={76} radius={10} style={{ marginBottom: 14 }} />
+                  <SkeletonBox width={160} height={16} radius={8} style={{ marginBottom: 10 }} />
+                  <SkeletonBox width={120} height={44} radius={10} />
+                </View>
+              </SkeletonPulse>
             ) : infoError ? (
               <Text style={{ color: '#B91C1C', fontWeight: '700' }}>{infoError}</Text>
             ) : (

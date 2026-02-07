@@ -18,7 +18,8 @@ import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
+import { Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -614,9 +615,26 @@ export default function ActivityPage() {
 
   if (isLoading) {
     return (
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" />
-        </SafeAreaView>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral75 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          <SkeletonPulse>
+            <SkeletonBox width={140} height={24} radius={8} style={{ marginBottom: 16 }} />
+            <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+              <SkeletonBox width={140} height={38} radius={12} style={{ marginRight: 12 }} />
+              <SkeletonBox width={140} height={38} radius={12} />
+            </View>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <SkeletonBox
+                key={idx}
+                width={'100%'}
+                height={96}
+                radius={16}
+                style={{ marginBottom: 12 }}
+              />
+            ))}
+          </SkeletonPulse>
+        </View>
+      </SafeAreaView>
     )
   }
 

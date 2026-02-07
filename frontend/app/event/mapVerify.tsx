@@ -1,6 +1,6 @@
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { setCache } from '@/lib/cache'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
@@ -8,8 +8,15 @@ import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const COURT_REGISTER_VERIFY_STORAGE_KEY = '@courtRegisterVerifiedLocation'
+const COURT_REGISTER_VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 type Coord = { latitude: number; longitude: number }
+
+// Hide default map POIs (cafes/hotels/etc.) so only app marker remains.
+const MAP_STYLE_HIDE_POI = [
+  { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
+]
 
 export default function MapVerifyPage() {
   const router = useRouter()
@@ -42,6 +49,27 @@ export default function MapVerifyPage() {
   const mapRef = useRef<MapView | null>(null)
   const blink = useRef(new Animated.Value(1)).current
 
+  const DEFAULT_DELTA = 0.005
+
+  // Vietnam bounding box (approx). Keeps the user from panning outside Vietnam.
+  const VIETNAM_BOUNDS = {
+    minLat: 8.0,
+    maxLat: 23.6,
+    minLng: 102.0,
+    maxLng: 109.6,
+  }
+
+  const isInVietnam = (c: Coord) => {
+    return (
+      c.latitude >= VIETNAM_BOUNDS.minLat &&
+      c.latitude <= VIETNAM_BOUNDS.maxLat &&
+      c.longitude >= VIETNAM_BOUNDS.minLng &&
+      c.longitude <= VIETNAM_BOUNDS.maxLng
+    )
+  }
+
+  const lastValidRegionRef = useRef<Region | null>(null)
+
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
@@ -58,9 +86,10 @@ export default function MapVerifyPage() {
     const region: Region = {
       latitude: initial.latitude,
       longitude: initial.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+      latitudeDelta: DEFAULT_DELTA,
+      longitudeDelta: DEFAULT_DELTA,
     }
+    lastValidRegionRef.current = region
     const t = setTimeout(() => {
       try {
         mapRef.current?.animateToRegion(region, 700)
@@ -76,7 +105,8 @@ export default function MapVerifyPage() {
       longitude: selectedCoord.longitude,
       formatted_address: formattedAddress || address || null,
     }
-    await AsyncStorage.setItem(COURT_REGISTER_VERIFY_STORAGE_KEY, JSON.stringify(payload))
+    // Persist briefly; CourtRegister will consume + clear it.
+    try { await setCache(COURT_REGISTER_VERIFY_STORAGE_KEY, payload, COURT_REGISTER_VERIFY_TTL_MS) } catch {}
     router.back()
   }
 
@@ -115,16 +145,34 @@ export default function MapVerifyPage() {
           ref={mapRef}
           style={styles.map}
           provider={PROVIDER_GOOGLE}
+          showsPointsOfInterest={false}
+          showsBuildings={false}
+          showsIndoors={false}
+          customMapStyle={MAP_STYLE_HIDE_POI}
           initialRegion={{
             latitude: initial.latitude,
             longitude: initial.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: DEFAULT_DELTA,
+            longitudeDelta: DEFAULT_DELTA,
+          }}
+          onRegionChangeComplete={(r) => {
+            // Keep center point inside Vietnam
+            const center: Coord = { latitude: r.latitude, longitude: r.longitude }
+            if (isInVietnam(center)) {
+              lastValidRegionRef.current = r
+              return
+            }
+            const fallback = lastValidRegionRef.current
+            if (!fallback) return
+            try {
+              mapRef.current?.animateToRegion(fallback, 250)
+            } catch {}
           }}
           onPress={(e) => {
             if (!editMode) return
             const c = e.nativeEvent.coordinate
             if (!c) return
+            if (!isInVietnam({ latitude: c.latitude, longitude: c.longitude })) return
             setSelectedCoord({ latitude: c.latitude, longitude: c.longitude })
           }}
         >

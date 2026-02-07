@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
+import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { getCache, setCache } from '@/lib/cache'
 import { ICONS } from '@/constants/icons'
@@ -10,6 +10,31 @@ import { COLORS } from '@/constants/colors'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useAuthContext } from '@/hooks/use-auth-context'
+import * as Location from 'expo-location'
+import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
+import { SkeletonList } from '@/components/ui/skeleton'
+
+type Coord = { latitude: number; longitude: number }
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function formatKmFromMeters(distanceMeters: number | null | undefined) {
+  if (distanceMeters == null || !Number.isFinite(distanceMeters)) return null
+  const km = distanceMeters / 1000
+  const rounded = km < 10 ? Math.round(km * 10) / 10 : Math.round(km)
+  const text = String(rounded).replace('.', ',')
+  return `${text} km`
+}
 
 // Helper to normalise venue value to array of strings
 function asArray(v: CourtInfoRow['venue'] | undefined | null): string[] {
@@ -31,7 +56,7 @@ const CourtListScreen = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'venue' | 'price' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'venue' | 'price' | 'distance' | null>(null)
     // Price filter state (inputs interpret value as thousands: 50 => 50,000 VND)
     const [minPriceK, setMinPriceK] = useState<string>('')
     const [maxPriceK, setMaxPriceK] = useState<string>('')
@@ -61,7 +86,108 @@ const CourtListScreen = () => {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const favLoadAbortRef = useRef<AbortController | null>(null)
 
+  // Distance filter state (matches Map numeric rules)
+  const [closeToMe, setCloseToMe] = useState(true)
+  const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null)
+  const [distanceKmInput, setDistanceKmInput] = useState<string>('')
+  const [distanceKmError, setDistanceKmError] = useState<string | null>(null)
+  const [userCoord, setUserCoord] = useState<Coord | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const distanceFilterActive = closeToMe || selectedDistanceKm != null
+  const requestedDistanceKeysRef = useRef<Set<string>>(new Set())
+  const autoPrefetchedKeysRef = useRef<Set<string>>(new Set())
+  const [, setDistanceMatrixTick] = useState(0)
+
   const { profile } = useAuthContext()
+
+  useEffect(() => {
+    return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))
+  }, [])
+
+  const sanitizeKmInput = useCallback((raw: string) => {
+    let s = raw.replace(',', '.')
+    s = s.replace(/[^0-9.]/g, '')
+    const parts = s.split('.')
+    if (parts.length > 2) {
+      s = `${parts[0]}.${parts.slice(1).join('')}`
+    }
+    return s
+  }, [])
+
+  const parseKmInput = useCallback((value: string): number | null => {
+    if (!value) return null
+    if (value === '.') return null
+    const n = Number(value)
+    if (!Number.isFinite(n)) return null
+    if (n <= 0) return null
+    return n
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const cached = await getCachedUserCoord()
+      if (!cancelled && cached && !userCoord) setUserCoord(cached)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const ensureUserLocation = useCallback(async () => {
+    if (userCoord) return userCoord
+    if (locationLoading) return null
+    setLocationLoading(true)
+    setLocationError(null)
+    try {
+      const cached = await getCachedUserCoord()
+      if (cached) {
+        setUserCoord(cached)
+        return cached
+      }
+
+      const perm = await Location.getForegroundPermissionsAsync()
+      let status = perm.status
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync()
+        status = req.status
+      }
+      if (status !== 'granted') {
+        setLocationError('Location permission is required')
+        return null
+      }
+
+      const last = await Location.getLastKnownPositionAsync()
+      if (last?.coords) {
+        const next = { latitude: last.coords.latitude, longitude: last.coords.longitude }
+        setUserCoord(next)
+        void setCachedUserCoord(next)
+        return next
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      })
+      const next = { latitude: loc.coords.latitude, longitude: loc.coords.longitude }
+      setUserCoord(next)
+      void setCachedUserCoord(next)
+      return next
+    } catch {
+      setLocationError('Unable to get your location')
+      return null
+    } finally {
+      setLocationLoading(false)
+    }
+  }, [userCoord, locationLoading])
+
+  useEffect(() => {
+    if (!distanceFilterActive) return
+    void ensureUserLocation()
+  }, [distanceFilterActive, ensureUserLocation])
+
+  useEffect(() => {
+    // If origin changes, allow a fresh prefetch batch.
+    autoPrefetchedKeysRef.current.clear()
+  }, [userCoord])
 
   // Unified numeric user id resolver similar to Home.tsx
   const resolveUserId = useCallback(async (): Promise<number | null> => {
@@ -157,20 +283,112 @@ const CourtListScreen = () => {
     })
   }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds, minPrice, maxPrice, priceByCourtId])
 
+  const displayCourts = useMemo(() => {
+    let list = filteredCourts
+    if (!distanceFilterActive || !userCoord) return list
+
+    if (selectedDistanceKm != null) {
+      const maxMeters = selectedDistanceKm * 1000
+      list = list.filter(c => {
+        if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') return false
+        const d = haversineMeters(userCoord.latitude, userCoord.longitude, c.latitude, c.longitude)
+        return d <= maxMeters
+      })
+    }
+
+    if (closeToMe) {
+      list = [...list].sort((a, b) => {
+        const aHas = typeof a.latitude === 'number' && typeof a.longitude === 'number'
+        const bHas = typeof b.latitude === 'number' && typeof b.longitude === 'number'
+        if (!aHas && !bHas) return 0
+        if (!aHas) return 1
+        if (!bHas) return -1
+        const da = haversineMeters(userCoord.latitude, userCoord.longitude, a.latitude as number, a.longitude as number)
+        const db = haversineMeters(userCoord.latitude, userCoord.longitude, b.latitude as number, b.longitude as number)
+        return da - db
+      })
+    }
+
+    return list
+  }, [filteredCourts, distanceFilterActive, userCoord, selectedDistanceKm, closeToMe])
+
   // Incremental rendering (pagination) state
   const BATCH_SIZE = 15
   const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Reset visible items when filters/search/favourite toggle change
-  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedVenues, showFavouritesOnly])
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE)
+    setLoadingMore(false)
+  }, [search, selectedVenues, showFavouritesOnly, minPriceK, maxPriceK, closeToMe, selectedDistanceKm])
 
-  const handleScroll = useCallback((e: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
-    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
-    if (distanceFromBottom < 40) { // threshold
-      setVisibleCount(prev => prev >= filteredCourts.length ? prev : Math.min(prev + BATCH_SIZE, filteredCourts.length))
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore) return
+    const nextCount = Math.min(visibleCount + BATCH_SIZE, displayCourts.length)
+    if (nextCount <= visibleCount) return
+
+    setLoadingMore(true)
+    try {
+      const origin = await ensureUserLocation()
+      // If we can't get location, still allow loading more (distance tags cannot be computed).
+      if (!origin) {
+        setVisibleCount(nextCount)
+        return
+      }
+
+      const nextBatch = displayCourts.slice(visibleCount, nextCount)
+      const dests: { dest_lat: number; dest_lng: number }[] = []
+      for (const c of nextBatch) {
+        if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') continue
+        const payload = { origin_lat: origin.latitude, origin_lng: origin.longitude, dest_lat: c.latitude, dest_lng: c.longitude }
+        const key = makeDistanceMatrixCacheKey(payload)
+        if (requestedDistanceKeysRef.current.has(key)) continue
+        requestedDistanceKeysRef.current.add(key)
+        dests.push({ dest_lat: c.latitude, dest_lng: c.longitude })
+      }
+
+      // Batch prefetch; wait before revealing the next chunk.
+      await prefetchDistanceMatrixBatchCached({ origin_lat: origin.latitude, origin_lng: origin.longitude, destinations: dests })
+      setVisibleCount(nextCount)
+    } finally {
+      setLoadingMore(false)
     }
-  }, [filteredCourts])
+  }, [loadingMore, visibleCount, displayCourts, ensureUserLocation])
+
+  const visibleCourts = useMemo(() => displayCourts.slice(0, visibleCount), [displayCourts, visibleCount])
+
+  // Lazy Distance Matrix fetch only when distance filter is being used, and only for visible items.
+  useEffect(() => {
+    if (!distanceFilterActive) return
+    if (!userCoord) return
+
+    const AUTO_PREFETCH_LIMIT = 15
+    const allowBeyondLimit = openFilter === 'distance' || selectedDistanceKm != null
+
+    const dests: { dest_lat: number; dest_lng: number }[] = []
+    for (const c of visibleCourts) {
+      if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') continue
+      const payload = { origin_lat: userCoord.latitude, origin_lng: userCoord.longitude, dest_lat: c.latitude, dest_lng: c.longitude }
+      const key = makeDistanceMatrixCacheKey(payload)
+      if (requestedDistanceKeysRef.current.has(key)) continue
+
+      if (!allowBeyondLimit && autoPrefetchedKeysRef.current.size >= AUTO_PREFETCH_LIMIT) continue
+
+      const peeked = peekDistanceMatrixCached(payload)
+      if (peeked?.status === 'loaded' || peeked?.status === 'error') {
+        requestedDistanceKeysRef.current.add(key)
+        continue
+      }
+      requestedDistanceKeysRef.current.add(key)
+      if (!allowBeyondLimit) autoPrefetchedKeysRef.current.add(key)
+      dests.push({ dest_lat: c.latitude, dest_lng: c.longitude })
+    }
+
+    if (dests.length) {
+      void prefetchDistanceMatrixBatchCached({ origin_lat: userCoord.latitude, origin_lng: userCoord.longitude, destinations: dests })
+    }
+  }, [distanceFilterActive, userCoord, visibleCourts, openFilter, selectedDistanceKm])
 
   // Toggle selections
   const toggleVenue = (v: string) => {
@@ -237,6 +455,16 @@ const CourtListScreen = () => {
               <Image source={ICONS.menu} style={styles.filterIcon} />
               <Text style={[styles.filterText, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterTextActive]}>Price</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterButton, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+              onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
+            >
+              <Image source={ICONS.radar} style={styles.filterIcon} />
+              <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
+                {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : (closeToMe ? 'Nearby Location' : 'Distance')}
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
         {/* Subheader */}
@@ -302,14 +530,82 @@ const CourtListScreen = () => {
             </View>
           </View>
         )}
+
+        {openFilter === 'distance' && (
+          <View style={[styles.dropdownWrapper, styles.distanceDropdownWrapper]}>
+            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10 }]}>
+              <View style={styles.distanceHeaderRow}>
+                <TouchableOpacity
+                  style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
+                  onPress={() => setCloseToMe(v => !v)}
+                >
+                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>Nearby Location</Text>
+                </TouchableOpacity>
+                {locationLoading && (
+                  <View style={styles.locationSpinnerWrap}>
+                    <ActivityIndicator size="small" color={COLORS.neutral800} />
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.distanceFilterTitle}>Type distance (km)</Text>
+              <TextInput
+                value={distanceKmInput}
+                onChangeText={(t) => {
+                  const cleaned = sanitizeKmInput(t)
+                  setDistanceKmInput(cleaned)
+
+                  if (cleaned.trim().length === 0) {
+                    setDistanceKmError(null)
+                    setSelectedDistanceKm(null)
+                    return
+                  }
+                  const parsed = parseKmInput(cleaned)
+                  if (parsed == null) {
+                    setDistanceKmError('Please type in number')
+                    return
+                  }
+                  setDistanceKmError(null)
+                  setSelectedDistanceKm(parsed)
+                }}
+                placeholder="e.g. 2"
+                placeholderTextColor={COLORS.neutral650}
+                keyboardType="numeric"
+                style={[styles.distanceInput, distanceKmError ? styles.distanceInputError : null]}
+              />
+              {!!distanceKmError && (
+                <Text style={styles.distanceErrorText}>{distanceKmError}</Text>
+              )}
+              {!!locationError && (distanceFilterActive || openFilter === 'distance') && (
+                <Text style={styles.distanceErrorText}>{locationError}</Text>
+              )}
+
+              <View style={styles.priceFooterRow}>
+                <TouchableOpacity
+                  style={[styles.clearPriceBtn, styles.priceCloseBtn]}
+                  onPress={() => {
+                    setCloseToMe(false)
+                    setSelectedDistanceKm(null)
+                    setDistanceKmInput('')
+                    setDistanceKmError(null)
+                    setLocationError(null)
+                  }}
+                >
+                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.clearPriceBtn, styles.priceCloseBtn]} onPress={() => { setOpenFilter(null) }}>
+                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
 
         {/* Content list */}
         <ScrollView
           style={styles.list}
           contentContainerStyle={{ paddingBottom: 40 }}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={loading}
@@ -317,12 +613,14 @@ const CourtListScreen = () => {
             />
           }
         >
-          {loading && <Text style={styles.statusText}>Loading courts...</Text>}
+          {loading && visibleCourts.length === 0 && (
+            <SkeletonList count={6} style={{ paddingTop: 6 }} />
+          )}
           {error && <Text style={[styles.statusText, { color: COLORS.danger }]}>Failed: {error}</Text>}
           {!loading && !error && filteredCourts.length === 0 && (
             <Text style={styles.statusText}>No courts match your filters.</Text>
           )}
-          {filteredCourts.slice(0, visibleCount).map(c => {
+          {visibleCourts.map(c => {
             const venues = asArray(c.venue)
             // Venue tag logic: if both indoor & outdoor present, show In/Outdoor single tag
             let venueDisplay: string[] = []
@@ -333,6 +631,40 @@ const CourtListScreen = () => {
               venueDisplay = [venues[0]]
             }
             const isFav = favouriteCourtIds.includes(c.courtid)
+
+            const distanceNode = (() => {
+              if (!distanceFilterActive) return null
+              if (!userCoord) return null
+              if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') return null
+              const payload = {
+                origin_lat: userCoord.latitude,
+                origin_lng: userCoord.longitude,
+                dest_lat: c.latitude,
+                dest_lng: c.longitude,
+              }
+              const entry = peekDistanceMatrixCached(payload)
+              const routeMeters = typeof entry?.result?.distance_meters === 'number' ? entry.result.distance_meters : null
+              const routeText = formatKmFromMeters(routeMeters)
+              if (entry?.status === 'loaded' && routeText) {
+                return (
+                  <View style={[styles.tag, styles.distanceTag]}>
+                    <Text style={[styles.tagText, styles.distanceTagText]}>{routeText}</Text>
+                  </View>
+                )
+              }
+              // Instant straight-line distance while route distance loads.
+              const approxMeters = haversineMeters(userCoord.latitude, userCoord.longitude, c.latitude, c.longitude)
+              const approxText = formatKmFromMeters(approxMeters)
+              if (approxText) {
+                return (
+                  <View style={[styles.tag, styles.distanceTag]}>
+                    <Text style={[styles.tagText, styles.distanceTagText]}>{`~${approxText}`}</Text>
+                  </View>
+                )
+              }
+              return null
+            })()
+
             return (
               <View key={c.courtinfoid} style={styles.cardWrap}>
                 <TouchableOpacity
@@ -350,6 +682,7 @@ const CourtListScreen = () => {
                           <Text style={[styles.tagText, { color: COLORS.neutral0 }]}>{v}</Text>
                         </View>
                       ))}
+                      {distanceNode}
                     </View>
                     {priceByCourtId[c.courtid] != null && (
                       <View style={styles.entryRow}>
@@ -369,6 +702,18 @@ const CourtListScreen = () => {
               </View>
             )
           })}
+
+          {visibleCount < displayCourts.length && (
+            <View style={styles.loadMoreWrap}>
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={COLORS.neutral800} />
+              ) : (
+                <Pressable onPress={handleLoadMore} hitSlop={8}>
+                  <Text style={styles.loadMoreText}>Load more...</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -416,6 +761,8 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // Push list a bit further down
   list: { flex: 1, marginTop: 14 },
+  loadMoreWrap: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  loadMoreText: { color: LIST_ACCENT, fontWeight: '700', fontSize: 13 },
   statusText: { color: COLORS.neutral800, fontSize: 12, paddingVertical: 12, textAlign: 'center' },
   cardWrap: { position: 'relative', overflow: 'visible', marginBottom: 16 },
   card: {
@@ -436,14 +783,28 @@ const styles = StyleSheet.create({
   cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
   cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
   cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  cardAddress: { color: COLORS.neutral500, fontSize: 13, fontWeight: '600' },
+  cardAddress: { color: COLORS.neutral800, fontSize: 13, fontWeight: '500' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
   tag: { backgroundColor: COLORS.neutral125, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
   tagFallback: { backgroundColor: COLORS.neutral125 },
   venueTag: { backgroundColor: COLORS.slateBlue },
   tagText: { color: COLORS.neutral900, fontSize: 11, fontWeight: '700' },
+  distanceTag: { backgroundColor: COLORS.neutral125, borderColor: COLORS.neutral350, borderWidth: 1, borderRadius: 0 },
+  distanceTagText: { color: COLORS.neutral925, fontWeight: '700' },
+  distanceTagLoading: { paddingHorizontal: 10 },
   // Price filter & tag styles
   priceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8 },
+  distanceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8, marginTop: 10 },
+  distanceDropdownWrapper: { position: 'absolute', top: 45, left: 12, right: 12, zIndex: 30 },
+  distanceInput: { backgroundColor: COLORS.neutral125, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: COLORS.neutral975 },
+  distanceInputError: { borderWidth: 1, borderColor: COLORS.danger },
+  distanceErrorText: { color: COLORS.danger, fontSize: 12, marginTop: 6 },
+  distanceHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  closeToMeBtn: { backgroundColor: COLORS.neutral125, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.neutral350 },
+  closeToMeBtnActive: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
+  closeToMeText: { fontSize: 12, fontWeight: '700', color: COLORS.neutral925 },
+  closeToMeTextActive: { color: COLORS.neutral0 },
+  locationSpinnerWrap: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
   priceInputsRow: { flexDirection: 'row', gap: 12 },
   priceInputWrapper: { flex: 1 },
   priceLabel: { fontSize: 12, fontWeight: '600', color: COLORS.neutral900, marginBottom: 4 },

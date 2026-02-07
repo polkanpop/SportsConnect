@@ -6,14 +6,18 @@ import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { getCache, invalidateCache, setCache } from '@/lib/cache'
 
-import { cloudinarySignUpload, geocodeCourtAddress, registerCourt } from '@/lib/backendApi'
+import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, registerCourt, type CourtAddressSuggestion } from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 
 const COURT_REGISTER_VERIFY_STORAGE_KEY = '@courtRegisterVerifiedLocation'
 const COURT_REGISTER_DRAFT_STORAGE_KEY = '@courtRegisterDraft'
+
+const COURT_REGISTER_DRAFT_TTL_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
+const COURT_REGISTER_VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 type Venue = 'Indoor' | 'Outdoor' | 'Both'
 
@@ -26,6 +30,9 @@ export default function CourtRegisterPage() {
   const [price, setPrice] = useState('')
   const [priceError, setPriceError] = useState<string | null>(null)
   const [venue, setVenue] = useState<Venue>('Indoor')
+
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
+  const [addressSuggestions, setAddressSuggestions] = useState<CourtAddressSuggestion[]>([])
 
   const [localImageUris, setLocalImageUris] = useState<string[]>([])
   const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([])
@@ -44,10 +51,19 @@ export default function CourtRegisterPage() {
       let cancelled = false
       ;(async () => {
         try {
-          const raw = await AsyncStorage.getItem(COURT_REGISTER_VERIFY_STORAGE_KEY)
-          if (!raw) return
-          await AsyncStorage.removeItem(COURT_REGISTER_VERIFY_STORAGE_KEY)
-          const parsed = JSON.parse(raw)
+          // Read via TTL cache. Fallback to legacy raw AsyncStorage (migration).
+          let parsed: any = await getCache<any>(COURT_REGISTER_VERIFY_STORAGE_KEY)
+          if (!parsed) {
+            const raw = await AsyncStorage.getItem(COURT_REGISTER_VERIFY_STORAGE_KEY)
+            if (raw) {
+              try {
+                parsed = JSON.parse(raw)
+                await setCache(COURT_REGISTER_VERIFY_STORAGE_KEY, parsed, COURT_REGISTER_VERIFY_TTL_MS)
+              } catch {}
+            }
+          }
+          if (!parsed) return
+          await invalidateCache(COURT_REGISTER_VERIFY_STORAGE_KEY)
           const latitude = Number(parsed?.latitude)
           const longitude = Number(parsed?.longitude)
           const formatted_address = parsed?.formatted_address
@@ -69,9 +85,18 @@ export default function CourtRegisterPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const raw = await AsyncStorage.getItem(COURT_REGISTER_DRAFT_STORAGE_KEY)
-        if (!raw) return
-        const parsed = JSON.parse(raw)
+        // Read via TTL cache. Fallback to legacy raw AsyncStorage (migration).
+        let parsed: any = await getCache<any>(COURT_REGISTER_DRAFT_STORAGE_KEY)
+        if (!parsed) {
+          const raw = await AsyncStorage.getItem(COURT_REGISTER_DRAFT_STORAGE_KEY)
+          if (raw) {
+            try {
+              parsed = JSON.parse(raw)
+              await setCache(COURT_REGISTER_DRAFT_STORAGE_KEY, parsed, COURT_REGISTER_DRAFT_TTL_MS)
+            } catch {}
+          }
+        }
+        if (!parsed) return
         if (cancelled) return
         if (typeof parsed?.name === 'string') setName(parsed.name)
         if (typeof parsed?.address === 'string') setAddress(parsed.address)
@@ -98,7 +123,7 @@ export default function CourtRegisterPage() {
         localImageUris,
         remoteImageUrls,
       }
-      AsyncStorage.setItem(COURT_REGISTER_DRAFT_STORAGE_KEY, JSON.stringify(payload)).catch(() => {})
+      setCache(COURT_REGISTER_DRAFT_STORAGE_KEY, payload, COURT_REGISTER_DRAFT_TTL_MS).catch(() => {})
     }, 250)
     return () => clearTimeout(t)
   }, [name, address, price, venue, agreeTruth, localImageUris, remoteImageUrls])
@@ -115,6 +140,47 @@ export default function CourtRegisterPage() {
       agreeTruth
     )
   }, [userid, name, address, price, priceError, submitting, agreeTruth])
+
+  const dedupeStrings = (items: string[]) => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const it of items) {
+      const v = String(it || '')
+      if (!v) continue
+      if (seen.has(v)) continue
+      seen.add(v)
+      out.push(v)
+    }
+    return out
+  }
+
+  useEffect(() => {
+    const q = address.trim()
+    if (q.length < 3) {
+      setAddressSuggestions([])
+      return
+    }
+    // If user has selected a suggestion (place id) and doesn't change the field, don't re-search.
+    if (selectedPlaceId) return
+
+    let cancelled = false
+    const t = setTimeout(() => {
+      autocompleteCourtAddress(q, 5)
+        .then((rows) => {
+          if (cancelled) return
+          setAddressSuggestions(Array.isArray(rows) ? rows : [])
+        })
+        .catch(() => {
+          if (cancelled) return
+          setAddressSuggestions([])
+        })
+    }, 250)
+
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [address, selectedPlaceId])
 
   const pickImages = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -133,7 +199,7 @@ export default function CourtRegisterPage() {
     const picked = (result.assets || []).map(a => a.uri).filter(Boolean)
     if (picked.length === 0) return
 
-    setLocalImageUris(prev => [...prev, ...picked].slice(0, 6))
+    setLocalImageUris(prev => dedupeStrings([...prev, ...picked]).slice(0, 6))
   }
 
   const uploadOneToCloudinary = async (localUri: string, idx: number) => {
@@ -184,7 +250,7 @@ export default function CourtRegisterPage() {
     setVerifiedCoord(null)
     setVerifyError(null)
     try {
-      const geo = await geocodeCourtAddress(a)
+      const geo = selectedPlaceId ? await geocodeCourtPlaceId(selectedPlaceId) : await geocodeCourtAddress(a)
       const w = (geo?.warnings || []).filter(Boolean)
       setWarnings(w)
       router.push({
@@ -204,6 +270,7 @@ export default function CourtRegisterPage() {
   }
 
   const handleSubmit = async () => {
+    if (submitting) return
     if (!userid) {
       Alert.alert('Not signed in', 'Please sign in first.')
       return
@@ -266,7 +333,7 @@ export default function CourtRegisterPage() {
       const w = (resp?.geocode?.warnings || []).filter(Boolean)
       setWarnings(w)
 
-      await AsyncStorage.removeItem(COURT_REGISTER_DRAFT_STORAGE_KEY).catch(() => {})
+      await invalidateCache(COURT_REGISTER_DRAFT_STORAGE_KEY).catch(() => {})
       setSubmittedVisible(true)
     } catch (e: any) {
       Alert.alert('Register failed', e?.message || 'Please try again')
@@ -276,6 +343,7 @@ export default function CourtRegisterPage() {
   }
 
   const handlePressRegister = () => {
+    if (submitting) return
     if (!userid) {
       Alert.alert('Not signed in', 'Please sign in first.')
       return
@@ -296,8 +364,12 @@ export default function CourtRegisterPage() {
   }
 
   const removeLocalImage = (uri: string) => {
-    setLocalImageUris(prev => prev.filter(x => x !== uri))
-    setRemoteImageUrls(prev => prev.filter((_, idx) => localImageUris[idx] !== uri))
+    setLocalImageUris(prev => {
+      const index = prev.indexOf(uri)
+      if (index < 0) return prev
+      setRemoteImageUrls(prevRemote => prevRemote.filter((_, i) => i !== index))
+      return prev.filter((_, i) => i !== index)
+    })
   }
 
   return (
@@ -330,6 +402,8 @@ export default function CourtRegisterPage() {
           value={address}
           onChangeText={(v) => {
             setAddress(v)
+            setSelectedPlaceId(null)
+            if (addressSuggestions.length) setAddressSuggestions([])
             if (verifiedCoord) setVerifiedCoord(null)
             if (verifyError) setVerifyError(null)
           }}
@@ -340,6 +414,29 @@ export default function CourtRegisterPage() {
           <Image source={ICONS.tick} style={styles.verifiedTickInInput} />
         )}
       </View>
+
+      {addressSuggestions.length > 0 && !verifiedCoord && (
+        <View style={styles.suggestBox}>
+          {addressSuggestions.map((s, i) => (
+            <TouchableOpacity
+              key={s.place_id}
+              activeOpacity={0.85}
+              style={[styles.suggestItem, i === addressSuggestions.length - 1 && styles.suggestItemLast]}
+              onPress={() => {
+                setAddress(s.description)
+                setSelectedPlaceId(s.place_id)
+                setAddressSuggestions([])
+                if (verifiedCoord) setVerifiedCoord(null)
+                if (verifyError) setVerifyError(null)
+              }}
+            >
+              <Text style={styles.suggestText} numberOfLines={2}>
+                {s.description}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {!!verifyError && <Text style={styles.verifyErrorText}>{verifyError}</Text>}
       <View style={styles.verifyRow}>
         <TouchableOpacity
@@ -529,6 +626,23 @@ const styles = StyleSheet.create({
   inputWrap: { position: 'relative' },
   inputWithIcon: { paddingRight: 40 },
   verifiedTickInInput: { position: 'absolute', right: 12, top: '50%', marginTop: -8, width: 16, height: 16, tintColor: COLORS.green },
+  suggestBox: {
+    marginTop: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: COLORS.neutral0,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  suggestItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  suggestItemLast: { borderBottomWidth: 0 },
+  suggestText: { color: COLORS.neutral925, fontWeight: '700', fontSize: 13 },
   verifyErrorText: { marginTop: 6, color: COLORS.danger500, fontWeight: '600', fontSize: 12 },
   inputError: { borderColor: COLORS.danger500 },
   verifyRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 },
@@ -630,7 +744,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
-  warningTitle: { fontSize: 14, fontWeight: '900', color: '#92400e', marginBottom: 6 },
   warningTitle: { fontSize: 14, fontWeight: '700', color: '#92400e', marginBottom: 6 },
   warningText: { fontSize: 13, color: '#92400e', fontWeight: '600' },
 

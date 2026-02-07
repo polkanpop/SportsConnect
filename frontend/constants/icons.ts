@@ -88,6 +88,10 @@ export const ICONS = {
   sillPickleball: require('../assets/icons/sill_pickleball.png'),
   sillTennis: require('../assets/icons/sill_tennis.png'),
   touch: require('../assets/icons/touch.png'),
+  motorbike: require('../assets/icons/motorbike.png'),
+  walk: require('../assets/icons/walk.png'),
+  distance: require('../assets/icons/distance.png'),
+  radar: require('../assets/icons/radar.png'),
   ///
   cancelEdit: require('../assets/icons/cancel_edit.png'),
   participants: require('../assets/icons/participants.png'),

@@ -1,13 +1,38 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
+import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { useFocusEffect } from 'expo-router'
+import * as Location from 'expo-location'
+import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
+import { SkeletonList } from '@/components/ui/skeleton'
+
+type Coord = { latitude: number; longitude: number }
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function formatKmFromMeters(distanceMeters: number | null | undefined) {
+  if (distanceMeters == null || !Number.isFinite(distanceMeters)) return null
+  const km = distanceMeters / 1000
+  const rounded = km < 10 ? Math.round(km * 10) / 10 : Math.round(km)
+  const text = String(rounded).replace('.', ',')
+  return `${text} km`
+}
 
 function asArray(v: CourtInfoRow['venue'] | undefined | null): string[] {
   if (!v) return []
@@ -27,11 +52,24 @@ const TrainingSessionListScreen = () => {
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'venue' | 'payment' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'venue' | 'payment' | 'distance' | null>(null)
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [freeOnly, setFreeOnly] = useState(false)
   const [paymentSelections, setPaymentSelections] = useState<string[]>([])
+
+  // Distance filter state (matches Map numeric rules)
+  const [closeToMe, setCloseToMe] = useState(true)
+  const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null)
+  const [distanceKmInput, setDistanceKmInput] = useState<string>('')
+  const [distanceKmError, setDistanceKmError] = useState<string | null>(null)
+  const [userCoord, setUserCoord] = useState<Coord | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const distanceFilterActive = closeToMe || selectedDistanceKm != null
+  const requestedDistanceKeysRef = React.useRef<Set<string>>(new Set())
+  const autoPrefetchedKeysRef = React.useRef<Set<string>>(new Set())
+  const [, setDistanceMatrixTick] = useState(0)
 
   const { data: sessionsData, isLoading: loading, isFetching, refetch } = useQuery({
     queryKey: ['trainingSessionsCombinedList'],
@@ -41,6 +79,91 @@ const TrainingSessionListScreen = () => {
   useEffect(() => { if(Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
   useEffect(() => { if(!loading && !sessionsData) setError('Failed loading sessions') }, [loading, sessionsData])
   useFocusEffect(useCallback(()=>{ refetch() },[refetch]))
+
+  useEffect(() => {
+    return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))
+  }, [])
+
+  const sanitizeKmInput = useCallback((raw: string) => {
+    let s = raw.replace(',', '.')
+    s = s.replace(/[^0-9.]/g, '')
+    const parts = s.split('.')
+    if (parts.length > 2) s = `${parts[0]}.${parts.slice(1).join('')}`
+    return s
+  }, [])
+
+  const parseKmInput = useCallback((value: string): number | null => {
+    if (!value) return null
+    if (value === '.') return null
+    const n = Number(value)
+    if (!Number.isFinite(n)) return null
+    if (n <= 0) return null
+    return n
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const cached = await getCachedUserCoord()
+      if (!cancelled && cached && !userCoord) setUserCoord(cached)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const ensureUserLocation = useCallback(async () => {
+    if (userCoord) return userCoord
+    if (locationLoading) return null
+    setLocationLoading(true)
+    setLocationError(null)
+    try {
+      const cached = await getCachedUserCoord()
+      if (cached) {
+        setUserCoord(cached)
+        return cached
+      }
+
+      const perm = await Location.getForegroundPermissionsAsync()
+      let status = perm.status
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync()
+        status = req.status
+      }
+      if (status !== 'granted') {
+        setLocationError('Location permission is required')
+        return null
+      }
+
+      const last = await Location.getLastKnownPositionAsync()
+      if (last?.coords) {
+        const next = { latitude: last.coords.latitude, longitude: last.coords.longitude }
+        setUserCoord(next)
+        void setCachedUserCoord(next)
+        return next
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      })
+      const next = { latitude: loc.coords.latitude, longitude: loc.coords.longitude }
+      setUserCoord(next)
+      void setCachedUserCoord(next)
+      return next
+    } catch {
+      setLocationError('Unable to get your location')
+      return null
+    } finally {
+      setLocationLoading(false)
+    }
+  }, [userCoord, locationLoading])
+
+  useEffect(() => {
+    if (!distanceFilterActive) return
+    void ensureUserLocation()
+  }, [distanceFilterActive, ensureUserLocation])
+
+  useEffect(() => {
+    autoPrefetchedKeysRef.current.clear()
+  }, [userCoord])
 
   const venueOptions = useMemo(() => {
     const s = new Set<string>(); allSessions.forEach(r => asArray(r.venue).forEach(x => s.add(x)))
@@ -74,6 +197,35 @@ const TrainingSessionListScreen = () => {
     })
   }, [allSessions, search, selectedVenues, freeOnly, paymentSelections])
 
+  const displaySessions = useMemo(() => {
+    let list = filteredSessions
+    if (!distanceFilterActive || !userCoord) return list
+
+    if (selectedDistanceKm != null) {
+      const maxMeters = selectedDistanceKm * 1000
+      list = list.filter(s => {
+        if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') return false
+        const d = haversineMeters(userCoord.latitude, userCoord.longitude, s.latitude, s.longitude)
+        return d <= maxMeters
+      })
+    }
+
+    if (closeToMe) {
+      list = [...list].sort((a, b) => {
+        const aHas = typeof a.latitude === 'number' && typeof a.longitude === 'number'
+        const bHas = typeof b.latitude === 'number' && typeof b.longitude === 'number'
+        if (!aHas && !bHas) return 0
+        if (!aHas) return 1
+        if (!bHas) return -1
+        const da = haversineMeters(userCoord.latitude, userCoord.longitude, a.latitude as number, a.longitude as number)
+        const db = haversineMeters(userCoord.latitude, userCoord.longitude, b.latitude as number, b.longitude as number)
+        return da - db
+      })
+    }
+
+    return list
+  }, [filteredSessions, distanceFilterActive, userCoord, selectedDistanceKm, closeToMe])
+
   const toggleFree = () => {
     setFreeOnly(f => { const next=!f; if (next) setPaymentSelections([]); return next })
   }
@@ -88,14 +240,73 @@ const TrainingSessionListScreen = () => {
   // Incremental rendering state (pagination)
   const BATCH_SIZE = 15
   const [visibleCount, setVisibleCount] = useState<number>(BATCH_SIZE)
-  useEffect(() => { setVisibleCount(BATCH_SIZE) }, [search, selectedVenues])
-  const handleScroll = useCallback((e: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent
-    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y)
-    if (distanceFromBottom < 40) {
-      setVisibleCount(prev => prev >= filteredSessions.length ? prev : Math.min(prev + BATCH_SIZE, filteredSessions.length))
+  const [loadingMore, setLoadingMore] = useState(false)
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE)
+    setLoadingMore(false)
+  }, [search, selectedVenues, freeOnly, paymentSelections, closeToMe, selectedDistanceKm])
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore) return
+    const nextCount = Math.min(visibleCount + BATCH_SIZE, displaySessions.length)
+    if (nextCount <= visibleCount) return
+
+    setLoadingMore(true)
+    try {
+      const origin = await ensureUserLocation()
+      if (!origin) {
+        setVisibleCount(nextCount)
+        return
+      }
+
+      const nextBatch = displaySessions.slice(visibleCount, nextCount)
+      const dests: { dest_lat: number; dest_lng: number }[] = []
+      for (const s of nextBatch) {
+        if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') continue
+        const p = { origin_lat: origin.latitude, origin_lng: origin.longitude, dest_lat: s.latitude, dest_lng: s.longitude }
+        const key = makeDistanceMatrixCacheKey(p)
+        if (requestedDistanceKeysRef.current.has(key)) continue
+        requestedDistanceKeysRef.current.add(key)
+        dests.push({ dest_lat: s.latitude, dest_lng: s.longitude })
+      }
+
+      await prefetchDistanceMatrixBatchCached({ origin_lat: origin.latitude, origin_lng: origin.longitude, destinations: dests })
+      setVisibleCount(nextCount)
+    } finally {
+      setLoadingMore(false)
     }
-  }, [filteredSessions])
+  }, [loadingMore, visibleCount, displaySessions, ensureUserLocation])
+
+  const visibleSessions = useMemo(() => displaySessions.slice(0, visibleCount), [displaySessions, visibleCount])
+
+  useEffect(() => {
+    if (!distanceFilterActive) return
+    if (!userCoord) return
+
+    const AUTO_PREFETCH_LIMIT = 15
+    const allowBeyondLimit = openFilter === 'distance' || selectedDistanceKm != null
+
+    const dests: { dest_lat: number; dest_lng: number }[] = []
+    for (const s of visibleSessions) {
+      if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') continue
+      const p = { origin_lat: userCoord.latitude, origin_lng: userCoord.longitude, dest_lat: s.latitude, dest_lng: s.longitude }
+      const key = makeDistanceMatrixCacheKey(p)
+      if (requestedDistanceKeysRef.current.has(key)) continue
+      if (!allowBeyondLimit && autoPrefetchedKeysRef.current.size >= AUTO_PREFETCH_LIMIT) continue
+
+      const peeked = peekDistanceMatrixCached(p)
+      if (peeked?.status === 'loaded' || peeked?.status === 'error') {
+        requestedDistanceKeysRef.current.add(key)
+        continue
+      }
+      requestedDistanceKeysRef.current.add(key)
+      if (!allowBeyondLimit) autoPrefetchedKeysRef.current.add(key)
+      dests.push({ dest_lat: s.latitude, dest_lng: s.longitude })
+    }
+    if (dests.length) {
+      void prefetchDistanceMatrixBatchCached({ origin_lat: userCoord.latitude, origin_lng: userCoord.longitude, destinations: dests })
+    }
+  }, [distanceFilterActive, userCoord, visibleSessions, openFilter, selectedDistanceKm])
 
   const toggleVenue = (v: string) => setSelectedVenues(p => p.includes(v)?p.filter(x=>x!==v):[...p,v])
   const toggleExpand = (id: number) => setExpandedIds(prev => { const n=new Set(prev); if(n.has(id)) n.delete(id); else n.add(id); return n })
@@ -135,6 +346,16 @@ const TrainingSessionListScreen = () => {
             <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>Payment</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterButton, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+            onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
+          >
+            <Image source={ICONS.radar} style={styles.filterIcon} />
+            <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
+              {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : (closeToMe ? 'Nearby Location' : 'Distance')}
+            </Text>
+          </TouchableOpacity>
           </ScrollView>
         </View>
         <Text style={styles.sectionTitle}>Training Sessions</Text>
@@ -170,12 +391,80 @@ const TrainingSessionListScreen = () => {
             </ScrollView>
           </View>
         )}
+
+        {openFilter === 'distance' && (
+          <View style={styles.dropdownWrapper}>
+            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10 }]}>
+              <View style={styles.distanceHeaderRow}>
+                <TouchableOpacity
+                  style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
+                  onPress={() => setCloseToMe(v => !v)}
+                >
+                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>Nearby Location</Text>
+                </TouchableOpacity>
+                {locationLoading && (
+                  <View style={styles.locationSpinnerWrap}>
+                    <ActivityIndicator size="small" color={COLORS.neutral800} />
+                  </View>
+                )}
+              </View>
+              <Text style={styles.distanceFilterTitle}>Type distance (km)</Text>
+              <TextInput
+                value={distanceKmInput}
+                onChangeText={(t) => {
+                  const cleaned = sanitizeKmInput(t)
+                  setDistanceKmInput(cleaned)
+                  if (cleaned.trim().length === 0) {
+                    setDistanceKmError(null)
+                    setSelectedDistanceKm(null)
+                    return
+                  }
+                  const parsed = parseKmInput(cleaned)
+                  if (parsed == null) {
+                    setDistanceKmError('Please type in number')
+                    return
+                  }
+                  setDistanceKmError(null)
+                  setSelectedDistanceKm(parsed)
+                }}
+                placeholder="e.g. 2"
+                placeholderTextColor={COLORS.neutral650}
+                keyboardType="numeric"
+                style={[styles.distanceInput, distanceKmError ? styles.distanceInputError : null]}
+              />
+              {!!distanceKmError && (
+                <Text style={styles.distanceErrorText}>{distanceKmError}</Text>
+              )}
+              {!!locationError && distanceFilterActive && (
+                <Text style={styles.distanceErrorText}>{locationError}</Text>
+              )}
+              <View style={styles.distanceFooterRow}>
+                <TouchableOpacity
+                  style={styles.distanceFooterBtn}
+                  onPress={() => {
+                    setCloseToMe(false)
+                    setSelectedDistanceKm(null)
+                    setDistanceKmInput('')
+                    setDistanceKmError(null)
+                    setLocationError(null)
+                  }}
+                >
+                  <Text style={styles.distanceFooterBtnText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.distanceFooterBtn}
+                  onPress={() => setOpenFilter(null)}
+                >
+                  <Text style={styles.distanceFooterBtnText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
         {openFilter && <Pressable style={styles.overlay} onPress={handleOutsidePress} />}
         <ScrollView
           style={styles.list}
           contentContainerStyle={{ paddingBottom: 100 }}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={loading || isFetching}
@@ -183,18 +472,53 @@ const TrainingSessionListScreen = () => {
             />
           }
         >
-          {loading && <Text style={styles.statusText}>Loading sessions...</Text>}
+          {loading && visibleSessions.length === 0 && (
+            <SkeletonList count={6} style={{ paddingTop: 6 }} />
+          )}
           {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
           {!loading && !error && filteredSessions.length === 0 && (
             <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading sessions...</Text>
           )}
-          {filteredSessions.slice(0, visibleCount).map(s => {
+          {visibleSessions.map(s => {
             const venues = asArray(s.venue)
             let venueDisplay:string[]=[]
             const lowerVenues = venues.map(v=>v.toLowerCase())
             if(lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) venueDisplay=['In/Outdoor']
             else if(venues.length) venueDisplay=[venues[0]]
             const expanded = expandedIds.has(s.sessionid)
+
+            const distanceNode = (() => {
+              if (!distanceFilterActive) return null
+              if (!userCoord) return null
+              if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') return null
+              const payload = {
+                origin_lat: userCoord.latitude,
+                origin_lng: userCoord.longitude,
+                dest_lat: s.latitude,
+                dest_lng: s.longitude,
+              }
+              const entry = peekDistanceMatrixCached(payload)
+              const routeMeters = typeof entry?.result?.distance_meters === 'number' ? entry.result.distance_meters : null
+              const routeText = formatKmFromMeters(routeMeters)
+              if (entry?.status === 'loaded' && routeText) {
+                return (
+                  <View style={[styles.tag, styles.distanceTag]}>
+                    <Text style={[styles.tagText, styles.distanceTagText]}>{routeText}</Text>
+                  </View>
+                )
+              }
+              const approxMeters = haversineMeters(userCoord.latitude, userCoord.longitude, s.latitude, s.longitude)
+              const approxText = formatKmFromMeters(approxMeters)
+              if (approxText) {
+                return (
+                  <View style={[styles.tag, styles.distanceTag]}>
+                    <Text style={[styles.tagText, styles.distanceTagText]}>{`~${approxText}`}</Text>
+                  </View>
+                )
+              }
+              return null
+            })()
+
             return (
               <TouchableOpacity
                 key={s.sessionid}
@@ -213,6 +537,7 @@ const TrainingSessionListScreen = () => {
                   <Text style={styles.dateText}>{s.time ? new Date(s.time).toLocaleString() : 'Unknown date'}</Text>
                   <View style={styles.tagRow}>
                     {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color: COLORS.white}]}>{v}</Text></View>)}
+                    {distanceNode}
                   </View>
                   {/* Entry fee + payment methods displayed on their own line (match events layout) */}
                   <View style={styles.entryRow}>
@@ -246,6 +571,18 @@ const TrainingSessionListScreen = () => {
               </TouchableOpacity>
             )
           })}
+
+          {visibleCount < displaySessions.length && (
+            <View style={styles.loadMoreWrap}>
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={COLORS.neutral800} />
+              ) : (
+                <Pressable onPress={handleLoadMore} hitSlop={8}>
+                  <Text style={styles.loadMoreText}>Load more...</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </ScrollView>
       </View>
       <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/tsCreate' as any)}>
@@ -274,6 +611,8 @@ const styles = StyleSheet.create({
   filterButtonActive:{backgroundColor:COLORS.limeGreen},
   filterButtonDisabled:{backgroundColor:COLORS.neutral200,opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:COLORS.neutral800,marginRight:6,resizeMode:'contain'},
+  loadMoreWrap: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  loadMoreText: { color: LIST_ACCENT, fontWeight: '700', fontSize: 13 },
   filterText:{color:COLORS.neutral950,fontSize:13,fontWeight:'600'},
   filterTextActive:{ color:COLORS.white },
   countBadge:{marginLeft:6,backgroundColor:COLORS.neutral525,color:COLORS.neutral975,paddingHorizontal:6,paddingVertical:2,borderRadius:10,fontSize:11,overflow:'hidden',fontWeight:'600'},
@@ -296,7 +635,7 @@ const styles = StyleSheet.create({
   expandButton:{padding:4,marginLeft:6},
   expandIcon:{width:18,height:18,tintColor:COLORS.neutral500},
   cardTitle:{color:COLORS.neutral950,fontSize:16,fontWeight:'800',flexShrink:1},
-  dateText:{color:COLORS.neutral500,fontSize:12,fontWeight:'600',marginTop:2},
+  dateText:{color:COLORS.neutral800,fontSize:13,fontWeight:'600',marginTop:2},
   tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
   tag:{backgroundColor:COLORS.neutral125,paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
   tagFallback:{backgroundColor:COLORS.neutral125},
@@ -315,12 +654,29 @@ const styles = StyleSheet.create({
   participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
   participantsIcon:{width:14,height:14,tintColor:COLORS.neutral525,marginRight:4,resizeMode:'contain'},
   participantsIconLarge:{width:18,height:18,tintColor:COLORS.neutral525,marginRight:6,resizeMode:'contain'},
-  participantsText:{color:COLORS.neutral525,fontSize:12,fontWeight:'700'},
+  participantsText:{color:COLORS.neutral800,fontSize:13,fontWeight:'600'},
   expandedContent:{marginTop:10},
-  expandedLine:{color:COLORS.neutral550,fontSize:12,fontWeight:'600',marginBottom:4},
-  expandedDescLabel:{color:COLORS.neutral550,fontSize:12,marginTop:4,fontWeight:'700'},
-  expandedDesc:{color:COLORS.neutral525,fontSize:12,marginTop:4},
+  expandedLine:{color:COLORS.neutral800,fontSize:13,fontWeight:'500',marginBottom:4},
+  expandedDescLabel:{color:COLORS.neutral800,fontSize:13,marginTop:4,fontWeight:'700'},
+  expandedDesc:{color:COLORS.neutral800,fontSize:13,marginTop:4},
   fab:{position:'absolute',right:20,bottom:30,backgroundColor:COLORS.orangeAccent,paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:COLORS.black,shadowOpacity:0.3,shadowRadius:6,elevation:5},
   fabIcon:{width:22,height:22,tintColor:COLORS.white,marginRight:8,resizeMode:'contain'},
   fabText:{color:COLORS.white,fontSize:14,fontWeight:'700'},
+
+  distanceFilterTitle:{fontSize:13,fontWeight:'700',color:COLORS.neutral950,marginBottom:8,marginTop:10},
+  distanceInput:{backgroundColor:COLORS.neutral125,borderRadius:8,paddingHorizontal:10,paddingVertical:8,fontSize:14,color:COLORS.neutral975},
+  distanceInputError:{borderWidth:1,borderColor:COLORS.danger},
+  distanceErrorText:{color:COLORS.danger,fontSize:12,marginTop:6},
+  distanceHeaderRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
+  closeToMeBtn:{backgroundColor:COLORS.neutral125,borderRadius:16,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:COLORS.neutral350},
+  closeToMeBtnActive:{backgroundColor:COLORS.limeGreen,borderColor:COLORS.limeGreen},
+  closeToMeText:{fontSize:12,fontWeight:'700',color:COLORS.neutral925},
+  closeToMeTextActive:{color:COLORS.neutral0},
+  locationSpinnerWrap:{width:22,height:22,alignItems:'center',justifyContent:'center'},
+  distanceFooterRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:12},
+  distanceFooterBtn:{paddingHorizontal:10,paddingVertical:6,backgroundColor:COLORS.neutral175,borderRadius:8},
+  distanceFooterBtnText:{fontSize:12,fontWeight:'700',color:COLORS.neutral925},
+  distanceTag:{backgroundColor:COLORS.neutral125,borderColor:COLORS.neutral350,borderWidth:1,borderRadius:0},
+  distanceTagText:{color:COLORS.neutral925,fontWeight:'700'},
+  distanceTagLoading:{paddingHorizontal:10},
 })

@@ -1,8 +1,12 @@
 
 import { ICONS } from "@/constants/icons";
+import { COLORS } from "@/constants/colors";
+import { IMAGES } from "@/constants/images";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { Animated, Dimensions, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
 import {
@@ -17,6 +21,7 @@ import { useUserInfo } from "@/hooks/use-user-info";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventPanel from "@/app/event/eventPanel";
+import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
   const router = useRouter();
@@ -63,7 +68,7 @@ export default function Home() {
       fontWeight: "600" as const,
       fontSize: 14,
       marginTop: 5,
-      bottom: 1,
+      bottom: 3,
       textAlign: "center" as const,
     },
     second: {
@@ -77,6 +82,7 @@ export default function Home() {
       fontWeight: "600" as const,
       fontSize: 13,
       marginBottom: 10,
+      bottom: -4,
       textAlign: "center" as const,
     },
   };
@@ -87,7 +93,7 @@ export default function Home() {
       icon: ICONS.coachIcon,
       label: "Coach",
       color: "rgba(151, 251, 104, 1)",
-      iconStyle: { width: 45, height: 45,top:8 },
+      iconStyle: { width: 50, height: 50,top:6 },
       labelStyle: labelStyles.first,
       route: "/event/tsList",
     },
@@ -103,7 +109,7 @@ export default function Home() {
       icon: ICONS.court,
       label: "Court",
       color: "#ffcc4bff",
-      iconStyle: { width: 60, height: 60 },
+      iconStyle: { width: 50, height: 50, bottom: -4 },
       labelStyle: labelStyles.third,
       // Updated to point to the new simplified court list screen
       route: "/event/courtList",
@@ -115,11 +121,12 @@ export default function Home() {
     favouriteid: number;
     courtid: number;
     name: string;
-    address: string;
     availability: string; // used only for color, no labels/sorting
+    imageUri?: string | null;
   };
   const [favoriteLocations, setFavoriteLocations] = useState<FavoriteLocation[]>([]);
   const [loadingFavs, setLoadingFavs] = useState(false);
+  const [pullRefreshingFavs, setPullRefreshingFavs] = useState(false);
   const [favError, setFavError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const lastLoadAbortRef = React.useRef<AbortController | null>(null);
@@ -152,6 +159,33 @@ export default function Home() {
   };
 
   const lastUserIdRef = React.useRef<number | null>(null);
+
+  const asStringArrayLoose = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
+    if (typeof v !== 'string') return [];
+    const s = v.trim();
+    if (!s) return [];
+    // JSON array
+    if (s.startsWith('[') && s.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) return parsed.map(String).map((x) => x.trim()).filter(Boolean);
+      } catch {
+        // ignore
+      }
+    }
+    // Postgres array like {a,b}
+    if (s.startsWith('{') && s.endsWith('}')) {
+      return s
+        .slice(1, -1)
+        .split(',')
+        .map((x) => x.replace(/^"|"$/g, '').trim())
+        .filter(Boolean);
+    }
+    // Comma-separated fallback
+    if (s.includes(',')) return s.split(',').map((x) => x.trim()).filter(Boolean);
+    return [s];
+  };
 
   const loadFavorites = async (force: boolean = false) => {
     // Abort any in-flight load to avoid race conditions when user switches rapidly
@@ -190,12 +224,14 @@ export default function Home() {
         if (seenCourtIds.has(fr.courtid)) return acc;
         seenCourtIds.add(fr.courtid);
         const info = infoMap.get(fr.courtid);
+        const images = asStringArrayLoose((info as any)?.images);
+        const firstImage = images.length ? images[0] : null;
         acc.push({
           favouriteid: fr.favouriteid,
           courtid: fr.courtid,
           name: info?.name || `Court ${fr.courtid}`,
-          address: info?.address || '',
           availability: info?.availability || 'Available',
+          imageUri: typeof firstImage === 'string' && firstImage.trim() ? firstImage.trim() : null,
         });
         return acc;
       }, []);
@@ -304,8 +340,15 @@ export default function Home() {
             contentContainerStyle={{ paddingBottom: 10 }}
             refreshControl={
               <RefreshControl
-                refreshing={loadingFavs}
-                onRefresh={() => loadFavorites(true)}
+                refreshing={pullRefreshingFavs}
+                onRefresh={async () => {
+                  setPullRefreshingFavs(true);
+                  try {
+                    await loadFavorites(true);
+                  } finally {
+                    setPullRefreshingFavs(false);
+                  }
+                }}
               />
             }
           >
@@ -354,14 +397,27 @@ export default function Home() {
             {favError && (
               <Text style={{ color: 'red', marginBottom: 6 }}>Failed to load favourites: {favError}</Text>
             )}
-            {loadingFavs && (
-              <Text style={{ marginBottom: 6 }}>Loading favourites...</Text>
-            )}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'center' }}
             >
+              {loadingFavs && (
+                <SkeletonPulse>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {Array.from({ length: 2 }).map((_, idx) => (
+                      <SkeletonBox
+                        key={idx}
+                        width={280}
+                        height={160}
+                        radius={16}
+                        style={{ marginRight: 12 }}
+                      />
+                    ))}
+                  </View>
+                </SkeletonPulse>
+              )}
+
               {!loadingFavs && favoriteLocations.length === 0 && (
                 <TouchableOpacity
                   activeOpacity={0.85}
@@ -384,8 +440,9 @@ export default function Home() {
                   <Text style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
                 </TouchableOpacity>
               )}
-              {favoriteLocations.map(fav => {
+              {!loadingFavs && favoriteLocations.map(fav => {
                 const isAvailable = String(fav.availability).toLowerCase() === 'available';
+                const bgSource = fav.imageUri ? { uri: fav.imageUri } : IMAGES.eventBanner;
                 return (
                   <TouchableOpacity
                     key={fav.favouriteid}
@@ -396,32 +453,101 @@ export default function Home() {
                     }}
                     disabled={!isAvailable}
                     style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 12,
-                      backgroundColor: isAvailable ? '#FFD700' : '#d4d4d4', // simple color diff only
+                      width: 280,
+                      height: 160,
                       borderRadius: 16,
                       marginRight: 12,
-                      minWidth: 120,
-                      maxWidth: 180,
                       opacity: isAvailable ? 1 : 0.6,
+                      overflow: 'hidden',
+                      borderWidth: 2,
+                      borderColor: COLORS.gold,
+                      shadowColor: COLORS.gold,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.32,
+                      shadowRadius: 12,
+                      elevation: 6,
                     }}
                   >
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: 13, fontWeight: '600', color: '#333' }}
+                    <ImageBackground
+                      source={bgSource as any}
+                      style={{ flex: 1, justifyContent: 'flex-end' }}
+                      imageStyle={{ borderRadius: 16 }}
+                      resizeMode="cover"
                     >
-                      {fav.name || 'Unnamed'}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: 11, color: '#444' }}
-                    >
-                      {fav.address || ''}
-                    </Text>
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.65)']}
+                        style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+                      />
+
+                      {/* Gold "shine" overlay so favourites read instantly */}
+                      <LinearGradient
+                        colors={['rgba(255,215,0,0.26)', 'rgba(255,215,0,0.00)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 90 }}
+                      />
+
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 12,
+                          right: 12,
+                          backgroundColor: 'rgba(0,0,0,0.45)',
+                          padding: 6,
+                          borderRadius: 20,
+                          borderWidth: 1.5,
+                          borderColor: COLORS.gold,
+                        }}
+                      >
+                        <Image source={ICONS.starCal} style={{ width: 14, height: 14, tintColor: COLORS.gold }} resizeMode="contain" />
+                      </View>
+
+                      <BlurView
+                        intensity={80}
+                        tint="dark"
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderTopWidth: 1,
+                          borderColor: 'rgba(255,255,255,0.10)',
+                        }}
+                      >
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: '#fff',
+                              fontSize: 16,
+                              fontWeight: '800',
+                              textShadowColor: 'rgba(0,0,0,0.45)',
+                              textShadowRadius: 6,
+                            }}
+                          >
+                            {fav.name || 'Unnamed'}
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: COLORS.gold,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Image source={ICONS.arrowright} style={{ width: 16, height: 16, tintColor: '#000' }} resizeMode="contain" />
+                        </View>
+                      </BlurView>
+                    </ImageBackground>
                   </TouchableOpacity>
                 );
               })}
-              {favoriteLocations.length > 0 && (
+              {!loadingFavs && favoriteLocations.length > 0 && (
                 <TouchableOpacity
                   key="add-more-single"
                   activeOpacity={0.8}
@@ -450,24 +576,23 @@ export default function Home() {
             <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
               Event
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 10 }}
-            >
-              {[...Array(3)].map((_, index) => (
-                <View
-                  key={index}
-                  style={{
-                    width: 240,
-                    height: 160,
-                    backgroundColor: "#d4d4d4",
-                    borderRadius: 8,
-                    marginRight: index < 2 ? 16 : 0,
-                  }}
-                />
-              ))}
-            </ScrollView>
+            <SkeletonPulse>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 10 }}
+              >
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <SkeletonBox
+                    key={index}
+                    width={240}
+                    height={160}
+                    radius={8}
+                    style={{ marginRight: index < 2 ? 16 : 0 }}
+                  />
+                ))}
+              </ScrollView>
+            </SkeletonPulse>
           </View>
 
           {/* Recommend Section */}
@@ -475,30 +600,65 @@ export default function Home() {
             <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
               Recommend for you
             </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 10 }}
-            >
-              {[...Array(3)].map((_, index) => (
-                <View
-                  key={index}
-                  style={{
-                    width: 240,
-                    height: 160,
-                    backgroundColor: "#d4d4d4",
-                    borderRadius: 8,
-                    marginRight: index < 2 ? 16 : 0,
-                  }}
-                />
-              ))}
-            </ScrollView>
+            <SkeletonPulse>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 10 }}
+              >
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <SkeletonBox
+                    key={index}
+                    width={240}
+                    height={160}
+                    radius={8}
+                    style={{ marginRight: index < 2 ? 16 : 0 }}
+                  />
+                ))}
+              </ScrollView>
+            </SkeletonPulse>
           </View>
           </ScrollView>
         )}
 
         <View style={{ flex: 1, display: activeView === 'event' ? 'flex' : 'none' }}>
-          {eventPanelMounted && <EventPanel organizerId={currentUserId} />}
+          {eventPanelMounted ? (
+            <EventPanel organizerId={currentUserId} />
+          ) : (
+            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+              <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
+                <SkeletonPulse>
+                  <SkeletonBox width={'100%'} height={54} radius={14} />
+                </SkeletonPulse>
+              </View>
+              <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}>
+                <SkeletonPulse>
+                  <SkeletonBox width={140} height={22} radius={8} style={{ marginBottom: 12 }} />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+                    {Array.from({ length: 2 }).map((_, idx) => (
+                      <SkeletonBox
+                        key={idx}
+                        width={288}
+                        height={148}
+                        radius={14}
+                        style={{ marginRight: 18 }}
+                      />
+                    ))}
+                  </ScrollView>
+                  <SkeletonBox width={180} height={22} radius={8} style={{ marginTop: 10, marginBottom: 12 }} />
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <SkeletonBox
+                      key={idx}
+                      width={'100%'}
+                      height={72}
+                      radius={12}
+                      style={{ marginBottom: 10 }}
+                    />
+                  ))}
+                </SkeletonPulse>
+              </View>
+            </View>
+          )}
         </View>
 
         {activeView !== 'user' && activeView !== 'event' && (
