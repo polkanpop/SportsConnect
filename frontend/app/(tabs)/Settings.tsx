@@ -127,7 +127,7 @@ export default function SettingsPage() {
 
         {/* Section One */}
         <View style={styles.card}>
-          <SettingRow icon={ICONS.user} label="Account" />
+          <SettingRow icon={ICONS.user} label="Account" onPress={() => router.push('/event/userAccountSetting')} />
           <SettingRow icon={ICONS.notifications} label="Notification" />
           <SettingRow icon={ICONS.lock} label="Data and Privacy" />
           <SettingRow icon={ICONS.settingCourt} label="Court Register" onPress={() => router.push('/event/courtRegister')} />

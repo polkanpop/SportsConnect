@@ -46,8 +46,21 @@ export default function TsCreate() {
     let base: CourtBookingRow[] = []
     if (Array.isArray(bookingsRaw) && bookingsRaw.length) base = bookingsRaw
     else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
+    const isUpcoming = (b: CourtBookingRow) => {
+      const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
+      if (s.includes('cancel') || s.includes('complete')) return false
+      return s.includes('upcoming') || s.includes('active') || s.includes('scheduled')
+    }
+    const active = base.filter(isUpcoming)
     const map = new Map<number, CourtBookingRow>()
-    for (const b of base) map.set(b.courtbookingid, b)
+    for (const b of active) {
+      const cbid = Number((b as any)?.courtbookingid)
+      const availabilityid = Number((b as any)?.availabilityid)
+      if (!Number.isFinite(cbid)) continue
+      const normalized = { ...(b as any), courtbookingid: cbid, availabilityid } as CourtBookingRow
+      const keyRaw = Number.isFinite(availabilityid) ? availabilityid : cbid
+      map.set(keyRaw, normalized)
+    }
     return Array.from(map.values())
   }, [bookingsRaw, bookingsAllRaw, userId])
 
@@ -111,8 +124,8 @@ export default function TsCreate() {
 
   const { data: sessionsCombined, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
   const { data: eventsCombined, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
-  const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>s.courtbookingid)), [sessionsCombined])
-  const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:any)=>e.courtbookingid)), [eventsCombined])
+  const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>Number(s?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [sessionsCombined])
+  const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:any)=>Number(e?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
 
   const availableEnrichedBookings = useMemo(() => {
     if (!enrichedBookings) return [] as EnrichedBooking[]

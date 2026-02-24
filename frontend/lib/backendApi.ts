@@ -1013,6 +1013,22 @@ export type CombinedEvent = {
 
 export type TrainingSessionRow = { sessionid: number; time: string; courtbookingid: number; status?: string; coachid: number }
 
+export async function listEventsByCourtBookingId(courtbookingid: number): Promise<EventRow[]> {
+	if (courtbookingid == null) throw new Error('courtbookingid required')
+	const data = await request(`/events?courtbookingid=${encodeURIComponent(courtbookingid)}`, {
+		debugLabel: 'listEventsByCourtBookingId',
+	})
+	return Array.isArray(data) ? (data as EventRow[]) : []
+}
+
+export async function listTrainingSessionsByCourtBookingId(courtbookingid: number): Promise<TrainingSessionRow[]> {
+	if (courtbookingid == null) throw new Error('courtbookingid required')
+	const data = await request(`/trainingsessions?courtbookingid=${encodeURIComponent(courtbookingid)}`, {
+		debugLabel: 'listTrainingSessionsByCourtBookingId',
+	})
+	return Array.isArray(data) ? (data as TrainingSessionRow[]) : []
+}
+
 export async function getEvent(eventid: number): Promise<EventRow | null> {
 	if (eventid == null) throw new Error('eventid required')
 	try {

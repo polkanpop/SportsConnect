@@ -1,12 +1,57 @@
-import React from 'react'
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from 'react-native'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Animated, StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, UIManager } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import LottieView from 'lottie-react-native'
 import { ICONS } from '@/constants/icons'
+
+const SUCCESS_ANIM = require('../../assets/animation/SuccessfulJoin.json')
+const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
 
 export default function Invoice() {
   const router = useRouter()
   const params = useLocalSearchParams()
+
+  const [revealed, setRevealed] = useState(false)
+  const finishedRef = useRef(false)
+  const animSize = useRef(new Animated.Value(140)).current
+
+  const shrinkAndReveal = useCallback(() => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+
+    if (!HAS_LOTTIE_NATIVE) {
+      setRevealed(true)
+      return
+    }
+
+    Animated.timing(animSize, {
+      toValue: 140,
+      duration: 260,
+      useNativeDriver: false,
+    }).start(() => setRevealed(true))
+  }, [animSize])
+
+  useEffect(() => {
+    if (!HAS_LOTTIE_NATIVE) {
+      setRevealed(true)
+      return
+    }
+
+    // Zoom-in at start (small -> big)
+    animSize.setValue(140)
+    Animated.timing(animSize, {
+      toValue: 260,
+      duration: 220,
+      useNativeDriver: false,
+    }).start()
+
+    // Fallback in case the animation finish callback doesn't fire on some devices.
+    const t = setTimeout(() => {
+      if (!finishedRef.current) shrinkAndReveal()
+    }, 2600)
+    return () => clearTimeout(t)
+  }, [animSize, shrinkAndReveal])
 
   const {
     title,
@@ -112,15 +157,32 @@ export default function Invoice() {
         
         {/* Success Header */}
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <Image source={ICONS.checkSquare} style={styles.checkIcon} />
-          </View>
-          <Text style={styles.successTitle}>Booking Successful!</Text>
-          <Text style={styles.successSub}>Your booking has been confirmed.</Text>
+          {HAS_LOTTIE_NATIVE ? (
+            <Animated.View style={[styles.successAnimWrap, { width: animSize, height: animSize }]}>
+              <LottieView
+                source={SUCCESS_ANIM}
+                autoPlay
+                loop={false}
+                onAnimationFinish={shrinkAndReveal}
+                style={styles.successAnim}
+              />
+            </Animated.View>
+          ) : (
+            <View style={styles.iconCircle}>
+              <Image source={ICONS.checkSquare} style={styles.checkIcon} />
+            </View>
+          )}
+
+          {revealed ? (
+            <>
+              <Text style={styles.successTitle}>Booking Successful!</Text>
+              <Text style={styles.successSub}>Your booking has been confirmed.</Text>
+            </>
+          ) : null}
         </View>
 
-        {/* Invoice Card */}
-        <View style={styles.card}>
+        {revealed ? (
+          <View style={styles.card}>
           <Text style={styles.cardHeader}>INVOICE DETAILS</Text>
           
           <View style={styles.divider} />
@@ -200,8 +262,8 @@ export default function Invoice() {
             <Text style={styles.totalLabel}>Total Amount</Text>
             <Text style={styles.totalValue}>{formatPrice(price)}đ</Text>
           </View>
-        </View>
-
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -227,8 +289,19 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
     marginTop: 20,
+  },
+  successAnimWrap: {
+    width: 200,
+    height: 200,
+    marginBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successAnim: {
+    width: '100%',
+    height: '100%',
   },
   iconCircle: {
     width: 80,
@@ -249,7 +322,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#222',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   successSub: {
     fontSize: 16,

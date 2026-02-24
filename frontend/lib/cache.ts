@@ -84,9 +84,12 @@ export async function fetchWithCache<T = any>(opts: {
       // Stale-while-revalidate background pass
       if (envelope.swrExp && now > envelope.swrExp) {
         // Fire & forget refresh
-        fetcher().then(fresh => setCache(key, fresh, ttlMs, swrMs)).catch(err => {
-          if (onBackgroundRefreshError) onBackgroundRefreshError(err)
-        })
+        Promise.resolve()
+          .then(fetcher)
+          .then(fresh => setCache(key, fresh, ttlMs, swrMs))
+          .catch(err => {
+            if (onBackgroundRefreshError) onBackgroundRefreshError(err)
+          })
       }
       return val
     } catch { /* fall through to fetch */ }
@@ -103,5 +106,11 @@ export async function hydrateThenRefresh<T = any>(key: string, ttlMs: number, sw
   const cached = await getCache<T>(key)
   if (cached != null) apply(cached)
   // Background fresh fetch (always) if no cache or stale
-  fetcher().then(fresh => { apply(fresh); setCache(key, fresh, ttlMs, swrMs) }).catch(err => console.warn('[cache] hydrateThenRefresh fetch error', key, err))
+  Promise.resolve()
+    .then(fetcher)
+    .then(fresh => {
+      apply(fresh)
+      setCache(key, fresh, ttlMs, swrMs)
+    })
+    .catch(err => console.warn('[cache] hydrateThenRefresh fetch error', key, err))
 }

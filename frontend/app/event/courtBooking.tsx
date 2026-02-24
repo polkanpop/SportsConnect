@@ -106,8 +106,25 @@ export default function CourtBooking() {
   const { data: userId } = useUserId()
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
-  // We no longer block booking based on existing bookings; only informational.
-  const hasBookingForCurrentAvailability = !!(availability && bookings.some(b => b.availabilityid === availability.availabilityid))
+
+  const isActiveCourtBooking = useCallback((b: CourtBookingRow) => {
+    const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
+    if (!s) return true
+    return !(s.includes('cancel') || s.includes('complete') || s.includes('reject'))
+  }, [])
+
+  // Only block duplicates for the same availability when the existing booking is still active.
+  const hasBookingForCurrentAvailability = !!(
+    availability && bookings.some(b => b.availabilityid === availability.availabilityid && isActiveCourtBooking(b))
+  )
+
+  // Ensure we see fresh bookings after navigating back from Details/cancel.
+  useFocusEffect(
+    useCallback(() => {
+      if (userId == null) return
+      void refetchUserBookings()
+    }, [refetchUserBookings, userId])
+  )
 
   // Derive week dates (Mon -> Sun) with offset (future weeks only)
   const weekDaysDetailed = useMemo(() => {
@@ -241,7 +258,7 @@ export default function CourtBooking() {
           })
         }
 
-        // Redirect to Invoice
+        // Redirect to Invoice (Invoice header plays the success animation)
         router.replace({
           pathname: '/event/invoice',
           params: {
@@ -255,8 +272,8 @@ export default function CourtBooking() {
             paymentStatus: data.payment?.status,
             bookingId: data.booking?.courtbookingid,
             note: noteText.trim(),
-            type: 'court'
-          }
+            type: 'court',
+          },
         })
       },
       onError: (err: any) => {

@@ -31,6 +31,7 @@ import {
   type BlockListRow,
   type TrainingSessionBookingRow,
   type TrainingSessionInfoMeta,
+  updateTrainingSession,
   updateTrainingSessionInfo,
 } from '@/lib/backendApi'
 
@@ -184,6 +185,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const [editCap, setEditCap] = useState('')
 
   const [saving, setSaving] = useState(false)
+
+  const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
+  const [cancellingSession, setCancellingSession] = useState(false)
+
+  const canCancelSelectedSession = useMemo(() => {
+    const s = String((selectedSession as any)?.status ?? '').toLowerCase()
+    if (!s) return true
+    if (s.includes('cancel') || s.includes('complete')) return false
+    return s.includes('upcoming') || s.includes('active') || s.includes('scheduled')
+  }, [selectedSession])
 
   const loadSessions = useCallback(
     async (preferredSessionId?: number | null) => {
@@ -479,6 +490,25 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       setSaving(false)
     }
   }
+
+  const onConfirmCancelSession = useCallback(async () => {
+    if (selectedSessionId == null) return
+    if (!canCancelSelectedSession) return
+
+    setCancellingSession(true)
+    setSessionsError(null)
+    try {
+      await updateTrainingSession(selectedSessionId, { status: 'cancelled' } as any)
+      setConfirmCancelVisible(false)
+      await loadSessions(selectedSessionId)
+      const detailsId = `created_session_${selectedSessionId}`
+      router.replace({ pathname: '/event/statusTransition', params: { anim: 'cancel', detailsId } } as any)
+    } catch (e: any) {
+      setSessionsError(e?.message || String(e))
+    } finally {
+      setCancellingSession(false)
+    }
+  }, [canCancelSelectedSession, loadSessions, router, selectedSessionId])
 
   const onRefresh = useCallback(async () => {
     setPullRefreshing(true)
@@ -1123,12 +1153,53 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 >
                   <Text style={{ color: '#fff', fontWeight: '800' }}>{saving ? 'Saving...' : 'Save changes'}</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  disabled={cancellingSession || !canCancelSelectedSession}
+                  onPress={() => setConfirmCancelVisible(true)}
+                  style={{
+                    marginTop: 10,
+                    backgroundColor: cancellingSession || !canCancelSelectedSession ? '#9ca3af' : '#B91C1C',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '900' }}>{cancellingSession ? 'Cancelling...' : 'Cancel Session'}</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
         </>
       )}
       </ScrollView>
+
+    <Modal transparent visible={confirmCancelVisible} animationType="fade" onRequestClose={() => setConfirmCancelVisible(false)}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 18 }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 16 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>Confirm Cancel</Text>
+          <Text style={{ marginTop: 8, color: '#374151' }}>Are you sure you want to cancel this training session?</Text>
+          <View style={{ flexDirection: 'row', marginTop: 14 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setConfirmCancelVisible(false)}
+              style={{ flex: 1, backgroundColor: '#f3f4f6', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginRight: 10 }}
+              disabled={cancellingSession}
+            >
+              <Text style={{ fontWeight: '800', color: '#111827' }}>No</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onConfirmCancelSession}
+              style={{ flex: 1, backgroundColor: cancellingSession ? '#9ca3af' : '#B91C1C', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
+              disabled={cancellingSession || !canCancelSelectedSession}
+            >
+              <Text style={{ fontWeight: '900', color: '#fff' }}>{cancellingSession ? 'Cancelling...' : 'Yes'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
 
     <Modal transparent visible={actionMenuVisible} animationType="fade" onRequestClose={() => setActionMenuVisible(false)}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.01)' }} onPress={() => setActionMenuVisible(false)}>

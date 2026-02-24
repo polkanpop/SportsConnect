@@ -106,6 +106,34 @@ def update_court_booking(courtbookingid: int, body: dict, current_user: str = De
         if not payload:
             raise HTTPException(status_code=422, detail="No fields to update")
 
+        # Hard guard: you cannot cancel a court booking while an upcoming event or training session
+        # still references this courtbookingid.
+        bookingstatus = payload.get("bookingstatus")
+        if isinstance(bookingstatus, str) and bookingstatus.strip().lower() == "cancelled":
+            def is_blocking_status(s: object) -> bool:
+                st = str(s or "").strip().lower()
+                if not st:
+                    return True
+                return ("cancel" not in st) and ("complete" not in st)
+
+            # Check events
+            evs = rest_select("events", "eventid,status,time", filters={"courtbookingid": courtbookingid})
+            if isinstance(evs, list):
+                for ev in evs:
+                    if not isinstance(ev, dict):
+                        continue
+                    if is_blocking_status(ev.get("status")):
+                        raise HTTPException(status_code=409, detail="You must cancel the event first.")
+
+            # Check training sessions
+            ses = rest_select("trainingsessions", "sessionid,status,time", filters={"courtbookingid": courtbookingid})
+            if isinstance(ses, list):
+                for s in ses:
+                    if not isinstance(s, dict):
+                        continue
+                    if is_blocking_status(s.get("status")):
+                        raise HTTPException(status_code=409, detail="You must cancel the training session first.")
+
         resp = rest_update("courtbooking", {PRIMARY_KEY: courtbookingid}, payload)
         if isinstance(resp, list) and resp:
             return resp[0]

@@ -14,6 +14,7 @@ import {
 	removeBlock,
 	rejectEventBooking,
 	type BlockListRow,
+	updateEvent,
 	updateEventInfo,
 } from "@/lib/backendApi";
 import { useRouter } from "expo-router";
@@ -163,6 +164,8 @@ export default function EventPanel({ organizerId }: Props) {
 	const [blocking, setBlocking] = useState(false);
 	const [confirmRemoveVisible, setConfirmRemoveVisible] = useState(false);
 	const [removeCandidate, setRemoveCandidate] = useState<{ userid: number; name: string } | null>(null);
+	const [confirmCancelVisible, setConfirmCancelVisible] = useState(false);
+	const [cancellingEvent, setCancellingEvent] = useState(false);
 
 	const [editTitle, setEditTitle] = useState("");
 	const [editDescription, setEditDescription] = useState("");
@@ -502,6 +505,31 @@ export default function EventPanel({ organizerId }: Props) {
 			setSavingEvent(false);
 		}
 	}, [editCap, editDescription, editTitle, loadHostEvents, selectedHostEventId]);
+
+	const canCancelSelectedEvent = useMemo(() => {
+		const s = String((selectedEvent as any)?.status ?? "").toLowerCase();
+		if (!s) return true;
+		if (s.includes("cancel") || s.includes("complete")) return false;
+		return s.includes("upcoming") || s.includes("active") || s.includes("scheduled");
+	}, [selectedEvent]);
+
+	const onConfirmCancelEvent = useCallback(async () => {
+		if (selectedHostEventId == null) return;
+		if (!canCancelSelectedEvent) return;
+		setCancellingEvent(true);
+		setHostEventsError(null);
+		try {
+			await updateEvent(selectedHostEventId, { status: "cancelled" } as any);
+			setConfirmCancelVisible(false);
+			await loadHostEvents(selectedHostEventId);
+			const detailsId = `created_event_${selectedHostEventId}`;
+			router.replace({ pathname: "/event/statusTransition", params: { anim: "cancel", detailsId } } as any);
+		} catch (e: any) {
+			setHostEventsError(e?.message || String(e));
+		} finally {
+			setCancellingEvent(false);
+		}
+	}, [canCancelSelectedEvent, loadHostEvents, router, selectedHostEventId]);
 
 	const isFree = (selectedEvent?.entry_fee ?? 0) <= 0;
 
@@ -1133,6 +1161,20 @@ export default function EventPanel({ organizerId }: Props) {
 						>
 							<Text style={{ color: "#fff", fontWeight: "800" }}>{savingEvent ? "Saving..." : "Save changes"}</Text>
 						</TouchableOpacity>
+
+						<TouchableOpacity
+							disabled={cancellingEvent || !canCancelSelectedEvent}
+							onPress={() => setConfirmCancelVisible(true)}
+							style={{
+								marginTop: 10,
+								backgroundColor: cancellingEvent || !canCancelSelectedEvent ? "#9ca3af" : "#B91C1C",
+								paddingVertical: 12,
+								borderRadius: 10,
+								alignItems: "center",
+							}}
+						>
+							<Text style={{ color: "#fff", fontWeight: "900" }}>{cancellingEvent ? "Cancelling..." : "Cancel Event"}</Text>
+						</TouchableOpacity>
 					</View>
 				</>
 			)}
@@ -1211,6 +1253,33 @@ export default function EventPanel({ organizerId }: Props) {
 								disabled={blocking}
 							>
 								<Text style={{ fontWeight: "900", color: "#fff" }}>{blocking ? "Blocking..." : "Block"}</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			</Modal>
+
+			<Modal transparent visible={confirmCancelVisible} animationType="fade" onRequestClose={() => setConfirmCancelVisible(false)}>
+				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
+					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
+						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Cancel</Text>
+						<Text style={{ marginTop: 8, color: "#374151" }}>Are you sure you want to cancel this event?</Text>
+						<View style={{ flexDirection: "row", marginTop: 14 }}>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={() => setConfirmCancelVisible(false)}
+								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
+								disabled={cancellingEvent}
+							>
+								<Text style={{ fontWeight: "800", color: "#111827" }}>No</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={onConfirmCancelEvent}
+								style={{ flex: 1, backgroundColor: cancellingEvent ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
+								disabled={cancellingEvent || !canCancelSelectedEvent}
+							>
+								<Text style={{ fontWeight: "900", color: "#fff" }}>{cancellingEvent ? "Cancelling..." : "Yes"}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>

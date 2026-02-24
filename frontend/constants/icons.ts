@@ -116,6 +116,8 @@ export const ICONS = {
   eventDeco: require('../assets/icons/eventdeco.png'),
   vietnamIcon: require('../assets/icons/vietnamese_icon.png'),
   englishIcon: require('../assets/icons/english_icon.png'),
+  darkTheme: require('../assets/icons/dark_theme.png'),
+  lightTheme: require('../assets/icons/light_theme.png'),
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   gmailButton: require('../assets/icons/gmail.png'),

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
 import { appendHistory } from '@/storage/history'
@@ -28,12 +29,14 @@ import {
   getTrainingSessionBooking,
   getTrainingSessionInfoBySessionId,
   getEvent,
+  listEventsByCourtBookingId,
+  listTrainingSessionsByCourtBookingId,
   listCourtAvailabilityAll,
   listCourtInfoCached,
   invalidateEventsCombinedCache,
   invalidateTrainingSessionsCombinedCache,
-  listEventsCombinedCached,
-  listTrainingSessionsCombinedCached,
+  listEventsCombined,
+  listTrainingSessionsCombined,
   updateCourtBooking,
   updateEvent,
   updateEventBooking,
@@ -170,17 +173,22 @@ export default function DetailsPage() {
   const needsSessionsCombined =
     parsed.kind === 'session_booking' || parsed.kind === 'court_booking' || parsed.kind === 'created_session'
 
+  // Use live (non-AsyncStorage-cached) combined lists for cancellation dependency checks.
+  // This avoids stale cache causing the court-cancel gate to stay locked after cancelling.
+  const eventsCombinedLiveKey = useMemo(() => [...queryKeys.eventsCombined, 'live'] as const, [])
+  const sessionsCombinedLiveKey = useMemo(() => [...queryKeys.trainingSessionsCombined, 'live'] as const, [])
+
   const eventsCombinedQuery = useQuery({
-    queryKey: queryKeys.eventsCombined,
-    queryFn: () => listEventsCombinedCached(),
+    queryKey: eventsCombinedLiveKey,
+    queryFn: () => listEventsCombined(),
     enabled: needsEventsCombined,
-    staleTime: 60_000,
+    staleTime: 0,
   })
   const sessionsCombinedQuery = useQuery({
-    queryKey: queryKeys.trainingSessionsCombined,
-    queryFn: () => listTrainingSessionsCombinedCached(),
+    queryKey: sessionsCombinedLiveKey,
+    queryFn: () => listTrainingSessionsCombined(),
     enabled: needsSessionsCombined,
-    staleTime: 60_000,
+    staleTime: 0,
   })
 
   const courtAvailabilityQuery = useQuery({
@@ -201,6 +209,25 @@ export default function DetailsPage() {
     queryKey: ['details', 'courtBooking', parsed.kind === 'court_booking' ? parsed.id : null],
     queryFn: () => getCourtBooking((parsed as any).id),
     enabled: parsed.kind === 'court_booking',
+  })
+
+  const courtBookingIdForDeps = useMemo(() => {
+    if (parsed.kind !== 'court_booking') return null
+    const raw = (courtBookingQuery.data as any)?.courtbookingid
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  }, [parsed.kind, (courtBookingQuery.data as any)?.courtbookingid])
+  const linkedEventsByCourtBookingQuery = useQuery({
+    queryKey: ['details', 'linkedEventsByCourtBooking', courtBookingIdForDeps],
+    queryFn: () => listEventsByCourtBookingId(courtBookingIdForDeps as number),
+    enabled: parsed.kind === 'court_booking' && courtBookingIdForDeps != null,
+    staleTime: 0,
+  })
+  const linkedSessionsByCourtBookingQuery = useQuery({
+    queryKey: ['details', 'linkedSessionsByCourtBooking', courtBookingIdForDeps],
+    queryFn: () => listTrainingSessionsByCourtBookingId(courtBookingIdForDeps as number),
+    enabled: parsed.kind === 'court_booking' && courtBookingIdForDeps != null,
+    staleTime: 0,
   })
   const eventBookingQuery = useQuery({
     queryKey: ['details', 'eventBooking', parsed.kind === 'event_booking' ? parsed.id : null],
@@ -522,6 +549,22 @@ export default function DetailsPage() {
         if (typeof userid === 'number') {
           setInList(['courtBookings', userid], (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
           setInList(['courtbookings', 'user', userid], (row: any) => row?.courtbookingid === parsed.id, { bookingstatus: 'cancelled' } as any)
+
+          // Refetch from server so other screens (e.g. courtBooking) clear "already booked" immediately.
+          try {
+            await queryClient.invalidateQueries({ queryKey: ['courtbookings', 'user', userid] as any })
+          } catch {
+            // ignore
+          }
+        }
+
+        // Availability lists may depend on bookings state.
+        try {
+          await queryClient.invalidateQueries({
+            predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability',
+          })
+        } catch {
+          // ignore
         }
       }
 
@@ -545,7 +588,7 @@ export default function DetailsPage() {
               return { ...row, numberofpeople: Math.max(0, curN - 1) }
             })
           })
-          void invalidateEventsCombinedCache()
+          await invalidateEventsCombinedCache()
         }
       }
 
@@ -569,7 +612,7 @@ export default function DetailsPage() {
               return { ...row, numberofpeople: Math.max(0, curN - 1) }
             })
           })
-          void invalidateTrainingSessionsCombinedCache()
+          await invalidateTrainingSessionsCombinedCache()
         }
       }
 
@@ -586,7 +629,7 @@ export default function DetailsPage() {
         if (typeof organizerid === 'number') {
           setInList(['createdEventsCombined', organizerid], (row: any) => row?.eventid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
         }
-        void invalidateEventsCombinedCache()
+        await invalidateEventsCombinedCache()
 
         // After a short grace period, hide cancelled events from list caches.
         setTimeout(() => {
@@ -625,7 +668,7 @@ export default function DetailsPage() {
         if (typeof coachid === 'number') {
           setInList(['createdTrainingSessionsCombined', coachid], (row: any) => row?.sessionid === parsed.id, { status: 'cancelled', _cancelledAt: cancelledAt } as any)
         }
-        void invalidateTrainingSessionsCombinedCache()
+        await invalidateTrainingSessionsCombinedCache()
 
         setTimeout(() => {
           queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
@@ -651,10 +694,23 @@ export default function DetailsPage() {
         }, 15_000)
       }
 
-      openResultModal('Cancelled', 'This record has been cancelled.', () => router.back())
+      // Ensure the live combined queries (used by court-cancel gating) refetch server truth.
+      try {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: eventsCombinedLiveKey as any }),
+          queryClient.invalidateQueries({ queryKey: sessionsCombinedLiveKey as any }),
+        ])
+      } catch {
+        // ignore
+      }
+
+      // Show cancellation notification page.
+      const anim = parsed.kind === 'created_event' || parsed.kind === 'created_session' ? 'cancel' : 'booking_cancel'
+      const detailsId = parsed.raw
+      router.replace({ pathname: '/event/statusTransition', params: { anim, detailsId } } as any)
     },
     onError: (_err, _vars, ctx) => {
-      const undo = (ctx as any)?.undo as Array<{ key: readonly unknown[]; prev: any }> | undefined
+      const undo = (ctx as any)?.undo as { key: readonly unknown[]; prev: any }[] | undefined
       if (Array.isArray(undo)) {
         for (const item of undo) queryClient.setQueryData(item.key, item.prev)
       }
@@ -683,6 +739,21 @@ export default function DetailsPage() {
     const booking = courtBookingQuery.data
     if (!booking) return null
     const cbid = booking.courtbookingid
+    const cbidNum = Number(cbid)
+    if (!Number.isFinite(cbidNum)) return 'Unable to verify linked events/sessions. Please try again.'
+
+    const depsLoading =
+      linkedEventsByCourtBookingQuery.isLoading ||
+      linkedEventsByCourtBookingQuery.isFetching ||
+      linkedSessionsByCourtBookingQuery.isLoading ||
+      linkedSessionsByCourtBookingQuery.isFetching
+
+    // Prevent cancelling the court booking before we know whether an event/session depends on it.
+    if (depsLoading) return 'Checking linked events/sessions…'
+
+    if (linkedEventsByCourtBookingQuery.error || linkedSessionsByCourtBookingQuery.error) {
+      return 'Unable to verify linked events/sessions. Please try again.'
+    }
 
     const now = Date.now()
     const isUpcoming = (status: any, time: any) => {
@@ -693,26 +764,49 @@ export default function DetailsPage() {
       return Number.isFinite(dt.getTime()) ? dt.getTime() > now : false
     }
 
-    const evs = Array.isArray(eventsCombinedQuery.data) ? eventsCombinedQuery.data : []
-    const ses = Array.isArray(sessionsCombinedQuery.data) ? sessionsCombinedQuery.data : []
+    const evs = Array.isArray(linkedEventsByCourtBookingQuery.data) ? linkedEventsByCourtBookingQuery.data : []
+    const ses = Array.isArray(linkedSessionsByCourtBookingQuery.data) ? linkedSessionsByCourtBookingQuery.data : []
 
-    const hasEvent = evs.some((e: any) => e?.courtbookingid === cbid && isUpcoming(e?.status, e?.time ?? e?.start_timestamp))
+    const hasEvent = evs.some((e: any) => {
+      if (Number(e?.courtbookingid) !== cbidNum) return false
+      return isUpcoming(e?.status, e?.time ?? e?.start_timestamp)
+    })
     if (hasEvent) return 'You must cancel the event first.'
 
-    const hasSession = ses.some((s: any) => s?.courtbookingid === cbid && isUpcoming(s?.status, s?.time ?? s?.start_timestamp))
+    const hasSession = ses.some((s: any) => {
+      if (Number(s?.courtbookingid) !== cbidNum) return false
+      return isUpcoming(s?.status, s?.time ?? s?.start_timestamp)
+    })
     if (hasSession) return 'You must cancel the training session first.'
 
     return null
-  }, [parsed.kind, courtBookingQuery.data, eventsCombinedQuery.data, sessionsCombinedQuery.data])
+  }, [
+    parsed.kind,
+    courtBookingQuery.data,
+    linkedEventsByCourtBookingQuery.data,
+    linkedEventsByCourtBookingQuery.isLoading,
+    linkedEventsByCourtBookingQuery.isFetching,
+    linkedEventsByCourtBookingQuery.error,
+    linkedSessionsByCourtBookingQuery.data,
+    linkedSessionsByCourtBookingQuery.isLoading,
+    linkedSessionsByCourtBookingQuery.isFetching,
+    linkedSessionsByCourtBookingQuery.error,
+  ])
 
   const canCancel = useMemo(() => {
     const lower = (v: any) => (typeof v === 'string' ? v.toLowerCase() : '')
     if (parsed.kind === 'court_booking') {
+      const depsLoading =
+        linkedEventsByCourtBookingQuery.isLoading ||
+        linkedEventsByCourtBookingQuery.isFetching ||
+        linkedSessionsByCourtBookingQuery.isLoading ||
+        linkedSessionsByCourtBookingQuery.isFetching
+      if (depsLoading) return false
       if (courtCancelBlockedReason) return false
-      return lower(courtBookingQuery.data?.bookingstatus) === 'upcoming'
+      return lower(courtBookingQuery.data?.bookingstatus ?? (courtBookingQuery.data as any)?.status) === 'upcoming'
     }
-    if (parsed.kind === 'event_booking') return lower(eventBookingQuery.data?.bookingstatus) === 'upcoming'
-    if (parsed.kind === 'session_booking') return lower(sessionBookingQuery.data?.bookingstatus) === 'upcoming'
+    if (parsed.kind === 'event_booking') return lower(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status) === 'upcoming'
+    if (parsed.kind === 'session_booking') return lower(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status) === 'upcoming'
     if (parsed.kind === 'created_event') return lower(createdEventQuery.data?.status) === 'upcoming'
     if (parsed.kind === 'created_session') return lower(createdSessionQuery.data?.status) === 'upcoming'
     return false
@@ -720,8 +814,15 @@ export default function DetailsPage() {
     parsed.kind,
     courtCancelBlockedReason,
     courtBookingQuery.data?.bookingstatus,
+    (courtBookingQuery.data as any)?.status,
+    linkedEventsByCourtBookingQuery.isFetching,
+    linkedEventsByCourtBookingQuery.isLoading,
+    linkedSessionsByCourtBookingQuery.isFetching,
+    linkedSessionsByCourtBookingQuery.isLoading,
     eventBookingQuery.data?.bookingstatus,
+    (eventBookingQuery.data as any)?.status,
     sessionBookingQuery.data?.bookingstatus,
+    (sessionBookingQuery.data as any)?.status,
     createdEventQuery.data?.status,
     createdSessionQuery.data?.status,
   ])
@@ -806,25 +907,27 @@ export default function DetailsPage() {
     return list.find((s) => s.sessionid === sessionid)?.court_name ?? null
   }, [parsed.kind, sessionBookingQuery.data, sessionsCombinedQuery.data])
 
+  const createdEventId = parsed.kind === 'created_event' ? parsed.id : null
   const createdEventCourtName = useMemo(() => {
-    if (parsed.kind !== 'created_event') return null
+    if (createdEventId == null) return null
     const list = eventsCombinedQuery.data
     if (!Array.isArray(list)) return null
-    return list.find((e) => e.eventid === parsed.id)?.court_name ?? null
-  }, [parsed.kind, eventsCombinedQuery.data, parsed.kind === 'created_event' ? parsed.id : null])
+    return list.find((e) => e.eventid === createdEventId)?.court_name ?? null
+  }, [createdEventId, eventsCombinedQuery.data])
 
+  const createdSessionId = parsed.kind === 'created_session' ? parsed.id : null
   const createdSessionCourtName = useMemo(() => {
-    if (parsed.kind !== 'created_session') return null
+    if (createdSessionId == null) return null
     const list = sessionsCombinedQuery.data
     if (!Array.isArray(list)) return null
-    return list.find((s) => s.sessionid === parsed.id)?.court_name ?? null
-  }, [parsed.kind, sessionsCombinedQuery.data, parsed.kind === 'created_session' ? parsed.id : null])
+    return list.find((s) => s.sessionid === createdSessionId)?.court_name ?? null
+  }, [createdSessionId, sessionsCombinedQuery.data])
 
   // Enable combined lists for created records too (court name/title/description convenience)
   React.useEffect(() => {
-    if (parsed.kind === 'created_event') void queryClient.prefetchQuery({ queryKey: queryKeys.eventsCombined, queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
-    if (parsed.kind === 'created_session') void queryClient.prefetchQuery({ queryKey: queryKeys.trainingSessionsCombined, queryFn: () => listTrainingSessionsCombinedCached(), staleTime: 60_000 })
-  }, [parsed.kind, queryClient])
+    if (parsed.kind === 'created_event') void queryClient.prefetchQuery({ queryKey: eventsCombinedLiveKey, queryFn: () => listEventsCombined(), staleTime: 0 })
+    if (parsed.kind === 'created_session') void queryClient.prefetchQuery({ queryKey: sessionsCombinedLiveKey, queryFn: () => listTrainingSessionsCombined(), staleTime: 0 })
+  }, [eventsCombinedLiveKey, parsed.kind, queryClient, sessionsCombinedLiveKey])
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1023,9 +1126,6 @@ export default function DetailsPage() {
           )}
 
           <View style={{ height: 12 }} />
-          {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
-            <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>
-          )}
           <Pressable
             disabled={!canCancel || busy || cancelMutation.isPending}
             onPress={openCancelModal}
@@ -1037,6 +1137,9 @@ export default function DetailsPage() {
           >
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </Pressable>
+          {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
+            <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -1157,9 +1260,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   cancelNote: {
-    color: '#666',
+    color: COLORS.danger,
     textAlign: 'center',
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 4,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Modal (synced with Settings sign-out modal)

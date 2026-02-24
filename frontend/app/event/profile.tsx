@@ -385,6 +385,9 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
           <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/event/userAccountSetting' as any)}>
+            <Text style={styles.changeThemeLink}>Change Theme</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.divider} />
@@ -582,6 +585,7 @@ const styles = StyleSheet.create({
   cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#fff', borderRadius: 20, padding: 6, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
   cameraIcon: { width: 20, height: 20, tintColor: '#333' },
   username: { fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 12 },
+  changeThemeLink: { fontSize: 13, color: '#333', textDecorationLine: 'underline', marginBottom: 4 },
   
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: 20 },
   tag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, margin: 4, elevation: 1 },
