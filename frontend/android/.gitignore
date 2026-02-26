@@ -1,0 +1,22 @@
+# OSX
+#
+.DS_Store
+
+# Android/IntelliJ
+#
+build/
+.idea
+.gradle
+local.properties
+*.iml
+*.hprof
+.cxx/
+
+# Google services / Firebase (keep local unless explicitly needed)
+app/google-services.json
+
+# Debug signing key (can be regenerated locally)
+app/debug.keystore
+
+# Bundle artifacts
+*.jsbundle

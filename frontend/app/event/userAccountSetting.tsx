@@ -1,27 +1,30 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, UIManager } from 'react-native'
+import { Animated, Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ICONS } from '@/constants/icons'
-import LottieView from 'lottie-react-native'
 
-const THEME_SWITCH_ANIM = require('../../assets/animation/ThemeSwitch.json')
-const AnimatedLottieView = Animated.createAnimatedComponent(LottieView)
-const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
+const SWITCH_TRACK_WIDTH = 66
+const SWITCH_TRACK_HEIGHT = 32
+const SWITCH_PADDING = 2
+const SWITCH_THUMB_SIZE = SWITCH_TRACK_HEIGHT - SWITCH_PADDING * 2
+const SWITCH_TRAVEL = SWITCH_TRACK_WIDTH - SWITCH_PADDING * 2 - SWITCH_THUMB_SIZE
 
 export default function UserAccountSetting() {
   const router = useRouter()
-  const [isDark, setIsDark] = useState(false)
-  const switchProgress = useRef(new Animated.Value(isDark ? 1 : 0)).current
+  // UI-only for now: default to the "success/on" state so the switch looks correct.
+  const [isDark, setIsDark] = useState(true)
+  const thumbTranslate = useRef(new Animated.Value(isDark ? SWITCH_TRAVEL : 0)).current
 
   useEffect(() => {
-    Animated.timing(switchProgress, {
-      toValue: isDark ? 1 : 0,
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+    Animated.timing(thumbTranslate, {
+      toValue: isDark ? SWITCH_TRAVEL : 0,
+      duration: 220,
+      useNativeDriver: true,
     }).start()
-  }, [isDark, switchProgress])
+  }, [isDark, thumbTranslate])
+
+  const thumbTransform = useMemo(() => [{ translateX: thumbTranslate }], [thumbTranslate])
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -46,24 +49,11 @@ export default function UserAccountSetting() {
             onPress={() => setIsDark(v => !v)}
             style={styles.themeSwitchWrap}
           >
-            {HAS_LOTTIE_NATIVE ? (
-              <AnimatedLottieView
-                source={THEME_SWITCH_ANIM}
-                progress={switchProgress}
-                autoPlay={false}
-                loop={false}
-                style={styles.themeSwitch}
-              />
-            ) : (
-              <View style={styles.themeSwitchFallback}>
-                <View style={[styles.fallbackHalf, !isDark && styles.fallbackHalfActive]}>
-                  <Image source={ICONS.lightTheme} style={styles.fallbackIcon} />
-                </View>
-                <View style={[styles.fallbackHalf, isDark && styles.fallbackHalfActive]}>
-                  <Image source={ICONS.darkTheme} style={styles.fallbackIcon} />
-                </View>
-              </View>
-            )}
+            <View style={[styles.switchTrack, isDark ? styles.switchTrackOn : styles.switchTrackOff]}>
+              <Animated.View style={[styles.switchThumb, { transform: thumbTransform }]}>
+                <Image source={isDark ? ICONS.darkTheme : ICONS.lightTheme} style={styles.switchThumbIcon} />
+              </Animated.View>
+            </View>
           </Pressable>
         </View>
       </View>
@@ -85,37 +75,35 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 15, fontWeight: '600', color: '#000000' },
 
   themeSwitchWrap: {
-    width: 96,
-    height: 44,
+    width: SWITCH_TRACK_WIDTH,
+    height: SWITCH_TRACK_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  themeSwitch: {
-    width: 96,
-    height: 44,
-  },
-  themeSwitchFallback: {
-    width: 96,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#E5E7EB',
-    flexDirection: 'row',
-    overflow: 'hidden',
-  },
-  fallbackHalf: {
-    flex: 1,
-    alignItems: 'center',
+  switchTrack: {
+    width: SWITCH_TRACK_WIDTH,
+    height: SWITCH_TRACK_HEIGHT,
+    borderRadius: SWITCH_TRACK_HEIGHT / 2,
+    padding: SWITCH_PADDING,
     justifyContent: 'center',
-    opacity: 0.55,
   },
-  fallbackHalfActive: {
-    opacity: 1,
+  switchTrackOn: {
     backgroundColor: '#111827',
   },
-  fallbackIcon: {
-    width: 18,
-    height: 18,
+  switchTrackOff: {
+    backgroundColor: '#E5E7EB',
+  },
+  switchThumb: {
+    width: SWITCH_THUMB_SIZE,
+    height: SWITCH_THUMB_SIZE,
+    borderRadius: SWITCH_THUMB_SIZE / 2,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchThumbIcon: {
+    width: SWITCH_THUMB_SIZE - 10,
+    height: SWITCH_THUMB_SIZE - 10,
     resizeMode: 'contain',
-    tintColor: '#FFFFFF',
   },
 })

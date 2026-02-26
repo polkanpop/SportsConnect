@@ -144,7 +144,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <View style={styles.signupRow}>
-          <Text style={styles.textDark}>Don't have an account?</Text>
+          <Text style={styles.textDark}>Don&apos;t have an account?</Text>
           <Link href="/(auth)/signup"><Text style={styles.signUpLink}>Sign up</Text></Link>
         </View>
       </View>

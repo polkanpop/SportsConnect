@@ -5,6 +5,151 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Image, View, Pressable, StyleSheet, useWindowDimensions, Animated, Text } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const AnimatedTabIcon = ({
+  focused,
+  icon,
+  label,
+  xOffset = 0,
+}: {
+  focused: boolean;
+  icon: any;
+  label: string;
+  xOffset?: number;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const labelOpacity = useRef(new Animated.Value(0)).current;
+  const labelTranslateY = useRef(new Animated.Value(6)).current;
+  const backgroundOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 0.9 : 1,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 12,
+    }).start();
+
+    Animated.parallel([
+      Animated.timing(labelOpacity, {
+        toValue: focused ? 1 : 0,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.spring(labelTranslateY, {
+        toValue: focused ? 0 : 6,
+        useNativeDriver: true,
+        bounciness: 6,
+        speed: 12,
+      }),
+      Animated.timing(backgroundOpacity, {
+        toValue: focused ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [backgroundOpacity, focused, labelOpacity, labelTranslateY, scale]);
+
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
+      <Animated.View style={{
+        position: 'absolute',
+        width: 58,
+        height: 54,
+        borderRadius: 15,
+        backgroundColor: COLORS.lightgrey,
+        opacity: backgroundOpacity,
+        top: 2,
+        transform: [{ translateX: xOffset }],
+      }} />
+      <Animated.Image
+        source={icon}
+        style={{
+          width: 28,
+          height: 28,
+          tintColor: focused ? COLORS.darkblue : COLORS.black,
+          transform: [{ translateX: xOffset }, { scale }],
+          marginBottom: 2,
+        }}
+      />
+      <Animated.Text
+        style={{
+          opacity: labelOpacity,
+          transform: [{ translateX: xOffset }, { translateY: labelTranslateY }],
+          color: COLORS.darkblue,
+          fontSize: 11,
+          position: 'absolute',
+          bottom: -4,
+          width: '200%',
+          textAlign: 'center',
+          left: '-50%',
+        }}
+        numberOfLines={1}
+      >{label}</Animated.Text>
+    </View>
+  );
+};
+
+const MapTabButton = (props: any) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 1.08,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 12,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      bounciness: 8,
+      speed: 12,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      {...props}
+      android_ripple={undefined}
+      style={{
+        top: -32,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+      onLongPress={props.onLongPress}
+      onPress={props.onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View
+        style={{
+          transform: [{ scale }],
+          width: 76,
+          height: 76,
+          borderRadius: 38,
+          backgroundColor: "#32CD32",
+          justifyContent: "center",
+          alignItems: "center",
+          overflow: 'hidden',
+          ...styles.shadow,
+        }}
+      >
+        <Image
+          source={ICONS.map}
+          style={{
+            width: 36,
+            height: 36,
+            tintColor: COLORS.black,
+          }}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+};
 const TabBarBackground = ({ width, height }: { width: number; height: number }) => {
   const center = width / 2;
   
@@ -54,7 +199,7 @@ const TabBarBackground = ({ width, height }: { width: number; height: number }) 
   );
 };
 
-const _layout = () => {
+const TabLayout = () => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -103,78 +248,9 @@ const _layout = () => {
         options={{
           title: "Homepage",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => {
-            const scale = useRef(new Animated.Value(1)).current;
-            const labelOpacity = useRef(new Animated.Value(0)).current;
-            const labelTranslateY = useRef(new Animated.Value(6)).current;
-            const backgroundOpacity = useRef(new Animated.Value(0)).current;
-
-            useEffect(() => {
-              Animated.spring(scale, {
-                toValue: focused ? 0.9 : 1,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-
-              Animated.parallel([
-                Animated.timing(labelOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 160,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(labelTranslateY, {
-                  toValue: focused ? 0 : 6,
-                  useNativeDriver: true,
-                  bounciness: 6,
-                  speed: 12,
-                }),
-                Animated.timing(backgroundOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 200,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }, [focused]);
-
-            return (
-              <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
-                <Animated.View style={{
-                  position: 'absolute',
-                  width: 58,
-                  height: 54,
-                  borderRadius: 15,
-                  backgroundColor: COLORS.lightgrey,
-                  opacity: backgroundOpacity,
-                  top: 2,
-                }} />
-                <Animated.Image
-                  source={ICONS.home}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    tintColor: focused ? COLORS.darkblue : COLORS.black,
-                    transform: [{ scale }],
-                    marginBottom: 2,
-                  }}
-                />
-                <Animated.Text
-                  style={{
-                    opacity: labelOpacity,
-                    transform: [{ translateY: labelTranslateY }],
-                    color: COLORS.darkblue,
-                    fontSize: 11,
-                    position: 'absolute',
-                    bottom: -4,
-                    width: '200%',
-                    textAlign: 'center',
-                    left: '-50%',
-                  }}
-                  numberOfLines={1}
-                >Home</Animated.Text>
-              </View>
-            );
-          },
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <AnimatedTabIcon focused={focused} icon={ICONS.home} label="Home" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -182,80 +258,9 @@ const _layout = () => {
         options={{
           title: "Activities",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => {
-            const scale = useRef(new Animated.Value(1)).current;
-            const labelOpacity = useRef(new Animated.Value(0)).current;
-            const labelTranslateY = useRef(new Animated.Value(6)).current;
-            const backgroundOpacity = useRef(new Animated.Value(0)).current;
-
-            useEffect(() => {
-              Animated.spring(scale, {
-                toValue: focused ? 0.9 : 1,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-
-              Animated.parallel([
-                Animated.timing(labelOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 160,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(labelTranslateY, {
-                  toValue: focused ? 0 : 6,
-                  useNativeDriver: true,
-                  bounciness: 6,
-                  speed: 12,
-                }),
-                Animated.timing(backgroundOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 200,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }, [focused]);
-
-            return (
-              <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
-                <Animated.View style={{
-                  position: 'absolute',
-                  width: 58,
-                  height: 54,
-                  borderRadius: 15,
-                  backgroundColor: COLORS.lightgrey,
-                  opacity: backgroundOpacity,
-                  top: 2,
-                  transform: [{ translateX: -8 }],
-                }} />
-                <Animated.Image
-                  source={ICONS.activity}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    tintColor: focused ? COLORS.darkblue : COLORS.black,
-                    transform: [{ scale }],
-                    marginBottom: 2,
-                    right: 8,
-                  }}
-                />
-                <Animated.Text
-                  style={{
-                    opacity: labelOpacity,
-                    transform: [{ translateX: -8 }, { translateY: labelTranslateY }],
-                    color: COLORS.darkblue,
-                    fontSize: 11,
-                    position: 'absolute',
-                    bottom: -4,
-                    width: '200%',
-                    textAlign: 'center',
-                    left: '-50%',
-                  }}
-                  numberOfLines={1}
-                >Activity</Animated.Text>
-              </View>
-            );
-          },
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <AnimatedTabIcon focused={focused} icon={ICONS.activity} label="Activity" xOffset={-8} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -264,66 +269,7 @@ const _layout = () => {
           title: "Map",
           headerShown: false,
           tabBarLabel: () => null,
-          tabBarButton: (props: any) => {
-            const scale = useRef(new Animated.Value(1)).current;
-
-            const handlePressIn = () => {
-              Animated.spring(scale, {
-                toValue: 1.08,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-            };
-
-            const handlePressOut = () => {
-              Animated.spring(scale, {
-                toValue: 1,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-            };
-
-            return (
-              <Pressable
-                {...props}
-                android_ripple={undefined}
-                style={{
-                  top: -32,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-                onLongPress={props.onLongPress}
-                onPress={props.onPress}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-             >
-                <Animated.View
-                  style={{
-                    transform: [{ scale }],
-                    width: 76,
-                    height: 76,
-                    borderRadius: 38,
-                    backgroundColor: "#32CD32",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    overflow: 'hidden',
-                    ...styles.shadow,
-                  }}
-                >
-                  <Image
-                    source={ICONS.map}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      tintColor: COLORS.black,
-                    }}
-                  />
-                </Animated.View>
-              </Pressable>
-            );
-          },
+          tabBarButton: (props: any) => <MapTabButton {...props} />,
         }}
       />
       <Tabs.Screen
@@ -331,80 +277,9 @@ const _layout = () => {
         options={{
           title: "Notification",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => {
-            const scale = useRef(new Animated.Value(1)).current;
-            const labelOpacity = useRef(new Animated.Value(0)).current;
-            const labelTranslateY = useRef(new Animated.Value(6)).current;
-            const backgroundOpacity = useRef(new Animated.Value(0)).current;
-
-            useEffect(() => {
-              Animated.spring(scale, {
-                toValue: focused ? 0.9 : 1,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-
-              Animated.parallel([
-                Animated.timing(labelOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 160,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(labelTranslateY, {
-                  toValue: focused ? 0 : 6,
-                  useNativeDriver: true,
-                  bounciness: 6,
-                  speed: 12,
-                }),
-                Animated.timing(backgroundOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 200,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }, [focused]);
-
-            return (
-              <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
-                <Animated.View style={{
-                  position: 'absolute',
-                  width: 58,
-                  height: 54,
-                  borderRadius: 15,
-                  backgroundColor: COLORS.lightgrey,
-                  opacity: backgroundOpacity,
-                  top: 2,
-                  transform: [{ translateX: 8 }],
-                }} />
-                <Animated.Image
-                  source={ICONS.notifications}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    tintColor: focused ? COLORS.darkblue : COLORS.black,
-                    transform: [{ scale }],
-                    marginBottom: 2,
-                    left: 8,
-                  }}
-                />
-                <Animated.Text
-                  style={{
-                    opacity: labelOpacity,
-                    transform: [{ translateX: 8 }, { translateY: labelTranslateY }],
-                    color: COLORS.darkblue,
-                    fontSize: 11,
-                    position: 'absolute',
-                    bottom: -4,
-                    width: '200%',
-                    textAlign: 'center',
-                    left: '-50%',
-                  }}
-                  numberOfLines={1}
-                >Alerts</Animated.Text>
-              </View>
-            );
-          },
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <AnimatedTabIcon focused={focused} icon={ICONS.notifications} label="Alerts" xOffset={8} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -412,78 +287,9 @@ const _layout = () => {
         options={{
           title: "Settings",
           headerShown: false,
-          tabBarIcon: ({ focused }: { focused: boolean }) => {
-            const scale = useRef(new Animated.Value(1)).current;
-            const labelOpacity = useRef(new Animated.Value(0)).current;
-            const labelTranslateY = useRef(new Animated.Value(6)).current;
-            const backgroundOpacity = useRef(new Animated.Value(0)).current;
-
-            useEffect(() => {
-              Animated.spring(scale, {
-                toValue: focused ? 0.9 : 1,
-                useNativeDriver: true,
-                bounciness: 8,
-                speed: 12,
-              }).start();
-
-              Animated.parallel([
-                Animated.timing(labelOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 160,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(labelTranslateY, {
-                  toValue: focused ? 0 : 6,
-                  useNativeDriver: true,
-                  bounciness: 6,
-                  speed: 12,
-                }),
-                Animated.timing(backgroundOpacity, {
-                  toValue: focused ? 1 : 0,
-                  duration: 200,
-                  useNativeDriver: true,
-                }),
-              ]).start();
-            }, [focused]);
-
-            return (
-              <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
-                <Animated.View style={{
-                  position: 'absolute',
-                  width: 58,
-                  height: 54,
-                  borderRadius: 15,
-                  backgroundColor: COLORS.lightgrey,
-                  opacity: backgroundOpacity,
-                  top: 2,
-                }} />
-                <Animated.Image
-                  source={ICONS.settings}
-                  style={{
-                    width: 28,
-                    height: 28,
-                    tintColor: focused ? COLORS.darkblue : COLORS.black,
-                    transform: [{ scale }],
-                    marginBottom: 2,
-                  }}
-                />
-                <Animated.Text
-                  style={{
-                    opacity: labelOpacity,
-                    transform: [{ translateY: labelTranslateY }],
-                    color: COLORS.darkblue,
-                    fontSize: 11,
-                    position: 'absolute',
-                    bottom: -4,
-                    width: '200%',
-                    textAlign: 'center',
-                    left: '-50%',
-                  }}
-                  numberOfLines={1}
-                >Settings</Animated.Text>
-              </View>
-            );
-          },
+          tabBarIcon: ({ focused }: { focused: boolean }) => (
+            <AnimatedTabIcon focused={focused} icon={ICONS.settings} label="Settings" />
+          ),
         }}
       />
     </Tabs>
@@ -503,4 +309,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default _layout;
+export default TabLayout;

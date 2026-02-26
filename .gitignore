@@ -4,11 +4,16 @@
 node_modules/
 
 # Ignore data folder
-data/
+/data/
 
 # Ignore environment variables
 .env
+.env.*
+!.env.example
+
+# Python virtualenvs
 /backend/.venv/
+/backend/backend/.venv/
 
 # Expo
 .expo/
@@ -39,15 +44,17 @@ yarn-error.*
 
 # local env files
 .env*.local
-.env*
+
+# Firebase Admin SDK service account keys (keep local; never commit)
+secrets/
+**/*firebase-adminsdk*.json
+**/*firebase-admin*.json
+**/*serviceAccount*.json
+frontend/sportconnect-c34b9-firebase-adminsdk-fbsvc-dd20b22440.json
 # typescript
 *.tsbuildinfo
 
 app-example
-
-# generated native folders
-/ios
-/android
 
 # Python bytecode caches - canonical rule for all nested __pycache__ dirs
 **/__pycache__/**

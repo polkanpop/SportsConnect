@@ -1,0 +1,91 @@
+area_id,court_id,area_name,area_type,sport,open_time,close_time,image
+1,101,Main Field,fixed,"[""Football""]",08:00,16:00,https://placehold.co/600x400
+2,101,Flex Court A,fixed,"[""Badminton""]",09:00,15:00,https://placehold.co/600x400
+3,101,Flex Court B,fixed,"[""Football""]",10:00,14:00,https://placehold.co/600x400
+4,102,Football Pitch,fixed,"[""Football""]",09:00,17:00,https://placehold.co/600x400
+5,102,Practice Area,fixed,"[""Football""]",10:00,16:00,https://placehold.co/600x400
+6,102,Side Pitch,fixed,"[""Football""]",11:00,15:00,https://placehold.co/600x400
+7,103,Badminton Court 1,fixed,"[""Badminton""]",08:00,14:00,https://placehold.co/600x400
+8,103,Table Tennis Zone,fixed,"[""TableTennis""]",09:00,13:00,https://placehold.co/600x400
+9,103,Flex Badminton,fixed,"[""Badminton""]",08:00,12:00,https://placehold.co/600x400
+10,104,Tennis Court A,fixed,"[""Tennis""]",07:00,15:00,https://placehold.co/600x400
+11,104,Tennis Court B,fixed,"[""Tennis""]",08:00,14:00,https://placehold.co/600x400
+12,104,Practice Wall,fixed,"[""Tennis""]",09:00,13:00,https://placehold.co/600x400
+13,105,Volleyball Court,fixed,"[""Volleyball""]",10:00,18:00,https://placehold.co/600x400
+14,105,Running Track,fixed,"[""Running""]",10:00,18:00,https://placehold.co/600x400
+15,105,Beach Flex,flex,"[""Volleyball"",""Running""]",11:00,17:00,https://placehold.co/600x400
+16,106,Basketball Court,fixed,"[""Basketball""]",08:30,15:30,https://placehold.co/600x400
+17,106,Badminton Court,fixed,"[""Badminton""]",09:00,15:00,https://placehold.co/600x400
+18,106,Flex Zone,flex,"[""Basketball"",""Badminton""]",10:00,14:00,https://placehold.co/600x400
+19,107,Football Field,fixed,"[""Football""]",07:30,14:30,https://placehold.co/600x400
+20,107,Volleyball Court,fixed,"[""Volleyball""]",08:00,14:00,https://placehold.co/600x400
+21,107,Multi-Sport Flex,flex,"[""Football"",""Volleyball""]",09:00,13:00,https://placehold.co/600x400
+22,108,Pickleball Court 1,fixed,"[""Pickleball""]",11:00,17:00,https://placehold.co/600x400
+23,108,Pickleball Court 2,fixed,"[""Pickleball""]",12:00,16:00,https://placehold.co/600x400
+24,108,Practice Area,fixed,"[""Pickleball""]",13:00,15:00,https://placehold.co/600x400
+25,109,Tennis Court,fixed,"[""Tennis""]",08:00,13:00,https://placehold.co/600x400
+26,109,Badminton Court,fixed,"[""Badminton""]",09:00,12:00,https://placehold.co/600x400
+27,109,Table Tennis Area,fixed,"[""TableTennis""]",08:30,12:30,https://placehold.co/600x400
+28,110,Running Path,fixed,"[""Running""]",12:00,20:00,https://placehold.co/600x400
+29,110,Jogging Trail,fixed,"[""Running""]",13:00,19:00,https://placehold.co/600x400
+30,110,Sprint Track,fixed,"[""Running""]",14:00,18:00,https://placehold.co/600x400
+31,111,Badminton Court,fixed,"[""Badminton""]",06:00,12:00,https://placehold.co/600x400
+32,111,Basketball Court,fixed,"[""Basketball""]",07:00,11:00,https://placehold.co/600x400
+33,111,Table Tennis Zone,fixed,"[""TableTennis""]",08:00,10:00,https://placehold.co/600x400
+34,112,Golf Range,fixed,"[""Golf""]",13:00,19:00,https://placehold.co/600x400
+35,112,Putting Green,fixed,"[""Golf""]",14:00,18:00,https://placehold.co/600x400
+36,112,Chipping Area,fixed,"[""Golf""]",15:00,17:00,https://placehold.co/600x400
+37,113,Football Pitch,fixed,"[""Football""]",07:00,17:00,https://placehold.co/600x400
+38,113,Tennis Court,fixed,"[""Tennis""]",08:00,16:00,https://placehold.co/600x400
+39,113,Flex Field,flex,"[""Football"",""Tennis""]",09:00,15:00,https://placehold.co/600x400
+40,114,Basketball Arena,fixed,"[""Basketball""]",09:00,15:00,https://placehold.co/600x400
+41,114,Half Court,fixed,"[""Basketball""]",10:00,14:00,https://placehold.co/600x400
+42,114,Practice Zone,fixed,"[""Basketball""]",11:00,13:00,https://placehold.co/600x400
+43,115,Volleyball Sand Court,fixed,"[""Volleyball""]",08:00,18:00,https://placehold.co/600x400
+44,115,Beach Court,fixed,"[""Volleyball""]",09:00,17:00,https://placehold.co/600x400
+45,115,Practice Sand,fixed,"[""Volleyball""]",10:00,16:00,https://placehold.co/600x400
+46,116,Badminton Hall,fixed,"[""Badminton""]",07:30,16:30,https://placehold.co/600x400
+47,116,Shuttle Court,fixed,"[""Badminton""]",08:00,16:00,https://placehold.co/600x400
+48,116,Practice Court,fixed,"[""Badminton""]",09:00,15:00,https://placehold.co/600x400
+49,117,Table Tennis Hall,fixed,"[""TableTennis""]",09:00,14:00,https://placehold.co/600x400
+50,117,Ping Pong Table 1,fixed,"[""TableTennis""]",10:00,13:00,https://placehold.co/600x400
+51,117,Ping Pong Table 2,fixed,"[""TableTennis""]",09:30,13:30,https://placehold.co/600x400
+52,118,Running Trail,fixed,"[""Running""]",10:00,17:00,https://placehold.co/600x400
+53,118,Jogging Lane,fixed,"[""Running""]",11:00,16:00,https://placehold.co/600x400
+54,118,Sprint Lane,fixed,"[""Running""]",12:00,15:00,https://placehold.co/600x400
+55,119,Football Field,fixed,"[""Football""]",08:00,15:00,https://placehold.co/600x400
+56,119,Practice Pitch,fixed,"[""Football""]",09:00,14:00,https://placehold.co/600x400
+57,119,Mini Field,fixed,"[""Football""]",10:00,13:00,https://placehold.co/600x400
+58,120,Volleyball Court,fixed,"[""Volleyball""]",09:30,18:30,https://placehold.co/600x400
+59,120,Basketball Court,fixed,"[""Basketball""]",10:00,18:00,https://placehold.co/600x400
+60,120,Multi-Sport Zone,flex,"[""Volleyball"",""Basketball""]",11:00,17:00,https://placehold.co/600x400
+61,121,Tennis Court,fixed,"[""Tennis""]",07:00,12:00,https://placehold.co/600x400
+62,121,Practice Court,fixed,"[""Tennis""]",08:00,11:00,https://placehold.co/600x400
+63,121,Clay Court,fixed,"[""Tennis""]",09:00,10:00,https://placehold.co/600x400
+64,122,Badminton Center,fixed,"[""Badminton""]",11:00,18:00,https://placehold.co/600x400
+65,122,Shuttle Zone,fixed,"[""Badminton""]",12:00,17:00,https://placehold.co/600x400
+66,122,Flex Hall,fixed,"[""Badminton""]",13:00,16:00,https://placehold.co/600x400
+67,123,Football Pitch,fixed,"[""Football""]",08:30,16:30,https://placehold.co/600x400
+68,123,Table Tennis Area,fixed,"[""TableTennis""]",09:00,15:00,https://placehold.co/600x400
+69,123,Flex Zone,flex,"[""Football"",""TableTennis""]",10:00,14:00,https://placehold.co/600x400
+70,124,Basketball Court,fixed,"[""Basketball""]",09:00,19:00,https://placehold.co/600x400
+71,124,Hoops Zone,fixed,"[""Basketball""]",10:00,18:00,https://placehold.co/600x400
+72,124,Half Court Flex,fixed,"[""Basketball""]",11:00,17:00,https://placehold.co/600x400
+73,125,Volleyball Court,fixed,"[""Volleyball""]",08:00,14:00,https://placehold.co/600x400
+74,125,Sand Flex,fixed,"[""Volleyball""]",09:00,13:00,https://placehold.co/600x400
+75,125,Beach Zone,fixed,"[""Volleyball""]",10:00,12:00,https://placehold.co/600x400
+76,126,Badminton Court,fixed,"[""Badminton""]",10:00,16:00,https://placehold.co/600x400
+77,126,Tennis Court,fixed,"[""Tennis""]",11:00,15:00,https://placehold.co/600x400
+78,126,Multi-Flex,flex,"[""Badminton"",""Tennis""]",10:30,15:30,https://placehold.co/600x400
+79,127,Football Ground,fixed,"[""Football""]",07:00,13:00,https://placehold.co/600x400
+80,127,Soccer Flex,fixed,"[""Football""]",08:00,12:00,https://placehold.co/600x400
+81,127,Training Ground,fixed,"[""Football""]",09:00,11:00,https://placehold.co/600x400
+82,128,Table Tennis Center,fixed,"[""TableTennis""]",12:00,19:00,https://placehold.co/600x400
+83,128,Ping Pong Flex,fixed,"[""TableTennis""]",13:00,18:00,https://placehold.co/600x400
+84,128,Practice Table,fixed,"[""TableTennis""]",14:00,17:00,https://placehold.co/600x400
+85,129,Running Track,fixed,"[""Running""]",08:00,17:00,https://placehold.co/600x400
+86,129,Jogging Path,fixed,"[""Running""]",09:00,16:00,https://placehold.co/600x400
+87,129,Sprint Zone,fixed,"[""Running""]",10:00,15:00,https://placehold.co/600x400
+88,130,Golf Course,fixed,"[""Golf""]",09:00,15:00,https://placehold.co/600x400
+89,130,Tennis Court,fixed,"[""Tennis""]",10:00,14:00,https://placehold.co/600x400
+90,130,Driving Range,flex,"[""Golf"",""Tennis""]",09:30,14:30,https://placehold.co/600x400

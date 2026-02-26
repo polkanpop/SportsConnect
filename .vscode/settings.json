@@ -1,0 +1,22 @@
+{
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "python.terminal.activateEnvironment": false,
+
+    // Prevent VS Code from creating TS projects from dependency tsconfig files.
+    // Some packages (e.g. expo-image-picker) ship internal build tsconfigs that reference
+    // dev-only bases like `expo-module-scripts/tsconfig.base`, which isn't present in apps.
+    "typescript.tsserver.exclude": [
+        "**/node_modules/expo-image-picker/**"
+    ],
+    "javascript.tsserver.exclude": [
+        "**/node_modules/expo-image-picker/**"
+    ],
+
+    // Android/Gradle in this repo requires Java 17. System Java 25 can break Gradle sync.
+    // This path is created by `frontend/android/use-jdk17.ps1` (run once on Windows).
+    // NOTE: Do NOT set `java.jdt.ls.java.home` to Java 17.
+    // The Java language server (Red Hat) requires Java 21+ and ships with its own runtime.
+    // We only pin Gradle import/build to Java 17.
+    "java.import.gradle.java.home": "${workspaceFolder}/frontend/android/.jdks/temurin-17",
+    "java.compile.nullAnalysis.mode": "automatic"
+}

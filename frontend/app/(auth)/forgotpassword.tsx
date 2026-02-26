@@ -37,7 +37,7 @@ const ForgotPasswordScreen = () => {
           <Image source={ICONS.app_icon} style={styles.logo} />
           <Text style={styles.title}>Forgot Password</Text>
         </View>
-        <Text style={styles.helper}>Enter your email or username and we'll send a reset link.</Text>
+        <Text style={styles.helper}>Enter your email or username and we&apos;ll send a reset link.</Text>
         <TextInput
           placeholder="Email or Username"
           placeholderTextColor={COLORS.dark300}

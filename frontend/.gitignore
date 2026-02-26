@@ -3,11 +3,15 @@
 # dependencies
 node_modules/
 
-# Ignore data folder
-data/
+# Note: do NOT ignore /data here (this app uses frontend/data/ CSVs)
 
 # Ignore environment variables
 .env
+.env.*
+!.env.example
+
+# Firebase / Google services (keep local unless explicitly needed)
+GoogleService-Info.plist
 
 # Expo
 .expo/
@@ -17,6 +21,8 @@ expo-env.d.ts
 
 # Native
 .kotlin/
+.jdks/
+.jdk/
 *.orig.*
 *.jks
 *.p8
@@ -38,12 +44,13 @@ yarn-error.*
 
 # local env files
 .env*.local
-.env*
+
+# Firebase Admin SDK service account keys (keep local; never commit)
+sportconnect-c34b9-firebase-adminsdk-fbsvc-dd20b22440.json
+*firebase-adminsdk*.json
+*firebase-admin*.json
+*serviceAccount*.json
 # typescript
 *.tsbuildinfo
 
 app-example
-
-# generated native folders
-/ios
-/android

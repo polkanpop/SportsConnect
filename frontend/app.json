@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Sportapp",
-    "slug": "sport_app",
+    "slug": "sport_connect",
     "icon": "./assets/icons/placeholder_icon.png",
     "extra": {
       "SUPABASE_URL": "https://pfhgiyujvxeartkomrpv.supabase.co",

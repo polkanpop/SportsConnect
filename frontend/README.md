@@ -9,6 +9,7 @@ Cross-platform (Android / iOS / Web) sports companion built with Expo SDK 54, Ex
 | Node | 18.x or 20.x LTS |
 | npm  | 9+ (ships with Node) |
 | Expo CLI | `npm i -g expo` (optional) |
+| JDK | 17 (required for Android/Gradle) |
 | Android Studio / Xcode | For emulators/simulators |
 
 ## 2. First-Time Clone Setup (Windows PowerShell friendly)
@@ -18,15 +19,21 @@ Cross-platform (Android / iOS / Web) sports companion built with Expo SDK 54, Ex
 git clone <repo-url> SportsConnect
 cd SportsConnect
 
+# Go to the Expo app
+cd frontend
+
 # (Optional) ensure there's no duplicate lowercase folder
 Get-ChildItem .. | Select-String sportsconnect | Out-Null
 
 # Clean any previous artifacts if re-cloning locally
-Remove-Item -Force -Recurse node_modules -ErrorAction SilentlyContinue
-Remove-Item package-lock.json -ErrorAction SilentlyContinue
+Remove-Item -Force -Recurse .\node_modules -ErrorAction SilentlyContinue
+Remove-Item .\package-lock.json -Force -ErrorAction SilentlyContinue
 
 # Install dependencies ( need --legacy-peer-deps very important !)
 npm install --legacy-peer-deps 
+
+# (Windows) Setup local JDK 17 for Android/Gradle (downloads automatically)
+powershell -ExecutionPolicy Bypass -File .\android\use-jdk17.ps1
 
 # note : when you reinstall these you will see everything red ( errors) ignore it and just run the below command
 
@@ -123,6 +130,8 @@ Some files still have `className` (e.g. `app/+not-found.tsx`). NativeWind remain
 | Env vars not loading | Ensure `EXPO_PUBLIC_*` prefix |
 | Babel `.plugins` error returns | Keep `babel.config.js` minimal: only `presets: ['babel-preset-expo']` |
 | Styling missing on converted auth screens | Confirm you removed all `className` and applied `styles.*` |
+| VS Code: “Can’t use Java X and Gradle Y to import android” | Use **JDK 17** for Android builds, and keep wrapper at `frontend/android/gradle/wrapper/gradle-wrapper.properties` (Gradle 8.13). Then clean caches: delete `frontend/android/.gradle`, `frontend/android/build`, `frontend/android/app/build` and reopen VS Code. |
+| Android build fails: `Filename longer than 260 characters` (CMake/Ninja on Windows) | Use a shorter path. Quick workaround (no moving files): from repo root run `subst S: $PWD`, then `cd S:\frontend` and run `npx expo run:android`. Remove later with `subst S: /d`. |
 
 ## 8. Tech Stack
 
