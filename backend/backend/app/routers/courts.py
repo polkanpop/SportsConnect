@@ -847,8 +847,8 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
             "courtinfo": address,
             "ownerid": req.ownerid,
             "price": req.price,
-            # New registrations should be reviewed.
-            "status": "pending",
+            # No court verification workflow yet; mark as verified so it appears in map features.
+            "status": "verified",
         }
         try:
             created_court = rest_insert("courts", court_insert_payload)

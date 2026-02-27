@@ -5,7 +5,10 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { useRouter } from 'expo-router'
 
 import { cloudinarySignUpload, geocodeCourtAddress, registerCourt } from '@/lib/backendApi'
+import { getCache, invalidateCache } from '@/lib/cache'
 import { useUserId } from '@/hooks/use-user-id'
+
+const COURT_REGISTER_VERIFY_STORAGE_KEY = '@courtRegisterVerifiedLocation'
 
 type Venue = 'Indoor' | 'Outdoor' | 'Both'
 
@@ -130,6 +133,19 @@ export default function CourtRegisterPage() {
     setSubmitting(true)
     setWarnings([])
     try {
+      // If user verified a pin on MapVerify, use those coordinates to ensure it shows on the map immediately.
+      let verifiedCoord: { latitude: number; longitude: number } | null = null
+      try {
+        const saved = await getCache<any>(COURT_REGISTER_VERIFY_STORAGE_KEY)
+        const lat = saved?.latitude != null ? Number(saved.latitude) : NaN
+        const lng = saved?.longitude != null ? Number(saved.longitude) : NaN
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          verifiedCoord = { latitude: lat, longitude: lng }
+        }
+      } catch {}
+      // Consume + clear it (so it doesn't apply to future registrations)
+      try { await invalidateCache(COURT_REGISTER_VERIFY_STORAGE_KEY) } catch {}
+
       // Upload images (if any) first
       let urls: string[] = remoteImageUrls
       if (localImageUris.length > 0 && remoteImageUrls.length < localImageUris.length) {
@@ -151,9 +167,12 @@ export default function CourtRegisterPage() {
         price: Number.isFinite(p) && p > 0 ? p : 0,
         venue,
         images: urls,
+        ...(verifiedCoord ? { latitude: verifiedCoord.latitude, longitude: verifiedCoord.longitude, accuracy_type: 'user_selected' } : {}),
       } as const
 
       const resp = await registerCourt(payload)
+      // Bust cached courtinfo so Map/Court List can reflect new court immediately.
+      try { await invalidateCache('cache:courtinfo:v1') } catch {}
       const w = (resp?.geocode?.warnings || []).filter(Boolean)
       setWarnings(w)
 

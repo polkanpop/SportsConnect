@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { getCache, setCache } from '@/lib/cache'
@@ -234,6 +234,9 @@ const CourtListScreen = () => {
   useEffect(() => {
     loadCourts()
   }, [loadCourts])
+
+  // Refresh on screen focus (handles coming back after Court Register)
+  useFocusEffect(useCallback(() => { loadCourts() }, [loadCourts]))
 
   // Load favourites for current user
   const loadFavourites = useCallback(async () => {

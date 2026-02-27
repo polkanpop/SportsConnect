@@ -13,7 +13,7 @@
   import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
   import * as Location from "expo-location";
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-  import { useRouter } from 'expo-router';
+  import { useFocusEffect, useRouter } from 'expo-router';
   import {
     ActivityIndicator,
     FlatList,
@@ -378,18 +378,24 @@
         } catch (e) {
           if (!cached) throw e // only surface if we had nothing cached
         }
-        let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => ({
+        let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => {
+          const latRaw: any = (m as any)?.latitude
+          const lngRaw: any = (m as any)?.longitude
+          const lat = typeof latRaw === 'number' ? latRaw : (typeof latRaw === 'string' ? Number(latRaw) : NaN)
+          const lng = typeof lngRaw === 'number' ? lngRaw : (typeof lngRaw === 'string' ? Number(lngRaw) : NaN)
+          return ({
           id: m.courtinfoid,
           courtid: m.courtid,
-          latitude: m.latitude ?? 0,
-          longitude: m.longitude ?? 0,
+          latitude: Number.isFinite(lat) ? lat : 0,
+          longitude: Number.isFinite(lng) ? lng : 0,
           name: m.name || m.address || `Court #${m.courtinfoid}`,
           address: m.address || "Unknown",
           images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
           venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
           availability: m.availability || "Available",
           isFavorite: false,
-        }));
+          })
+        });
         setMarkers(normalized);
 
         // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
@@ -426,10 +432,8 @@
       });
       return Array.from(set);
     }, [markers]);
-    // Fetch markers from backend /courtinfo API (architecture shift away from direct Supabase client)
-    useEffect(() => {
-      fetchMarkers();
-    }, [fetchMarkers]);
+    // Refresh markers when screen is focused (covers returning from Court Register)
+    useFocusEffect(useCallback(() => { fetchMarkers(); }, [fetchMarkers]));
 
     const availabilityOptions = ["Available", "Unavailable"];
 
