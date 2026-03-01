@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { getCache, setCache } from '@/lib/cache'
+import { listCourtInfo } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -219,10 +220,12 @@ const CourtListScreen = () => {
       if (cached && cached.length) {
         setAllCourts(cached.filter(r => (r.availability || '').toLowerCase() === 'available'))
       }
-      const rows = await listCourtInfoCached()
+      // Always fetch fresh so verified courts appear immediately.
+      const rows = await listCourtInfo()
       const available = rows.filter(r => (r.availability || '').toLowerCase() === 'available')
       setAllCourts(available)
-      await setCache('cache:courtinfo:v1', rows, 5 * 60 * 1000, 5 * 60 * 1000)
+      // Short TTL (seconds) to avoid stale verified status.
+      await setCache('cache:courtinfo:v1', rows, 15 * 1000, 15 * 1000)
     } catch (e: any) {
       setError(e.message || String(e))
     } finally {
