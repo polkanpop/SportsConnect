@@ -2,6 +2,24 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from ..db import rest_select, rest_upsert, rest_delete, rest_insert, rest_update
 from ..auth import get_current_user
 from typing import Any, Dict
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _ascii_safe(obj: Any) -> str:
+    """Return an ASCII-only string for logging.
+
+    Prevents UnicodeEncodeError on Windows consoles when payloads contain Vietnamese.
+    """
+    try:
+        return json.dumps(obj, ensure_ascii=True, default=str)
+    except Exception:
+        try:
+            return ascii(obj)
+        except Exception:
+            return "<unprintable>"
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -78,12 +96,12 @@ def create_event(body: dict, current_user: str = Depends(get_current_user)):
         # Default status if not provided
         if "status" not in payload:
             payload["status"] = "upcoming"
-        # Debug logging (remove later)
-        print("[create_event] payload=", payload)
+        # Debug logging (ASCII-safe; avoid crashing on non-ASCII input)
+        logger.info("[create_event] payload=%s", _ascii_safe(payload))
         try:
             resp = rest_insert("events", payload)
         except RuntimeError as e:
-            print("[create_event] insert error:", e)
+            logger.warning("[create_event] insert error: %s", str(e))
             raise
         return resp[0] if isinstance(resp, list) and resp else payload
     except HTTPException:
@@ -183,10 +201,10 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         event_payload["time"] = start_ts
     # Insert event first
     try:
-        print("[create_event_with_info] event_payload=", event_payload)
+        logger.info("[create_event_with_info] event_payload=%s", _ascii_safe(event_payload))
         event_resp = rest_insert("events", event_payload)
     except RuntimeError as e:
-        print("[create_event_with_info] events insert error:", e)
+        logger.warning("[create_event_with_info] events insert error: %s", str(e))
         if "409" in str(e):
             raise HTTPException(status_code=409, detail="Duplicate event or sequence conflict")
         # Pass through 403/permission context
@@ -216,10 +234,10 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         eventinfo_payload["support_payment_method"] = support_payment_method
     # Insert eventinfo; rollback if fails
     try:
-        print("[create_event_with_info] eventinfo_payload=", eventinfo_payload)
+        logger.info("[create_event_with_info] eventinfo_payload=%s", _ascii_safe(eventinfo_payload))
         info_resp = rest_insert("eventinfo", eventinfo_payload)
     except RuntimeError as e:
-        print("[create_event_with_info] eventinfo insert error:", e)
+        logger.warning("[create_event_with_info] eventinfo insert error: %s", str(e))
         # Rollback event
         try:
             rest_delete("events", {"eventid": eventid})

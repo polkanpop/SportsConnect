@@ -1,11 +1,8 @@
 
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
-import { IMAGES } from "@/constants/images";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { Animated, Dimensions, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
@@ -133,6 +130,33 @@ export default function Home() {
 
   const { data: userInfo } = useUserInfo(currentUserId);
 
+  const isPlaceholderImageUri = (uri: string): boolean => {
+    const u = uri.trim().toLowerCase();
+    if (!u) return true;
+    return (
+      u.includes('via.placeholder.com') ||
+      u.includes('placeholder.com') ||
+      u.includes('placehold.co') ||
+      u.includes('dummyimage.com')
+    );
+  };
+
+  const normalizeImageUri = (uri: unknown): string | null => {
+    if (typeof uri !== 'string') return null;
+    const trimmed = uri.trim();
+    if (!trimmed) return null;
+    if (isPlaceholderImageUri(trimmed)) return null;
+    return trimmed;
+  };
+
+  const pickFirstRealImageUri = (uris: string[]): string | null => {
+    for (const uri of uris) {
+      const normalized = normalizeImageUri(uri);
+      if (normalized) return normalized;
+    }
+    return null;
+  };
+
   // Unified numeric user id resolver (matches Map.tsx logic):
   // 1. Backend profile from AuthContext (login via /auth/login)
   // 2. AsyncStorage persisted @backendProfile
@@ -225,13 +249,13 @@ export default function Home() {
         seenCourtIds.add(fr.courtid);
         const info = infoMap.get(fr.courtid);
         const images = asStringArrayLoose((info as any)?.images);
-        const firstImage = images.length ? images[0] : null;
+        const firstImage = pickFirstRealImageUri(images);
         acc.push({
           favouriteid: fr.favouriteid,
           courtid: fr.courtid,
           name: info?.name || `Court ${fr.courtid}`,
           availability: info?.availability || 'Available',
-          imageUri: typeof firstImage === 'string' && firstImage.trim() ? firstImage.trim() : null,
+          imageUri: firstImage,
         });
         return acc;
       }, []);
@@ -442,7 +466,8 @@ export default function Home() {
               )}
               {!loadingFavs && favoriteLocations.map(fav => {
                 const isAvailable = String(fav.availability).toLowerCase() === 'available';
-                const bgSource = fav.imageUri ? { uri: fav.imageUri } : IMAGES.eventBanner;
+                const imageUri = normalizeImageUri(fav.imageUri);
+                const hasImage = !!imageUri;
                 return (
                   <TouchableOpacity
                     key={fav.favouriteid}
@@ -459,91 +484,126 @@ export default function Home() {
                       marginRight: 12,
                       opacity: isAvailable ? 1 : 0.6,
                       overflow: 'hidden',
-                      borderWidth: 2,
-                      borderColor: COLORS.gold,
-                      shadowColor: COLORS.gold,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.32,
-                      shadowRadius: 12,
-                      elevation: 6,
+                      borderWidth: 0,
+                      borderColor: 'transparent',
+                      shadowColor: hasImage ? '#000' : 'transparent',
+                      shadowOffset: hasImage ? { width: 0, height: 4 } : { width: 0, height: 0 },
+                      shadowOpacity: hasImage ? 0.32 : 0,
+                      shadowRadius: hasImage ? 12 : 0,
+                      elevation: hasImage ? 6 : 0,
                     }}
                   >
-                    <ImageBackground
-                      source={bgSource as any}
-                      style={{ flex: 1, justifyContent: 'flex-end' }}
-                      imageStyle={{ borderRadius: 16 }}
-                      resizeMode="cover"
-                    >
-                      <LinearGradient
-                        colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.65)']}
-                        style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
-                      />
-
-                      {/* Gold "shine" overlay so favourites read instantly */}
-                      <LinearGradient
-                        colors={['rgba(255,215,0,0.26)', 'rgba(255,215,0,0.00)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 90 }}
-                      />
-
-                      <View
-                        style={{
-                          position: 'absolute',
-                          top: 12,
-                          right: 12,
-                          backgroundColor: 'rgba(0,0,0,0.45)',
-                          padding: 6,
-                          borderRadius: 20,
-                          borderWidth: 1.5,
-                          borderColor: COLORS.gold,
-                        }}
+                    {hasImage ? (
+                      <ImageBackground
+                        source={{ uri: imageUri as string } as any}
+                        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#e6e6e6' }}
+                        imageStyle={{ borderRadius: 16, backgroundColor: '#e6e6e6' }}
+                        resizeMode="cover"
                       >
-                        <Image source={ICONS.starCal} style={{ width: 14, height: 14, tintColor: COLORS.gold }} resizeMode="contain" />
-                      </View>
-
-                      <BlurView
-                        intensity={80}
-                        tint="dark"
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderTopWidth: 1,
-                          borderColor: 'rgba(255,255,255,0.10)',
-                        }}
-                      >
-                        <View style={{ flex: 1, paddingRight: 10 }}>
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: '#fff',
-                              fontSize: 16,
-                              fontWeight: '800',
-                              textShadowColor: 'rgba(0,0,0,0.45)',
-                              textShadowRadius: 6,
-                            }}
-                          >
-                            {fav.name || 'Unnamed'}
-                          </Text>
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 12,
+                            right: 12,
+                            backgroundColor: 'transparent',
+                            padding: 0,
+                            borderRadius: 0,
+                            borderWidth: 0,
+                            borderColor: 'transparent',
+                          }}
+                        >
+                          <Image
+                            source={ICONS.starCal}
+                            style={{ width: 20, height: 20, tintColor: COLORS.gold }}
+                            resizeMode="contain"
+                          />
                         </View>
 
                         <View
                           style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: COLORS.gold,
+                            flexDirection: 'row',
                             alignItems: 'center',
-                            justifyContent: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            backgroundColor: 'rgba(0,0,0,0.55)',
                           }}
                         >
-                          <Image source={ICONS.arrowright} style={{ width: 16, height: 16, tintColor: '#000' }} resizeMode="contain" />
+                          <View style={{ flex: 1, paddingRight: 10 }}>
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: '#fff',
+                                fontSize: 16,
+                                fontWeight: '800',
+                              }}
+                            >
+                              {fav.name || 'Unnamed'}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: COLORS.gold,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Image
+                              source={ICONS.arrowright}
+                              style={{ width: 16, height: 16, tintColor: '#000' }}
+                              resizeMode="contain"
+                            />
+                          </View>
                         </View>
-                      </BlurView>
-                    </ImageBackground>
+                      </ImageBackground>
+                    ) : (
+                      <View style={{ flex: 1, backgroundColor: '#e6e6e6', justifyContent: 'flex-end' }}>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            backgroundColor: 'rgba(0,0,0,0.55)',
+                          }}
+                        >
+                          <View style={{ flex: 1, paddingRight: 10 }}>
+                            <Text
+                              numberOfLines={1}
+                              style={{
+                                color: '#fff',
+                                fontSize: 16,
+                                fontWeight: '800',
+                              }}
+                            >
+                              {fav.name || 'Unnamed'}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: COLORS.gold,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Image
+                              source={ICONS.arrowright}
+                              style={{ width: 16, height: 16, tintColor: '#000' }}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}

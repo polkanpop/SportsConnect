@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listCourtInfoCached, listCourtAvailability, createCourtBooking, createPayment, listCourtBookings, deleteCourtBooking } from '@/lib/backendApi'
+import { listCourtInfoCached, listCourtAvailabilityCached, createCourtBooking, createPayment, listCourtBookings, deleteCourtBooking } from '@/lib/backendApi'
 import { queryKeys } from './query-keys'
 
 // Deprecated local keys kept for backward compatibility (will remove later)
@@ -18,9 +18,12 @@ export function useCourtAvailability(courtid: number | null) {
     queryKey: queryKeys.courtAvailability(courtid),
     queryFn: () => {
       if (courtid == null || Number.isNaN(courtid)) return []
-      return listCourtAvailability(courtid)
+      return listCourtAvailabilityCached(courtid)
     },
     enabled: !!courtid && !Number.isNaN(courtid),
+		staleTime: 60_000,
+		gcTime: 10 * 60_000,
+		refetchOnWindowFocus: false,
   })
 }
 

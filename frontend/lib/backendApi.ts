@@ -93,7 +93,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		method: options.method || 'GET',
 		signal: options.signal,
 		headers: {
-			'Content-Type': 'application/json',
+			'Content-Type': 'application/json; charset=utf-8',
 			...authHeader,
 			...(options.headers || {})
 		},
@@ -413,6 +413,11 @@ export type CourtRegisterRequest = {
 	latitude?: number
 	longitude?: number
 	accuracy_type?: string
+	schedule?: {
+		booking_date: string[]
+		start_time: string
+		end_time: string
+	}
 }
 
 export type CourtRegisterResponse = {
@@ -728,12 +733,12 @@ export async function listCourtInfo(): Promise<CourtInfoRow[]> {
 	const data = await request('/courtinfo', { debugLabel: 'listCourtInfo' })
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
 }
-// Cached variant (5 min TTL, additional 5 min stale window)
+// Cached variant (short TTL; courts/verification status should feel near-realtime)
 export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 	return fetchWithCache<CourtInfoRow[]>({
 		key: 'cache:courtinfo:v1',
-		ttlMs: 5 * 60 * 1000,
-		swrMs: 5 * 60 * 1000,
+		ttlMs: 15 * 1000,
+		swrMs: 15 * 1000,
 		fetcher: () => listCourtInfo()
 	})
 }
@@ -955,6 +960,19 @@ export async function debugIdentity(): Promise<{ token_subject: string; numeric_
 export async function listCourtAvailability(courtid: number) {
 	const path = `/courtavailability?courtid=${encodeURIComponent(courtid)}`
 	return request(path, { debugLabel: 'listCourtAvailability' }) as Promise<any[]>
+}
+
+export async function listCourtAvailabilityCached(courtid: number) {
+	const key = `@courtAvailability:${courtid}`
+	return fetchWithCache({
+		key,
+		ttlMs: 60_000,
+		swrMs: 5 * 60_000,
+		fetcher: () => listCourtAvailability(courtid),
+		onBackgroundRefreshError: (err) => {
+			console.warn('[listCourtAvailabilityCached] background refresh failed', (err as any)?.message)
+		}
+	})
 }
 
 export type CourtAvailabilityRow = {

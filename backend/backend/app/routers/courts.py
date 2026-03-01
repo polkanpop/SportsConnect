@@ -2,13 +2,13 @@ import os
 import logging
 import re
 from typing import Any, Optional
+from datetime import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..auth import get_current_user
-from ..db import get_http_client, rest_insert, rest_select
-from fastapi_cache.decorator import cache
+from ..db import get_http_client, rest_delete, rest_insert, rest_select
 
 router = APIRouter(prefix="/courts", tags=["courts"])
 
@@ -18,6 +18,40 @@ SELECT_COLUMNS = "*"  # adjust if you want a slimmer payload
 
 
 ALLOWED_VENUES: set[str] = {"Indoor", "Outdoor"}
+
+
+_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$")
+
+
+def _parse_time_hhmm_or_hhmmss(s: str) -> tuple[int, str]:
+    """Parse `HH:MM` or `HH:MM:SS`.
+
+    Returns:
+      - minutes since midnight (seconds ignored for ordering)
+      - normalized time string `HH:MM:SS` for DB insert
+    """
+    raw = (s or "").strip()
+    if not _TIME_RE.match(raw):
+        raise ValueError("Invalid time format; expected HH:MM")
+    parts = raw.split(":")
+    hh = int(parts[0])
+    mm = int(parts[1])
+    ss = int(parts[2]) if len(parts) == 3 else 0
+    # Safety clamp (regex already ensures ranges)
+    ss = max(0, min(59, ss))
+    return hh * 60 + mm, f"{hh:02d}:{mm:02d}:{ss:02d}"
+
+
+def _best_effort_cleanup_new_court(*, courtid: Optional[int]) -> None:
+    if not courtid:
+        return
+    # Delete dependents first to satisfy FK constraints.
+    for table in ("courtavailability", "courtinfo", "courts"):
+        try:
+            rest_delete(table, {"courtid": courtid})
+        except Exception:
+            # Best-effort only; never mask the original error.
+            pass
 
 
 class GeocodeResponse(BaseModel):
@@ -35,6 +69,12 @@ class GeocodeResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class CourtSchedule(BaseModel):
+    booking_date: list[str] = Field(default_factory=list)  # e.g. ["Mon", "Tue", ...]
+    start_time: str = Field(default="08:00")
+    end_time: str = Field(default="22:00")
+
+
 class CourtRegisterRequest(BaseModel):
     name: str
     address: str
@@ -45,6 +85,7 @@ class CourtRegisterRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy_type: Optional[str] = None
+    schedule: Optional[CourtSchedule] = None
 
 
 class CourtRegisterResponse(BaseModel):
@@ -783,7 +824,6 @@ async def distance_matrix_batch(req: DistanceMatrixBatchRequest, _: str = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("", response_model=list[dict])
-@cache(expire=300)
 async def list_courts():
     try:
         data = rest_select("courts", SELECT_COLUMNS, order={"column": "courtid"})
@@ -792,7 +832,6 @@ async def list_courts():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtid}", response_model=dict)
-@cache(expire=300)
 async def get_court(courtid: int):
     try:
         row = rest_select("courts", SELECT_COLUMNS, filters={"courtid": courtid}, single=True)
@@ -835,6 +874,22 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
     if any(v not in ALLOWED_VENUES for v in venues):
         raise HTTPException(status_code=400, detail="Invalid venue; expected Indoor/Outdoor/Both")
 
+    # Validate schedule early to avoid partial inserts (courts created without availability).
+    allowed_days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+    schedule = req.schedule or CourtSchedule()
+    schedule_days = [d for d in (schedule.booking_date or []) if isinstance(d, str) and d.strip()]
+    schedule_days = [d.strip() for d in schedule_days if d.strip() in allowed_days]
+    if not schedule_days:
+        schedule_days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    try:
+        start_m, start_db = _parse_time_hhmm_or_hhmmss(schedule.start_time)
+        end_m, end_db = _parse_time_hhmm_or_hhmmss(schedule.end_time)
+        if start_m >= end_m:
+            raise ValueError("start_time must be earlier than end_time")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid schedule: {str(e)}")
+
     geocode = _geocode_address(address)
 
     has_user_coords = req.latitude is not None and req.longitude is not None
@@ -842,6 +897,7 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
     longitude = float(req.longitude) if has_user_coords else geocode.longitude
     accuracy_type = (req.accuracy_type or ("user_selected" if has_user_coords else None) or geocode.accuracy_type or geocode.location_type)
 
+    courtid: Optional[int] = None
     try:
         court_insert_payload: dict[str, Any] = {
             "courtinfo": address,
@@ -885,6 +941,22 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
         info_row = created_info[0] if isinstance(created_info, list) and created_info else created_info
         courtinfoid = int(info_row.get("courtinfoid"))
     except Exception as e:
+        _best_effort_cleanup_new_court(courtid=courtid)
         raise HTTPException(status_code=500, detail=f"Failed creating courtinfo: {str(e)}")
+
+    try:
+        rest_insert(
+            "courtavailability",
+            {
+                "courtid": courtid,
+                "start_time": start_db,
+                "end_time": end_db,
+                "booking_date": schedule_days,
+                "status": "available",
+            },
+        )
+    except Exception as e:
+        _best_effort_cleanup_new_court(courtid=courtid)
+        raise HTTPException(status_code=500, detail=f"Failed creating court availability: {str(e)}")
 
     return CourtRegisterResponse(courtid=courtid, courtinfoid=courtinfoid, geocode=geocode)

@@ -5,7 +5,17 @@
   // Removed static markers import
   import { supabase } from "@/lib/supabase";
   // Backend API helpers (public)
-  import { listFavouriteCourtsCached, addFavouriteCourt, removeFavouriteCourt, FavouriteCourt, listCourtInfoCached, CourtInfoRow } from '@/lib/backendApi';
+  import {
+    listFavouriteCourtsCached,
+    addFavouriteCourt,
+    removeFavouriteCourt,
+    FavouriteCourt,
+    CourtInfoRow,
+    listCourtInfo,
+    getDistanceMatrixCached,
+    peekDistanceMatrixCached,
+    listCourts,
+  } from '@/lib/backendApi';
   import { favouritesEvents } from '@/lib/favouritesEvents';
   import { getCache, setCache } from '@/lib/cache';
   import { useAuthContext } from '@/hooks/use-auth-context';
@@ -15,7 +25,7 @@
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
   import { useFocusEffect, useRouter } from 'expo-router';
   import {
-    ActivityIndicator,
+    Dimensions,
     FlatList,
     Image,
     Keyboard,
@@ -33,7 +43,6 @@
   } from "react-native";
   import { useQuery } from '@tanstack/react-query';
   import { useCourtAvailability } from '@/hooks/use-court-data';
-  import { getDistanceMatrixCached, peekDistanceMatrixCached, listCourts } from '@/lib/backendApi';
   import { GestureHandlerRootView } from "react-native-gesture-handler";
   import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -200,6 +209,13 @@
     return distanceMeters / walkSpeedMps;
   }
 
+  function estimateMotorbikeSecondsFromMeters(distanceMeters: number | null | undefined) {
+    if (distanceMeters == null || !Number.isFinite(distanceMeters) || distanceMeters < 0) return null;
+    // Rough city riding speed; used only for "~" placeholder while matrix loads.
+    const rideSpeedMps = 8.3; // ~30 km/h
+    return distanceMeters / rideSpeedMps;
+  }
+
   const WEEK_DAYS: { key: string; label: string }[] = [
     { key: 'Mon', label: 'Mon' },
     { key: 'Tue', label: 'Tue' },
@@ -209,6 +225,9 @@
     { key: 'Sat', label: 'Sat' },
     { key: 'Sun', label: 'Sun' },
   ]
+
+  const DETAIL_IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
+  const DETAIL_IMAGE_TILE_HEIGHT = 120
 
   export default function App() {
     const router = useRouter();
@@ -244,7 +263,9 @@
     const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null); // radius filter (km)
     const [distanceKmInput, setDistanceKmInput] = useState<string>('');
     const [distanceKmError, setDistanceKmError] = useState<string | null>(null);
-    const [transportExpanded, setTransportExpanded] = useState(false);
+    const [scheduleExpanded, setScheduleExpanded] = useState(true);
+    const [transportExpanded, setTransportExpanded] = useState(true);
+    const [reviewsExpanded, setReviewsExpanded] = useState(false);
 
     type DistanceMatrixStatus = 'loading' | 'loaded' | 'error';
     const [distanceMatrixStatusByCourtInfoId, setDistanceMatrixStatusByCourtInfoId] = useState<Record<number, DistanceMatrixStatus>>({});
@@ -284,7 +305,16 @@
     }, [mapRef]);
 
     // Snap points for the BottomSheet
-    const snapPoints = useMemo(() => ["24%", "55%", "92%"], []);
+    const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);
+
+    // Reset section expansion state when selecting a new marker
+    useEffect(() => {
+      if (!selectedMarker) return;
+      setScheduleExpanded(true);
+      setTransportExpanded(true);
+      setReviewsExpanded(false);
+      setWeekOffset(0);
+    }, [selectedMarker?.id]);
 
     // Auth context (backend login OR supabase anonymous/social)
     const { profile, session } = useAuthContext();
@@ -360,30 +390,13 @@
       return null;
     }, [profile]);
 
-    const fetchMarkers = useCallback(async () => {
-      setLoadingMarkers(true);
-      setErrorMarkers(null);
-      try {
-        // Fetch via backend API
-        // Hydrate markers from cache first for snappy load
-        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
-        let rows: CourtInfoRow[] = []
-        if (cached) rows = cached
-        // Always fetch fresh (cached variant handles TTL)
-        try {
-          const fresh = await listCourtInfoCached();
-          rows = fresh
-          // refresh cache TTL
-          setCache('cache:courtinfo:v1', fresh, 5 * 60 * 1000, 5 * 60 * 1000)
-        } catch (e) {
-          if (!cached) throw e // only surface if we had nothing cached
-        }
-        let normalized: MarkerType[] = rows.map((m: CourtInfoRow) => {
-          const latRaw: any = (m as any)?.latitude
-          const lngRaw: any = (m as any)?.longitude
-          const lat = typeof latRaw === 'number' ? latRaw : (typeof latRaw === 'string' ? Number(latRaw) : NaN)
-          const lng = typeof lngRaw === 'number' ? lngRaw : (typeof lngRaw === 'string' ? Number(lngRaw) : NaN)
-          return ({
+    const normalizeCourtInfoRows = useCallback((rows: CourtInfoRow[]): MarkerType[] => {
+      return rows.map((m: CourtInfoRow) => {
+        const latRaw: any = (m as any)?.latitude
+        const lngRaw: any = (m as any)?.longitude
+        const lat = typeof latRaw === 'number' ? latRaw : (typeof latRaw === 'string' ? Number(latRaw) : NaN)
+        const lng = typeof lngRaw === 'number' ? lngRaw : (typeof lngRaw === 'string' ? Number(lngRaw) : NaN)
+        return ({
           id: m.courtinfoid,
           courtid: m.courtid,
           latitude: Number.isFinite(lat) ? lat : 0,
@@ -394,17 +407,69 @@
           venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
           availability: m.availability || "Available",
           isFavorite: false,
-          })
-        });
-        setMarkers(normalized);
+        })
+      });
+    }, []);
 
-        // Fetch favourites from API if we can determine numeric user id (unchanged behaviour)
+    const refreshFavouritesOnly = useCallback(async () => {
+      const numericUserId = await getCurrentNumericUserId();
+      if (numericUserId === null) return;
+      try {
+        const rowsFav = await listFavouriteCourtsCached({ userid: numericUserId });
+        const favRows: FavouriteCourt[] = Array.isArray(rowsFav)
+          ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r)
+          : [];
+        setFavouriteRecords(favRows);
+        const favIds = favRows.map(r => r.courtid);
+        setFavoriteIds(favIds);
+        setMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) })));
+        setFilteredMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) })));
+      } catch (e) {
+        console.warn('[Map] failed to load favouritecourts', e);
+      }
+    }, [getCurrentNumericUserId]);
+
+    const fetchMarkers = useCallback(async (opts?: { forceFresh?: boolean; onlyIfCacheMissing?: boolean; showLoading?: boolean }) => {
+      const forceFresh = !!opts?.forceFresh;
+      const onlyIfCacheMissing = !!opts?.onlyIfCacheMissing;
+      const showLoading = opts?.showLoading ?? true;
+
+      if (onlyIfCacheMissing) {
+        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1');
+        if (cached && cached.length) {
+          // We already have cached markers available; don't refetch on tab hop.
+          // (Court Register invalidates this cache key, so returning from register will still refresh.)
+          return;
+        }
+      }
+
+      if (showLoading) setLoadingMarkers(true);
+      setErrorMarkers(null);
+      try {
+        const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1');
+        let rows: CourtInfoRow[] = Array.isArray(cached) ? cached : [];
+
+        // Only hit network if cache missing OR explicitly forced.
+        if (forceFresh || !rows.length) {
+          const fresh = await listCourtInfo();
+          rows = fresh;
+          // Longer TTL prevents refetch when simply hopping between tabs.
+          await setCache('cache:courtinfo:v1', fresh, 60 * 1000);
+        }
+
+        let normalized: MarkerType[] = normalizeCourtInfoRows(rows);
+        setMarkers(normalized);
+        setFilteredMarkers(normalized);
+
+        // Apply favourites (cheap + cached)
         const numericUserId = await getCurrentNumericUserId();
         let favIds: number[] = [];
         if (numericUserId !== null) {
           try {
             const rowsFav = await listFavouriteCourtsCached({ userid: numericUserId });
-            const favRows: FavouriteCourt[] = Array.isArray(rowsFav) ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
+            const favRows: FavouriteCourt[] = Array.isArray(rowsFav)
+              ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r)
+              : [];
             setFavouriteRecords(favRows);
             favIds = favRows.map(r => r.courtid);
             setFavoriteIds(favIds);
@@ -412,16 +477,19 @@
             console.warn('[Map] failed to load favouritecourts', e);
           }
         }
-        normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
-        setMarkers(normalized);
-        setFilteredMarkers(normalized);
+        if (favIds.length) {
+          normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
+          setMarkers(normalized);
+          setFilteredMarkers(normalized);
+        }
       } catch (e: any) {
         setErrorMarkers(e.message || String(e));
         setMarkers([]);
         setFilteredMarkers([]);
+      } finally {
+        if (showLoading) setLoadingMarkers(false);
       }
-      setLoadingMarkers(false);
-    }, [getCurrentNumericUserId]);
+    }, [getCurrentNumericUserId, normalizeCourtInfoRows]);
 
     const venueOptions = useMemo(() => {
       const set = new Set<string>();
@@ -432,8 +500,13 @@
       });
       return Array.from(set);
     }, [markers]);
-    // Refresh markers when screen is focused (covers returning from Court Register)
-    useFocusEffect(useCallback(() => { fetchMarkers(); }, [fetchMarkers]));
+    // On focus:
+    // - Only refetch court markers if the courtinfo cache was invalidated (e.g., after Court Register)
+    // - Still refresh favourites (cached) so fav pins stay in sync
+    useFocusEffect(useCallback(() => {
+      fetchMarkers({ onlyIfCacheMissing: true, showLoading: false });
+      refreshFavouritesOnly();
+    }, [fetchMarkers, refreshFavouritesOnly]));
 
     const availabilityOptions = ["Available", "Unavailable"];
 
@@ -1191,9 +1264,9 @@
                       {/* ...existing code... */}
                       {/* Title & actions row (layout adjusted for single-line names) */}
                       <View style={styles.titleRow}> 
-                        <TouchableOpacity onPress={() => setCalendarModalVisible(true)} style={{ flex: 1 }}>
+                        <View style={{ flex: 1 }}>
                           <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
-                        </TouchableOpacity>
+                        </View>
                         <View style={styles.actionRow}> 
                         <TouchableOpacity
                           style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
@@ -1263,7 +1336,10 @@
 
 
                       {/* Location Address */}
-                      <Text style={styles.markerAddress}>Address: {selectedMarker.address}</Text>
+                      <Text style={styles.markerAddress}>
+                        <Text style={styles.markerAddressLabel}>Address: </Text>
+                        {selectedMarker.address}
+                      </Text>
 
                       {/* Venue Tags (moved under address) */}
                       <View style={styles.sheetTagRow}>
@@ -1282,6 +1358,86 @@
                           ))
                         })()}
                       </View>
+
+                      {/* Price */}
+                      <Text style={styles.priceText}>
+                        Price: ({price ? new Intl.NumberFormat('vi-VN').format(Number(price)) : '0'}đ/hr)
+                      </Text>
+
+                      {/* Schedule Section (expandable, expanded by default) */}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setScheduleExpanded((p) => !p)}
+                        style={styles.transportHeader}
+                      >
+                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Schedule</Text>
+                        <Image
+                          source={ICONS.arrowdown}
+                          style={[styles.transportHeaderArrow, scheduleExpanded ? styles.transportArrowOpen : null]}
+                        />
+                      </TouchableOpacity>
+
+                      {scheduleExpanded && (
+                        availability ? (
+                          <View style={styles.scheduleBox}>
+                            {/* Match the existing modal schedule UI */}
+                            <View style={styles.scheduleHeaderRow}>
+                              <Text
+                                numberOfLines={1}
+                                style={[styles.scheduleTimeText, styles.scheduleTimeTextInline]}
+                              >
+                                Opening Time: {String(availability.start_time || '').slice(0, 5)} - {String(availability.end_time || '').slice(0, 5)}
+                              </Text>
+
+                              <View style={styles.weekNavInline}>
+                                <TouchableOpacity
+                                  style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}
+                                  onPress={() => setWeekOffset(prev => Math.max(0, prev - 1))}
+                                  disabled={weekOffset === 0}
+                                >
+                                  <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}
+                                  onPress={() => setWeekOffset(prev => Math.min(2, prev + 1))}
+                                  disabled={weekOffset === 2}
+                                >
+                                  <Image source={ICONS.arrowright} style={styles.navIcon} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+
+                            <View style={styles.weekRow}>
+                              {weekDaysDetailed.map((day, index) => {
+                                const today = new Date();
+                                const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                const isPast = weekOffset === 0 && day.date < todayOnly;
+                                const isDayAvailable = availability?.booking_date?.includes(day.key);
+                                const isAvailable = isDayAvailable && !isPast;
+
+                                return (
+                                  <View
+                                    key={index}
+                                    style={[
+                                      styles.dayCell,
+                                      !isAvailable && styles.dayCellDisabled,
+                                    ]}
+                                  >
+                                    <Text style={styles.dayLabel}>{day.label}</Text>
+                                    <Text style={[styles.dayDate, day.isToday && styles.todayUnderline]}>
+                                      {day.date.getDate()}
+                                    </Text>
+                                  </View>
+                                )
+                              })}
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.placeholderSection}>
+                            <Text style={styles.placeholderText}>No schedule available yet.</Text>
+                          </View>
+                        )
+                      )}
 
                       {/* Transport Section (expandable) */}
                       <TouchableOpacity
@@ -1304,18 +1460,81 @@
                         const hasDuration = typeof durationSecondsByCourtInfoId[id] === 'number' && Number.isFinite(durationSecondsByCourtInfoId[id]);
                         const isLoading = status === 'loading' || (!hasDistance && !hasDuration && inFlightDistanceIdsRef.current.has(id));
 
+                        const crowMeters = (userLocation && userLocation.coords)
+                          ? haversineMeters(
+                              userLocation.coords.latitude,
+                              userLocation.coords.longitude,
+                              selectedMarker.latitude,
+                              selectedMarker.longitude,
+                            )
+                          : null;
+                        const crowKmLabel = crowMeters != null ? (formatKmFromMeters(crowMeters) ?? 'Unavailable') : null;
+
+                        const approxKmLabel = (crowKmLabel && crowKmLabel !== 'Unavailable')
+                          ? `~ ${crowKmLabel}`
+                          : (crowKmLabel ?? 'Loading…');
+                        const approxTravelSecs = estimateMotorbikeSecondsFromMeters(crowMeters);
+                        const approxWalkSecs = estimateWalkSecondsFromMeters(crowMeters);
+                        const approxTravelLabel = approxTravelSecs != null ? `~ ${formatDuration(approxTravelSecs) ?? 'Unavailable'}` : 'Loading…';
+                        const approxWalkLabel = approxWalkSecs != null ? `~ ${formatDuration(approxWalkSecs) ?? 'Unavailable'}` : 'Loading…';
+
                         if (isLoading) {
+                          // Show "as the crow flies" distance placeholder (same concept as Court List)
                           return (
-                            <View style={styles.transportLoading}>
-                              <ActivityIndicator size="small" color={COLORS.slate600} />
+                            <View style={styles.transportBox}>
+                              <View style={styles.transportRow}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.distance} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Distance</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxKmLabel}</Text>
+                              </View>
+
+                              <View style={styles.transportRow}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.motorbike} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Travel time</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxTravelLabel}</Text>
+                              </View>
+
+                              <View style={styles.transportRowLast}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.walk} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Walk time</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxWalkLabel}</Text>
+                              </View>
                             </View>
                           );
                         }
 
                         if (status === 'error') {
                           return (
-                            <View style={styles.transportLoading}>
-                              <Text style={styles.transportErrorText}>Unable to load transport metrics</Text>
+                            <View style={styles.transportBox}>
+                              <View style={styles.transportRow}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.distance} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Distance</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxKmLabel ?? 'Unavailable'}</Text>
+                              </View>
+
+                              <View style={styles.transportRow}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.motorbike} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Travel time</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxTravelSecs != null ? approxTravelLabel : 'Unavailable'}</Text>
+                              </View>
+
+                              <View style={styles.transportRowLast}>
+                                <View style={styles.transportLeft}>
+                                  <Image source={ICONS.walk} style={styles.transportIcon} />
+                                  <Text style={styles.transportLabel}>Walk time</Text>
+                                </View>
+                                <Text style={styles.transportValue}>{approxWalkSecs != null ? approxWalkLabel : 'Unavailable'}</Text>
+                              </View>
                             </View>
                           );
                         }
@@ -1359,11 +1578,15 @@
                       {/* Images Section */}
                       <Text style={styles.sectionHeader}>Images</Text>
                       {selectedMarker.images && selectedMarker.images.length > 0 ? (
-                        <View style={styles.imageContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                           {selectedMarker.images.map((image, idx) => (
-                            <Image key={idx} source={{ uri: image }} style={styles.markerImage} />
+                            <Image
+                              key={idx}
+                              source={{ uri: image }}
+                              style={styles.detailImageTile}
+                            />
                           ))}
-                        </View>
+                        </ScrollView>
                       ) : (
                         <View style={styles.placeholderSection}>
                           <Text style={styles.placeholderText}>No images available yet.</Text>
@@ -1371,10 +1594,23 @@
                       )}
 
                       {/* Reviews Section */}
-                      <Text style={styles.sectionHeader}>Reviews</Text>
-                      <View style={styles.placeholderSection}>
-                        <Text style={styles.placeholderText}>Placeholder for user review :D</Text>
-                      </View>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setReviewsExpanded((p) => !p)}
+                        style={styles.transportHeader}
+                      >
+                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Reviews</Text>
+                        <Image
+                          source={ICONS.arrowdown}
+                          style={[styles.transportHeaderArrow, reviewsExpanded ? styles.transportArrowOpen : null]}
+                        />
+                      </TouchableOpacity>
+
+                      {reviewsExpanded && (
+                        <View style={styles.placeholderSection}>
+                          <Text style={styles.placeholderText}>Placeholder for user review :D</Text>
+                        </View>
+                      )}
                     </BottomSheetScrollView>
                   ) : (
                     <View style={styles.bottomSheetContent}>
@@ -1698,6 +1934,7 @@
       alignItems: "flex-start",
       padding: 16,
       position: "relative",
+      paddingBottom: 96,
     },
     topRightActions: {
       position: "absolute",
@@ -1776,19 +2013,71 @@
       fontSize: 16,
       color: "#666",
       textAlign: "left",
+      marginTop: 10,
       marginBottom: 16,
     },
-    imageContainer: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-      marginTop: 16,
+    markerAddressLabel: {
+      fontWeight: 'bold',
+      color: "#666",
     },
-    markerImage: {
-      width: 100,
-      height: 100,
-      borderRadius: 8,
-      margin: 4,
+    priceText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 6,
+    },
+    scheduleBox: {
+      width: '100%',
+      backgroundColor: COLORS.neutral0,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: COLORS.neutral450,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    scheduleTimeText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: COLORS.slate900,
+      marginBottom: 10,
+    },
+    scheduleTimeTextInline: {
+      marginBottom: 0,
+      marginRight: 10,
+      flex: 1,
+    },
+    scheduleDaysRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    scheduleDayPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: COLORS.neutral350,
+      backgroundColor: COLORS.white,
+      marginRight: 8,
+      marginBottom: 8,
+    },
+    scheduleDayPillDisabled: {
+      opacity: 0.35,
+    },
+    scheduleDayText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: COLORS.slate600,
+    },
+    imagesRow: {
+      paddingVertical: 6,
+      paddingRight: 16,
+    },
+    detailImageTile: {
+      width: DETAIL_IMAGE_TILE_WIDTH,
+      height: DETAIL_IMAGE_TILE_HEIGHT,
+      borderRadius: 12,
+      marginRight: 12,
+      backgroundColor: '#eee',
     },
     // Custom floating “My Location” button
     myLocationButton: {
@@ -1973,7 +2262,7 @@
     modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
     modalCancel: { backgroundColor:'#eee' },
     modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
-    weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+    weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
     scheduleHeaderRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
     weekNavInline: { flexDirection:'row', alignItems:'center' },
     navBtn: { padding:8, borderRadius:10, backgroundColor:'#e0e0e0', marginHorizontal:4 },
