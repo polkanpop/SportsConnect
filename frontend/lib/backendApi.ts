@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '@/env'
-import { fetchWithCache, invalidateByPrefix, invalidateCache } from '@/lib/cache'
+import { fetchWithCache, getCache, invalidateByPrefix, invalidateCache, setCache } from '@/lib/cache'
 import { queryClient } from '@/providers/query-provider'
 import { supabase } from './supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -81,7 +81,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		}
 	}
 	// Preflight: if this endpoint is protected (heuristic) ensure access token fresh
-	const isProtectedEndpoint = /^(?:\/courtbookings|\/courts|\/events|\/eventbookings|\/trainingsessions|\/trainingsessioninfo|\/tsbookings|\/blocklist|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
+	const isProtectedEndpoint = /^(?:\/courtbookings|\/servicebookings|\/courts|\/events|\/eventbookings|\/trainingsessions|\/trainingsessioninfo|\/tsbookings|\/blocklist|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
 	if (isProtectedEndpoint) {
 		const bt = await getLocalBackendToken()
 		const nowMs = Date.now()
@@ -106,7 +106,10 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	// Extremely detailed debug logs as requested
 	console.log('[backendApi]', debugLabel, { url, status: res.status, elapsedMs: elapsed, raw: text?.slice(0,500) })
 	if (!res.ok) {
-		const detail = (data && (data.detail || data.error)) || `HTTP ${res.status}`
+		const detailRaw = (data && (data.detail || data.error)) || `HTTP ${res.status}`
+		const detail = typeof detailRaw === 'string' ? detailRaw : (() => {
+			try { return JSON.stringify(detailRaw) } catch { return String(detailRaw) }
+		})()
 		// Broaden automatic refresh: any 401 Invalid token (expired or signature) triggers one retry
 		if (res.status === 401 && attempt === 0 && /Invalid token:/i.test(detail)) {
 			const refreshed = await refreshAccessToken()
@@ -733,6 +736,38 @@ export async function listCourtInfo(): Promise<CourtInfoRow[]> {
 	const data = await request('/courtinfo', { debugLabel: 'listCourtInfo' })
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
 }
+
+export async function getCourtInfoByCourtId(courtid: number): Promise<CourtInfoRow | null> {
+	if (courtid == null) throw new Error('courtid required')
+	try {
+		const row = await request(`/courtinfo/by-courtid/${encodeURIComponent(courtid)}`, { debugLabel: 'getCourtInfoByCourtId' })
+		return (row as CourtInfoRow) || null
+	} catch {
+		return null
+	}
+}
+
+export async function upsertCourtInfoIntoCache(row: CourtInfoRow, opts?: { ttlMs?: number; swrMs?: number }) {
+	if (!row || typeof row !== 'object') return
+	const ttlMs = opts?.ttlMs ?? 60 * 1000
+	const swrMs = opts?.swrMs
+	try {
+		const existing = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
+		// Important: don't create a partial cache with only one row (can prevent Map from ever fetching full list).
+		if (!Array.isArray(existing) || existing.length === 0) return
+		const list: CourtInfoRow[] = existing.slice()
+		const idx = list.findIndex(r => r?.courtid === row.courtid)
+		if (idx >= 0) list[idx] = { ...list[idx], ...row }
+		else list.push(row)
+		await setCache('cache:courtinfo:v1', list, ttlMs, swrMs)
+	} catch {}
+	// Ensure react-query consumers re-read the (updated) AsyncStorage cache without forcing a network fetch.
+	try {
+		queryClient.invalidateQueries({
+			predicate: q => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].toLowerCase().includes('courtinfo')
+		})
+	} catch {}
+}
 // Cached variant (short TTL; courts/verification status should feel near-realtime)
 export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 	return fetchWithCache<CourtInfoRow[]>({
@@ -762,6 +797,27 @@ export async function getCourt(courtid: number): Promise<CourtRow | null> {
 	}
 }
 
+// ---- Services ----
+export type ServiceRow = {
+	serviceid: number
+	courtid: number
+	name: string
+	category: string
+	price: number
+	stock: number
+	images?: any
+	status?: string
+}
+
+export async function listServicesByCourtId(courtid: number): Promise<ServiceRow[]> {
+	if (courtid == null || !Number.isFinite(courtid)) throw new Error('courtid required')
+	const data = await request(`/services?courtid=${encodeURIComponent(String(courtid))}`, {
+		method: 'GET',
+		debugLabel: 'listServicesByCourtId',
+	})
+	return Array.isArray(data) ? (data as ServiceRow[]) : []
+}
+
 // ---- Payments & Court Bookings (simplified create helpers) ----
 export type PaymentRow = { paymentid: number; status: string; time: string; method: string; amount: number }
 export async function createPayment(payload: { status: 'paid'|'pending'|'failed'; method: 'vnpay'|'cash'; amount: number }) {
@@ -781,6 +837,18 @@ export async function getPayment(paymentid: number): Promise<PaymentRow | null> 
 export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null; bookingstatus?: string }
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
+}
+
+// ---- Service booking line items ----
+export type ServiceBookingCreateRow = { courtbookingid: number; serviceid: number; quantity: number; unit_price: number; paymentid?: number | null }
+export async function createServiceBookings(rows: ServiceBookingCreateRow[]): Promise<any[]> {
+	if (!Array.isArray(rows) || rows.length === 0) return []
+	const data = await request('/servicebookings', {
+		method: 'POST',
+		body: JSON.stringify(rows),
+		debugLabel: 'createServiceBookings',
+	})
+	return Array.isArray(data) ? data : []
 }
 
 export async function getCourtBooking(courtbookingid: number): Promise<CourtBookingRow | null> {

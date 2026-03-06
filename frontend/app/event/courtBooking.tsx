@@ -2,13 +2,16 @@ import React, { useCallback, useMemo, useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
+import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
-import { CourtBookingRow, listCourts } from '@/lib/backendApi'
+import { CourtBookingRow, listCourts, createServiceBookings, listServicesByCourtId, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useUserId } from '@/hooks/use-user-id'
 import { appendHistory } from '@/storage/history'
+
 
 type AvailabilityRow = {
   availabilityid: number
@@ -33,7 +36,7 @@ function formatRange(start?: string | null, end?: string | null) {
     const startTime = s.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
     const endTime = e ? e.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''
     return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
-  } catch (err) {
+  } catch {
     return `${start}${end ? ` → ${end}` : ''}`
   }
 }
@@ -63,7 +66,7 @@ export default function CourtBooking() {
   const router = useRouter()
   const params = useLocalSearchParams()
   const courtid = params.courtid ? parseInt(String(params.courtid), 10) : NaN
-  const { profile } = useAuthContext()
+  useAuthContext()
 
   const { data: courtInfoData, isLoading: courtInfoLoading, error: courtInfoError } = useCourtInfo()
   const courtInfo = courtInfoData?.find?.((c:any)=> c.courtid === courtid)
@@ -91,6 +94,9 @@ export default function CourtBooking() {
   const [confirmation, setConfirmation] = useState<CourtBookingRow | null>(null)
   const [noteExpanded, setNoteExpanded] = useState(false)
   const [noteText, setNoteText] = useState('')
+  const [servicesExpanded, setServicesExpanded] = useState(true)
+  const [serviceQtyById, setServiceQtyById] = useState<Record<number, number>>({})
+  const [serviceTouchedById, setServiceTouchedById] = useState<Record<number, boolean>>({})
   // Week navigation (0 = current week, can move forward to +2)
   const [weekOffset, setWeekOffset] = useState(0)
   // Derived duration (minutes) of selected booking window
@@ -162,16 +168,37 @@ export default function CourtBooking() {
   // Courts pricing (price per hour) fetched from /courts
   const { data: courtsData } = useQuery({ queryKey: ['courts'], queryFn: () => listCourts() })
   const pricePerHour: number | null = courtsData?.find?.((c: any) => c.courtid === courtid)?.price ?? null
-  const calculatedAmount = useMemo(() => {
+  const courtAmount = useMemo(() => {
     if (pricePerHour == null || !startSlot || !endSlot) return 0
     return Math.round(Number(pricePerHour) * (durationMinutes / 60)) // prorated (e.g. 90m = 1.5h)
   }, [pricePerHour, durationMinutes, startSlot, endSlot])
+
+  const { data: servicesData, isLoading: servicesLoading } = useQuery({
+    queryKey: ['courtServices', courtid],
+    queryFn: () => listServicesByCourtId(courtid),
+    enabled: Number.isFinite(courtid),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const servicesTotal = useMemo(() => {
+    const rows: ServiceRow[] = Array.isArray(servicesData) ? servicesData : []
+    let sum = 0
+    for (const s of rows) {
+      const qty = serviceQtyById[s.serviceid] || 0
+      if (qty > 0) sum += qty * (Number(s.price) || 0)
+    }
+    return sum
+  }, [servicesData, serviceQtyById])
+
+  const totalAmount = useMemo(() => {
+    return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
+  }, [courtAmount, servicesTotal])
   const formattedAmount = useMemo(() => {
-    if (!calculatedAmount) return 'Confirm Booking'
+    if (!totalAmount) return 'Confirm Booking'
     try {
-      return `Confirm Booking - ${new Intl.NumberFormat('vi-VN').format(calculatedAmount)}₫`
-    } catch { return `Confirm Booking - ${calculatedAmount}₫` }
-  }, [calculatedAmount])
+      return `Confirm Booking - ${new Intl.NumberFormat('vi-VN').format(totalAmount)}₫`
+    } catch { return `Confirm Booking - ${totalAmount}₫` }
+  }, [totalAmount])
   // Disallow duplicate booking for same availability
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !hasBookingForCurrentAvailability)
 
@@ -220,10 +247,42 @@ export default function CourtBooking() {
       start_timestamp: startTs,
       end_timestamp: endTs,
       bookingdate: bookingDateStr,
-      amount: calculatedAmount || 0,
+      amount: totalAmount || 0,
       note: noteText.trim() ? noteText.trim() : null,
     }, {
-      onSuccess: (data) => {
+      onSuccess: async (data) => {
+        // Persist selected service line items (servicebooking table) if any were chosen.
+        try {
+          const courtbookingid = Number((data as any)?.booking?.courtbookingid)
+          const paymentidRaw = (data as any)?.payment?.paymentid ?? (data as any)?.booking?.paymentid
+          const paymentid = Number(paymentidRaw)
+          const paymentidSafe = Number.isFinite(paymentid) && paymentid > 0 ? paymentid : null
+          if (Number.isFinite(courtbookingid) && courtbookingid > 0) {
+            const rows: ServiceRow[] = Array.isArray(servicesData) ? servicesData : []
+            const items: ServiceBookingCreateRow[] = rows
+              .map((s) => ({
+                courtbookingid,
+                serviceid: Number(s.serviceid),
+                quantity: Number(serviceQtyById[s.serviceid] || 0),
+                unit_price: Number(s.price),
+                paymentid: paymentidSafe,
+              }))
+              .filter((r) =>
+                Number.isFinite(r.serviceid) && r.serviceid > 0 &&
+                Number.isFinite(r.quantity) && r.quantity > 0 &&
+                Number.isFinite(r.unit_price) && r.unit_price >= 0
+              )
+
+            if (items.length > 0) {
+              console.log('[courtBooking] creating servicebookings', { count: items.length, sample: items[0] })
+              await createServiceBookings(items)
+            }
+          }
+        } catch (e) {
+          // Best-effort only; booking + payment should still succeed even if servicebooking insert fails.
+          console.warn('[courtBooking] createServiceBookings failed', e)
+        }
+
         if (typeof userId === 'number') {
           const courtTitle = courtInfo?.name || 'Court Booking'
           void appendHistory(userId, {
@@ -232,7 +291,7 @@ export default function CourtBooking() {
             subtitle: `Method: ${paymentMethod}`,
             fromStatus: 'unpaid',
             toStatus: String(data.payment?.status ?? 'pending'),
-            amount: typeof calculatedAmount === 'number' ? calculatedAmount : (calculatedAmount == null ? null : Number(calculatedAmount)),
+            amount: typeof totalAmount === 'number' ? totalAmount : (totalAmount == null ? null : Number(totalAmount)),
             meta: {
               paymentid: data.payment?.paymentid,
               type: 'court',
@@ -267,7 +326,7 @@ export default function CourtBooking() {
             date: selectedDateStr,
             time: `${startSlot} - ${endSlot}`,
             location: courtInfo?.address,
-            price: calculatedAmount,
+            price: totalAmount,
             paymentMethod: paymentMethod,
             paymentStatus: data.payment?.status,
             bookingId: data.booking?.courtbookingid,
@@ -446,6 +505,89 @@ export default function CourtBooking() {
               <Text style={styles.payText}>VNPay</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Services (expandable, closed by default) */}
+          <TouchableOpacity style={styles.servicesHeaderRow} activeOpacity={0.8} onPress={() => setServicesExpanded(p => !p)}>
+            <Text style={styles.servicesHeaderText}>Services</Text>
+            <Image source={ICONS.arrowdown} style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]} />
+          </TouchableOpacity>
+          {servicesExpanded && (
+            <View style={styles.servicesWrapper}>
+              {servicesLoading ? (
+                <Text style={styles.statusText}>Loading services...</Text>
+              ) : (
+                (Array.isArray(servicesData) ? servicesData : []).length === 0 ? (
+                  <Text style={styles.statusText}>This court have no services</Text>
+                ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.servicesScrollContent}>
+                  {(Array.isArray(servicesData) ? servicesData : []).map((s: ServiceRow) => {
+                    const qty = serviceQtyById[s.serviceid] || 0
+                    const touched = !!serviceTouchedById[s.serviceid]
+                    const rawImageUri = Array.isArray(s.images) && s.images.length ? s.images[0] : null
+                    const imageUri = typeof rawImageUri === 'string' && rawImageUri.trim()
+                      ? optimizeRemoteImageUrl(rawImageUri, { width: 600, height: 300, quality: 75, resize: 'contain' })
+                      : null
+                    return (
+                      <View key={s.serviceid} style={styles.serviceCard}>
+                        {imageUri ? (
+                          <View style={styles.serviceImageWrap}>
+                            <ExpoImage
+                              source={{ uri: imageUri }}
+                              style={styles.serviceImage}
+                              contentFit="contain"
+                              cachePolicy="disk"
+                              transition={0}
+                              recyclingKey={`${s.serviceid}:${imageUri}`}
+                            />
+                          </View>
+                        ) : (
+                          <View style={styles.serviceImagePlaceholder} />
+                        )}
+                        <Text style={styles.serviceName} numberOfLines={2}>{s.name}</Text>
+                        <Text style={styles.servicePrice}>{new Intl.NumberFormat('vi-VN').format(Number(s.price) || 0)}₫</Text>
+
+                        <View style={styles.qtyRow}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setServiceTouchedById(prev => ({ ...prev, [s.serviceid]: true }))
+                              setServiceQtyById(prev => {
+                                const cur = prev[s.serviceid] || 0
+                                const next = Math.max(0, cur - 1)
+                                return { ...prev, [s.serviceid]: next }
+                              })
+                            }}
+                            style={styles.qtyBox}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.qtyBoxText}>-</Text>
+                          </TouchableOpacity>
+                          <View style={styles.qtyBoxMid}>
+                            <Text style={styles.qtyMidText}>{touched ? String(qty) : ''}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setServiceTouchedById(prev => ({ ...prev, [s.serviceid]: true }))
+                              setServiceQtyById(prev => {
+                                const cur = prev[s.serviceid] || 0
+                                const next = cur + 1
+                                return { ...prev, [s.serviceid]: next }
+                              })
+                            }}
+                            style={styles.qtyBox}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.qtyBoxText}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )
+                  })}
+                </ScrollView>
+                )
+              )}
+            </View>
+          )}
+
           {/* Note Section */}
           <TouchableOpacity style={styles.noteRow} activeOpacity={0.8} onPress={() => setNoteExpanded(p => !p)}>
             <Image source={ICONS.noteIcon} style={styles.noteIcon} />
@@ -558,6 +700,21 @@ const styles = StyleSheet.create({
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   paymentRow: { flexDirection: 'row', marginTop: 20 },
   payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', marginRight: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
+  servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  servicesHeaderText: { fontSize: 16, fontWeight: '700', color: '#222' },
+  servicesWrapper: { marginTop: 10 },
+  servicesScrollContent: { paddingVertical: 8, paddingRight: 8 },
+  serviceCard: { width: 130, marginRight: 14 },
+  serviceImageWrap: { width: '100%', height: 62, borderRadius: 10, backgroundColor: '#f2f2f2', overflow: 'hidden' },
+  serviceImage: { width: '100%', height: '100%' },
+  serviceImagePlaceholder: { width: '100%', height: 62, borderRadius: 10, backgroundColor: '#f2f2f2' },
+  serviceName: { marginTop: 8, fontSize: 13, fontWeight: '700', color: '#222', minHeight: 34 },
+  servicePrice: { marginTop: 2, fontSize: 12, fontWeight: '700', color: '#111' },
+  qtyRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  qtyBox: { width: 36, height: 32, borderRadius: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#d9d9d9', alignItems: 'center', justifyContent: 'center' },
+  qtyBoxMid: { flex: 1, height: 32, marginHorizontal: 8, borderRadius: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e2e2e2', alignItems: 'center', justifyContent: 'center' },
+  qtyBoxText: { fontSize: 18, fontWeight: '800', color: '#111', lineHeight: 18 },
+  qtyMidText: { fontSize: 14, fontWeight: '800', color: '#111' },
   payMethodActive: { backgroundColor: '#FFA500' },
   payIcon: { width: 28, height: 28, marginRight: 10, resizeMode: 'contain' },
   payText: { fontSize: 15, fontWeight: '700', color: '#222' },
@@ -580,6 +737,8 @@ const styles = StyleSheet.create({
   noteTextLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#222' },
   noteArrow: { width: 18, height: 18, resizeMode: 'contain' },
   noteArrowExpanded: { transform: [{ rotate: '90deg' }] },
+  servicesArrow: { width: 16, height: 16, resizeMode: 'contain', transform: [{ rotate: '0deg' }], marginTop: 2 },
+  servicesArrowOpen: { transform: [{ rotate: '180deg' }] },
   noteInputWrapper: { marginTop: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 10 },
   noteInput: { minHeight: 80, padding: 10, fontSize: 14, color: '#222', textAlignVertical: 'top' },
   durationWarning: { marginTop: 8, color: '#c00', fontSize: 12, fontWeight: '600' },

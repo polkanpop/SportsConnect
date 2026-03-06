@@ -6,10 +6,14 @@
     // Some packages (e.g. expo-image-picker) ship internal build tsconfigs that reference
     // dev-only bases like `expo-module-scripts/tsconfig.base`, which isn't present in apps.
     "typescript.tsserver.exclude": [
-        "**/node_modules/expo-image-picker/**"
+        "**/node_modules/**",
+        "**/node_modules/expo-image-picker/**",
+        "**/node_modules/expo-image/**"
     ],
     "javascript.tsserver.exclude": [
-        "**/node_modules/expo-image-picker/**"
+        "**/node_modules/**",
+        "**/node_modules/expo-image-picker/**",
+        "**/node_modules/expo-image/**"
     ],
 
     // Android/Gradle in this repo requires Java 17. System Java 25 can break Gradle sync.

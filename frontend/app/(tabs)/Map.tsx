@@ -437,8 +437,10 @@
       if (onlyIfCacheMissing) {
         const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1');
         if (cached && cached.length) {
-          // We already have cached markers available; don't refetch on tab hop.
-          // (Court Register invalidates this cache key, so returning from register will still refresh.)
+          // We already have cached markers available; sync state from cache but don't refetch on tab hop.
+          const normalized: MarkerType[] = normalizeCourtInfoRows(cached);
+          setMarkers(normalized);
+          setFilteredMarkers(normalized);
           return;
         }
       }

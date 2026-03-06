@@ -4,8 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
-import { getCache, setCache } from '@/lib/cache'
-import { listCourtInfo } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -215,17 +213,11 @@ const CourtListScreen = () => {
     setLoading(true)
     setError(null)
     try {
-      // Attempt cached value first
-      const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1')
-      if (cached && cached.length) {
-        setAllCourts(cached.filter(r => (r.availability || '').toLowerCase() === 'available'))
-      }
-      // Always fetch fresh so verified courts appear immediately.
-      const rows = await listCourtInfo()
-      const available = rows.filter(r => (r.availability || '').toLowerCase() === 'available')
+      // Use the shared courtinfo cache; this prevents refetching the full list on every focus.
+      // Court Register now upserts the newly created court into this cache.
+      const rows = await listCourtInfoCached()
+      const available = (Array.isArray(rows) ? rows : []).filter(r => (r.availability || '').toLowerCase() === 'available')
       setAllCourts(available)
-      // Short TTL (seconds) to avoid stale verified status.
-      await setCache('cache:courtinfo:v1', rows, 15 * 1000, 15 * 1000)
     } catch (e: any) {
       setError(e.message || String(e))
     } finally {
@@ -637,6 +629,8 @@ const CourtListScreen = () => {
               venueDisplay = [venues[0]]
             }
             const isFav = favouriteCourtIds.includes(c.courtid)
+
+            const hasImage = false
 
             const distanceNode = (() => {
               if (!distanceFilterActive) return null
