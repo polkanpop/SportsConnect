@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { getCache, invalidateCache, setCache } from '@/lib/cache'
 
-import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, registerCourt, type CourtAddressSuggestion, type CourtRegisterRequest } from '@/lib/backendApi'
+import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, getCourtInfoByCourtId, registerCourt, type CourtAddressSuggestion, type CourtRegisterRequest, upsertCourtInfoIntoCache } from '@/lib/backendApi'
 import { useUserId } from '@/hooks/use-user-id'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
@@ -676,8 +676,25 @@ export default function CourtRegisterPage() {
       const w = (resp?.geocode?.warnings || []).filter(Boolean)
       setWarnings(w)
 
-      // Bust cached courtinfo so Map/Court List can reflect new court immediately.
-      await invalidateCache('cache:courtinfo:v1').catch(() => {})
+      // Fetch ONLY the newly created court and merge into cache so Map/Court List/etc. update immediately
+      // without refetching the full court list.
+      if (resp?.courtid != null) {
+        try {
+          const existingCourtInfo = await getCache<any>('cache:courtinfo:v1')
+          const hasExistingList = Array.isArray(existingCourtInfo) && existingCourtInfo.length > 0
+          if (!hasExistingList) {
+            await invalidateCache('cache:courtinfo:v1').catch(() => {})
+          } else {
+            const newInfo = await getCourtInfoByCourtId(resp.courtid)
+            if (newInfo) await upsertCourtInfoIntoCache(newInfo)
+            else await invalidateCache('cache:courtinfo:v1').catch(() => {})
+          }
+        } catch {
+          await invalidateCache('cache:courtinfo:v1').catch(() => {})
+        }
+      } else {
+        await invalidateCache('cache:courtinfo:v1').catch(() => {})
+      }
 
       await invalidateCache(COURT_REGISTER_DRAFT_STORAGE_KEY).catch(() => {})
       setSubmittedVisible(true)

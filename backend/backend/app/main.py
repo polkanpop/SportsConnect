@@ -10,6 +10,9 @@ warnings.filterwarnings(
 )
 
 from fastapi import FastAPI, Response, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from .db import get_settings
 from .rate_limit import limiter
@@ -27,6 +30,8 @@ from .routers import (
     userlogin,
     users,
     courtbookings,
+    servicebookings,
+    services,
     eventbookings,
     trainingsessions,
     trainingsessioninfo,
@@ -59,6 +64,56 @@ START_TIME = time.time()
 
 app = FastAPI(title="SportsConnect API", version="0.1.0")
 
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log 422 validation/parsing errors with a small request-body preview.
+
+    This is mainly to diagnose why /api/servicebookings returns 422 without any
+    helpful server logs.
+    """
+    try:
+        body_bytes = await request.body()
+        body_preview = body_bytes[:2000].decode("utf-8", errors="replace")
+    except Exception:
+        body_preview = "<unavailable>"
+
+    logger.warning(
+        "request_validation_error path=%s method=%s errors=%s body=%s",
+        request.url.path,
+        request.method,
+        exc.errors(),
+        body_preview,
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
+
+@app.middleware("http")
+async def _log_servicebookings_422(request: Request, call_next):
+    # Only log for the problematic endpoint to avoid noisy logs.
+    is_target = request.url.path.startswith("/api/servicebookings") and request.method.upper() == "POST"
+    body_preview = None
+    if is_target:
+        try:
+            body_bytes = await request.body()
+            body_preview = body_bytes[:2000].decode("utf-8", errors="replace")
+        except Exception:
+            body_preview = "<unavailable>"
+
+    response = await call_next(request)
+    if is_target and response.status_code == 422:
+        logger.warning(
+            "servicebookings_post_422 content_type=%s body=%s",
+            request.headers.get("content-type"),
+            body_preview,
+        )
+    return response
+
 # Attach limiter & middleware (only endpoints decorated with @limiter.limit will be enforced)
 app.state.limiter = limiter
 app.add_exception_handler(429, _rate_limit_exceeded_handler)
@@ -84,6 +139,8 @@ app.include_router(userinfo.router, prefix="/api")
 app.include_router(userlogin.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(courtbookings.router, prefix="/api")
+app.include_router(servicebookings.router, prefix="/api")
+app.include_router(services.router, prefix="/api")
 app.include_router(eventbookings.router, prefix="/api")
 app.include_router(trainingsessions.router, prefix="/api")
 app.include_router(trainingsessioninfo.router, prefix="/api")

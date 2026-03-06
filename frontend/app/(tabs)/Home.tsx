@@ -3,7 +3,8 @@ import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Animated, Dimensions, Image, ImageBackground, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image as ExpoImage } from 'expo-image'
+import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
 import {
@@ -12,6 +13,7 @@ import {
   listCourtInfoCached,
   CourtInfoRow,
 } from "@/lib/backendApi";
+import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { useUserInfo } from "@/hooks/use-user-info";
@@ -467,7 +469,10 @@ export default function Home() {
               {!loadingFavs && favoriteLocations.map(fav => {
                 const isAvailable = String(fav.availability).toLowerCase() === 'available';
                 const imageUri = normalizeImageUri(fav.imageUri);
-                const hasImage = !!imageUri;
+                const optimizedImageUri = imageUri
+                  ? optimizeRemoteImageUrl(imageUri, { width: 1200, height: 700, quality: 75, resize: 'cover' })
+                  : null
+                const hasImage = !!optimizedImageUri;
                 return (
                   <TouchableOpacity
                     key={fav.favouriteid}
@@ -494,12 +499,15 @@ export default function Home() {
                     }}
                   >
                     {hasImage ? (
-                      <ImageBackground
-                        source={{ uri: imageUri as string } as any}
-                        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#e6e6e6' }}
-                        imageStyle={{ borderRadius: 16, backgroundColor: '#e6e6e6' }}
-                        resizeMode="cover"
-                      >
+                      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#e6e6e6' }}>
+                        <ExpoImage
+                          source={{ uri: optimizedImageUri as string }}
+                          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                          contentFit="cover"
+                          cachePolicy="disk"
+                          transition={0}
+                          recyclingKey={`${fav.courtid}:${optimizedImageUri as string}`}
+                        />
                         <View
                           style={{
                             position: 'absolute',
@@ -559,7 +567,7 @@ export default function Home() {
                             />
                           </View>
                         </View>
-                      </ImageBackground>
+                      </View>
                     ) : (
                       <View style={{ flex: 1, backgroundColor: '#e6e6e6', justifyContent: 'flex-end' }}>
                         <View

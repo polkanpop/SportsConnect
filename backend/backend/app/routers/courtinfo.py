@@ -28,6 +28,24 @@ async def list_courts(courtids: str | None = Query(default=None)):
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/by-courtid/{courtid}", response_model=CourtInfo)
+async def get_court_by_courtid(courtid: int):
+    try:
+        data = rest_select(
+            "courtinfo",
+            "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type",
+            filters={"courtid": courtid},
+            single=True,
+        )
+        if not data:
+            raise HTTPException(status_code=404, detail="Court not found")
+        return data
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 @router.get("/{courtinfoid}", response_model=CourtInfo)
 async def get_court(courtinfoid: int):
     try:
