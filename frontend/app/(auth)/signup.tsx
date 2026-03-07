@@ -199,8 +199,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Shared color tokens (matching login.tsx local definition)
 const COLOR = {
   dark300: '#6A6B6B',
-  green700: '#15803d',
-  green800: '#166534',
+  green700: '#FF6017',
+  green800: '#FF8147',
   white: '#ffffff',
   red600: '#dc2626',
   bg: '#f8f8f8'

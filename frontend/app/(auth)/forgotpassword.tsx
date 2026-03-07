@@ -62,7 +62,7 @@ export default ForgotPasswordScreen
 
 const COLORS = {
   dark300: '#6A6B6B',
-  green700: '#15803d',
+  green700: '#FF6017',
   white: '#ffffff',
   bg: '#f8f8f8',
   red600: '#dc2626'

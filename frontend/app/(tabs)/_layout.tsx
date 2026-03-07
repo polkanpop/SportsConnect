@@ -2,25 +2,24 @@ import { COLORS } from "@/constants/colors";
 import { ICONS } from "@/constants/icons";
 import { Tabs } from "expo-router";
 import React, { useEffect, useMemo, useRef } from "react";
-import { Image, View, Pressable, StyleSheet, useWindowDimensions, Animated, Text } from "react-native";
+import { Image, View, Pressable, StyleSheet, useWindowDimensions, Animated } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const AnimatedTabIcon = ({
   focused,
   icon,
-  label,
   xOffset = 0,
+  activeTintColor = COLORS.brandOrangeDeep,
+  inactiveTintColor = COLORS.black,
 }: {
   focused: boolean;
   icon: any;
-  label: string;
   xOffset?: number;
+  activeTintColor?: string;
+  inactiveTintColor?: string;
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
-  const labelOpacity = useRef(new Animated.Value(0)).current;
-  const labelTranslateY = useRef(new Animated.Value(6)).current;
-  const backgroundOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(scale, {
@@ -29,63 +28,19 @@ const AnimatedTabIcon = ({
       bounciness: 8,
       speed: 12,
     }).start();
-
-    Animated.parallel([
-      Animated.timing(labelOpacity, {
-        toValue: focused ? 1 : 0,
-        duration: 160,
-        useNativeDriver: true,
-      }),
-      Animated.spring(labelTranslateY, {
-        toValue: focused ? 0 : 6,
-        useNativeDriver: true,
-        bounciness: 6,
-        speed: 12,
-      }),
-      Animated.timing(backgroundOpacity, {
-        toValue: focused ? 1 : 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [backgroundOpacity, focused, labelOpacity, labelTranslateY, scale]);
+  }, [focused, scale]);
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', height: 48, width: '100%' }}>
-      <Animated.View style={{
-        position: 'absolute',
-        width: 58,
-        height: 54,
-        borderRadius: 15,
-        backgroundColor: COLORS.lightgrey,
-        opacity: backgroundOpacity,
-        top: 2,
-        transform: [{ translateX: xOffset }],
-      }} />
       <Animated.Image
         source={icon}
         style={{
-          width: 28,
-          height: 28,
-          tintColor: focused ? COLORS.darkblue : COLORS.black,
-          transform: [{ translateX: xOffset }, { scale }],
-          marginBottom: 2,
+          width: 26,
+          height: 26,
+          tintColor: focused ? activeTintColor : inactiveTintColor,
+          transform: [{ translateX: xOffset }, { translateY: 3 }, { scale }],
         }}
       />
-      <Animated.Text
-        style={{
-          opacity: labelOpacity,
-          transform: [{ translateX: xOffset }, { translateY: labelTranslateY }],
-          color: COLORS.darkblue,
-          fontSize: 11,
-          position: 'absolute',
-          bottom: -4,
-          width: '200%',
-          textAlign: 'center',
-          left: '-50%',
-        }}
-        numberOfLines={1}
-      >{label}</Animated.Text>
     </View>
   );
 };
@@ -131,7 +86,7 @@ const MapTabButton = (props: any) => {
           width: 76,
           height: 76,
           borderRadius: 38,
-          backgroundColor: "#32CD32",
+          backgroundColor: COLORS.brandOrangeDeep,
           justifyContent: "center",
           alignItems: "center",
           overflow: 'hidden',
@@ -141,9 +96,9 @@ const MapTabButton = (props: any) => {
         <Image
           source={ICONS.map}
           style={{
-            width: 36,
-            height: 36,
-            tintColor: COLORS.black,
+            width: 34,
+            height: 34,
+            tintColor: COLORS.neutral0,
           }}
         />
       </Animated.View>
@@ -193,7 +148,7 @@ const TabBarBackground = ({ width, height }: { width: number; height: number }) 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, width: width, height: height }}>
       <Svg width={width} height={height}>
-        <Path d={d} fill="#ffffff" />
+        <Path d={d} fill={COLORS.white} />
       </Svg>
     </View>
   );
@@ -226,11 +181,11 @@ const TabLayout = () => {
           tabBarItemStyle: {
           justifyContent: "center",
           alignItems: "center",
-          paddingTop: 4,
+          paddingTop: 8,
           // Keep a consistent touch target without shifting layout
           height: 60,
         },
-        tabBarActiveTintColor: COLORS.darkblue,
+        tabBarActiveTintColor: COLORS.brandOrangeDeep,
         tabBarInactiveTintColor: COLORS.black,
       }}
     >
@@ -249,7 +204,11 @@ const TabLayout = () => {
           title: "Homepage",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.home} label="Home" />
+            <AnimatedTabIcon
+              focused={focused}
+              icon={ICONS.home}
+              activeTintColor={COLORS.brandOrangeDeep}
+            />
           ),
         }}
       />
@@ -259,7 +218,7 @@ const TabLayout = () => {
           title: "Activities",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.activity} label="Activity" xOffset={-8} />
+            <AnimatedTabIcon focused={focused} icon={ICONS.activity} xOffset={-8} />
           ),
         }}
       />
@@ -278,7 +237,7 @@ const TabLayout = () => {
           title: "Notification",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.notifications} label="Alerts" xOffset={8} />
+            <AnimatedTabIcon focused={focused} icon={ICONS.notifications} xOffset={8} />
           ),
         }}
       />
@@ -288,7 +247,7 @@ const TabLayout = () => {
           title: "Settings",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.settings} label="Settings" />
+            <AnimatedTabIcon focused={focused} icon={ICONS.settings} />
           ),
         }}
       />
@@ -298,7 +257,7 @@ const TabLayout = () => {
 
 const styles = StyleSheet.create({
   shadow: {
-    shadowColor: "#000",
+    shadowColor: COLORS.black,
     shadowOffset: {
       width: 0,
       height: 4,
