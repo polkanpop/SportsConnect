@@ -73,8 +73,8 @@
     const pinColor = isSelected
       ? COLORS.green
       : marker.isFavorite
-        ? '#FFD700'
-        : COLORS.red;
+        ? COLORS.brandOrangeYellow
+        : COLORS.brandOrangeDeep;
     const coordinate = useMemo(() => ({ latitude: marker.latitude, longitude: marker.longitude }), [marker.latitude, marker.longitude]);
     const handlePress = useCallback(() => onPress(marker), [onPress, marker]);
     // Key still includes states to preserve previous remount semantics when fav/selection toggles
@@ -2262,8 +2262,8 @@
     modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
     modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
     modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
-    modalCancel: { backgroundColor:'#eee' },
-    modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
+    modalCancel: { backgroundColor: COLORS.danger },
+    modalBtnText: { fontSize:14, fontWeight:'600', color: COLORS.neutral0 },
     weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
     scheduleHeaderRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
     weekNavInline: { flexDirection:'row', alignItems:'center' },

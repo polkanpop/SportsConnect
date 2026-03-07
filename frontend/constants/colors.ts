@@ -1,6 +1,11 @@
 export const COLORS = {
+  // Primary brand palette
+  brandOrangeDeep: '#FF6017',
+  brandOrangeLight: '#FF8147',
+  brandOrangeYellow: '#FFA024',
+
   // Legacy names (keep for compatibility)
-  yellow: '#FFFF00',
+  yellow: '#FFA024',
   bio: '#EEEEEE',
   green: '#0EF553',
   darkgreen: '#008000',
@@ -11,7 +16,7 @@ export const COLORS = {
   darkgrey: '#D9D9D9',
   grey: '#D3D3D3',
   lightgrey: '#EEEEEE',
-  orange: '#FFBA0A',
+  orange: '#FF6017',
   cyan: '#00FFFF',
   lightblue: '#99CDDB',
   blue: '#0EA5CE',
@@ -79,7 +84,7 @@ export const COLORS = {
   success: '#28A745',
   danger: '#DC3545',
   danger500: '#EF4444',
-  warning: '#F59E0B',
+  warning: '#FFA024',
 
   // Common “named” colors used in Map/list markers etc.
   seaGreen: '#2E8B57',
@@ -88,8 +93,8 @@ export const COLORS = {
   slateBlue: '#6A5ACD',
   darkGray: '#A9A9A9',
   hotPink: '#FF69B4',
-  orange500: '#FFA500',
-  gold: '#FFD700',
+  orange500: '#FF8147',
+  gold: '#FFA024',
   coral: '#FF5733',
 
   cyan50: '#E0F7FA',
@@ -115,7 +120,7 @@ export const COLORS = {
   orange100: '#FFEDD5',
   orange200: '#FED7AA',
   orangeSoft: '#FFE9D9',
-  orangeAccent: '#FF6B3B',
+  orangeAccent: '#FF8147',
   greenSoft: '#E9F9EF',
   brown900: '#7C2D12',
 

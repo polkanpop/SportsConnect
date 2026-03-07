@@ -8,10 +8,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Link, Stack, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Restored unified login: identifier can be email OR username, resolves to email then authenticates.
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [identifier, setIdentifier] = useState(""); // email or username
@@ -74,7 +76,11 @@ export default function LoginScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top', 'bottom']}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.container, { paddingBottom: 24 + (insets?.bottom ?? 0) }]}
+        >
         <View style={styles.logoWrapper}>
           <Image source={ICONS.app_icon} style={styles.logo} />
           <Text style={styles.appTitle}>SportConnect</Text>
@@ -147,7 +153,8 @@ export default function LoginScreen() {
           <Text style={styles.textDark}>Don&apos;t have an account?</Text>
           <Link href="/(auth)/signup"><Text style={styles.signUpLink}>Sign up</Text></Link>
         </View>
-      </View>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }
@@ -155,8 +162,9 @@ export default function LoginScreen() {
 // Color tokens derived from Tailwind + custom config
 const COLORS = {
   dark300: '#6A6B6B',
-  green700: '#15803d',
-  green800: '#166534',
+  // Brand oranges (requested)
+  green700: '#FF6017',
+  green800: '#FF8147',
   white: '#ffffff',
   blue600: '#2563eb',
   red600: '#dc2626',
@@ -167,7 +175,7 @@ const COLORS = {
 // shadow-md approximation for RN
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 28, // px-7
     paddingTop: 80, // pt-20
@@ -285,7 +293,7 @@ const styles = StyleSheet.create({
   },
   quickAccessText: {
     textDecorationLine: 'underline',
-    color: COLORS.blue600,
+    color: COLORS.green700,
     fontSize: 16, // text-base
     marginBottom: 20, // mb-5
     textAlign: 'center',

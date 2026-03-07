@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import { CourtBookingRow, listCourts, createServiceBookings, listServicesByCourtId, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
@@ -687,7 +688,7 @@ const styles = StyleSheet.create({
   errorText: { color: '#c00', marginTop: 8, fontSize: 13 },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
   dayCell: { flex: 1, marginHorizontal: 2, paddingVertical: 10, borderRadius: 10, backgroundColor: '#e9e9e9', alignItems: 'center' },
-  dayCellSelected: { backgroundColor: '#FFD700' },
+  dayCellSelected: { backgroundColor: COLORS.brandOrangeYellow },
   dayCellDisabled: { opacity: 0.35 },
   dayLabel: { fontSize: 12, fontWeight: '600', color: '#222' },
   todayUnderline: { textDecorationLine: 'underline' },
@@ -715,14 +716,14 @@ const styles = StyleSheet.create({
   qtyBoxMid: { flex: 1, height: 32, marginHorizontal: 8, borderRadius: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e2e2e2', alignItems: 'center', justifyContent: 'center' },
   qtyBoxText: { fontSize: 18, fontWeight: '800', color: '#111', lineHeight: 18 },
   qtyMidText: { fontSize: 14, fontWeight: '800', color: '#111' },
-  payMethodActive: { backgroundColor: '#FFA500' },
+  payMethodActive: { backgroundColor: COLORS.brandOrangeLight },
   payIcon: { width: 28, height: 28, marginRight: 10, resizeMode: 'contain' },
   payText: { fontSize: 15, fontWeight: '700', color: '#222' },
   confirmBtnDisabled: { backgroundColor: '#ccc' },
   confirmText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   bottomSafeArea: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#ffffff' },
   bottomBar: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#eee', alignItems: 'center' },
-  confirmUnifiedBtn: { width: '90%', backgroundColor: '#FF5733', paddingVertical: 18, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
+  confirmUnifiedBtn: { width: '90%', backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 18, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
   confirmUnifiedText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   successBox: { marginTop: 16, backgroundColor: '#e9ffe9', padding: 12, borderRadius: 10 },
   successTitle: { fontSize: 14, fontWeight: '700', color: '#0a7a0a' },
@@ -760,7 +761,7 @@ const styles = StyleSheet.create({
   modalBody: { fontSize:14, color:'#444', lineHeight:20 },
   modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
   modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
-  modalCancel: { backgroundColor:'#eee' },
-  modalConfirm: { backgroundColor:'#FF5733' },
-  modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
+  modalCancel: { backgroundColor: COLORS.danger },
+  modalConfirm: { backgroundColor: COLORS.brandOrangeDeep },
+  modalBtnText: { fontSize:14, fontWeight:'600', color: COLORS.neutral0 },
 })
