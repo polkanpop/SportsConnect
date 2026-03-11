@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..auth import get_current_user
-from ..db import get_http_client, rest_delete, rest_insert, rest_select
+from ..db import get_http_client, rest_delete, rest_insert, rest_select, rest_update, rest_upsert
 
 router = APIRouter(prefix="/courts", tags=["courts"])
 
@@ -46,11 +46,41 @@ def _best_effort_cleanup_new_court(*, courtid: Optional[int]) -> None:
     if not courtid:
         return
     # Delete dependents first to satisfy FK constraints.
-    for table in ("courtavailability", "courtinfo", "courts"):
+    # Best-effort only; never mask the original error.
+    try:
+        rest_delete("courtavailability", {"courtid": courtid})
+    except Exception:
+        pass
+
+    try:
+        playing_rows = rest_select("playingcourt", "playingcourtid", filters={"courtid": courtid})
+    except Exception:
+        playing_rows = []
+    if isinstance(playing_rows, list):
+        for r in playing_rows:
+            try:
+                pid = int(r.get("playingcourtid"))
+            except Exception:
+                continue
+            try:
+                rest_delete("playingcourtinfo", {"playingcourtid": pid})
+            except Exception:
+                pass
+
+    try:
+        rest_delete("playingcourt", {"courtid": courtid})
+    except Exception:
+        pass
+
+    try:
+        rest_delete("services", {"courtid": courtid})
+    except Exception:
+        pass
+
+    for table in ("courtinfo", "courts"):
         try:
             rest_delete(table, {"courtid": courtid})
         except Exception:
-            # Best-effort only; never mask the original error.
             pass
 
 
@@ -75,17 +105,43 @@ class CourtSchedule(BaseModel):
     end_time: str = Field(default="22:00")
 
 
+class PlayingCourtRegister(BaseModel):
+    # A "playing court" group (e.g. San 1). We will create a FULL and (optionally) HALF_A/HALF_B rows.
+    name: str  # base name (stored in playingcourt.base_name)
+    full_price: Optional[float] = None
+    allow_half_booking: Optional[bool] = True
+    half_a_name: Optional[str] = None
+    half_b_name: Optional[str] = None
+    half_a_price: Optional[float] = None
+    half_b_price: Optional[float] = None
+    description: Optional[str] = None
+    images: list[str] = Field(default_factory=list)
+    half_a_images: list[str] = Field(default_factory=list)
+    half_b_images: list[str] = Field(default_factory=list)
+    surface: Optional[str] = None  # courtsurface enum value (e.g. concrete/hardwood/synthetic)
+
+
+class ServiceRegister(BaseModel):
+    name: str
+    category: str
+    price: float
+    stock: Optional[int] = 0
+    images: list[str] = Field(default_factory=list)
+
+
 class CourtRegisterRequest(BaseModel):
     name: str
     address: str
     ownerid: int
-    price: float = Field(default=0, ge=0)
     venue: str  # Indoor | Outdoor | Both
     images: list[str] = Field(default_factory=list)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy_type: Optional[str] = None
     schedule: Optional[CourtSchedule] = None
+    allow_half_court: Optional[bool] = True
+    playing_courts: list[PlayingCourtRegister] = Field(default_factory=list)
+    services: list[ServiceRegister] = Field(default_factory=list)
 
 
 class CourtRegisterResponse(BaseModel):
@@ -844,6 +900,48 @@ async def get_court(courtid: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.patch("/{courtid}", response_model=dict)
+async def update_court(courtid: int, body: dict, current_user: str = Depends(get_current_user)):
+    """Update court base fields.
+
+    Security:
+    - Requires Bearer token
+    - If the token subject is numeric, enforce ownerid == subject
+    """
+    try:
+        numeric_subject = int(current_user) if str(current_user).isdigit() else None
+    except Exception:
+        numeric_subject = None
+
+    existing = rest_select("courts", "courtid,ownerid", filters={"courtid": courtid}, single=True)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Court not found")
+    if numeric_subject is not None:
+        try:
+            ownerid = int(existing.get("ownerid"))
+        except Exception:
+            ownerid = None
+        if ownerid is not None and ownerid != numeric_subject:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+    patch: dict[str, Any] = {}
+
+    if isinstance(body, dict) and "courtinfo" in body:
+        v = body.get("courtinfo")
+        patch["courtinfo"] = (v or "").strip() if isinstance(v, str) else v
+
+    patch = {k: v for k, v in patch.items() if v is not None}
+    if not patch:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    try:
+        updated = rest_update("courts", {"courtid": courtid}, patch)
+        row = updated[0] if isinstance(updated, list) and updated else updated
+        return row
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/register", response_model=CourtRegisterResponse)
 async def register_court(req: CourtRegisterRequest, current_user: str = Depends(get_current_user)):
     """Register a new court + courtinfo row.
@@ -897,12 +995,26 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
     longitude = float(req.longitude) if has_user_coords else geocode.longitude
     accuracy_type = (req.accuracy_type or ("user_selected" if has_user_coords else None) or geocode.accuracy_type or geocode.location_type)
 
+    requested = req.playing_courts or []
+    if not requested:
+        raise HTTPException(status_code=400, detail="My court is required (playing_courts)")
+
+    for pc in requested:
+        if pc.full_price is None:
+            raise HTTPException(status_code=400, detail="Missing full_price for a playing court")
+        try:
+            fp = float(pc.full_price)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid full_price")
+        if fp < 0:
+            raise HTTPException(status_code=400, detail="full_price must be >= 0")
+
     courtid: Optional[int] = None
     try:
         court_insert_payload: dict[str, Any] = {
             "courtinfo": address,
             "ownerid": req.ownerid,
-            "price": req.price,
+            "allow_half_court": True if req.allow_half_court is None else bool(req.allow_half_court),
             # No court verification workflow yet; mark as verified so it appears in map features.
             "status": "verified",
         }
@@ -912,8 +1024,14 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
             # Some environments may not have a 'status' column on courts.
             # Fall back gracefully to avoid breaking registrations.
             msg = str(e).lower()
-            if "status" in msg and ("column" in msg or "unknown" in msg or "does not exist" in msg):
-                court_insert_payload.pop("status", None)
+            if ("column" in msg or "unknown" in msg or "does not exist" in msg) and any(
+                k in msg for k in ("status", "allow_half_court")
+            ):
+                # Drop fields that might not exist in older DBs.
+                if "status" in msg:
+                    court_insert_payload.pop("status", None)
+                if "allow_half_court" in msg:
+                    court_insert_payload.pop("allow_half_court", None)
                 created_court = rest_insert("courts", court_insert_payload)
             else:
                 raise
@@ -944,19 +1062,209 @@ async def register_court(req: CourtRegisterRequest, current_user: str = Depends(
         _best_effort_cleanup_new_court(courtid=courtid)
         raise HTTPException(status_code=500, detail=f"Failed creating courtinfo: {str(e)}")
 
+    # Create playing courts, playingcourtinfo, availability rows, and optional services.
+    # Requires DB migration: public.playingcourt, public.playingcourtinfo and public.courtavailability.playingcourtid.
     try:
-        rest_insert(
-            "courtavailability",
-            {
+        allow_half_global = True if req.allow_half_court is None else bool(req.allow_half_court)
+        created_playing_ids: list[int] = []
+        for pc in requested:
+            base = (pc.name or "").strip()
+            if not base:
+                raise HTTPException(status_code=400, detail="Playing court name is required")
+            surface = (pc.surface or "").strip() or None
+
+            try:
+                full_price = float(pc.full_price) if pc.full_price is not None else None
+            except Exception:
+                full_price = None
+            if full_price is None or full_price < 0:
+                raise HTTPException(status_code=400, detail=f"Invalid full_price for {base}")
+
+            allow_half_group = True if pc.allow_half_booking is None else bool(pc.allow_half_booking)
+            allow_half_group = allow_half_global and allow_half_group
+
+            half_a_name = (pc.half_a_name or "").strip()
+            half_b_name = (pc.half_b_name or "").strip()
+
+            half_a_price: Optional[float]
+            half_b_price: Optional[float]
+            try:
+                half_a_price = float(pc.half_a_price) if pc.half_a_price is not None else None
+            except Exception:
+                half_a_price = None
+            try:
+                half_b_price = float(pc.half_b_price) if pc.half_b_price is not None else None
+            except Exception:
+                half_b_price = None
+
+            if allow_half_group:
+                if not half_a_name or not half_b_name:
+                    raise HTTPException(status_code=400, detail=f"Half court names are required for {base}")
+                if half_a_price is None or half_a_price < 0:
+                    raise HTTPException(status_code=400, detail=f"Invalid half_a_price for {base}")
+                if half_b_price is None or half_b_price < 0:
+                    raise HTTPException(status_code=400, detail=f"Invalid half_b_price for {base}")
+
+            group_ids: list[int] = []
+
+            # FULL
+            full_payload: dict[str, Any] = {
                 "courtid": courtid,
-                "start_time": start_db,
-                "end_time": end_db,
-                "booking_date": schedule_days,
-                "status": "available",
-            },
-        )
+                "base_name": base,
+                "name": base,
+                "part": "full",
+                "allow_half_booking": allow_half_group,
+                "price": full_price,
+            }
+            if surface:
+                full_payload["surface"] = surface
+            try:
+                rows = rest_insert("playingcourt", full_payload)
+            except Exception as e:
+                msg = str(e).lower()
+                if "price" in msg and ("column" in msg or "does not exist" in msg or "unknown" in msg):
+                    full_payload.pop("price", None)
+                    rows = rest_insert("playingcourt", full_payload)
+                else:
+                    raise
+            row = rows[0] if isinstance(rows, list) and rows else rows
+            full_id = int(row.get("playingcourtid"))
+            group_ids.append(full_id)
+
+            half_a_id: Optional[int] = None
+            half_b_id: Optional[int] = None
+
+            if allow_half_group:
+                for half_name, half_price, part in (
+                    (half_a_name, half_a_price, "half_a"),
+                    (half_b_name, half_b_price, "half_b"),
+                ):
+                    half_payload: dict[str, Any] = {
+                        "courtid": courtid,
+                        "base_name": base,
+                        "name": half_name,
+                        "part": part,
+                        "allow_half_booking": allow_half_group,
+                        "price": half_price,
+                    }
+                    if surface:
+                        half_payload["surface"] = surface
+                    try:
+                        hrows = rest_insert("playingcourt", half_payload)
+                    except Exception as e:
+                        msg = str(e).lower()
+                        if "price" in msg and ("column" in msg or "does not exist" in msg or "unknown" in msg):
+                            half_payload.pop("price", None)
+                            hrows = rest_insert("playingcourt", half_payload)
+                        else:
+                            raise
+                    hrow = hrows[0] if isinstance(hrows, list) and hrows else hrows
+                    hid = int(hrow.get("playingcourtid"))
+                    group_ids.append(hid)
+                    if part == "half_a":
+                        half_a_id = hid
+                    elif part == "half_b":
+                        half_b_id = hid
+
+            # Info rows (allow separate images per part)
+            full_images = [x for x in (pc.images or []) if isinstance(x, str) and x.strip()]
+            half_a_images = [x for x in (pc.half_a_images or []) if isinstance(x, str) and x.strip()]
+            half_b_images = [x for x in (pc.half_b_images or []) if isinstance(x, str) and x.strip()]
+
+            info_common: dict[str, Any] = {}
+
+            try:
+                rest_upsert("playingcourtinfo", {"playingcourtid": full_id, "images": full_images, **info_common}, on_conflict="playingcourtid")
+            except Exception:
+                pass
+
+            if allow_half_group:
+                try:
+                    if half_a_id is not None:
+                        rest_upsert(
+                            "playingcourtinfo",
+                            {
+                                "playingcourtid": half_a_id,
+                                "images": (half_a_images or full_images),
+                                **info_common,
+                            },
+                            on_conflict="playingcourtid",
+                        )
+                except Exception:
+                    pass
+
+                try:
+                    if half_b_id is not None:
+                        rest_upsert(
+                            "playingcourtinfo",
+                            {
+                                "playingcourtid": half_b_id,
+                                "images": (half_b_images or full_images),
+                                **info_common,
+                            },
+                            on_conflict="playingcourtid",
+                        )
+                except Exception:
+                    pass
+
+            created_playing_ids.extend(group_ids)
+
+        # Availability rows (one per created playing court)
+        for pid in created_playing_ids:
+            rest_insert(
+                "courtavailability",
+                {
+                    "courtid": courtid,
+                    "playingcourtid": pid,
+                    "start_time": start_db,
+                    "end_time": end_db,
+                    "booking_date": schedule_days,
+                    "status": "available",
+                },
+            )
+
+        # Optional services
+        for s in (req.services or []):
+            svc_name = (s.name or "").strip()
+            if not svc_name:
+                raise HTTPException(status_code=400, detail="Service name is required")
+            category = (s.category or "").strip()
+            if not category:
+                raise HTTPException(status_code=400, detail="Service category is required")
+            try:
+                price = float(s.price)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid service price")
+            if price < 0:
+                raise HTTPException(status_code=400, detail="Service price must be >= 0")
+            try:
+                stock = int(s.stock) if s.stock is not None else 0
+            except Exception:
+                stock = 0
+            if stock < 0:
+                raise HTTPException(status_code=400, detail="Service stock must be >= 0")
+
+            svc_images = [x for x in (s.images or []) if isinstance(x, str) and x.strip()]
+            payload: dict[str, Any] = {
+                "courtid": courtid,
+                "name": svc_name,
+                "category": category,
+                "price": price,
+                "stock": stock,
+                "status": "active",
+                "images": svc_images,
+            }
+            try:
+                rest_insert("services", payload)
+            except Exception as e:
+                msg = str(e).lower()
+                if "images" in msg and ("column" in msg or "does not exist" in msg or "unknown" in msg):
+                    payload.pop("images", None)
+                    rest_insert("services", payload)
+                else:
+                    raise
     except Exception as e:
         _best_effort_cleanup_new_court(courtid=courtid)
-        raise HTTPException(status_code=500, detail=f"Failed creating court availability: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed creating playing courts / availability: {str(e)}")
 
     return CourtRegisterResponse(courtid=courtid, courtinfoid=courtinfoid, geocode=geocode)

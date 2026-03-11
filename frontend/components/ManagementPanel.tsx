@@ -6,7 +6,7 @@ export type ManagementPanelKey = 'user' | 'event' | 'court'
 
 export default function ManagementPanel(props: {
   active: ManagementPanelKey
-  onSelect: (key: Exclude<ManagementPanelKey, 'court'>) => void
+  onSelect: (key: ManagementPanelKey) => void
   defaultExpanded?: boolean
   expanded?: boolean
   onExpandedChange?: (expanded: boolean) => void
@@ -35,7 +35,7 @@ export default function ManagementPanel(props: {
       [
         { key: 'user', label: 'User' },
         { key: 'event', label: 'Event/Training Session' },
-        { key: 'court', label: 'Court', disabled: true },
+        { key: 'court', label: 'Court' },
       ] as Array<{
         key: ManagementPanelKey
         label: string
@@ -71,7 +71,7 @@ export default function ManagementPanel(props: {
                 disabled={disabled}
                 onPress={() => {
                   if (disabled) return
-                  onSelect(item.key as Exclude<ManagementPanelKey, 'court'>)
+                  onSelect(item.key)
                 }}
                 style={[
                   styles.row,

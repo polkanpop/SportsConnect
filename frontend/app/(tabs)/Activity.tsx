@@ -19,7 +19,7 @@ import { COLORS } from "@/constants/colors";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
-import { Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -89,9 +89,14 @@ const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking["
     if (s.includes('upcoming')) return 'Upcoming';
     return null;
   };
-  const fromStatus = pick(statusRaw);
-  if (fromStatus) return fromStatus;
-  if (dateTime && !Number.isNaN(dateTime.getTime())) return dateTime < new Date() ? 'Completed' : 'Upcoming';
+
+  const picked = pick(statusRaw);
+  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
+
+  // Authoritative rule: past => Completed (unless Cancelled)
+  if (isPast) return picked === 'Cancelled' ? 'Cancelled' : 'Completed';
+
+  if (picked) return picked;
   return 'Upcoming';
 };
 
@@ -118,16 +123,22 @@ const mergeBookings = (params: {
       return null;
     };
 
-    // Source of truth: bookingstatus column (upcoming/completed/cancelled)
     const fromBookingStatus = pick(bookingStatusRaw);
+    const fromStatus = pick(statusRaw);
+    const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
+    const isCancelled = fromBookingStatus === 'Cancelled' || fromStatus === 'Cancelled';
+
+    // Authoritative rule: past => Completed (unless Cancelled)
+    if (isPast) return isCancelled ? 'Cancelled' : 'Completed';
+
+    if (isCancelled) return 'Cancelled';
+
+    // Source of truth: bookingstatus column (upcoming/completed/cancelled)
     if (fromBookingStatus) return fromBookingStatus;
 
     // Backward-compatible fallback
-    const fromStatus = pick(statusRaw);
     if (fromStatus) return fromStatus;
 
-    // Last resort fallback
-    if (dateTime && !Number.isNaN(dateTime.getTime())) return dateTime < new Date() ? 'Completed' : 'Upcoming';
     return 'Upcoming';
   };
 
@@ -547,6 +558,12 @@ export default function ActivityPage() {
 
   const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed';
 
+  const recordTitlePrefix = (activity: UnifiedBooking['activity']): string => {
+    if (activity === 'court') return 'Court';
+    if (activity === 'event') return 'Event';
+    return 'Training';
+  };
+
   const renderRecord = (item: UnifiedBooking) => (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -566,27 +583,23 @@ export default function ActivityPage() {
         ]}
       />
       <View style={styles.eventDetails}>
-        <View style={styles.titleRow}>
-          <Text style={styles.eventTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
+        <Text style={styles.eventTitle} numberOfLines={2}>
+          <Text style={styles.eventTitlePrefix}>{recordTitlePrefix(item.activity)}: </Text>
+          {item.title}
+        </Text>
+
+        <View style={{ marginTop: 8 }}>
           <View style={[styles.statusPill, getStatusStyle(item.status)]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
 
-        <Text style={styles.eventTime}>
-          <Text style={styles.eventTimeLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || 'Unknown'}
+        <Text style={styles.eventMetaLine}>
+          <Text style={styles.eventMetaLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || 'Unknown'}
         </Text>
 
-        {(item.activity === 'event' || item.activity === 'session') && (
-          <Text style={styles.eventTime}>
-            <Text style={styles.eventTimeLabel}>Court:</Text> {item.courtName || 'Unknown'}
-          </Text>
-        )}
-
-        <Text style={styles.eventTime}>
-          <Text style={styles.eventTimeLabel}>Time:</Text>{" "}
+        <Text style={styles.eventMetaLine}>
+          <Text style={styles.eventMetaLabel}>Time:</Text>{" "}
           {(() => {
             const start = parseTimestampLoose(item.startTimestamp ?? null);
             const end = parseTimestampLoose(item.endTimestamp ?? null);
@@ -597,6 +610,12 @@ export default function ActivityPage() {
             return 'Unknown';
           })()}
         </Text>
+
+        {item.activity !== 'court' && (
+          <Text style={styles.eventMetaLine}>
+            <Text style={styles.eventMetaLabel}>Court:</Text> {item.courtName || 'Unknown'}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -1043,10 +1062,15 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: '800',
+    color: COLORS.neutral975,
     flex: 1,
     flexShrink: 1,
-    paddingRight: 6,
+    alignSelf: 'stretch',
+  },
+  eventTitlePrefix: {
+    fontWeight: '900',
+    color: COLORS.neutral975,
   },
   titleRow: {
     flexDirection: 'row',
@@ -1055,12 +1079,12 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
-  eventTime: {
+  eventMetaLine: {
     fontSize: 14,
     color: COLORS.neutral850,
-    marginBottom: 5,
+    marginTop: 6,
   },
-  eventTimeLabel: {
+  eventMetaLabel: {
     fontWeight: '900',
     color: COLORS.neutral975,
   },
@@ -1112,26 +1136,27 @@ const styles = StyleSheet.create({
   modeSegmentContainer: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: COLORS.neutral200,
-    borderRadius: 999,
-    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.gray200,
+    overflow: 'hidden',
+    backgroundColor: COLORS.white,
   },
   modeSegment: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modeSegmentActive: {
-    backgroundColor: COLORS.bootstrapBlue,
+    backgroundColor: COLORS.orange200,
   },
   modeSegmentText: {
     color: COLORS.neutral975,
     fontWeight: '700',
   },
   modeSegmentTextActive: {
-    color: COLORS.white,
+    color: COLORS.brown900,
   },
   upcomingSection: {
     padding: 20,

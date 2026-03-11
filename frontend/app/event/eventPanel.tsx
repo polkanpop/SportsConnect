@@ -2,9 +2,9 @@ import { ICONS } from "@/constants/icons";
 import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {
 	approveEventBooking,
-	type CombinedEvent,
-	type EventBookingRow,
+	cloudinarySignUpload,
 	createBlock,
+	deleteCloudinaryAssetsByUrl,
 	getEventBookingsByEventId,
 	getEventInfoByEventId,
 	getPayment,
@@ -13,16 +13,19 @@ import {
 	listEventsCombinedByOrganizerId,
 	removeBlock,
 	rejectEventBooking,
-	type BlockListRow,
 	updateEvent,
 	updateEventInfo,
 } from "@/lib/backendApi";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
+import { COLORS } from "@/constants/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	Alert,
 	Dimensions,
 	Image,
 	Modal,
@@ -35,6 +38,10 @@ import {
 	View,
 } from "react-native";
 
+type BlockListRow = any;
+type CombinedEvent = any;
+type EventBookingRow = any;
+
 type Props = {
 	organizerId: number | null;
 };
@@ -43,9 +50,38 @@ function selectedEventStorageKey(organizerId: number) {
 	return `@home:eventPanel:selectedEventId:v1:${organizerId}`;
 }
 
+function parseTimestampLoose(raw: unknown): Date | null {
+	if (typeof raw !== "string") return null;
+	const s = raw.trim();
+	if (!s) return null;
+	let d = new Date(s);
+	if (!Number.isNaN(d.getTime())) return d;
+	// Postgres: "YYYY-MM-DD HH:mm:ss" (Hermes can treat as invalid)
+	const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+	if (m) {
+		d = new Date(`${m[1]}T${m[2]}:00`);
+		if (!Number.isNaN(d.getTime())) return d;
+	}
+	return null;
+}
+
+function isPastEventLoose(ev: any): boolean {
+	const end = parseTimestampLoose(ev?.end_timestamp ?? null);
+	const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null);
+	const now = Date.now();
+	if (end) return end.getTime() < now;
+	if (start) return start.getTime() < now;
+	return false;
+}
+
+function isHiddenEventStatus(statusRaw: unknown): boolean {
+	const st = String(statusRaw ?? "").trim().toLowerCase();
+	return st === "completed" || st === "cancelled";
+}
+
 function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: string | null }) {
 	const candidate = (ev.start_timestamp || ev.time || "").trim();
-	const d = candidate ? new Date(candidate) : null;
+	const d = candidate ? parseTimestampLoose(candidate) : null;
 	if (!d || Number.isNaN(d.getTime())) return "Date: -";
 	const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
 	const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -93,6 +129,41 @@ function fallbackSilhouetteByEventId(eventid: number) {
 	const idx = Math.abs(Number(eventid) || 0) % BASKETBALL_SILHOUETTES.length;
 	return BASKETBALL_SILHOUETTES[idx];
 }
+
+const IMAGE_TILE_WIDTH = Math.round((Dimensions.get("window").width - 36) * 0.7);
+const IMAGE_TILE_HEIGHT = 120;
+
+const CLOUDINARY_DELIVERY_WIDTH = 1280;
+const CLOUDINARY_DELIVERY_HEIGHT = Math.max(
+	1,
+	Math.round((CLOUDINARY_DELIVERY_WIDTH * IMAGE_TILE_HEIGHT) / Math.max(1, IMAGE_TILE_WIDTH))
+);
+
+const dedupeStrings = (arr: string[]) => {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const s of arr) {
+		const v = String(s || "").trim();
+		if (!v || seen.has(v)) continue;
+		seen.add(v);
+		out.push(v);
+	}
+	return out;
+};
+
+const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
+	try {
+		const marker = "/upload/";
+		const idx = secureUrl.indexOf(marker);
+		if (idx < 0) return secureUrl;
+		const before = secureUrl.slice(0, idx + marker.length);
+		const after = secureUrl.slice(idx + marker.length);
+		const transform = `c_fill,w_${CLOUDINARY_DELIVERY_WIDTH},h_${CLOUDINARY_DELIVERY_HEIGHT},q_auto,f_auto`;
+		return `${before}${transform}/${after}`;
+	} catch {
+		return secureUrl;
+	}
+};
 
 type EnrichedBooking = {
 	booking: EventBookingRow;
@@ -170,8 +241,132 @@ export default function EventPanel({ organizerId }: Props) {
 	const [editTitle, setEditTitle] = useState("");
 	const [editDescription, setEditDescription] = useState("");
 	const [editCap, setEditCap] = useState("");
+	const [editImages, setEditImages] = useState<string[]>([]);
+	const [imageUploading, setImageUploading] = useState(false);
+	const [removeImageConfirmVisible, setRemoveImageConfirmVisible] = useState(false);
+	const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null);
+	const [pendingCloudinaryDeletes, setPendingCloudinaryDeletes] = useState<string[]>([]);
 	const [savingEvent, setSavingEvent] = useState(false);
 	const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, "approve" | "reject">>({});
+
+	const lastHydratedEventIdRef = useRef<number | null>(null);
+	const initialEditSnapshotRef = useRef<string>("");
+	const isDirtyRef = useRef<boolean>(false);
+
+	const makeEditSnapshot = useCallback(
+		(payload: { title: string; description: string; cap: string; images: string[] }) => {
+			const title = String(payload.title || "").trim();
+			const description = String(payload.description || "");
+			const cap = String(payload.cap || "").trim();
+			const images = dedupeStrings(Array.isArray(payload.images) ? payload.images : []);
+			return JSON.stringify({ title, description, cap, images });
+		},
+		[]
+	);
+
+	const currentEditSnapshot = useMemo(() => {
+		return makeEditSnapshot({ title: editTitle, description: editDescription, cap: editCap, images: editImages });
+	}, [editCap, editDescription, editImages, editTitle, makeEditSnapshot]);
+
+	const isDirty = useMemo(() => {
+		if (!initialEditSnapshotRef.current) return false;
+		return currentEditSnapshot !== initialEditSnapshotRef.current;
+	}, [currentEditSnapshot]);
+
+	useEffect(() => {
+		isDirtyRef.current = isDirty;
+	}, [isDirty]);
+
+	const uploadOneToCloudinary = useCallback(
+		async (localUri: string, idx: number) => {
+			if (typeof organizerId !== "number") throw new Error("Not signed in");
+
+			const resized = await ImageManipulator.manipulateAsync(
+				localUri,
+				[{ resize: { width: 1280 } }],
+				{ compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+			);
+
+			const publicId = `event_${organizerId}_${Date.now()}_${idx}`;
+			const sign = await cloudinarySignUpload({ public_id: publicId, overwrite: true } as any);
+			const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(sign.cloudName)}/image/upload`;
+
+			const form = new FormData();
+			form.append("file", {
+				uri: resized.uri,
+				name: `${publicId}.jpg`,
+				type: "image/jpeg",
+			} as any);
+			form.append("api_key", sign.apiKey);
+			form.append("timestamp", String(sign.timestamp));
+			form.append("signature", sign.signature);
+			if (sign.uploadPreset) form.append("upload_preset", String(sign.uploadPreset));
+			if (sign.folder) form.append("folder", String(sign.folder));
+			form.append("public_id", publicId);
+			form.append("overwrite", "true");
+
+			const resp = await fetch(endpoint, { method: "POST", body: form });
+			const json = await resp.json().catch(() => null);
+			if (!resp.ok) {
+				const msg = json?.error?.message || `Upload failed (HTTP ${resp.status})`;
+				throw new Error(msg);
+			}
+			const secureUrl: string | undefined = json?.secure_url;
+			if (!secureUrl) throw new Error("Upload succeeded but missing secure_url");
+			return applyCloudinaryDeliveryOptimizations(secureUrl);
+		},
+		[organizerId]
+	);
+
+	const pickImage = useCallback(async () => {
+		if (imageUploading) return;
+		if (typeof organizerId !== "number") {
+			Alert.alert("Not signed in", "Please sign in first.");
+			return;
+		}
+		const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+		if (!perm.granted) {
+			Alert.alert("Permission needed", "Please allow photo library access to select images.");
+			return;
+		}
+
+		const result = await ImagePicker.launchImageLibraryAsync({
+			mediaTypes: ImagePicker.MediaTypeOptions.Images,
+			allowsMultipleSelection: false,
+			allowsEditing: true,
+			aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+			quality: 0.9,
+		} as any);
+
+		if (result.canceled) return;
+		const picked = (result.assets || []).map((a) => a.uri).filter(Boolean);
+		if (picked.length === 0) return;
+
+		setImageUploading(true);
+		try {
+			const uploadedUrl = await uploadOneToCloudinary(picked[0], editImages.length);
+			setEditImages((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 6));
+			setPendingCloudinaryDeletes((prev) => prev.filter((u) => u !== uploadedUrl));
+		} catch (e: any) {
+			Alert.alert("Upload failed", e?.message || String(e));
+		} finally {
+			setImageUploading(false);
+		}
+	}, [editImages.length, imageUploading, organizerId, uploadOneToCloudinary]);
+
+	const requestRemoveImage = useCallback((uri: string) => {
+		setRemoveImageCandidateUri(uri);
+		setRemoveImageConfirmVisible(true);
+	}, []);
+
+	const onConfirmRemoveImage = useCallback(() => {
+		if (removeImageCandidateUri) {
+			setPendingCloudinaryDeletes((prev) => (prev.includes(removeImageCandidateUri) ? prev : [...prev, removeImageCandidateUri]));
+			setEditImages((prev) => prev.filter((u) => u !== removeImageCandidateUri));
+		}
+		setRemoveImageConfirmVisible(false);
+		setRemoveImageCandidateUri(null);
+	}, [removeImageCandidateUri]);
 
 	const loadHostEvents = useCallback(async (preferredEventId?: number | null) => {
 		if (organizerId == null) {
@@ -184,8 +379,13 @@ export default function EventPanel({ organizerId }: Props) {
 		try {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			const normalized = Array.isArray(rows) ? rows : [];
-			setHostEvents(normalized);
-			if (normalized.length === 0) {
+			const filtered = normalized.filter((ev) => {
+				if (isHiddenEventStatus((ev as any)?.status)) return false;
+				if (isPastEventLoose(ev)) return false;
+				return true;
+			});
+			setHostEvents(filtered);
+			if (filtered.length === 0) {
 				setSelectedHostEventId(null);
 				return;
 			}
@@ -196,10 +396,10 @@ export default function EventPanel({ organizerId }: Props) {
 						? preferredSelectedEventIdRef.current
 						: null;
 			setSelectedHostEventId((prev) => {
-				const has = (id: number | null) => id != null && normalized.some((e) => e.eventid === id);
+				const has = (id: number | null) => id != null && filtered.some((e) => e.eventid === id);
 				if (preferred != null && has(preferred)) return preferred;
 				if (has(prev)) return prev;
-				return normalized[0].eventid;
+				return filtered[0].eventid;
 			});
 		} catch (e: any) {
 			setHostEventsError(e?.message || String(e));
@@ -315,13 +515,47 @@ export default function EventPanel({ organizerId }: Props) {
 
 	useEffect(() => {
 		if (selectedHostEventId == null) return;
+		const isNewSelection = lastHydratedEventIdRef.current !== selectedHostEventId;
+		if (!isNewSelection && isDirtyRef.current) return;
+		lastHydratedEventIdRef.current = selectedHostEventId;
+		setPendingCloudinaryDeletes([]);
 		const meta = hostEvents.find((e) => e.eventid === selectedHostEventId);
 		setEditTitle(String(meta?.title || ""));
 		setEditDescription(String(meta?.description || ""));
 		setEditCap(meta?.participants_cap != null ? String(meta?.participants_cap) : "");
 		loadBookingsForEvent(selectedHostEventId);
 		loadBlockedForTarget(selectedHostEventId);
-	}, [loadBlockedForTarget, loadBookingsForEvent, selectedHostEventId]);
+
+		let cancelled = false;
+		(async () => {
+			try {
+				const info = await getEventInfoByEventId(selectedHostEventId);
+				if (cancelled) return;
+				const imgs = asStringArray((info as any)?.images);
+				setEditImages(imgs);
+				const snapshot = makeEditSnapshot({
+					title: String(meta?.title || ""),
+					description: String(meta?.description || ""),
+					cap: meta?.participants_cap != null ? String(meta?.participants_cap) : "",
+					images: imgs,
+				});
+				initialEditSnapshotRef.current = snapshot;
+			} catch {
+				if (cancelled) return;
+				setEditImages([]);
+				const snapshot = makeEditSnapshot({
+					title: String(meta?.title || ""),
+					description: String(meta?.description || ""),
+					cap: meta?.participants_cap != null ? String(meta?.participants_cap) : "",
+					images: [],
+				});
+				initialEditSnapshotRef.current = snapshot;
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [hostEvents, loadBlockedForTarget, loadBookingsForEvent, makeEditSnapshot, selectedHostEventId]);
 
 	const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {
 		setActionUser({ userid, name });
@@ -488,6 +722,7 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const onSaveEventInfo = useCallback(async () => {
 		if (selectedHostEventId == null) return;
+		if (!isDirty) return;
 		setSavingEvent(true);
 		try {
 			const meta = await getEventInfoByEventId(selectedHostEventId);
@@ -497,14 +732,25 @@ export default function EventPanel({ organizerId }: Props) {
 				title: editTitle.trim() || meta.title,
 				description: editDescription,
 				participants_cap: capNum != null && Number.isFinite(capNum) ? capNum : meta.participants_cap,
+				images: editImages,
 			});
+			const urlsToDelete = pendingCloudinaryDeletes.filter((u) => !editImages.includes(u));
+			if (urlsToDelete.length) {
+				try {
+					await deleteCloudinaryAssetsByUrl(urlsToDelete);
+				} catch (e: any) {
+					console.warn('[eventPanel] cloudinary delete failed', e?.message || String(e));
+				}
+			}
 			await loadHostEvents();
+			initialEditSnapshotRef.current = currentEditSnapshot;
+			setPendingCloudinaryDeletes([]);
 		} catch (e: any) {
 			setHostEventsError(e?.message || String(e));
 		} finally {
 			setSavingEvent(false);
 		}
-	}, [editCap, editDescription, editTitle, loadHostEvents, selectedHostEventId]);
+	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, isDirty, loadHostEvents, pendingCloudinaryDeletes, selectedHostEventId]);
 
 	const canCancelSelectedEvent = useMemo(() => {
 		const s = String((selectedEvent as any)?.status ?? "").toLowerCase();
@@ -549,7 +795,7 @@ export default function EventPanel({ organizerId }: Props) {
 					borderRadius: 14,
 					padding: 4,
 					borderWidth: 1,
-					borderColor: '#BFDBFE',
+					borderColor: COLORS.neutral350,
 				}}
 			>
 				<TouchableOpacity
@@ -561,10 +807,10 @@ export default function EventPanel({ organizerId }: Props) {
 						borderRadius: 12,
 						alignItems: 'center',
 						justifyContent: 'center',
-						backgroundColor: managementMode === 'event' ? '#60A5FA' : 'transparent',
+						backgroundColor: managementMode === 'event' ? COLORS.brandOrangeYellow : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'event' ? '#fff' : '#60A5FA' }}>Event</Text>
+					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'event' ? COLORS.white : COLORS.brandOrangeYellow }}>Event</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
 					activeOpacity={0.85}
@@ -575,10 +821,10 @@ export default function EventPanel({ organizerId }: Props) {
 						borderRadius: 12,
 						alignItems: 'center',
 						justifyContent: 'center',
-						backgroundColor: managementMode === 'trainingSession' ? '#60A5FA' : 'transparent',
+						backgroundColor: managementMode === 'trainingSession' ? COLORS.purple : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'trainingSession' ? '#fff' : '#60A5FA' }}>Training Session</Text>
+					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'trainingSession' ? COLORS.white : COLORS.purple }}>Training Session</Text>
 				</TouchableOpacity>
 			</View>
 		</View>
@@ -628,7 +874,7 @@ export default function EventPanel({ organizerId }: Props) {
 						showsHorizontalScrollIndicator={false}
 						removeClippedSubviews={false}
 						style={{ overflow: "visible" }}
-						contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 18, paddingBottom: 12 }}
+						contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 18, paddingBottom: 12 }}
 					>
 						{Array.from({ length: 2 }).map((_, idx) => (
 							<SkeletonBox
@@ -636,7 +882,7 @@ export default function EventPanel({ organizerId }: Props) {
 								width={288}
 								height={148}
 								radius={14}
-								style={{ marginRight: 18 }}
+									style={{ marginRight: idx < 1 ? 18 : 0 }}
 							/>
 						))}
 					</ScrollView>
@@ -658,14 +904,17 @@ export default function EventPanel({ organizerId }: Props) {
 					showsHorizontalScrollIndicator={false}
 					removeClippedSubviews={false}
 					style={{ overflow: "visible" }}
-					contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 18, paddingBottom: 12 }}
+					contentContainerStyle={{ paddingHorizontal: 0, paddingTop: 18, paddingBottom: 12 }}
 				>
-					{hostEvents.map((ev) => {
+						{hostEvents.map((ev, idx) => {
 						const selected = ev.eventid === selectedHostEventId;
 						const accent = "#16a34a";
 						const silhouette = fallbackSilhouetteByEventId(ev.eventid);
 						return (
-							<View key={ev.eventid} style={{ width: 288, marginRight: 18, overflow: "visible" }}>
+								<View
+									key={ev.eventid}
+									style={{ width: 288, marginRight: idx < hostEvents.length - 1 ? 18 : 0, overflow: "visible" }}
+								>
 								{selected && (
 									<View
 										pointerEvents="none"
@@ -716,65 +965,72 @@ export default function EventPanel({ organizerId }: Props) {
 										overflow: "hidden",
 									}}
 								>
-								<Image
-									source={silhouette}
-									resizeMode="contain"
-									style={{
-										position: "absolute",
-										top: -14,
-										right: -18,
-										width: 128,
-										height: 128,
-										opacity: selected ? 0.26 : 0.14,
-										tintColor: selected ? "#ffffff" : accent,
-										zIndex: 0,
-									}}
-								/>
-								<View style={{ paddingRight: 78, flex: 1 }}>
-									<Text numberOfLines={1} style={{ fontWeight: "900", fontSize: 16, color: selected ? "#fff" : "#111" }}>
-										{ev.title || `Event #${ev.eventid}`}
-									</Text>
-									<Text
-										numberOfLines={1}
+									<View
+										pointerEvents="none"
 										style={{
-											color: selected ? "#f0fdf4" : "#555",
-											marginTop: 8,
-											fontSize: 12,
-											fontWeight: "700",
-											lineHeight: 16,
+											position: "absolute",
+											top: -14,
+											right: -18,
+											width: 120,
+											height: 120,
+											zIndex: 0,
 										}}
 									>
-										{formatEventDateLabel(ev)}
-									</Text>
-									<Text
+										<Image
+											source={silhouette}
+											resizeMode="contain"
+											style={{
+												width: "100%",
+												height: "100%",
+												opacity: selected ? 0.26 : 0.14,
+												tintColor: selected ? "#ffffff" : accent,
+											}}
+										/>
+									</View>
+									<View
+										pointerEvents="none"
 										style={{
-											color: selected ? "#ecfdf5" : "#374151",
-											marginTop: "auto",
-											paddingBottom: 2,
-											fontSize: 12,
-											fontWeight: "900",
-											letterSpacing: 0.6,
+											position: "absolute",
+											top: -2,
+											right: -6,
+											width: 46,
+											height: 46,
+											opacity: selected ? 0.95 : 0.9,
+											zIndex: 2,
 										}}
 									>
-										PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
-									</Text>
-								</View>
+										<Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
+									</View>
+									<View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
+										<Text numberOfLines={2} style={{ fontWeight: "900", fontSize: 16, lineHeight: 18, color: selected ? "#fff" : "#111" }}>
+											{ev.title || `Event #${ev.eventid}`}
+										</Text>
+										<Text
+											numberOfLines={1}
+											style={{
+												color: selected ? "#f0fdf4" : "#555",
+												marginTop: 8,
+												fontSize: 12,
+												fontWeight: "700",
+												lineHeight: 16,
+											}}
+										>
+											{formatEventDateLabel(ev)}
+										</Text>
+										<Text
+											style={{
+												color: selected ? "#ecfdf5" : "#374151",
+												marginTop: "auto",
+												paddingBottom: 2,
+												fontSize: 12,
+												fontWeight: "900",
+												letterSpacing: 0.6,
+											}}
+										>
+											PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
+										</Text>
+									</View>
 								</TouchableOpacity>
-								<View
-									pointerEvents="none"
-									style={{
-										position: "absolute",
-										top: -24,
-										right: -24,
-										width: 56,
-										height: 56,
-										zIndex: 200,
-										elevation: 24,
-										opacity: selected ? 0.95 : 0.9,
-									}}
-								>
-									<Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: 48, height: 48, bottom: -13, right: -8}} />
-								</View>
 							</View>
 						);
 					})}
@@ -1140,6 +1396,87 @@ export default function EventPanel({ organizerId }: Props) {
 							}}
 						/>
 
+						<Text style={{ fontWeight: "700", marginBottom: 6 }}>Images</Text>
+						<ScrollView
+							horizontal
+							showsHorizontalScrollIndicator={false}
+							contentContainerStyle={{ flexDirection: "row", alignItems: "flex-start", gap: 10, paddingTop: 6, paddingBottom: 6 }}
+							style={{ marginBottom: 10 }}
+						>
+							{editImages.map((uri) => (
+								<View
+									key={uri}
+									style={{
+										width: IMAGE_TILE_WIDTH,
+										height: IMAGE_TILE_HEIGHT,
+										alignSelf: "flex-start",
+										borderRadius: 12,
+										borderWidth: 1,
+										borderColor: COLORS.neutral350,
+										borderStyle: "dashed",
+										backgroundColor: COLORS.neutral0,
+										alignItems: "center",
+										justifyContent: "center",
+										overflow: "hidden",
+									}}
+								>
+									<View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+										<Image source={{ uri }} style={{ width: "100%", height: "100%", resizeMode: "cover" }} />
+									</View>
+									<TouchableOpacity
+										activeOpacity={0.85}
+										onPress={() => requestRemoveImage(uri)}
+										style={{
+											position: "absolute",
+											top: 8,
+											right: 8,
+											width: 28,
+											height: 28,
+											borderRadius: 14,
+											backgroundColor: COLORS.neutral0,
+											borderWidth: 1,
+											borderColor: COLORS.neutral200,
+											alignItems: "center",
+											justifyContent: "center",
+										}}
+									>
+										<Text style={{ fontSize: 20, lineHeight: 20, fontWeight: "900", color: COLORS.neutral925, marginTop: -1 }}>×</Text>
+									</TouchableOpacity>
+								</View>
+							))}
+
+							{editImages.length < 6 && (
+								<View
+									style={{
+										width: IMAGE_TILE_WIDTH,
+										height: IMAGE_TILE_HEIGHT,
+										alignSelf: "flex-start",
+										borderRadius: 12,
+										borderWidth: 1,
+										borderColor: COLORS.neutral350,
+										borderStyle: "dashed",
+										backgroundColor: COLORS.neutral0,
+										alignItems: "center",
+										justifyContent: "center",
+										overflow: "hidden",
+									}}
+								>
+									<TouchableOpacity
+										activeOpacity={0.85}
+										disabled={imageUploading}
+										onPress={pickImage}
+										style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+									>
+										{imageUploading ? (
+											<ActivityIndicator size="small" color={COLORS.neutral800} />
+										) : (
+											<Text style={{ fontSize: 28, fontWeight: "700", color: COLORS.neutral800, marginTop: -1 }}>+</Text>
+										)}
+									</TouchableOpacity>
+								</View>
+							)}
+						</ScrollView>
+
 						<Text style={{ fontWeight: "700", marginBottom: 6 }}>Participants cap</Text>
 						<TextInput
 							value={editCap}
@@ -1150,10 +1487,10 @@ export default function EventPanel({ organizerId }: Props) {
 						/>
 
 						<TouchableOpacity
-							disabled={savingEvent}
+							disabled={savingEvent || !isDirty}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent ? "#9ca3af" : "#16a34a",
+								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : "#16a34a",
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",
@@ -1307,6 +1644,43 @@ export default function EventPanel({ organizerId }: Props) {
 								onPress={onConfirmRemoveBlockedUser}
 								style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={removeCandidate == null}
+							>
+								<Text style={{ fontWeight: "900", color: "#fff" }}>Remove</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</View>
+			</Modal>
+
+			<Modal
+				transparent
+				visible={removeImageConfirmVisible}
+				animationType="fade"
+				onRequestClose={() => {
+					setRemoveImageConfirmVisible(false);
+					setRemoveImageCandidateUri(null);
+				}}
+			>
+				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
+					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
+						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Remove image</Text>
+						<Text style={{ marginTop: 8, color: "#374151" }}>Do you want to remove this image?</Text>
+						<View style={{ flexDirection: "row", marginTop: 14 }}>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={() => {
+									setRemoveImageConfirmVisible(false);
+									setRemoveImageCandidateUri(null);
+								}}
+								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
+							>
+								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								activeOpacity={0.8}
+								onPress={onConfirmRemoveImage}
+								style={{ flex: 1, backgroundColor: removeImageCandidateUri ? "#2563eb" : "#9ca3af", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
+								disabled={!removeImageCandidateUri}
 							>
 								<Text style={{ fontWeight: "900", color: "#fff" }}>Remove</Text>
 							</TouchableOpacity>

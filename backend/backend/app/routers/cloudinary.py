@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import time
 from typing import Any, Dict, Optional
 
@@ -249,3 +250,164 @@ def delete_profile_picture(sub: str = Depends(get_current_user)):
         publicIdUsed=public_id_used,
         attemptedPublicIds=public_ids,
     )
+
+
+def _extract_cloudinary_public_id_from_url(url: str) -> Optional[str]:
+    """Best-effort extraction of Cloudinary public_id from a delivery URL.
+
+    Expected patterns:
+    - https://res.cloudinary.com/<cloud>/image/upload/<transform...>/v123/<public_id>.<ext>
+    - https://res.cloudinary.com/<cloud>/image/upload/v123/<public_id>.<ext>
+
+    We use the version segment (v123) as an anchor; everything after it is treated
+    as the public_id path, with the extension stripped.
+    """
+    if not isinstance(url, str):
+        return None
+    u = url.strip()
+    if not u:
+        return None
+    u = u.split("?", 1)[0]
+    marker = "/upload/"
+    if marker not in u:
+        return None
+    after = u.split(marker, 1)[1]
+    parts = [p for p in after.split("/") if p]
+    if not parts:
+        return None
+
+    v_idx: Optional[int] = None
+    for i, p in enumerate(parts):
+        if re.fullmatch(r"v\d+", p):
+            v_idx = i
+            break
+
+    public_parts = parts[v_idx + 1 :] if v_idx is not None else parts[-1:]
+    if not public_parts:
+        return None
+    public_path = "/".join(public_parts)
+    public_no_ext = re.sub(r"\.[A-Za-z0-9]+$", "", public_path)
+    return public_no_ext or None
+
+
+def _require_public_id_owner(userid: int, public_id: str) -> None:
+    """Validate that public_id belongs to the authenticated user.
+
+    We enforce a naming convention used by the mobile app when uploading:
+    - court_<ownerId>_...
+    - event_<organizerId>_...
+    - session_<coachId>_...
+    - pfp_user_<userId>
+
+    Folder prefixes are allowed; we validate using the basename.
+    """
+    base = (public_id or "").split("/")[-1]
+    if not base:
+        raise HTTPException(status_code=400, detail="Missing public_id")
+
+    m = re.match(r"^(court|event|session)_(\d+)_", base)
+    if m:
+        pid_user = int(m.group(2))
+        if pid_user != userid:
+            raise HTTPException(status_code=403, detail="Not allowed to delete this asset")
+        return
+
+    m2 = re.match(r"^pfp_user_(\d+)", base)
+    if m2:
+        pid_user = int(m2.group(1))
+        if pid_user != userid:
+            raise HTTPException(status_code=403, detail="Not allowed to delete this asset")
+        return
+
+    raise HTTPException(status_code=403, detail="Unsupported asset public_id")
+
+
+class DeleteAssetsRequest(BaseModel):
+    urls: list[str] = Field(default_factory=list)
+
+
+class DeleteAssetsItem(BaseModel):
+    url: str
+    public_id: Optional[str] = None
+    result: Optional[str] = None
+    error: Optional[str] = None
+
+
+class DeleteAssetsResponse(BaseModel):
+    deleted: list[DeleteAssetsItem]
+
+
+@router.post("/assets/delete", response_model=DeleteAssetsResponse)
+def delete_assets(req: DeleteAssetsRequest, sub: str = Depends(get_current_user)):
+    """Delete Cloudinary image assets by URL after a successful save.
+
+    Security:
+    - Requires Bearer token
+    - Only allows deleting assets whose public_id embeds the authenticated userid
+      with known prefixes: court_/event_/session_/pfp_user_.
+    """
+    try:
+        userid = int(str(sub))
+    except Exception:
+        raise HTTPException(status_code=403, detail="Token subject is not a numeric userid")
+
+    urls = req.urls if isinstance(req.urls, list) else []
+    urls = [u for u in urls if isinstance(u, str) and u.strip()]
+    if not urls:
+        return DeleteAssetsResponse(deleted=[])
+
+    cloud_name = _require_env("CLOUDINARY_CLOUD_NAME")
+    api_key = _require_env("CLOUDINARY_API_KEY")
+    api_secret = _require_env("CLOUDINARY_API_SECRET")
+
+    destroy_url = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/destroy"
+
+    def _destroy(public_id: str) -> str:
+        timestamp = int(time.time())
+        destroy_params: Dict[str, Any] = {
+            "public_id": public_id,
+            "timestamp": timestamp,
+            "invalidate": True,
+            "type": "upload",
+        }
+        signature = _cloudinary_signature(destroy_params, api_secret)
+        payload = {
+            "public_id": public_id,
+            "timestamp": str(timestamp),
+            "invalidate": "true",
+            "type": "upload",
+            "api_key": api_key,
+            "signature": signature,
+        }
+        body = urlencode(payload).encode("utf-8")
+        r = Request(destroy_url, data=body, method="POST")
+        r.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with urlopen(r, timeout=20) as resp:
+            raw = resp.read().decode("utf-8")
+        data = json.loads(raw) if raw else {}
+        return str((data or {}).get("result") or "ok")
+
+    out: list[DeleteAssetsItem] = []
+    for u in urls:
+        try:
+            pid = _extract_cloudinary_public_id_from_url(u)
+            if not pid:
+                out.append(DeleteAssetsItem(url=u, public_id=None, result=None, error="Could not extract public_id"))
+                continue
+            _require_public_id_owner(userid, pid)
+            result = _destroy(pid)
+            out.append(DeleteAssetsItem(url=u, public_id=pid, result=result, error=None))
+        except HTTPException as e:
+            out.append(DeleteAssetsItem(url=u, public_id=None, result=None, error=str(e.detail)))
+        except HTTPError as e:
+            try:
+                raw = e.read().decode("utf-8")
+                data = json.loads(raw) if raw else {}
+                msg = (data or {}).get("error", {}).get("message") or f"Cloudinary destroy failed (HTTP {e.code})"
+            except Exception:
+                msg = f"Cloudinary destroy failed (HTTP {getattr(e, 'code', 'unknown')})"
+            out.append(DeleteAssetsItem(url=u, public_id=None, result=None, error=msg))
+        except Exception as e:
+            out.append(DeleteAssetsItem(url=u, public_id=None, result=None, error=str(getattr(e, "message", None) or str(e))))
+
+    return DeleteAssetsResponse(deleted=out)

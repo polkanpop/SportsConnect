@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator, Pressable } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useRouter } from 'expo-router'
@@ -34,9 +34,60 @@ const CLOUDINARY_DELIVERY_HEIGHT = Math.max(
   Math.round((CLOUDINARY_DELIVERY_WIDTH * IMAGE_TILE_HEIGHT) / Math.max(1, IMAGE_TILE_WIDTH))
 )
 
+const formatVnd = (value: unknown) => {
+  const raw = typeof value === 'string' ? value : (value as any)
+  const n = typeof raw === 'string'
+    ? Number(String(raw).replace(/[^0-9.-]/g, ''))
+    : Number(raw)
+  const safe = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
+  try {
+    return `${new Intl.NumberFormat('vi-VN').format(safe)}₫`
+  } catch {
+    return `${String(safe).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}₫`
+  }
+}
+
+const digitsOnly = (s: string) => String(s || '').replace(/\D+/g, '')
+
+const formatThousandGroups = (digits: string) => {
+  const d = digitsOnly(digits)
+  if (!d) return ''
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+const toNumberFromInput = (value: unknown) => {
+  const d = digitsOnly(String(value ?? ''))
+  if (!d) return 0
+  const n = Number(d)
+  return Number.isFinite(n) ? n : 0
+}
+
 const canonicalizeAddress = (s: string) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase()
 
 type Venue = 'Indoor' | 'Outdoor' | 'Both'
+
+type PlayingCourtDraft = {
+  fullName: string
+  fullPrice: string
+  allowHalfBooking: boolean
+  half1Name: string
+  half1Price: string
+  half2Name: string
+  half2Price: string
+  description: string
+  images: string[]
+  half1Images: string[]
+  half2Images: string[]
+  surface: string
+}
+
+type ServiceDraft = {
+  name: string
+  category: 'consumable' | 'rental'
+  price: string
+  stock: string
+  images: string[]
+}
 
 export default function CourtRegisterPage() {
   const router = useRouter()
@@ -51,8 +102,6 @@ export default function CourtRegisterPage() {
 
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [price, setPrice] = useState('')
-  const [priceError, setPriceError] = useState<string | null>(null)
   const [venue, setVenue] = useState<Venue>('Indoor')
 
   const [scheduleDays, setScheduleDays] = useState<WeekDayKey[]>([...WEEK_DAYS])
@@ -82,6 +131,34 @@ export default function CourtRegisterPage() {
   const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([])
   const [imageUploading, setImageUploading] = useState(false)
 
+  const [playingCourts, setPlayingCourts] = useState<PlayingCourtDraft[]>([])
+  const [expandedCourtIdxs, setExpandedCourtIdxs] = useState<Set<number>>(new Set())
+  const [playingCourtModalVisible, setPlayingCourtModalVisible] = useState(false)
+  const [pcFullName, setPcFullName] = useState('')
+  const [pcFullPrice, setPcFullPrice] = useState('')
+  const [pcAllowHalf, setPcAllowHalf] = useState(true)
+  const [pcHalf1Name, setPcHalf1Name] = useState('')
+  const [pcHalf1Price, setPcHalf1Price] = useState('')
+  const [pcHalf2Name, setPcHalf2Name] = useState('')
+  const [pcHalf2Price, setPcHalf2Price] = useState('')
+  const [pcDescription, setPcDescription] = useState('')
+  const [pcSurface, setPcSurface] = useState<'hardwood' | 'concrete' | 'synthetic'>('concrete')
+  const [pcImages, setPcImages] = useState<string[]>([])
+  const [pcHalf1Images, setPcHalf1Images] = useState<string[]>([])
+  const [pcHalf2Images, setPcHalf2Images] = useState<string[]>([])
+  const [pcHalfTab, setPcHalfTab] = useState<'half1' | 'half2'>('half1')
+
+  const [servicesExpanded, setServicesExpanded] = useState(false)
+  const [services, setServices] = useState<ServiceDraft[]>([])
+  const [serviceDraftVisible, setServiceDraftVisible] = useState(false)
+  const [expandedServiceIdxs, setExpandedServiceIdxs] = useState<Set<number>>(new Set())
+  const [svcName, setSvcName] = useState('')
+  const [svcCategory, setSvcCategory] = useState<'consumable' | 'rental'>('consumable')
+  const [svcCategoryDropdownOpen, setSvcCategoryDropdownOpen] = useState(false)
+  const [svcPrice, setSvcPrice] = useState('')
+  const [svcStock, setSvcStock] = useState('')
+  const [svcImages, setSvcImages] = useState<string[]>([])
+
   const [checking, setChecking] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
@@ -90,6 +167,17 @@ export default function CourtRegisterPage() {
   const [agreeTruth, setAgreeTruth] = useState(false)
   const [confirmVisible, setConfirmVisible] = useState(false)
   const [submittedVisible, setSubmittedVisible] = useState(false)
+  const [removeImageConfirmVisible, setRemoveImageConfirmVisible] = useState(false)
+  const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null)
+
+  const toggleCourtExpanded = useCallback((idx: number) => {
+    setExpandedCourtIdxs(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
@@ -196,7 +284,6 @@ export default function CourtRegisterPage() {
 
         if (typeof parsed?.name === 'string') setName(parsed.name)
         if (typeof parsed?.address === 'string') setAddress(parsed.address)
-        if (typeof parsed?.price === 'string') setPrice(parsed.price)
         if (parsed?.venue === 'Indoor' || parsed?.venue === 'Outdoor' || parsed?.venue === 'Both') setVenue(parsed.venue)
         if (Array.isArray(parsed?.scheduleDays)) {
           const wanted = parsed.scheduleDays.filter((d: any) => typeof d === 'string' && (WEEK_DAYS as readonly string[]).includes(d))
@@ -298,7 +385,6 @@ export default function CourtRegisterPage() {
         lastGeocodeLatitude: typeof lastGeocode?.latitude === 'number' ? lastGeocode.latitude : null,
         lastGeocodeLongitude: typeof lastGeocode?.longitude === 'number' ? lastGeocode.longitude : null,
         lastGeocodeWarnings: Array.isArray(lastGeocode?.warnings) ? lastGeocode.warnings : [],
-        price,
         venue,
         scheduleDays,
         startTime,
@@ -310,7 +396,7 @@ export default function CourtRegisterPage() {
       setCache(COURT_REGISTER_DRAFT_STORAGE_KEY, payload, COURT_REGISTER_DRAFT_TTL_MS).catch(() => {})
     }, 250)
     return () => clearTimeout(t)
-  }, [name, address, addressSuggestions, selectedPlaceId, verifiedCoord, price, venue, scheduleDays, startTime, endTime, agreeTruth, localImageUris, remoteImageUrls])
+  }, [name, address, addressSuggestions, selectedPlaceId, verifiedCoord, venue, scheduleDays, startTime, endTime, agreeTruth, localImageUris, remoteImageUrls])
 
   const isValidHHMM = (s: string) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test((s || '').trim())
   const toMinutes = (s: string) => {
@@ -331,14 +417,11 @@ export default function CourtRegisterPage() {
       !!userid &&
       name.trim().length > 0 &&
       address.trim().length > 0 &&
-      price.trim().length > 0 &&
-      !priceError &&
-      Number(price) > 0 &&
       !submitting &&
       isScheduleValid &&
       agreeTruth
     )
-  }, [userid, name, address, price, priceError, submitting, agreeTruth, isScheduleValid])
+  }, [userid, name, address, submitting, agreeTruth, isScheduleValid])
 
   const dedupeStrings = (items: string[]) => {
     const seen = new Set<string>()
@@ -457,6 +540,203 @@ export default function CourtRegisterPage() {
     }
   }
 
+  const pickPlayingCourtImage = async (target: 'full' | 'half1' | 'half2') => {
+    if (imageUploading) return
+    if (!userid) {
+      Alert.alert('Not signed in', 'Please sign in first.')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      quality: 0.9,
+    } as any)
+
+    if (result.canceled) return
+    const picked = (result.assets || []).map(a => a.uri).filter(Boolean)
+    if (picked.length === 0) return
+
+    setImageUploading(true)
+    try {
+      if (target === 'full') {
+        const uploadedUrl = await uploadOneToCloudinary(picked[0], pcImages.length, 'pc_full')
+        setPcImages(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+      } else if (target === 'half1') {
+        const uploadedUrl = await uploadOneToCloudinary(picked[0], pcHalf1Images.length, 'pc_half1')
+        setPcHalf1Images(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+      } else {
+        const uploadedUrl = await uploadOneToCloudinary(picked[0], pcHalf2Images.length, 'pc_half2')
+        setPcHalf2Images(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+      }
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message || 'Please try again')
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const removePlayingCourtImage = (target: 'full' | 'half1' | 'half2', uri: string) => {
+    if (target === 'full') setPcImages(prev => prev.filter(u => u !== uri))
+    if (target === 'half1') setPcHalf1Images(prev => prev.filter(u => u !== uri))
+    if (target === 'half2') setPcHalf2Images(prev => prev.filter(u => u !== uri))
+  }
+
+  const pickServiceImage = async () => {
+    if (imageUploading) return
+    if (!userid) {
+      Alert.alert('Not signed in', 'Please sign in first.')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      quality: 0.9,
+    } as any)
+
+    if (result.canceled) return
+    const picked = (result.assets || []).map(a => a.uri).filter(Boolean)
+    if (picked.length === 0) return
+
+    setImageUploading(true)
+    try {
+      const uploadedUrl = await uploadOneToCloudinary(picked[0], svcImages.length, 'svc')
+      setSvcImages(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message || 'Please try again')
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const removeServiceImage = (uri: string) => {
+    setSvcImages(prev => prev.filter(u => u !== uri))
+  }
+
+  const openPlayingCourtModal = () => {
+    setPcFullName('')
+    setPcFullPrice('')
+    setPcAllowHalf(true)
+    setPcHalf1Name('')
+    setPcHalf1Price('')
+    setPcHalf2Name('')
+    setPcHalf2Price('')
+    setPcDescription('')
+    setPcSurface('concrete')
+    setPcImages([])
+    setPcHalf1Images([])
+    setPcHalf2Images([])
+    setPcHalfTab('half1')
+    setPlayingCourtModalVisible(true)
+  }
+
+  const addPlayingCourt = () => {
+    const fullName = pcFullName.trim()
+    const fullPrice = pcFullPrice.trim()
+    if (!fullName) {
+      Alert.alert('Missing info', 'Please enter a sub-court name.')
+      return
+    }
+    if (!fullPrice || !Number.isFinite(toNumberFromInput(fullPrice)) || toNumberFromInput(fullPrice) < 0) {
+      Alert.alert('Missing info', 'Please enter a valid full court price.')
+      return
+    }
+
+    let half1Name = pcHalf1Name.trim()
+    let half2Name = pcHalf2Name.trim()
+    const half1Price = pcHalf1Price.trim()
+    const half2Price = pcHalf2Price.trim()
+
+    if (pcAllowHalf) {
+      if (!half1Name || !half2Name) {
+        Alert.alert('Missing info', 'Please enter Half Court 1 and Half Court 2 names.')
+        return
+      }
+      if (!half1Price || !Number.isFinite(toNumberFromInput(half1Price)) || toNumberFromInput(half1Price) < 0) {
+        Alert.alert('Missing info', 'Please enter a valid price for Half Court 1.')
+        return
+      }
+      if (!half2Price || !Number.isFinite(toNumberFromInput(half2Price)) || toNumberFromInput(half2Price) < 0) {
+        Alert.alert('Missing info', 'Please enter a valid price for Half Court 2.')
+        return
+      }
+    } else {
+      half1Name = ''
+      half2Name = ''
+    }
+
+    const item: PlayingCourtDraft = {
+      fullName,
+      fullPrice,
+      allowHalfBooking: !!pcAllowHalf,
+      half1Name,
+      half1Price: pcAllowHalf ? half1Price : '',
+      half2Name,
+      half2Price: pcAllowHalf ? half2Price : '',
+      description: pcDescription.trim(),
+      images: pcImages,
+      half1Images: pcAllowHalf ? pcHalf1Images : [],
+      half2Images: pcAllowHalf ? pcHalf2Images : [],
+      surface: pcSurface,
+    }
+    setPlayingCourts(prev => [...prev, item])
+    setPlayingCourtModalVisible(false)
+  }
+
+  const openAddService = () => {
+    setSvcName('')
+    setSvcCategory('consumable')
+    setSvcCategoryDropdownOpen(false)
+    setSvcPrice('')
+    setSvcStock('')
+    setSvcImages([])
+    setServiceDraftVisible(true)
+  }
+
+  const addService = () => {
+    const nm = svcName.trim()
+    const price = svcPrice.trim()
+    const stock = svcStock.trim()
+    if (!nm) {
+      Alert.alert('Missing info', 'Please enter a service name.')
+      return
+    }
+    if (!price || !Number.isFinite(toNumberFromInput(price)) || toNumberFromInput(price) < 0) {
+      Alert.alert('Missing info', 'Please enter a valid service price.')
+      return
+    }
+    if (stock && (!Number.isFinite(Number(stock)) || Number(stock) < 0)) {
+      Alert.alert('Missing info', 'Please enter a valid stock (or leave empty).')
+      return
+    }
+    setServices(prev => [
+      ...prev,
+      {
+        name: nm,
+        category: svcCategory,
+        price,
+        stock,
+        images: svcImages,
+      },
+    ])
+    setServiceDraftVisible(false)
+  }
+
   const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
     // Delivery-time optimizations only (no AI/auto-crop).
     // Example: .../upload/<transformations>/v1234/...jpg
@@ -475,14 +755,14 @@ export default function CourtRegisterPage() {
     }
   }
 
-  const uploadOneToCloudinary = async (localUri: string, idx: number) => {
+  const uploadOneToCloudinary = async (localUri: string, idx: number, prefix: string = 'court') => {
     const resized = await ImageManipulator.manipulateAsync(
       localUri,
       [{ resize: { width: 1280 } }],
       { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
     )
 
-    const publicId = `court_${userid}_${Date.now()}_${idx}`
+  const publicId = `${prefix}_${userid}_${Date.now()}_${idx}`
     const sign = await cloudinarySignUpload({ public_id: publicId, overwrite: true })
 
     const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(sign.cloudName)}/image/upload`
@@ -603,6 +883,15 @@ export default function CourtRegisterPage() {
     }
   }
 
+  const toggleServiceExpanded = (idx: number) => {
+    setExpandedServiceIdxs(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
   const handleSubmit = async () => {
     if (submitting) return
     if (!userid) {
@@ -617,14 +906,6 @@ export default function CourtRegisterPage() {
     }
 
     // Ensure the full procedure is complete before starting any Cloudinary upload.
-    if (priceError) {
-      return
-    }
-    const p = Number(price)
-    if (!Number.isFinite(p) || p <= 0) {
-      Alert.alert('Invalid price', 'Please enter a valid price.')
-      return
-    }
     if (!verifiedCoord) {
       setVerifyError(' Please verify court location first.')
       return
@@ -638,7 +919,11 @@ export default function CourtRegisterPage() {
       return
     }
 
-    setSubmitting(true)
+    if (playingCourts.length === 0) {
+      Alert.alert('Sub-court required', 'Please add at least one sub-court in the “Sub-court” section.')
+      return
+    }
+
     setSubmitting(true)
     // Persist in-flight state immediately so leaving/re-entering keeps the button in "Registering…".
     try {
@@ -658,9 +943,30 @@ export default function CourtRegisterPage() {
         name: nm,
         address: addr,
         ownerid: userid,
-        price: p,
         venue,
         images: urls,
+        allow_half_court: playingCourts.some(pc => pc.allowHalfBooking),
+        playing_courts: playingCourts.map(pc => ({
+          name: pc.fullName,
+          full_price: toNumberFromInput(pc.fullPrice),
+          allow_half_booking: pc.allowHalfBooking,
+          half_a_name: pc.allowHalfBooking ? pc.half1Name : undefined,
+          half_b_name: pc.allowHalfBooking ? pc.half2Name : undefined,
+          half_a_price: pc.allowHalfBooking ? toNumberFromInput(pc.half1Price) : undefined,
+          half_b_price: pc.allowHalfBooking ? toNumberFromInput(pc.half2Price) : undefined,
+          description: pc.description || undefined,
+          images: pc.images,
+          half_a_images: pc.allowHalfBooking ? pc.half1Images : undefined,
+          half_b_images: pc.allowHalfBooking ? pc.half2Images : undefined,
+          surface: pc.surface || undefined,
+        })),
+        services: services.map(s => ({
+          name: s.name,
+          category: s.category,
+          price: toNumberFromInput(s.price),
+          stock: s.stock ? Number(s.stock) : 0,
+          images: Array.isArray(s.images) ? s.images : [],
+        })),
         schedule: {
           booking_date: scheduleDays,
           start_time: startTime.trim(),
@@ -742,6 +1048,17 @@ export default function CourtRegisterPage() {
 
   const removeLocalImage = (uri: string) => {
     setRemoteImageUrls(prev => prev.filter(u => u !== uri))
+  }
+
+  const requestRemoveImage = (uri: string) => {
+    setRemoveImageCandidateUri(uri)
+    setRemoveImageConfirmVisible(true)
+  }
+
+  const onConfirmRemoveImage = () => {
+    if (removeImageCandidateUri) removeLocalImage(removeImageCandidateUri)
+    setRemoveImageConfirmVisible(false)
+    setRemoveImageCandidateUri(null)
   }
 
 
@@ -842,31 +1159,11 @@ export default function CourtRegisterPage() {
         <TouchableOpacity
           onPress={handleVerifyLocation}
           disabled={checking || submitting || (!selectedPlaceId && !verifiedCoord)}
-          style={[styles.smallBtn, styles.smallBtnRed, (checking || submitting || (!selectedPlaceId && !verifiedCoord)) && styles.btnDisabled]}
+          style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, (checking || submitting || (!selectedPlaceId && !verifiedCoord)) && styles.btnDisabled]}
         >
           <Text style={styles.smallBtnText}>{checking ? 'Verifying…' : 'Verify Location'}</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.label}>Price (VND)</Text>
-      <TextInput
-        value={price}
-        onChangeText={(raw) => {
-          if (!raw) {
-            setPrice('')
-            setPriceError(null)
-            return
-          }
-          const digits = raw.replace(/[^\d]/g, '')
-          setPrice(digits)
-          const hasLetters = /[A-Za-z]/.test(raw)
-          setPriceError(hasLetters ? 'Please type in number' : null)
-        }}
-        placeholder="e.g. 200000"
-        keyboardType="numeric"
-        style={styles.input}
-      />
-      {!!priceError && <Text style={styles.verifyErrorText}>{priceError}</Text>}
-
       <Text style={styles.label}>Venue</Text>
       <View style={styles.segmented}>
         {(['Indoor', 'Outdoor', 'Both'] as const).map(v => {
@@ -884,51 +1181,263 @@ export default function CourtRegisterPage() {
         })}
       </View>
 
-      <Text style={styles.label}>Schedule</Text>
-      <View style={styles.weekRow}>
-        {WEEK_DAYS.map((label) => {
-          const active = scheduleDays.includes(label)
+      <Text style={styles.label}>Sub-court</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.myCourtCardsRow}
+      >
+        {playingCourts.map((pc, idx) => {
+          const expanded = expandedCourtIdxs.has(idx)
           return (
-            <TouchableOpacity
-              key={label}
-              onPress={() => {
-                setScheduleDays(prev => (prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]))
-              }}
-              style={[styles.dayCell, active && styles.dayCellSelected]}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.dayLabel, active && styles.dayLabelSelected]}>{label}</Text>
-            </TouchableOpacity>
+            <View key={`${pc.fullName}-${idx}`} style={[styles.courtCard, expanded && styles.courtCardExpanded]}>
+              <TouchableOpacity
+                onPress={() => toggleCourtExpanded(idx)}
+                activeOpacity={0.85}
+                style={styles.courtCardHeader}
+              >
+                <Text style={styles.myCourtName} numberOfLines={1}>{pc.fullName}</Text>
+                <Image
+                  source={ICONS.arrowdown}
+                  style={[styles.courtCardArrow, expanded && styles.courtCardArrowOpen]}
+                />
+              </TouchableOpacity>
+
+              <Text style={styles.myCourtMeta}>{`Full price: ${formatVnd(pc.fullPrice)}`}</Text>
+              <Text style={styles.myCourtMeta}>{pc.allowHalfBooking ? 'Half Court Booking: On' : 'Half Court Booking: Off'}</Text>
+
+              {expanded && (
+                <View style={styles.courtCardBody}>
+                  <Text style={styles.courtDetailLine}>{`Surface: ${pc.surface || 'concrete'}`}</Text>
+                  {pc.allowHalfBooking ? (
+                    <>
+                      <Text style={styles.courtDetailLine}>{`Half Court 1: ${pc.half1Name || 'Half Court 1'} • ${formatVnd(pc.half1Price)}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 2: ${pc.half2Name || 'Half Court 2'} • ${formatVnd(pc.half2Price)}`}</Text>
+                    </>
+                  ) : null}
+                  <Text style={styles.courtDetailLabel}>Description:</Text>
+                  <Text style={styles.courtDetailDesc} numberOfLines={4}>
+                    {(pc.description || '').trim() ? pc.description : 'No description'}
+                  </Text>
+                  <Text style={styles.courtDetailLine}>{`Full Court Images: ${Array.isArray(pc.images) ? pc.images.length : 0}`}</Text>
+                  {pc.allowHalfBooking ? (
+                    <>
+                      <Text style={styles.courtDetailLine}>{`Half Court 1 Images: ${Array.isArray(pc.half1Images) ? pc.half1Images.length : 0}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 2 Images: ${Array.isArray(pc.half2Images) ? pc.half2Images.length : 0}`}</Text>
+                    </>
+                  ) : null}
+                </View>
+              )}
+            </View>
           )
         })}
-      </View>
 
-      <View style={styles.timeRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Start Time (HH:MM)</Text>
-          <TextInput
-            value={startTime}
-            onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
-            placeholder="08:00"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={5}
-            style={styles.input}
-          />
+        <View style={[styles.coverFrame, styles.addCourtCover, (submitting || imageUploading) && styles.btnDisabled]}>
+          <TouchableOpacity
+            onPress={openPlayingCourtModal}
+            disabled={submitting || imageUploading}
+            activeOpacity={0.85}
+            style={styles.coverPressable}
+          >
+            <Text style={styles.addCourtCoverText}>Add sub court</Text>
+          </TouchableOpacity>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>End Time (HH:MM)</Text>
-          <TextInput
-            value={endTime}
-            onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
-            placeholder="22:00"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={5}
-            style={styles.input}
-          />
+      </ScrollView>
+
+      <TouchableOpacity
+        onPress={() => setServicesExpanded(v => !v)}
+        activeOpacity={0.85}
+        style={styles.servicesHeaderRow}
+      >
+        <Text style={styles.servicesHeaderText}>Services (optional)</Text>
+        <Image
+          source={ICONS.arrowdown}
+          style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]}
+        />
+      </TouchableOpacity>
+
+      {servicesExpanded && (
+        <View style={styles.servicesBody}>
+          {services.length === 0 ? (
+            <Text style={styles.servicesHint}>No services added.</Text>
+          ) : null}
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.servicesCardsRow}
+          >
+            {services.map((s, idx) => {
+              const expanded = expandedServiceIdxs.has(idx)
+              return (
+                <View key={`${s.name}-${idx}`} style={[styles.serviceCard, expanded && styles.serviceCardExpanded]}>
+                  <TouchableOpacity
+                    onPress={() => toggleServiceExpanded(idx)}
+                    activeOpacity={0.85}
+                    style={styles.serviceCardHeader}
+                  >
+                    <Text style={styles.servicesName} numberOfLines={1}>{s.name}</Text>
+                    <Image
+                      source={ICONS.arrowdown}
+                      style={[styles.courtCardArrow, expanded && styles.courtCardArrowOpen]}
+                    />
+                  </TouchableOpacity>
+
+                  <Text style={styles.servicesMeta}>{`${s.category} • ${formatVnd(s.price)}`}</Text>
+
+                  {expanded && (
+                    <View style={styles.serviceCardBody}>
+                      <Text style={styles.courtDetailLine}>{`Stock: ${s.stock ? Number(s.stock) || 0 : 0}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Images: ${Array.isArray(s.images) ? s.images.length : 0}`}</Text>
+                      {Array.isArray(s.images) && s.images.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.thumbsRow}
+                        >
+                          {s.images.map((uri) => (
+                            <View key={uri} style={styles.thumbFrame}>
+                              <Image source={{ uri }} style={styles.thumbImage} />
+                            </View>
+                          ))}
+                        </ScrollView>
+                      ) : null}
+                    </View>
+                  )}
+                </View>
+              )
+            })}
+
+            <View style={[styles.coverFrame, styles.addServiceCover, submitting && styles.btnDisabled]}>
+              <TouchableOpacity
+                onPress={openAddService}
+                disabled={submitting}
+                activeOpacity={0.85}
+                style={styles.coverPressable}
+              >
+                <Text style={styles.addCourtCoverText}>Add service</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {serviceDraftVisible && (
+            <View style={styles.serviceDraftInline}>
+                <Text style={styles.label}>Service name</Text>
+                <TextInput value={svcName} onChangeText={setSvcName} placeholder="Water" style={styles.input} />
+
+                <Text style={styles.label}>Category</Text>
+                <TouchableOpacity
+                  onPress={() => setSvcCategoryDropdownOpen(v => !v)}
+                  activeOpacity={0.85}
+                  style={styles.dropdownBtn}
+                >
+                  <Text style={styles.dropdownBtnText}>{svcCategory}</Text>
+                  <Image
+                    source={ICONS.arrowdown}
+                    style={[styles.dropdownArrow, svcCategoryDropdownOpen && styles.dropdownArrowOpen]}
+                  />
+                </TouchableOpacity>
+
+                <Modal
+                  visible={svcCategoryDropdownOpen}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setSvcCategoryDropdownOpen(false)}
+                >
+                  <Pressable style={styles.dropdownOverlay} onPress={() => setSvcCategoryDropdownOpen(false)} />
+                  <View style={styles.dropdownModalContainer}>
+                    <View style={styles.dropdownModal}>
+                      {(['consumable', 'rental'] as const).map(opt => {
+                        const selected = svcCategory === opt
+                        return (
+                          <TouchableOpacity
+                            key={opt}
+                            onPress={() => {
+                              setSvcCategory(opt)
+                              setSvcCategoryDropdownOpen(false)
+                            }}
+                            activeOpacity={0.85}
+                            style={styles.dropdownModalItem}
+                          >
+                            <Text style={styles.dropdownItemText}>{opt}</Text>
+                            <Image source={selected ? ICONS.tick : ''} style={styles.dropdownCheck} />
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+                  </View>
+                </Modal>
+
+                <Text style={styles.label}>Price(₫) :</Text>
+                <View style={styles.priceInputWrap}>
+                  <TextInput
+                    value={svcPrice}
+                    onChangeText={(v) => setSvcPrice(formatThousandGroups(v))}
+                    placeholder="0"
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    style={[styles.input, styles.inputWithSuffix]}
+                  />
+                  <Text style={styles.suffixInInput}>₫</Text>
+                </View>
+
+                <Text style={styles.label}>Stock</Text>
+                <TextInput
+                  value={svcStock}
+                  onChangeText={setSvcStock}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  style={styles.input}
+                />
+
+                <Text style={styles.label}>Images (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                  {svcImages.map((uri) => (
+                    <View key={uri} style={styles.coverFrame}>
+                      <View style={styles.coverPressable}>
+                        <Image source={{ uri }} style={styles.coverImage} />
+                      </View>
+                      <TouchableOpacity onPress={() => removeServiceImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
+                        <Text style={styles.removeXText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {svcImages.length < 6 && (
+                    <View style={styles.coverFrame}>
+                      <TouchableOpacity
+                        onPress={pickServiceImage}
+                        disabled={imageUploading}
+                        activeOpacity={0.85}
+                        style={styles.coverPressable}
+                      >
+                        <Text style={styles.addPlus}>+</Text>
+                        <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </ScrollView>
+
+                <View style={styles.serviceDraftBtnsRow}>
+                  <TouchableOpacity
+                    onPress={() => setServiceDraftVisible(false)}
+                    style={[styles.modalBtn, styles.modalCancel]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalBtnText}>Close</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={addService}
+                    style={[styles.modalBtn, styles.modalConfirm]}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalBtnText}>Submit</Text>
+                  </TouchableOpacity>
+                </View>
+            </View>
+          )}
         </View>
-      </View>
+      )}
 
       <View style={styles.rowBetween}>
         <Text style={styles.label}>Images</Text>
@@ -945,7 +1454,7 @@ export default function CourtRegisterPage() {
               <Image source={{ uri }} style={styles.coverImage} />
             </View>
             <TouchableOpacity
-              onPress={() => removeLocalImage(uri)}
+              onPress={() => requestRemoveImage(uri)}
               style={styles.removeXBtn}
               activeOpacity={0.85}
             >
@@ -972,6 +1481,302 @@ export default function CourtRegisterPage() {
         )}
       </ScrollView>
 
+      <Modal
+        visible={playingCourtModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlayingCourtModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCardTall}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Add Sub-Court</Text>
+              <TouchableOpacity
+                onPress={() => setPlayingCourtModalVisible(false)}
+                style={styles.modalCloseXBtn}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalCloseXText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.label}>Sub-Court name</Text>
+              <TextInput
+                value={pcFullName}
+                onChangeText={setPcFullName}
+                placeholder="Court 1"
+                style={styles.input}
+              />
+
+              <Text style={styles.label}>Price(₫) :</Text>
+              <View style={styles.priceInputWrap}>
+                <TextInput
+                  value={pcFullPrice}
+                  onChangeText={(v) => setPcFullPrice(formatThousandGroups(v))}
+                  placeholder="0"
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  style={[styles.input, styles.inputWithSuffix]}
+                />
+                <Text style={styles.suffixInInput}>₫</Text>
+              </View>
+
+              <Text style={styles.label}>Schedule</Text>
+              <View style={styles.weekRow}>
+                {WEEK_DAYS.map((label) => {
+                  const active = scheduleDays.includes(label)
+                  return (
+                    <TouchableOpacity
+                      key={label}
+                      onPress={() => {
+                        setScheduleDays(prev => (prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]))
+                      }}
+                      style={[styles.dayCell, active && styles.dayCellSelected]}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.dayLabel, active && styles.dayLabelSelected]}>{label}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              <View style={styles.timeRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Start Time (HH:MM)</Text>
+                  <TextInput
+                    value={startTime}
+                    onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
+                    placeholder="08:00"
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    maxLength={5}
+                    style={styles.input}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>End Time (HH:MM)</Text>
+                  <TextInput
+                    value={endTime}
+                    onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
+                    placeholder="22:00"
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    maxLength={5}
+                    style={styles.input}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.label}>Images</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                {pcImages.map((uri) => (
+                  <View key={uri} style={styles.coverFrame}>
+                    <View style={styles.coverPressable}>
+                      <Image source={{ uri }} style={styles.coverImage} />
+                    </View>
+                    <TouchableOpacity onPress={() => removePlayingCourtImage('full', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
+                      <Text style={styles.removeXText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {pcImages.length < 6 && (
+                  <View style={styles.coverFrame}>
+                    <TouchableOpacity
+                      onPress={() => pickPlayingCourtImage('full')}
+                      disabled={imageUploading}
+                      activeOpacity={0.85}
+                      style={styles.coverPressable}
+                    >
+                      <Text style={styles.addPlus}>+</Text>
+                      <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+
+              <Text style={styles.label}>Allow Half Court Booking</Text>
+              <View style={styles.segmented}>
+                {([
+                  { label: 'Yes', value: true },
+                  { label: 'No', value: false },
+                ] as const).map(opt => {
+                  const active = pcAllowHalf === opt.value
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      onPress={() => setPcAllowHalf(opt.value)}
+                      style={[styles.segment, active && styles.segmentActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              {pcAllowHalf && (
+                <>
+                  <Text style={styles.label}>Choose Sub-Court Half:</Text>
+                  <View style={styles.halfTabsRow}>
+                    <TouchableOpacity
+                      onPress={() => setPcHalfTab('half1')}
+                      activeOpacity={0.85}
+                      style={[styles.halfTab, pcHalfTab === 'half1' && styles.halfTabActive]}
+                    >
+                      <Text style={[styles.halfTabText, pcHalfTab === 'half1' && styles.halfTabTextActive]}>Half Court 1</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setPcHalfTab('half2')}
+                      activeOpacity={0.85}
+                      style={[styles.halfTab, pcHalfTab === 'half2' && styles.halfTabActive]}
+                    >
+                      <Text style={[styles.halfTabText, pcHalfTab === 'half2' && styles.halfTabTextActive]}>Half Court 2</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {pcHalfTab === 'half1' ? (
+                    <>
+                      <Text style={styles.label}>Name</Text>
+                      <TextInput
+                        value={pcHalf1Name}
+                        onChangeText={setPcHalf1Name}
+                        placeholder="Name"
+                        style={styles.input}
+                      />
+                      <Text style={styles.label}>Price(₫) :</Text>
+                      <View style={styles.priceInputWrap}>
+                        <TextInput
+                          value={pcHalf1Price}
+                          onChangeText={(v) => setPcHalf1Price(formatThousandGroups(v))}
+                          placeholder="0"
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          style={[styles.input, styles.inputWithSuffix]}
+                        />
+                        <Text style={styles.suffixInInput}>₫</Text>
+                      </View>
+
+                      <Text style={styles.label}>Images</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                        {pcHalf1Images.map((uri) => (
+                          <View key={uri} style={styles.coverFrame}>
+                            <View style={styles.coverPressable}>
+                              <Image source={{ uri }} style={styles.coverImage} />
+                            </View>
+                            <TouchableOpacity onPress={() => removePlayingCourtImage('half1', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
+                              <Text style={styles.removeXText}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                        {pcHalf1Images.length < 6 && (
+                          <View style={styles.coverFrame}>
+                            <TouchableOpacity
+                              onPress={() => pickPlayingCourtImage('half1')}
+                              disabled={imageUploading}
+                              activeOpacity={0.85}
+                              style={styles.coverPressable}
+                            >
+                              <Text style={styles.addPlus}>+</Text>
+                              <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.label}>Name</Text>
+                      <TextInput
+                        value={pcHalf2Name}
+                        onChangeText={setPcHalf2Name}
+                        placeholder="Name"
+                        style={styles.input}
+                      />
+                      <Text style={styles.label}>Price(₫) :</Text>
+                      <View style={styles.priceInputWrap}>
+                        <TextInput
+                          value={pcHalf2Price}
+                          onChangeText={(v) => setPcHalf2Price(formatThousandGroups(v))}
+                          placeholder="0"
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          style={[styles.input, styles.inputWithSuffix]}
+                        />
+                        <Text style={styles.suffixInInput}>₫</Text>
+                      </View>
+
+                      <Text style={styles.label}>Images</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                        {pcHalf2Images.map((uri) => (
+                          <View key={uri} style={styles.coverFrame}>
+                            <View style={styles.coverPressable}>
+                              <Image source={{ uri }} style={styles.coverImage} />
+                            </View>
+                            <TouchableOpacity onPress={() => removePlayingCourtImage('half2', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
+                              <Text style={styles.removeXText}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                        {pcHalf2Images.length < 6 && (
+                          <View style={styles.coverFrame}>
+                            <TouchableOpacity
+                              onPress={() => pickPlayingCourtImage('half2')}
+                              disabled={imageUploading}
+                              activeOpacity={0.85}
+                              style={styles.coverPressable}
+                            >
+                              <Text style={styles.addPlus}>+</Text>
+                              <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </>
+                  )}
+                </>
+              )}
+
+              <Text style={styles.label}>Surface</Text>
+              <View style={styles.surfaceWrap}>
+                {(['hardwood', 'concrete', 'synthetic'] as const).map(s => {
+                  const active = pcSurface === s
+                  return (
+                    <TouchableOpacity
+                      key={s}
+                      onPress={() => setPcSurface(s)}
+                      style={[styles.surfacePill, active && styles.surfacePillActive]}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.surfacePillText, active && styles.surfacePillTextActive]}>{s}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              <Text style={styles.label}>Description (optional)</Text>
+              <TextInput
+                value={pcDescription}
+                onChangeText={setPcDescription}
+                placeholder="Describe something about your court"
+                style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]}
+                multiline
+              />
+
+              
+
+              <TouchableOpacity
+                onPress={addPlayingCourt}
+                style={[styles.submitBtn, { alignSelf: 'center', marginTop: 16 }]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.submitText}>Submit</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <TouchableOpacity
         style={styles.truthRow}
         activeOpacity={0.85}
@@ -981,7 +1786,7 @@ export default function CourtRegisterPage() {
           {agreeTruth && <Text style={styles.checkboxTick}>✓</Text>}
         </View>
         <Text style={styles.checkboxLabel}>
-          I agree that all the information I submit is <Text style={styles.underline}>true</Text>.
+          I agree that all the information I submit is <Text style={styles.truthBold}>true</Text>.
         </Text>
       </TouchableOpacity>
 
@@ -1031,6 +1836,37 @@ export default function CourtRegisterPage() {
                 }}
               >
                 <Text style={[styles.modalBtnText, { color: COLORS.neutral0 }]}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={removeImageConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setRemoveImageConfirmVisible(false)
+          setRemoveImageCandidateUri(null)
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remove image</Text>
+            <Text style={styles.modalBody}>Do you want to remove this image?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancel]}
+                onPress={() => {
+                  setRemoveImageConfirmVisible(false)
+                  setRemoveImageCandidateUri(null)
+                }}
+              >
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={onConfirmRemoveImage}>
+                <Text style={styles.modalBtnText}>Remove</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1095,9 +1931,10 @@ const styles = StyleSheet.create({
   suggestText: { color: COLORS.neutral925, fontWeight: '700', fontSize: 13 },
   verifyErrorText: { marginTop: 6, color: COLORS.danger500, fontWeight: '600', fontSize: 12 },
   inputError: { borderColor: COLORS.danger500 },
-  verifyRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10 },
+  verifyRow: { flexDirection: 'row', marginTop: 10 },
   smallBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: COLORS.neutral200 },
   smallBtnRed: { backgroundColor: COLORS.coral },
+  verifyBtnFull: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   smallBtnText: { color: COLORS.neutral0, fontWeight: '900', fontSize: 13 },
   input: {
     borderWidth: 1,
@@ -1120,9 +1957,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   segment: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff' },
-  segmentActive: { backgroundColor: '#2563eb' },
+  segmentActive: { backgroundColor: COLORS.orange200 },
   segmentText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  segmentTextActive: { color: '#fff' },
+  segmentTextActive: { color: COLORS.brown900 },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
@@ -1154,6 +1991,85 @@ const styles = StyleSheet.create({
 
   timeRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
 
+  myCourtBox: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: COLORS.neutral0,
+    borderRadius: 12,
+    padding: 12,
+  },
+  myCourtHint: { color: COLORS.neutral600, fontWeight: '700', fontSize: 13, marginBottom: 10 },
+  myCourtCardsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 },
+  courtCard: {
+    width: 260,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    padding: 12,
+    alignSelf: 'flex-start',
+  },
+  courtCardExpanded: { minHeight: 220 },
+  courtCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  courtCardArrow: { width: 18, height: 18, tintColor: COLORS.neutral600 },
+  courtCardArrowOpen: { transform: [{ rotate: '180deg' }] },
+  courtCardBody: { marginTop: 10 },
+  courtDetailLine: { color: COLORS.neutral800, fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  courtDetailLabel: { color: COLORS.neutral800, fontSize: 13, fontWeight: '900', marginTop: 4 },
+  courtDetailDesc: { color: COLORS.neutral800, fontSize: 13, marginTop: 6, lineHeight: 18 },
+  addCourtCover: { borderStyle: 'dashed' },
+  addCourtCoverText: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
+  myCourtName: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
+  myCourtMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
+
+  servicesBox: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: COLORS.neutral0,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 8 },
+  servicesHeaderText: { color: '#0f172a', fontWeight: '700', fontSize: 14 },
+  servicesArrow: { width: 18, height: 18, tintColor: COLORS.neutral600 },
+  servicesArrowOpen: { transform: [{ rotate: '180deg' }] },
+  servicesBody: { paddingHorizontal: 12, paddingBottom: 12 },
+  servicesHint: { color: COLORS.neutral600, fontWeight: '700', fontSize: 13, marginBottom: 10 },
+  servicesList: { gap: 10, marginBottom: 12 },
+  servicesRow: { flexDirection: 'row', alignItems: 'center' },
+  servicesName: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
+  servicesMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
+  serviceDraftBox: { marginTop: 12 },
+  serviceDraftBtnsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+
+  dropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+  },
+  dropdownBtnText: { color: '#0f172a', fontWeight: '800', fontSize: 14 },
+  dropdownArrow: { width: 18, height: 18, tintColor: COLORS.neutral600 },
+  dropdownArrowOpen: { transform: [{ rotate: '180deg' }] },
+  dropdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.2)' },
+  dropdownModalContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: 18 },
+  dropdownModal: {
+    maxHeight: 220,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  dropdownModalItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  dropdownCheck: { width: 18, height: 18, tintColor: COLORS.neutral800 },
+  dropdownItemText: { color: COLORS.neutral925, fontWeight: '800', fontSize: 13 },
+
   coverFrame: {
     width: IMAGE_TILE_WIDTH,
     height: IMAGE_TILE_HEIGHT,
@@ -1171,6 +2087,7 @@ const styles = StyleSheet.create({
   coverPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   addPlus: { fontSize: 28, fontWeight: '700', color: COLORS.neutral800, marginTop: -1 },
+  coverHint: { marginTop: 6, color: COLORS.neutral600, fontWeight: '800', fontSize: 12 },
   removeXBtn: {
     position: 'absolute',
     top: 8,
@@ -1194,8 +2111,8 @@ const styles = StyleSheet.create({
   checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.neutral550, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.neutral0 },
   checkboxBoxChecked: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
   checkboxTick: { color: COLORS.neutral0, fontWeight: '900', fontSize: 14, marginTop: -1 },
-  checkboxLabel: { marginLeft: 10, color: COLORS.neutral925, fontWeight: '700', flex: 1, lineHeight: 18, marginTop: 1 },
-  underline: { textDecorationLine: 'underline' },
+  checkboxLabel: { marginLeft: 10, color: COLORS.neutral925, fontWeight: '400', flex: 1, lineHeight: 18, marginTop: 1 },
+  truthBold: { fontWeight: '800' },
 
   warningBox: {
     marginTop: 14,
@@ -1224,11 +2141,91 @@ const styles = StyleSheet.create({
 
   modalOverlay: { flex: 1, backgroundColor: COLORS.black50, justifyContent: 'center', alignItems: 'center', padding: 18 },
   modalCard: { width: '100%', maxWidth: 420, backgroundColor: COLORS.neutral0, borderRadius: 14, padding: 16 },
+  modalCardTall: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: Math.max(200, Math.round(Dimensions.get('window').height * 0.85)),
+    backgroundColor: COLORS.neutral0,
+    borderRadius: 14,
+    padding: 16,
+  },
+
+  servicesCardsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 10, paddingBottom: 6 },
+  serviceCard: {
+    width: Math.min(240, Math.max(190, Math.round(Dimensions.get('window').width * 0.62))),
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    backgroundColor: COLORS.neutral0,
+    padding: 12,
+  },
+  serviceCardExpanded: { borderColor: COLORS.neutral550 },
+  serviceCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  serviceCardBody: { marginTop: 8 },
+  addServiceCover: { width: 170, height: 120 },
+  serviceDraftInline: { marginTop: 12 },
+  thumbsRow: { flexDirection: 'row', gap: 8, paddingTop: 8, paddingBottom: 2 },
+  thumbFrame: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    backgroundColor: COLORS.neutral0,
+  },
+  thumbImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  modalCloseXBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.neutral0,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseXText: { fontSize: 22, lineHeight: 22, fontWeight: '900', color: COLORS.neutral925, marginTop: -1 },
+  modalScrollContent: { paddingBottom: 14 },
   modalTitle: { fontSize: 16, fontWeight: '900', color: COLORS.neutral975, marginBottom: 6 },
+  modalTitleCentered: { flex: 1, textAlign: 'center' },
+
+  priceInputWrap: { position: 'relative' },
+  inputWithSuffix: { paddingRight: 40 },
+  suffixInInput: { position: 'absolute', right: 12, top: '50%', marginTop: -9, fontSize: 14, fontWeight: '900', color: COLORS.neutral800 },
   modalBody: { fontSize: 14, fontWeight: '700', color: COLORS.neutral800 },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
+  modalBtnsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   modalBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   modalCancel: { backgroundColor: COLORS.danger },
   modalConfirm: { backgroundColor: COLORS.brandOrangeDeep },
   modalBtnText: { fontWeight: '900', color: COLORS.neutral0 },
+
+  surfaceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  surfacePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  surfacePillActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  surfacePillText: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  surfacePillTextActive: { color: '#1d4ed8' },
+
+  halfTabsRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 8 },
+  halfTab: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+  },
+  halfTabActive: { backgroundColor: COLORS.brandOrangeDeep, borderColor: COLORS.brandOrangeDeep },
+  halfTabText: { fontSize: 13, fontWeight: '900', color: COLORS.neutral800 },
+  halfTabTextActive: { color: COLORS.neutral0 },
 })

@@ -11,6 +11,8 @@ class CourtInfo(BaseModel):
     venue: Optional[Union[List[str], str]] = None
     images: Optional[List[str]] = None
     availability: Optional[str] = None
+    accuracy_type: Optional[str] = None
+    price: Optional[float] = None
 
 class Notification(BaseModel):
     id: int  # primary key column 'id' in table
@@ -52,7 +54,8 @@ class FavouriteCourtCreate(BaseModel):
 
 class CourtAvailability(BaseModel):
     availabilityid: int
-    courtid: int
+    courtid: Optional[int] = None
+    playingcourtid: Optional[int] = None
     status: Optional[str] = None
     start_time: Optional[str] = None  # HH:MM:SS
     end_time: Optional[str] = None
@@ -63,6 +66,7 @@ class EventInfo(BaseModel):
     eventid: int
     numberofpeople: Optional[int] = None
     description: Optional[str] = None
+    images: Optional[List[str]] = None
     title: str
 
 class Event(BaseModel):
@@ -92,6 +96,7 @@ class TrainingSessionInfo(BaseModel):
     sessionid: Optional[int] = None
     numberofpeople: int
     description: str
+    images: Optional[List[str]] = None
     title: str
 
 class TSBooking(BaseModel):

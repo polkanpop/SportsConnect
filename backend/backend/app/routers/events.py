@@ -25,6 +25,37 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 PRIMARY_KEY = "eventid"
 
+
+def _normalize_images(v: Any):
+    if v is None:
+        return None
+    if isinstance(v, list):
+        out: list[str] = []
+        for x in v:
+            s = str(x).strip()
+            if s:
+                out.append(s)
+        return out
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("[") and s.endswith("]"):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+        if s.startswith("{") and s.endswith("}"):
+            inner = s[1:-1]
+            parts = [p.strip().strip('"') for p in inner.split(",")]
+            return [p for p in parts if p]
+        if "," in s:
+            return [p.strip() for p in s.split(",") if p.strip()]
+        return [s]
+    return []
+
 @router.get("", response_model=list[dict])
 def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     try:
@@ -229,6 +260,9 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         "join_status": True,
         "auto_approve": auto_approve,
     }
+    images = _normalize_images(body.get("images"))
+    if images is not None:
+        eventinfo_payload["images"] = images
     if monetize:
         eventinfo_payload["entry_fee"] = entry_fee
         eventinfo_payload["support_payment_method"] = support_payment_method

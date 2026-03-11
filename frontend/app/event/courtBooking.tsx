@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { CourtBookingRow, listCourts, createServiceBookings, listServicesByCourtId, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, listServicesByCourtId, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -166,13 +166,8 @@ export default function CourtBooking() {
 
   // Derived validity and button enable state
   const isDaySelectable = useCallback((dayKey: string) => availableDayKeys.includes(dayKey), [availableDayKeys])
-  // Courts pricing (price per hour) fetched from /courts
-  const { data: courtsData } = useQuery({ queryKey: ['courts'], queryFn: () => listCourts() })
-  const pricePerHour: number | null = courtsData?.find?.((c: any) => c.courtid === courtid)?.price ?? null
-  const courtAmount = useMemo(() => {
-    if (pricePerHour == null || !startSlot || !endSlot) return 0
-    return Math.round(Number(pricePerHour) * (durationMinutes / 60)) // prorated (e.g. 90m = 1.5h)
-  }, [pricePerHour, durationMinutes, startSlot, endSlot])
+  // courts.price has been removed from the schema; base court fee is 0 for now.
+  const courtAmount = 0
 
   const { data: servicesData, isLoading: servicesLoading } = useQuery({
     queryKey: ['courtServices', courtid],
@@ -487,9 +482,7 @@ export default function CourtBooking() {
         )}
         {/* Payment Method */}
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionTitle}>
-            {pricePerHour != null ? `Payment (${new Intl.NumberFormat('vi-VN').format(pricePerHour)}₫/hr)` : 'Payment (price/hr)'}
-          </Text>
+          <Text style={styles.sectionTitle}>Payment</Text>
           <View style={styles.paymentRow}>
             <TouchableOpacity
               onPress={() => setPaymentMethod(paymentMethod === 'cash' ? null : 'cash')}

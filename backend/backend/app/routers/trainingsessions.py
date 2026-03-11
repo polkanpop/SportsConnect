@@ -2,9 +2,43 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from ..db import rest_select, rest_update
 from ..auth import get_current_user
 
+import json
+from typing import Any
+
 router = APIRouter(prefix="/trainingsessions", tags=["training"])
 
 PRIMARY_KEY = "sessionid"
+
+
+def _normalize_images(v: Any):
+    if v is None:
+        return None
+    if isinstance(v, list):
+        out: list[str] = []
+        for x in v:
+            s = str(x).strip()
+            if s:
+                out.append(s)
+        return out
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("[") and s.endswith("]"):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                pass
+        if s.startswith("{") and s.endswith("}"):
+            inner = s[1:-1]
+            parts = [p.strip().strip('"') for p in inner.split(",")]
+            return [p for p in parts if p]
+        if "," in s:
+            return [p.strip() for p in s.split(",") if p.strip()]
+        return [s]
+    return []
 
 @router.get("", response_model=list[dict])
 def list_training_sessions(
@@ -143,6 +177,10 @@ def create_training_session_with_info(body: dict):
             "numberofpeople": 0,
             "join_status": True,
         }
+
+        images = _normalize_images(body.get("images"))
+        if images is not None:
+            info_payload["images"] = images
         # trainingsessioninfo may or may not have auto_approve yet. We'll try and gracefully fallback.
         info_payload_with_auto = {**info_payload, "auto_approve": auto_approve}
         if monetize:

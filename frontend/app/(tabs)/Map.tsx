@@ -12,9 +12,11 @@
     FavouriteCourt,
     CourtInfoRow,
     listCourtInfo,
+    listPlayingCourtsByCourtId,
+    getPlayingCourtInfo,
+    type PlayingCourtRow,
     getDistanceMatrixCached,
     peekDistanceMatrixCached,
-    listCourts,
   } from '@/lib/backendApi';
   import { favouritesEvents } from '@/lib/favouritesEvents';
   import { getCache, setCache } from '@/lib/cache';
@@ -41,7 +43,7 @@
     TouchableWithoutFeedback,
     View,
   } from "react-native";
-  import { useQuery } from '@tanstack/react-query';
+  
   import { useCourtAvailability } from '@/hooks/use-court-data';
   import { GestureHandlerRootView } from "react-native-gesture-handler";
   import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
@@ -73,7 +75,7 @@
     const pinColor = isSelected
       ? COLORS.green
       : marker.isFavorite
-        ? COLORS.brandOrangeYellow
+        ? COLORS.amber200
         : COLORS.brandOrangeDeep;
     const coordinate = useMemo(() => ({ latitude: marker.latitude, longitude: marker.longitude }), [marker.latitude, marker.longitude]);
     const handlePress = useCallback(() => onPress(marker), [onPress, marker]);
@@ -129,6 +131,20 @@
   ];
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  function dedupeStrings(input: any[]): string[] {
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const v of Array.isArray(input) ? input : []) {
+      if (typeof v !== 'string') continue
+      const s = v.trim()
+      if (!s) continue
+      if (seen.has(s)) continue
+      seen.add(s)
+      out.push(s)
+    }
+    return out
+  }
 
   function clampRegionToVietnam(region: Region): Region {
     const latitudeDelta = Math.min(region.latitudeDelta, VN_MAX_LAT_DELTA);
@@ -264,8 +280,13 @@
     const [distanceKmInput, setDistanceKmInput] = useState<string>('');
     const [distanceKmError, setDistanceKmError] = useState<string | null>(null);
     const [scheduleExpanded, setScheduleExpanded] = useState(true);
+    const [imagesExpanded, setImagesExpanded] = useState(true);
     const [transportExpanded, setTransportExpanded] = useState(true);
     const [reviewsExpanded, setReviewsExpanded] = useState(false);
+
+    const [selectedSchedulePlayingCourtId, setSelectedSchedulePlayingCourtId] = useState<number | null>(null);
+    const [playingCourtsForSelected, setPlayingCourtsForSelected] = useState<PlayingCourtRow[]>([]);
+    const [playingCourtImagesById, setPlayingCourtImagesById] = useState<Record<number, string[]>>({});
 
     type DistanceMatrixStatus = 'loading' | 'loaded' | 'error';
     const [distanceMatrixStatusByCourtInfoId, setDistanceMatrixStatusByCourtInfoId] = useState<Record<number, DistanceMatrixStatus>>({});
@@ -311,6 +332,7 @@
     useEffect(() => {
       if (!selectedMarker) return;
       setScheduleExpanded(true);
+      setImagesExpanded(true);
       setTransportExpanded(true);
       setReviewsExpanded(false);
       setWeekOffset(0);
@@ -321,15 +343,148 @@
 
     // Fetch availability for selected marker
     const { data: availabilityRows } = useCourtAvailability(selectedMarker?.courtid || null);
+
+    // Choose which playingcourt's schedule to display (defaults to first availability row)
+    useEffect(() => {
+      if (!Array.isArray(availabilityRows) || availabilityRows.length === 0) {
+        setSelectedSchedulePlayingCourtId(null);
+        return;
+      }
+      const availIds = availabilityRows
+        .map((r: any) => (typeof r?.playingcourtid === 'number' ? r.playingcourtid : Number(r?.playingcourtid)))
+        .filter((pid: any): pid is number => typeof pid === 'number' && Number.isFinite(pid));
+      const availSet = new Set<number>(availIds);
+
+      // Prefer a FULL part if we have playingcourts loaded.
+      const preferredFull = playingCourtsForSelected
+        .filter((pc: any) => String(pc?.part || '').toUpperCase() === 'FULL')
+        .map((pc: any) => (typeof pc?.playingcourtid === 'number' ? pc.playingcourtid : Number(pc?.playingcourtid)))
+        .find((pid: any) => typeof pid === 'number' && Number.isFinite(pid) && availSet.has(pid)) as number | undefined;
+
+      setSelectedSchedulePlayingCourtId(preferredFull ?? (availIds[0] ?? null));
+    }, [selectedMarker?.id, availabilityRows, playingCourtsForSelected]);
+
     const availability = useMemo(() => {
       if (!Array.isArray(availabilityRows) || !availabilityRows.length) return null;
-      const row = availabilityRows[0];
-      let bd = row.booking_date;
-      if (typeof bd === 'string') {
-        try { bd = JSON.parse(bd); } catch { bd = []; }
+
+      const normalized = availabilityRows.map((r: any) => {
+        let bd = r?.booking_date;
+        if (typeof bd === 'string') {
+          try { bd = JSON.parse(bd); } catch { bd = []; }
+        }
+        return { ...r, booking_date: Array.isArray(bd) ? bd : [] };
+      });
+
+      if (selectedSchedulePlayingCourtId != null) {
+        const match = normalized.find((r: any) => Number(r?.playingcourtid) === selectedSchedulePlayingCourtId);
+        if (match) return match;
       }
-      return { ...row, booking_date: Array.isArray(bd) ? bd : [] };
-    }, [availabilityRows]);
+
+      return normalized[0];
+    }, [availabilityRows, selectedSchedulePlayingCourtId]);
+
+    // Load playingcourts + their info images (for schedule switch labels + aggregated gallery)
+    useEffect(() => {
+      let cancelled = false;
+      setPlayingCourtsForSelected([]);
+      setPlayingCourtImagesById({});
+
+      const courtid = selectedMarker?.courtid;
+      if (typeof courtid !== 'number' || !Number.isFinite(courtid)) return;
+
+      (async () => {
+        try {
+          const pcs = await listPlayingCourtsByCourtId(courtid);
+          if (cancelled) return;
+          const rows = Array.isArray(pcs) ? pcs : [];
+          setPlayingCourtsForSelected(rows);
+
+          const ids = rows
+            .map((pc: any) => (typeof pc?.playingcourtid === 'number' ? pc.playingcourtid : Number(pc?.playingcourtid)))
+            .filter((n: any): n is number => typeof n === 'number' && Number.isFinite(n));
+
+          if (!ids.length) return;
+          const results = await Promise.allSettled(ids.map((pid) => getPlayingCourtInfo(pid)));
+          if (cancelled) return;
+
+          const next: Record<number, string[]> = {};
+          results.forEach((r, idx) => {
+            const pid = ids[idx];
+            if (!pid) return;
+            if (r.status === 'fulfilled') {
+              next[pid] = dedupeStrings(Array.isArray((r.value as any)?.images) ? (r.value as any).images : []);
+            }
+          });
+          setPlayingCourtImagesById(next);
+        } catch (e) {
+          console.warn('[Map] failed to load playingcourts/images', e);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [selectedMarker?.courtid]);
+
+    const scheduleSwitchOptions = useMemo(() => {
+      if (!Array.isArray(availabilityRows) || availabilityRows.length < 2) return [] as Array<{ id: number; label: string }>;
+      const availIds = availabilityRows
+        .map((r: any) => (typeof r?.playingcourtid === 'number' ? r.playingcourtid : Number(r?.playingcourtid)))
+        .filter((n: any): n is number => typeof n === 'number' && Number.isFinite(n));
+      const availSet = new Set<number>(availIds);
+
+      // If we know sub-courts (base_name), show one option per base_name (prefer FULL).
+      if (Array.isArray(playingCourtsForSelected) && playingCourtsForSelected.length) {
+        const baseOrder: string[] = [];
+        const baseToPcs = new Map<string, PlayingCourtRow[]>();
+
+        for (const pc of playingCourtsForSelected) {
+          const base = String((pc as any)?.base_name || (pc as any)?.name || '').trim();
+          if (!base) continue;
+          if (!baseToPcs.has(base)) {
+            baseToPcs.set(base, []);
+            baseOrder.push(base);
+          }
+          baseToPcs.get(base)!.push(pc);
+        }
+
+        const opts: Array<{ id: number; label: string }> = [];
+        for (const base of baseOrder) {
+          const pcs = baseToPcs.get(base) || [];
+          const full = pcs.find((x: any) => String(x?.part || '').toUpperCase() === 'FULL');
+          const fullId = typeof (full as any)?.playingcourtid === 'number' ? (full as any).playingcourtid : Number((full as any)?.playingcourtid);
+          if (Number.isFinite(fullId) && availSet.has(fullId)) {
+            opts.push({ id: fullId, label: base });
+            continue;
+          }
+
+          const firstAvail = pcs
+            .map((x: any) => (typeof x?.playingcourtid === 'number' ? x.playingcourtid : Number(x?.playingcourtid)))
+            .find((pid: any) => typeof pid === 'number' && Number.isFinite(pid) && availSet.has(pid)) as number | undefined;
+          if (firstAvail != null) opts.push({ id: firstAvail, label: base });
+        }
+
+        return opts.length > 1 ? opts : [];
+      }
+
+      // Fallback: one option per playingcourtid.
+      const unique: number[] = [];
+      const seen = new Set<number>();
+      for (const id of availIds) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        unique.push(id);
+      }
+      return unique.length > 1
+        ? unique.map((id, idx) => ({ id, label: `Court ${idx + 1}` }))
+        : [];
+    }, [availabilityRows, playingCourtsForSelected]);
+
+    const aggregatedImages = useMemo(() => {
+      const main = Array.isArray(selectedMarker?.images) ? selectedMarker!.images : [];
+      const sub = Object.values(playingCourtImagesById || {}).flat();
+      return dedupeStrings([...(main || []), ...(sub || [])]);
+    }, [selectedMarker?.images, playingCourtImagesById]);
 
     // Derive week dates (Mon -> Sun) for modal
     const weekDaysDetailed = useMemo(() => {
@@ -349,14 +504,6 @@
         setWeekOffset(0);
       }
     }, [calendarModalVisible]);
-
-    // Fetch courts for price
-    const { data: courtsData } = useQuery({ 
-      queryKey: ['courts'], 
-      queryFn: () => listCourts(),
-      enabled: !!selectedMarker 
-    });
-    const price = courtsData?.find((c: any) => c.courtid === selectedMarker?.courtid)?.price;
 
     const warnedMissingUserIdRef = useRef(false);
 
@@ -392,16 +539,20 @@
 
     const normalizeCourtInfoRows = useCallback((rows: CourtInfoRow[]): MarkerType[] => {
       return rows.map((m: CourtInfoRow) => {
+        const courtInfoIdRaw: any = (m as any)?.courtinfoid
+        const courtIdRaw: any = (m as any)?.courtid
+        const courtinfoid = typeof courtInfoIdRaw === 'number' ? courtInfoIdRaw : (typeof courtInfoIdRaw === 'string' ? Number(courtInfoIdRaw) : NaN)
+        const courtid = typeof courtIdRaw === 'number' ? courtIdRaw : (typeof courtIdRaw === 'string' ? Number(courtIdRaw) : NaN)
         const latRaw: any = (m as any)?.latitude
         const lngRaw: any = (m as any)?.longitude
         const lat = typeof latRaw === 'number' ? latRaw : (typeof latRaw === 'string' ? Number(latRaw) : NaN)
         const lng = typeof lngRaw === 'number' ? lngRaw : (typeof lngRaw === 'string' ? Number(lngRaw) : NaN)
         return ({
-          id: m.courtinfoid,
-          courtid: m.courtid,
+          id: Number.isFinite(courtinfoid) ? courtinfoid : 0,
+          courtid: Number.isFinite(courtid) ? courtid : 0,
           latitude: Number.isFinite(lat) ? lat : 0,
           longitude: Number.isFinite(lng) ? lng : 0,
-          name: m.name || m.address || `Court #${m.courtinfoid}`,
+          name: m.name || m.address || `Court #${Number.isFinite(courtinfoid) ? courtinfoid : ''}`,
           address: m.address || "Unknown",
           images: Array.isArray(m.images) ? m.images : (m.images ? [m.images].flat() : []),
           venue: Array.isArray(m.venue) ? m.venue : (m.venue ? [m.venue].flat() : []),
@@ -420,10 +571,13 @@
           ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r)
           : [];
         setFavouriteRecords(favRows);
-        const favIds = favRows.map(r => r.courtid);
+        const favIds = favRows
+          .map(r => Number((r as any)?.courtid))
+          .filter((n): n is number => Number.isFinite(n));
+        const favIdSet = new Set(favIds);
         setFavoriteIds(favIds);
-        setMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) })));
-        setFilteredMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) })));
+        setMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) })));
+        setFilteredMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) })));
       } catch (e) {
         console.warn('[Map] failed to load favouritecourts', e);
       }
@@ -473,14 +627,17 @@
               ? (rowsFav as any[]).filter(r => typeof r === 'object' && 'courtid' in r)
               : [];
             setFavouriteRecords(favRows);
-            favIds = favRows.map(r => r.courtid);
+            favIds = favRows
+              .map(r => Number((r as any)?.courtid))
+              .filter((n): n is number => Number.isFinite(n));
             setFavoriteIds(favIds);
           } catch (e) {
             console.warn('[Map] failed to load favouritecourts', e);
           }
         }
         if (favIds.length) {
-          normalized = normalized.map(m => ({ ...m, isFavorite: favIds.includes(m.courtid) }));
+          const favIdSet = new Set(favIds);
+          normalized = normalized.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) }));
           setMarkers(normalized);
           setFilteredMarkers(normalized);
         }
@@ -959,7 +1116,7 @@
                       >
                         <Image
                           source={ICONS.starCal}
-                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? '#333' : '#fff' }}
+                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? COLORS.brandOrangeDeep : COLORS.neutral700 }}
                         />
                       </TouchableOpacity>
                     </View>
@@ -1282,7 +1439,8 @@
                               }
                               return;
                             }
-                            const courtId = selectedMarker.courtid; // use real courts.courtid
+                              const courtId = Number((selectedMarker as any).courtid); // use real courts.courtid
+                              if (!Number.isFinite(courtId)) return;
                             const alreadyFav = favoriteIds.includes(courtId);
                             // Optimistic UI
                             setFavoriteIds(prev => alreadyFav ? prev.filter(id => id !== courtId) : [...prev, courtId]);
@@ -1318,7 +1476,10 @@
                         >
                           <Image
                             source={ICONS.starCal}
-                            style={[styles.favoriteIcon, isFavorite && { tintColor: '#FFFF00' }]}
+                            style={[
+                              styles.favoriteIcon,
+                              { tintColor: isFavorite ? COLORS.brandOrangeDeep : COLORS.neutral700 },
+                            ]}
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1362,9 +1523,6 @@
                       </View>
 
                       {/* Price */}
-                      <Text style={styles.priceText}>
-                        Price: ({price ? new Intl.NumberFormat('vi-VN').format(Number(price)) : '0'}đ/hr)
-                      </Text>
 
                       {/* Schedule Section (expandable, expanded by default) */}
                       <TouchableOpacity
@@ -1382,6 +1540,30 @@
                       {scheduleExpanded && (
                         availability ? (
                           <View style={styles.scheduleBox}>
+                            {scheduleSwitchOptions.length > 1 && (
+                              <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.subCourtSwitchRow}
+                              >
+                                {scheduleSwitchOptions.map((opt) => {
+                                  const active = opt.id === selectedSchedulePlayingCourtId;
+                                  return (
+                                    <TouchableOpacity
+                                      key={opt.id}
+                                      style={[styles.subCourtSwitchPill, active && styles.subCourtSwitchPillActive]}
+                                      activeOpacity={0.85}
+                                      onPress={() => setSelectedSchedulePlayingCourtId(opt.id)}
+                                    >
+                                      <Text style={[styles.subCourtSwitchText, active && styles.subCourtSwitchTextActive]} numberOfLines={1}>
+                                        {opt.label}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </ScrollView>
+                            )}
+
                             {/* Match the existing modal schedule UI */}
                             <View style={styles.scheduleHeaderRow}>
                               <Text
@@ -1577,13 +1759,24 @@
                         );
                       })()}
 
-                      {/* Images Section */}
-                      <Text style={styles.sectionHeader}>Images</Text>
-                      {selectedMarker.images && selectedMarker.images.length > 0 ? (
+                      {/* Images Section (expandable) */}
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => setImagesExpanded((p) => !p)}
+                        style={styles.transportHeader}
+                      >
+                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Images</Text>
+                        <Image
+                          source={ICONS.arrowdown}
+                          style={[styles.transportHeaderArrow, imagesExpanded ? styles.transportArrowOpen : null]}
+                        />
+                      </TouchableOpacity>
+
+                      {imagesExpanded && (aggregatedImages.length > 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
-                          {selectedMarker.images.map((image, idx) => (
+                          {aggregatedImages.map((image, idx) => (
                             <Image
-                              key={idx}
+                              key={`${image}:${idx}`}
                               source={{ uri: image }}
                               style={styles.detailImageTile}
                             />
@@ -1593,7 +1786,7 @@
                         <View style={styles.placeholderSection}>
                           <Text style={styles.placeholderText}>No images available yet.</Text>
                         </View>
-                      )}
+                      ))}
 
                       {/* Reviews Section */}
                       <TouchableOpacity
@@ -1685,7 +1878,6 @@
                 </View>
 
                 <Text style={{ fontSize: 16, marginTop: 20, fontWeight: 'bold' }}>
-                  Price: ({price ? new Intl.NumberFormat('vi-VN').format(Number(price)) : '0'}đ/hr)
                 </Text>
 
                 <View style={styles.modalActions}>
@@ -1961,7 +2153,7 @@
     favoriteIcon: {
       width: 24,
       height: 24,
-      tintColor: '#888',
+      tintColor: COLORS.brandOrangeDeep,
     },
     bookingButton: {
       flexDirection: 'row',
@@ -2036,6 +2228,32 @@
       borderColor: COLORS.neutral450,
       paddingVertical: 12,
       paddingHorizontal: 12,
+    },
+    subCourtSwitchRow: {
+      paddingBottom: 10,
+      paddingRight: 8,
+      gap: 8,
+    },
+    subCourtSwitchPill: {
+      maxWidth: 220,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.neutral350,
+      backgroundColor: COLORS.white,
+    },
+    subCourtSwitchPillActive: {
+      backgroundColor: COLORS.brandOrangeDeep,
+      borderColor: COLORS.brandOrangeDeep,
+    },
+    subCourtSwitchText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: COLORS.slate600,
+    },
+    subCourtSwitchTextActive: {
+      color: COLORS.white,
     },
     scheduleTimeText: {
       fontSize: 14,
@@ -2153,7 +2371,7 @@
       alignItems: 'center',
     },
     inlineStarActive: {
-      backgroundColor: '#FFD700',
+      backgroundColor: 'rgba(255,255,255,0.25)',
     },
     // Bottom sheet tag styles
     sheetTagRow: {
@@ -2241,7 +2459,6 @@
     transportIcon: {
       width: 22,
       height: 22,
-      resizeMode: 'contain',
       marginRight: 10,
     },
     transportLabel: {

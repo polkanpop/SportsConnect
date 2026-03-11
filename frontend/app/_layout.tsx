@@ -9,6 +9,7 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import React from 'react'
 import { StyleSheet, Text, TextInput } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 import './global.css'
 
@@ -30,9 +31,22 @@ function patchGlobalFont() {
   const pickFontFamily = (style: any) => {
     const flat = StyleSheet.flatten(style) || {}
     const weightRaw = flat?.fontWeight
-    const weight = typeof weightRaw === 'string' ? parseInt(weightRaw, 10) : weightRaw
-    if (weight && weight >= 700) return 'MontserratBold'
-    if (weight && weight >= 600) return 'MontserratSemiBold'
+
+    let weight: number | null = null
+    if (typeof weightRaw === 'number' && Number.isFinite(weightRaw)) {
+      weight = weightRaw
+    } else if (typeof weightRaw === 'string') {
+      const normalized = weightRaw.trim().toLowerCase()
+      if (normalized === 'bold') weight = 700
+      else if (normalized === 'normal') weight = 400
+      else if (/^\d+$/.test(normalized)) {
+        const parsed = parseInt(normalized, 10)
+        weight = Number.isFinite(parsed) ? parsed : null
+      }
+    }
+
+    if (weight != null && weight >= 700) return 'MontserratBold'
+    if (weight != null && weight >= 600) return 'MontserratSemiBold'
     return 'MontserratRegular'
   }
 
@@ -126,18 +140,20 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <QueryProvider>
-        <AuthProvider>
-          <SplashScreenController />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="auto" />
-        </AuthProvider>
-      </QueryProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <QueryProvider>
+          <AuthProvider>
+            <SplashScreenController />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </AuthProvider>
+        </QueryProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   )
 }

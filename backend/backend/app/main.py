@@ -45,6 +45,7 @@ from .routers import (
     auth,
     cloudinary,
     blocklist,
+    playingcourts,
 )
 from .routers import debug_identity
 from fastapi_cache import FastAPICache
@@ -146,6 +147,7 @@ app.include_router(trainingsessions.router, prefix="/api")
 app.include_router(trainingsessioninfo.router, prefix="/api")
 app.include_router(tsbookings.router, prefix="/api")
 app.include_router(courtavailability.router, prefix="/api")
+app.include_router(playingcourts.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
 app.include_router(eventinfo.router, prefix="/api")
 app.include_router(debug_identity.router, prefix="/api")

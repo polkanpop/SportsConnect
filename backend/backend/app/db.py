@@ -56,10 +56,13 @@ def rest_select(table: str, select: str, filters: Optional[Dict[str, Any]] = Non
         return data[0] if data else None
     return data
 
-def rest_upsert(table: str, payload: Dict[str, Any]) -> Any:
+def rest_upsert(table: str, payload: Dict[str, Any], on_conflict: Optional[str] = None) -> Any:
     settings = get_settings()
     client = get_http_client()
     url = f"{settings.SUPABASE_URL}/rest/v1/{table}"
+    if on_conflict:
+        # PostgREST upsert uses primary key by default; pass on_conflict for UNIQUE keys.
+        url = f"{url}?on_conflict={on_conflict}"
     headers = rest_headers(settings)
     headers["Prefer"] = "resolution=merge-duplicates,return=representation"
     r = client.post(url, headers=headers, json=payload)

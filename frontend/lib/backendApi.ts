@@ -122,6 +122,121 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	return data
 }
 
+// ---- Auto status completion (upcoming -> completed) ----
+// Some UIs rely on status enums rather than timestamps.
+// This performs best-effort background updates so passed items are not shown.
+let autoCompleteLastRunMs = 0
+let autoCompleteInFlight: Promise<void> | null = null
+
+function parseTimestampLoose(raw: unknown): Date | null {
+	if (typeof raw !== 'string') return null
+	const s = raw.trim()
+	if (!s) return null
+	let d = new Date(s)
+	if (!Number.isNaN(d.getTime())) return d
+	// Postgres: "YYYY-MM-DD HH:mm:ss" (Hermes can treat as invalid)
+	const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+	if (m) {
+		d = new Date(`${m[1]}T${m[2]}:00`)
+		if (!Number.isNaN(d.getTime())) return d
+	}
+	return null
+}
+
+function shouldAutoCompleteStatus(statusRaw: unknown): boolean {
+	const st = String(statusRaw ?? '').trim().toLowerCase()
+	return st === 'upcoming'
+}
+
+function isPastEnd(endRaw: unknown, fallbackStartRaw: unknown): boolean {
+	const end = parseTimestampLoose(endRaw)
+	const start = parseTimestampLoose(fallbackStartRaw)
+	const now = Date.now()
+	if (end && !Number.isNaN(end.getTime())) return end.getTime() < now
+	if (start && !Number.isNaN(start.getTime())) return start.getTime() < now
+	return false
+}
+
+async function autoCompletePastStatusesInBackground(payload: {
+	events?: CombinedEvent[]
+	sessions?: CombinedTrainingSession[]
+	bookings?: CourtBookingRow[]
+}): Promise<void> {
+	const nowMs = Date.now()
+	// Throttle to avoid spamming updates across screens.
+	if (autoCompleteInFlight) return autoCompleteInFlight
+	if (nowMs - autoCompleteLastRunMs < 30_000) return
+
+	autoCompleteInFlight = (async () => {
+		autoCompleteLastRunMs = Date.now()
+		const eventIdsToComplete: number[] = []
+		const sessionIdsToComplete: number[] = []
+		const bookingIdsToComplete: number[] = []
+
+		for (const ev of payload.events || []) {
+			if (!shouldAutoCompleteStatus((ev as any).status)) continue
+			if (isPastEnd((ev as any).end_timestamp, (ev as any).start_timestamp ?? (ev as any).time)) {
+				if (typeof (ev as any).eventid === 'number') eventIdsToComplete.push((ev as any).eventid)
+			}
+		}
+		for (const s of payload.sessions || []) {
+			if (!shouldAutoCompleteStatus((s as any).status)) continue
+			if (isPastEnd((s as any).end_timestamp, (s as any).start_timestamp ?? (s as any).time)) {
+				if (typeof (s as any).sessionid === 'number') sessionIdsToComplete.push((s as any).sessionid)
+			}
+		}
+		for (const b of payload.bookings || []) {
+			const st = String((b as any).bookingstatus ?? '').trim().toLowerCase()
+			if (st !== 'upcoming') continue
+			if (isPastEnd((b as any).end_timestamp, (b as any).start_timestamp)) {
+				if (typeof (b as any).courtbookingid === 'number') bookingIdsToComplete.push((b as any).courtbookingid)
+			}
+		}
+
+		if (!eventIdsToComplete.length && !sessionIdsToComplete.length && !bookingIdsToComplete.length) return
+
+		const ops: Promise<any>[] = []
+		for (const id of eventIdsToComplete) {
+			ops.push(
+				request(`/events/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ status: 'completed' }),
+					debugLabel: 'autoCompleteEvent',
+				})
+			)
+		}
+		for (const id of sessionIdsToComplete) {
+			ops.push(
+				request(`/trainingsessions/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ status: 'completed' }),
+					debugLabel: 'autoCompleteTrainingSession',
+				})
+			)
+		}
+		for (const id of bookingIdsToComplete) {
+			ops.push(
+				request(`/courtbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'completed' }),
+					debugLabel: 'autoCompleteCourtBooking',
+				})
+			)
+		}
+
+		await Promise.allSettled(ops)
+		// Bust combined caches once so subsequent reads reflect completion.
+		try { await invalidateCache('cache:events:combined:v1') } catch {}
+		try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	})()
+
+	try {
+		await autoCompleteInFlight
+	} finally {
+		autoCompleteInFlight = null
+	}
+}
+
 export type CourtGeocode = {
 	formatted_address?: string | null
 	latitude: number
@@ -410,9 +525,30 @@ export type CourtRegisterRequest = {
 	name: string
 	address: string
 	ownerid: number
-	price?: number
 	venue: 'Indoor' | 'Outdoor' | 'Both'
 	images: string[]
+	allow_half_court?: boolean
+	playing_courts?: Array<{
+		name: string
+		full_price?: number
+		allow_half_booking?: boolean
+		half_a_name?: string
+		half_b_name?: string
+		half_a_price?: number
+		half_b_price?: number
+		description?: string
+		images: string[]
+		half_a_images?: string[]
+		half_b_images?: string[]
+		surface?: 'hardwood' | 'concrete' | 'synthetic' | string
+	}>
+	services?: Array<{
+		name: string
+		category: 'consumable' | 'rental' | string
+		price: number
+		stock?: number
+		images?: string[]
+	}>
 	latitude?: number
 	longitude?: number
 	accuracy_type?: string
@@ -707,6 +843,15 @@ export async function deleteMyProfilePicture(): Promise<{ cloudinaryResult: stri
 	return { cloudinaryResult: String((res as any)?.cloudinaryResult || ''), pfpCleared: !!(res as any)?.pfpCleared }
 }
 
+export async function deleteCloudinaryAssetsByUrl(urls: string[]): Promise<{ deleted: Array<{ url: string; public_id?: string | null; result?: string | null; error?: string | null }> }> {
+	const res = await request('/cloudinary/assets/delete', {
+		method: 'POST',
+		body: JSON.stringify({ urls: Array.isArray(urls) ? urls : [] }),
+		debugLabel: 'deleteCloudinaryAssetsByUrl',
+	})
+	return res as any
+}
+
 // Cached variant: user info display name rarely changes; short TTL
 export async function getUserInfoByUserIdCached(userid: number) {
 	return fetchWithCache<UserInfoRow | null>({
@@ -730,6 +875,7 @@ export type CourtInfoRow = {
 	venue?: string[] | string | null
 	images?: string[] | null
 	availability?: string | null
+	accuracy_type?: string | null
 }
 
 export async function listCourtInfo(): Promise<CourtInfoRow[]> {
@@ -745,6 +891,24 @@ export async function getCourtInfoByCourtId(courtid: number): Promise<CourtInfoR
 	} catch {
 		return null
 	}
+}
+
+export async function updateCourtInfoByCourtId(
+	courtid: number,
+	patch: Partial<Pick<CourtInfoRow, 'name' | 'address' | 'latitude' | 'longitude' | 'venue' | 'images' | 'availability' | 'accuracy_type'>>
+): Promise<CourtInfoRow> {
+	if (courtid == null) throw new Error('courtid required')
+	const res = await request(`/courtinfo/by-courtid/${encodeURIComponent(courtid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'updateCourtInfoByCourtId'
+	})
+	try {
+		if (res && typeof res === 'object') {
+			await upsertCourtInfoIntoCache(res as CourtInfoRow, { ttlMs: 60 * 1000, swrMs: 60 * 1000 })
+		}
+	} catch {}
+	return res as CourtInfoRow
 }
 
 export async function upsertCourtInfoIntoCache(row: CourtInfoRow, opts?: { ttlMs?: number; swrMs?: number }) {
@@ -778,9 +942,9 @@ export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 	})
 }
 
-// ---- Courts base table (includes pricing) ----
-// Schema: courts(courtid int PK, courtinfo text, ownerid int, price numeric)
-export type CourtRow = { courtid: number; courtinfo: string; ownerid: number; price: number }
+// ---- Courts base table ----
+// Schema: courts(courtid int PK, courtinfo text, ownerid int)
+export type CourtRow = { courtid: number; courtinfo: string; ownerid: number }
 
 export async function listCourts(): Promise<CourtRow[]> {
 	const data = await request('/courts', { debugLabel: 'listCourts' })
@@ -795,6 +959,72 @@ export async function getCourt(courtid: number): Promise<CourtRow | null> {
 	} catch (e) {
 		return null
 	}
+}
+
+export async function updateCourt(courtid: number, patch: Partial<Pick<CourtRow, 'courtinfo'>>): Promise<CourtRow> {
+	if (courtid == null) throw new Error('courtid required')
+	return request(`/courts/${encodeURIComponent(courtid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'updateCourt'
+	}) as Promise<CourtRow>
+}
+
+// ---- Playing courts ----
+export type PlayingCourtRow = {
+	playingcourtid: number
+	courtid: number
+	base_name?: string | null
+	name?: string | null
+	part?: string | null
+	price?: number | null
+}
+
+export type PlayingCourtInfoRow = {
+	playingcourtid: number
+	images?: string[]
+}
+
+export async function listPlayingCourtsByCourtId(courtid: number): Promise<PlayingCourtRow[]> {
+	if (courtid == null || !Number.isFinite(courtid)) throw new Error('courtid required')
+	const data = await request(`/playingcourts?courtid=${encodeURIComponent(String(courtid))}`, {
+		method: 'GET',
+		debugLabel: 'listPlayingCourtsByCourtId',
+	})
+	return Array.isArray(data) ? (data as PlayingCourtRow[]) : []
+}
+
+export async function patchPlayingCourt(
+	playingcourtid: number,
+	patch: Partial<Pick<PlayingCourtRow, 'name' | 'base_name' | 'price'>>
+): Promise<PlayingCourtRow> {
+	if (playingcourtid == null || !Number.isFinite(playingcourtid)) throw new Error('playingcourtid required')
+	return request(`/playingcourts/${encodeURIComponent(String(playingcourtid))}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'patchPlayingCourt',
+	}) as Promise<PlayingCourtRow>
+}
+
+export async function getPlayingCourtInfo(playingcourtid: number): Promise<PlayingCourtInfoRow> {
+	if (playingcourtid == null || !Number.isFinite(playingcourtid)) throw new Error('playingcourtid required')
+	const row = await request(`/playingcourts/${encodeURIComponent(String(playingcourtid))}/info`, {
+		method: 'GET',
+		debugLabel: 'getPlayingCourtInfo',
+	})
+	return (row || { playingcourtid, images: [] }) as PlayingCourtInfoRow
+}
+
+export async function patchPlayingCourtInfo(
+	playingcourtid: number,
+	patch: Partial<Pick<PlayingCourtInfoRow, 'images'>>
+): Promise<PlayingCourtInfoRow> {
+	if (playingcourtid == null || !Number.isFinite(playingcourtid)) throw new Error('playingcourtid required')
+	return request(`/playingcourts/${encodeURIComponent(String(playingcourtid))}/info`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'patchPlayingCourtInfo',
+	}) as Promise<PlayingCourtInfoRow>
 }
 
 // ---- Services ----
@@ -816,6 +1046,31 @@ export async function listServicesByCourtId(courtid: number): Promise<ServiceRow
 		debugLabel: 'listServicesByCourtId',
 	})
 	return Array.isArray(data) ? (data as ServiceRow[]) : []
+}
+
+export async function createService(payload: Omit<Partial<ServiceRow>, 'serviceid'> & { courtid: number; name: string; category: string; price: number }): Promise<ServiceRow> {
+	return request('/services', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'createService',
+	}) as Promise<ServiceRow>
+}
+
+export async function patchService(serviceid: number, patch: Partial<Omit<ServiceRow, 'serviceid' | 'courtid'>>): Promise<ServiceRow> {
+	if (serviceid == null || !Number.isFinite(serviceid)) throw new Error('serviceid required')
+	return request(`/services/${encodeURIComponent(String(serviceid))}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'patchService',
+	}) as Promise<ServiceRow>
+}
+
+export async function deleteService(serviceid: number): Promise<{ deleted: boolean; row?: ServiceRow }>{
+	if (serviceid == null || !Number.isFinite(serviceid)) throw new Error('serviceid required')
+	return request(`/services/${encodeURIComponent(String(serviceid))}`, {
+		method: 'DELETE',
+		debugLabel: 'deleteService',
+	}) as Promise<{ deleted: boolean; row?: ServiceRow }>
 }
 
 // ---- Payments & Court Bookings (simplified create helpers) ----
@@ -935,7 +1190,9 @@ export async function listCourtBookings(params?: { userid?: number }) {
 	const qs: string[] = []
 	if (params?.userid !== undefined) qs.push(`userid=${encodeURIComponent(params.userid)}`)
 	const path = `/courtbookings${qs.length ? '?' + qs.join('&') : ''}`
-	return request(path, { debugLabel: 'listCourtBookings' }) as Promise<CourtBookingRow[]>
+	const rows = (await request(path, { debugLabel: 'listCourtBookings' })) as CourtBookingRow[]
+	void autoCompletePastStatusesInBackground({ bookings: Array.isArray(rows) ? rows : [] })
+	return Array.isArray(rows) ? rows : []
 }
 
 // New functions to fetch bookings by user ID
@@ -1030,6 +1287,37 @@ export async function listCourtAvailability(courtid: number) {
 	return request(path, { debugLabel: 'listCourtAvailability' }) as Promise<any[]>
 }
 
+export async function updateCourtAvailabilityByCourtId(
+	courtid: number,
+	patch: Partial<Pick<CourtAvailabilityRow, 'booking_date' | 'start_time' | 'end_time' | 'status'>>
+): Promise<any> {
+	if (courtid == null) throw new Error('courtid required')
+	const res = await request(`/courtavailability/by-courtid/${encodeURIComponent(courtid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'updateCourtAvailabilityByCourtId',
+	})
+	try { await invalidateCache(`@courtAvailability:${courtid}`) } catch {}
+	return res
+}
+
+export async function updateCourtAvailabilityByPlayingCourtId(
+	playingcourtid: number,
+	patch: Partial<Pick<CourtAvailabilityRow, 'booking_date' | 'start_time' | 'end_time' | 'status'>>,
+	opts?: { courtid?: number }
+): Promise<any> {
+	if (playingcourtid == null) throw new Error('playingcourtid required')
+	const res = await request(`/courtavailability/by-playingcourtid/${encodeURIComponent(playingcourtid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify(patch),
+		debugLabel: 'updateCourtAvailabilityByPlayingCourtId',
+	})
+	if (opts?.courtid != null) {
+		try { await invalidateCache(`@courtAvailability:${opts.courtid}`) } catch {}
+	}
+	return res
+}
+
 export async function listCourtAvailabilityCached(courtid: number) {
 	const key = `@courtAvailability:${courtid}`
 	return fetchWithCache({
@@ -1045,11 +1333,12 @@ export async function listCourtAvailabilityCached(courtid: number) {
 
 export type CourtAvailabilityRow = {
 	availabilityid: number
-	courtid: number
-	status: string
-	start_time: string
-	end_time: string
-	booking_date: any
+	courtid?: number
+	playingcourtid?: number
+	status?: string
+	start_time?: string
+	end_time?: string
+	booking_date?: any
 }
 
 export async function listCourtAvailabilityAll(): Promise<CourtAvailabilityRow[]> {
@@ -1068,6 +1357,8 @@ export type EventInfoMeta = {
 	numberofpeople?: number | null
 	description?: string | null
 	title: string
+	// New schema field: images ARRAY
+	images?: string[] | string | null
 	entry_fee?: number | null
 	support_payment_method?: string | null
 	participants_cap?: number | null
@@ -1082,6 +1373,7 @@ export type CombinedEvent = {
 	organizerName?: string | null
 	title?: string
 	description?: string | null
+	images?: string[]
 	numberofpeople?: number | null
 	start_timestamp?: string | null
 	end_timestamp?: string | null
@@ -1214,6 +1506,8 @@ export type TrainingSessionInfoMeta = {
 	numberofpeople: number
 	description: string
 	title: string
+	// New schema field: images ARRAY
+	images?: string[] | string | null
 	entry_fee?: number | null
 	support_payment_method?: string | null
 	participants_cap?: number | null
@@ -1246,6 +1540,30 @@ export type CombinedTrainingSession = {
 // Utility to safely fetch a single resource and swallow errors (returns null)
 async function safeGet(path: string, label: string) {
 	try { return await request(path, { debugLabel: label }) } catch { return null }
+}
+
+function normalizeStringArrayLoose(v: unknown): string[] {
+	if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean)
+	if (typeof v !== 'string') return []
+	const s = v.trim()
+	if (!s) return []
+	if (s.startsWith('[') && s.endsWith(']')) {
+		try {
+			const parsed = JSON.parse(s)
+			if (Array.isArray(parsed)) return parsed.map(String).map((x) => x.trim()).filter(Boolean)
+		} catch {
+			// ignore
+		}
+	}
+	if (s.startsWith('{') && s.endsWith('}')) {
+		return s
+			.slice(1, -1)
+			.split(',')
+			.map((x) => x.replace(/^"|"$/g, '').trim())
+			.filter(Boolean)
+	}
+	if (s.includes(',')) return s.split(',').map((x) => x.trim()).filter(Boolean)
+	return [s]
 }
 
 // Aggregate events with related meta, court info and organizer name.
@@ -1286,7 +1604,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
 
-	return events.map(e => {
+	const combined = events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
 		const courtid = availability?.courtid
@@ -1301,6 +1619,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			organizerName: nameByUserId.get(e.organizerid) || null,
 			title: meta?.title,
 			description: meta?.description,
+			images: normalizeStringArrayLoose(meta?.images),
 			numberofpeople: meta?.numberofpeople ?? null,
 			start_timestamp: booking?.start_timestamp ?? null,
 			end_timestamp: booking?.end_timestamp ?? null,
@@ -1316,6 +1635,8 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			venue: ci?.venue,
 		}
 	})
+	void autoCompletePastStatusesInBackground({ events: combined })
+	return combined
 }
 
 // Aggregate events created by a specific organizer.
@@ -1383,11 +1704,14 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 }
 // Cached variant (events volatile): TTL-only so React Query refetches can break through.
 export async function listEventsCombinedCached(): Promise<CombinedEvent[]> {
-	return fetchWithCache<CombinedEvent[]>({
+	const list = await fetchWithCache<CombinedEvent[]>({
 		key: 'cache:events:combined:v1',
 		ttlMs: 60 * 1000,
 		fetcher: () => listEventsCombined()
 	})
+	// Best-effort background completion.
+	void autoCompletePastStatusesInBackground({ events: list })
+	return list
 }
 
 // Force refresh of the cached combined events list.
@@ -1402,6 +1726,7 @@ export type CreateEventWithInfoPayload = {
 	time?: string
 	title: string
 	description?: string
+	images?: string[]
 	participants_cap: number
 	auto_approve?: boolean
 	monetize: boolean
@@ -1426,6 +1751,7 @@ export type CreateTrainingSessionWithInfoPayload = {
 	time?: string
 	title: string
 	description?: string
+	images?: string[]
 	participants_cap: number
 	auto_approve?: boolean
 	monetize: boolean
@@ -1476,7 +1802,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
 
-	return sessions.map(s => {
+	const combined = sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
 		const courtid = availability?.courtid
@@ -1506,6 +1832,8 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			join_status: (meta as any)?.join_status ?? null,
 		}
 	})
+	void autoCompletePastStatusesInBackground({ sessions: combined })
+	return combined
 }
 
 // Aggregate training sessions created by a specific coach.
@@ -1573,11 +1901,13 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 }
 // Cached variant (sessions volatile): TTL-only so React Query refetches can break through.
 export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrainingSession[]> {
-	return fetchWithCache<CombinedTrainingSession[]>({
+	const list = await fetchWithCache<CombinedTrainingSession[]>({
 		key: 'cache:trainingsessions:combined:v1',
 		ttlMs: 60 * 1000,
 		fetcher: () => listTrainingSessionsCombined()
 	})
+	void autoCompletePastStatusesInBackground({ sessions: list })
+	return list
 }
 
 // Force refresh of the cached combined training sessions list.

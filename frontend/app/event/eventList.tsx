@@ -15,6 +15,21 @@ import { SkeletonList } from '@/components/ui/skeleton'
 
 type Coord = { latitude: number; longitude: number }
 
+function parseMaybeTimestamp(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!s) return null
+  let d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d
+  // Postgres: "YYYY-MM-DD HH:mm:ss" (Hermes can treat as invalid)
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+  if (m) {
+    d = new Date(`${m[1]}T${m[2]}:00`)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return null
+}
+
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371000
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -200,6 +215,22 @@ const EventListScreen = () => {
         if (!cancelledAt) return false
         if (Date.now() - cancelledAt >= 15_000) return false
       }
+
+      // Never list completed events.
+      if (status.includes('complete')) return false
+
+      // Hide past events (prefer end time when available).
+      const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+      const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+      const start = parseMaybeTimestamp(startRaw)
+      const end = parseMaybeTimestamp(endRaw)
+      const nowTs = Date.now()
+      if (end && !Number.isNaN(end.getTime())) {
+        if (end.getTime() < nowTs) return false
+      } else if (start && !Number.isNaN(start.getTime())) {
+        if (start.getTime() < nowTs) return false
+      }
+
       // text search
       const title = (ev.title || '').toLowerCase()
       const address = (ev.address || '').toLowerCase()
@@ -363,6 +394,8 @@ const EventListScreen = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Event List</Text>
+        <View style={styles.headerSpacer} />
       </View>
       {/* Search */}
       <View style={styles.searchRow}>
@@ -411,7 +444,7 @@ const EventListScreen = () => {
           </TouchableOpacity>
           </ScrollView>
         </View>
-        <Text style={styles.sectionTitle}>Events</Text>
+        {/* Subheader removed (title is in header row) */}
         {openFilter && openFilter !== 'payment' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
@@ -591,8 +624,8 @@ const EventListScreen = () => {
                       const start = ev.start_timestamp || ev.time
                       const end = ev.end_timestamp
                       if (!start) return 'Unknown date'
-                      const startD = new Date(start)
-                      const endD = end ? new Date(end) : null
+                      const startD = parseMaybeTimestamp(start) || new Date(start)
+                      const endD = end ? (parseMaybeTimestamp(end) || new Date(end)) : null
                       const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
                       const startTime = startD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
                       const endTime = endD ? endD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
@@ -664,6 +697,8 @@ export default EventListScreen
 const styles = StyleSheet.create({
   safe:{flex:1,backgroundColor:COLORS.white},
   headerRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:12,paddingTop:6,marginBottom:13},
+  headerTitle:{flex:1,textAlign:'center',fontSize:20,fontWeight:'700',color:COLORS.neutral925},
+  headerSpacer:{width:40},
   backButton:{padding:8,marginRight:8,borderRadius:28,backgroundColor:COLORS.neutral175},
   backIcon:{width:24,height:24,tintColor:COLORS.neutral925,resizeMode:'contain'},
   searchRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:12,paddingBottom:4},
@@ -690,11 +725,11 @@ const styles = StyleSheet.create({
   tickBoxSelected:{backgroundColor:COLORS.limeGreen,borderColor:COLORS.limeGreen},
   tickText:{color:COLORS.white,fontSize:14},
   overlay:{position:'absolute',top:0,left:0,right:0,bottom:0},
-  list:{flex:1,marginTop:14},
+  list:{flex:1},
   loadMoreWrap:{paddingVertical:14,alignItems:'center',justifyContent:'center'},
   loadMoreText:{color:LIST_ACCENT,fontWeight:'700',fontSize:13},
   statusText:{color:COLORS.neutral800,fontSize:12,paddingVertical:12,textAlign:'center'},
-  card:{flexDirection:'row',backgroundColor:COLORS.white,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140,borderWidth:1,borderColor:'#e5e7eb',borderLeftWidth:5,borderLeftColor:LIST_ACCENT,overflow:'hidden'},
+  card:{flexDirection:'row',backgroundColor:COLORS.white,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140,borderWidth:1,borderColor:LIST_ACCENT,borderLeftWidth:5,borderLeftColor:LIST_ACCENT,overflow:'hidden'},
   cardExpanded:{minHeight:180},
   cardLeft:{flex:1,paddingRight:78,zIndex:1},
   cardSilhouette:{position:'absolute',top:-14,right:-18,width:128,height:128,opacity:0.14,tintColor:LIST_ACCENT,resizeMode:'contain',zIndex:0},
