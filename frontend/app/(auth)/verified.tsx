@@ -70,7 +70,7 @@ export default function EmailVerifiedAutoLoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, backgroundColor: '#f8f8f8' },
-  title: { fontSize: 28, fontWeight: '800', color: '#15803d', marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: '800', color: '#15803d', marginBottom: 12 },
   info: { fontSize: 16, color: '#15803d', marginTop: 8 },
   error: { fontSize: 14, color: '#dc2626', marginTop: 12, textAlign: 'center' },
 });

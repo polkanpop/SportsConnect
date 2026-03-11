@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
   payText: { fontSize: 14, fontWeight: '700', color: '#222' },
   paymentMeta: { fontSize: 12, fontWeight: '600', color: '#555' },
   freeNote: { fontSize: 12, color: '#2e8b57', fontWeight: '700' },
-  smallText: { fontSize: 11, color: '#666' },
+  smallText: { fontSize: 12, color: '#666' },
   noteRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12 },
   noteIcon: { width: 22, height: 22, marginRight: 10, resizeMode: 'contain' },
   noteTextLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#222' },

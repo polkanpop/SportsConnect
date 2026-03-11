@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.neutral200,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
   },
   historyButton: {
@@ -1034,7 +1034,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   monthHeader: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: COLORS.neutral975,
   },

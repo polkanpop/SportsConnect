@@ -46,9 +46,9 @@ const styles = StyleSheet.create({
     fontFamily: 'MontserratSemiBold',
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: 'MontserratBold',
-    lineHeight: 32,
+    lineHeight: 34,
   },
   subtitle: {
     fontSize: 20,

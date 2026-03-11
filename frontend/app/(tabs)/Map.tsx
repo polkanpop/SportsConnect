@@ -25,6 +25,7 @@
   import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
   import * as Location from "expo-location";
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+  import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
   import { useFocusEffect, useRouter } from 'expo-router';
   import {
     Dimensions,
@@ -42,10 +43,11 @@
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
+    useWindowDimensions,
   } from "react-native";
   
   import { useCourtAvailability } from '@/hooks/use-court-data';
-  import { GestureHandlerRootView } from "react-native-gesture-handler";
+  import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
   import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
@@ -249,6 +251,34 @@
     const router = useRouter();
     // Favorite state for selected marker
     const [isFavorite, setIsFavorite] = useState(false);
+    // Image zoom
+    const [zoomMapImageUri, setZoomMapImageUri] = useState<string | null>(null)
+    const zoomWindow = useWindowDimensions()
+    const zoomFrameW = Math.max(260, Math.min(Math.round(zoomWindow.width * 0.92), 560))
+    const zoomFrameH = Math.max(260, Math.min(Math.round(zoomWindow.height * 0.72), 640))
+    const zoomScale = useSharedValue(1)
+    const zoomTX = useSharedValue(0)
+    const zoomTY = useSharedValue(0)
+    const zoomBaseScale = useSharedValue(1)
+    const zoomBaseX = useSharedValue(0)
+    const zoomBaseY = useSharedValue(0)
+    const zoomAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: zoomTX.value }, { translateY: zoomTY.value }, { scale: zoomScale.value }],
+    }))
+    const zoomGesture = useMemo(() => {
+      const pinch = Gesture.Pinch()
+        .onUpdate((e) => { zoomScale.value = Math.max(1, Math.min(zoomBaseScale.value * e.scale, 4)) })
+        .onEnd(() => { zoomBaseScale.value = zoomScale.value })
+      const pan = Gesture.Pan()
+        .onUpdate((e) => { if (zoomScale.value <= 1) return; zoomTX.value = zoomBaseX.value + e.translationX; zoomTY.value = zoomBaseY.value + e.translationY })
+        .onEnd(() => { zoomBaseX.value = zoomTX.value; zoomBaseY.value = zoomTY.value })
+      return Gesture.Simultaneous(pinch, pan)
+    }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomScale, zoomTX, zoomTY])
+    useEffect(() => {
+      if (!zoomMapImageUri) return
+      zoomScale.value = 1; zoomTX.value = 0; zoomTY.value = 0
+      zoomBaseScale.value = 1; zoomBaseX.value = 0; zoomBaseY.value = 0
+    }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomMapImageUri, zoomScale, zoomTX, zoomTY])
     const mapRef = useRef<MapView | null>(null); // Ref to the map
     const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
 
@@ -342,7 +372,9 @@
     const { profile, session } = useAuthContext();
 
     // Fetch availability for selected marker
-    const { data: availabilityRows } = useCourtAvailability(selectedMarker?.courtid || null);
+    const { data: availabilityRows, isLoading: availabilityLoading } = useCourtAvailability(selectedMarker?.courtid || null);
+
+    const [playingCourtsLoading, setPlayingCourtsLoading] = useState(false);
 
     // Choose which playingcourt's schedule to display (defaults to first availability row)
     useEffect(() => {
@@ -393,6 +425,7 @@
       if (typeof courtid !== 'number' || !Number.isFinite(courtid)) return;
 
       (async () => {
+        setPlayingCourtsLoading(true);
         try {
           const pcs = await listPlayingCourtsByCourtId(courtid);
           if (cancelled) return;
@@ -418,6 +451,8 @@
           setPlayingCourtImagesById(next);
         } catch (e) {
           console.warn('[Map] failed to load playingcourts/images', e);
+        } finally {
+          if (!cancelled) setPlayingCourtsLoading(false);
         }
       })();
 
@@ -1538,7 +1573,11 @@
                       </TouchableOpacity>
 
                       {scheduleExpanded && (
-                        availability ? (
+                        availabilityLoading ? (
+                          <View style={styles.placeholderSection}>
+                            <Text style={styles.placeholderText}>Loading schedule...</Text>
+                          </View>
+                        ) : availability ? (
                           <View style={styles.scheduleBox}>
                             {scheduleSwitchOptions.length > 1 && (
                               <ScrollView
@@ -1604,6 +1643,7 @@
                                     key={index}
                                     style={[
                                       styles.dayCell,
+                                      isAvailable && { backgroundColor: '#FED7AA' },
                                       !isAvailable && styles.dayCellDisabled,
                                     ]}
                                   >
@@ -1775,13 +1815,18 @@
                       {imagesExpanded && (aggregatedImages.length > 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                           {aggregatedImages.map((image, idx) => (
-                            <Image
-                              key={`${image}:${idx}`}
-                              source={{ uri: image }}
-                              style={styles.detailImageTile}
-                            />
+                            <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
+                              <Image
+                                source={{ uri: image }}
+                                style={styles.detailImageTile}
+                              />
+                            </TouchableOpacity>
                           ))}
                         </ScrollView>
+                      ) : playingCourtsLoading ? (
+                        <View style={styles.placeholderSection}>
+                          <Text style={styles.placeholderText}>Loading images...</Text>
+                        </View>
                       ) : (
                         <View style={styles.placeholderSection}>
                           <Text style={styles.placeholderText}>No images available yet.</Text>
@@ -1865,6 +1910,7 @@
                         key={index} 
                         style={[
                           styles.dayCell, 
+                          isAvailable && { backgroundColor: '#FED7AA' },
                           !isAvailable && styles.dayCellDisabled
                         ]}
                       >
@@ -1890,6 +1936,23 @@
                 </View>
               </View>
             </View>
+          </Modal>
+
+          {/* Image Zoom Modal */}
+          <Modal visible={!!zoomMapImageUri} transparent animationType="fade" onRequestClose={() => setZoomMapImageUri(null)}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }} onPress={() => setZoomMapImageUri(null)}>
+                {!!zoomMapImageUri && (
+                  <GestureDetector gesture={zoomGesture}>
+                    <Animated.Image
+                      source={{ uri: zoomMapImageUri }}
+                      style={[{ width: zoomFrameW, height: zoomFrameH }, zoomAnimStyle]}
+                      resizeMode="contain"
+                    />
+                  </GestureDetector>
+                )}
+              </Pressable>
+            </GestureHandlerRootView>
           </Modal>
         </SafeAreaProvider>
       </GestureHandlerRootView>
@@ -2192,7 +2255,7 @@
       justifyContent: 'space-between',
     },
     markerTitle: {
-      fontSize: 20,
+      fontSize: 17,
       fontWeight: "bold",
       textAlign: "left",
       flexShrink: 1,

@@ -206,7 +206,7 @@ const SettingRow = ({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
     marginTop: 25,
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   username: {
     marginTop: 0,
     marginBottom: 16,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "600",
     color: "#000000",
   },

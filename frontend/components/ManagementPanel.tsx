@@ -35,7 +35,7 @@ export default function ManagementPanel(props: {
       [
         { key: 'user', label: 'User' },
         { key: 'event', label: 'Event/Training Session' },
-        { key: 'court', label: 'Court' },
+        { key: 'court', label: 'Venue & Court' },
       ] as Array<{
         key: ManagementPanelKey
         label: string

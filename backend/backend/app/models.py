@@ -12,6 +12,7 @@ class CourtInfo(BaseModel):
     images: Optional[List[str]] = None
     availability: Optional[str] = None
     accuracy_type: Optional[str] = None
+    auto_approve: Optional[bool] = None
     price: Optional[float] = None
 
 class Notification(BaseModel):

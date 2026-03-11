@@ -876,6 +876,7 @@ export type CourtInfoRow = {
 	images?: string[] | null
 	availability?: string | null
 	accuracy_type?: string | null
+	auto_approve?: boolean | null
 }
 
 export async function listCourtInfo(): Promise<CourtInfoRow[]> {
@@ -895,7 +896,7 @@ export async function getCourtInfoByCourtId(courtid: number): Promise<CourtInfoR
 
 export async function updateCourtInfoByCourtId(
 	courtid: number,
-	patch: Partial<Pick<CourtInfoRow, 'name' | 'address' | 'latitude' | 'longitude' | 'venue' | 'images' | 'availability' | 'accuracy_type'>>
+	patch: Partial<Pick<CourtInfoRow, 'name' | 'address' | 'latitude' | 'longitude' | 'venue' | 'images' | 'availability' | 'accuracy_type' | 'auto_approve'>>
 ): Promise<CourtInfoRow> {
 	if (courtid == null) throw new Error('courtid required')
 	const res = await request(`/courtinfo/by-courtid/${encodeURIComponent(courtid)}`, {
@@ -978,6 +979,9 @@ export type PlayingCourtRow = {
 	name?: string | null
 	part?: string | null
 	price?: number | null
+	allow_half_booking?: boolean | null
+	surface?: string | null
+	images?: string[]
 }
 
 export type PlayingCourtInfoRow = {
@@ -1089,7 +1093,26 @@ export async function getPayment(paymentid: number): Promise<PaymentRow | null> 
 	}
 }
 
-export type CourtBookingRow = { courtbookingid: number; availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string; note?: string | null; bookingstatus?: string }
+export type CourtBookingRow = {
+	courtbookingid: number
+	availabilityid: number
+	userid: number
+	status: string
+	paymentid?: number | null
+	start_timestamp: string
+	end_timestamp: string
+	bookingdate: string
+	note?: string | null
+	bookingstatus?: string
+	playingcourtid?: number | null
+	selected_court_name?: string | null
+	selected_base_name?: string | null
+	selected_part?: 'full' | 'half_a' | 'half_b' | null
+	selected_surface?: string | null
+	court_price_at_booking?: number | null
+	duration_minutes?: number | null
+	total_amount?: number | null
+}
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
 }
@@ -1198,6 +1221,12 @@ export async function listCourtBookings(params?: { userid?: number }) {
 // New functions to fetch bookings by user ID
 export async function getCourtBookingsByUserId(userId: number) {
 	return request(`/courtbookings?userid=${userId}`, { debugLabel: 'getCourtBookingsByUserId' })
+}
+
+export async function listCourtBookingsByCourtId(courtid: number): Promise<CourtBookingRow[]> {
+	if (courtid == null || !Number.isFinite(courtid)) throw new Error('courtid required')
+	const rows = await request(`/courtbookings?courtid=${encodeURIComponent(courtid)}`, { debugLabel: 'listCourtBookingsByCourtId' })
+	return Array.isArray(rows) ? (rows as CourtBookingRow[]) : []
 }
 
 export async function getEventBookingsByUserId(userId: number) {

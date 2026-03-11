@@ -595,7 +595,7 @@ export default function Home() {
                   }}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>Add more...</Text>
-                  <Text style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
+                  <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
                 </TouchableOpacity>
               )}
               {!loadingFavs && favoriteLocations.map(fav => {
@@ -674,7 +674,7 @@ export default function Home() {
                               numberOfLines={1}
                               style={{
                                 color: '#fff',
-                                fontSize: 16,
+                                fontSize: 13,
                                 fontWeight: '800',
                               }}
                             >
@@ -717,7 +717,7 @@ export default function Home() {
                               numberOfLines={1}
                               style={{
                                 color: '#fff',
-                                fontSize: 16,
+                                fontSize: 13,
                                 fontWeight: '800',
                               }}
                             >
@@ -1037,7 +1037,7 @@ export default function Home() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
-                <Text style={{ fontSize: 24, lineHeight: 38, fontWeight: '800', color: '#111' }}>Menu</Text>
+                <Text style={{ fontSize: 20, lineHeight: 32, fontWeight: '800', color: '#111' }}>Menu</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={closeMenu}
@@ -1049,7 +1049,7 @@ export default function Home() {
 
               {/* Language switch (UI only for now) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginTop: 6, marginBottom: 12 }}>
-                <Text style={{ flex: 1, marginRight: 12, fontSize: 20, lineHeight: 28, fontWeight: '800', color: '#111' }} numberOfLines={1}>Language</Text>
+                <Text style={{ flex: 1, marginRight: 12, fontSize: 16, lineHeight: 24, fontWeight: '700', color: '#111' }} numberOfLines={1}>Language</Text>
 
                 <View
                   style={{

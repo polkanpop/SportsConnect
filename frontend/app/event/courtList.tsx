@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bookmarkWrap: { position: 'absolute', top: -3, right: -6, zIndex: 50, elevation: 50 },
-  bookmarkIcon: { width: 32, height: 32, tintColor: COLORS.gold, resizeMode: 'contain' },
+  bookmarkIcon: { width: 32, height: 32, left: -8, tintColor: COLORS.gold, resizeMode: 'contain' },
   cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
   cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
   cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },

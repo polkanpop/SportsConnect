@@ -216,6 +216,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const [blocking, setBlocking] = useState(false)
   const [confirmRemoveVisible, setConfirmRemoveVisible] = useState(false)
   const [removeCandidate, setRemoveCandidate] = useState<{ userid: number; name: string } | null>(null)
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<number>>(new Set())
 
   const [infoMeta, setInfoMeta] = useState<TrainingSessionInfoMeta | null>(null)
   const [infoLoading, setInfoLoading] = useState(false)
@@ -844,7 +845,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>No training sessions yet</Text>
           <Text style={{ color: '#555' }}>Create a training session to manage participants here.</Text>
           <TouchableOpacity
-            style={{ marginTop: 10, backgroundColor: '#16a34a', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+            style={{ marginTop: 10, backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
             onPress={() => router.push('/event/tsCreate' as any)}
           >
             <Text style={{ color: '#fff', fontWeight: '700' }}>Create Training Session</Text>
@@ -1004,11 +1005,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     backgroundColor: '#fff',
                     borderRadius: 12,
                     padding: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     marginBottom: 10,
                   }}
                 >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity
                     activeOpacity={0.75}
                     onPress={() =>
@@ -1078,6 +1078,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setExpandedNoteIds(prev => {
+                        const n = new Set(prev);
+                        if (n.has(a.booking.tsbookingid)) n.delete(a.booking.tsbookingid);
+                        else n.add(a.booking.tsbookingid);
+                        return n;
+                      })}
+                      style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
+                    >
+                      <Text style={{ fontSize: 16 }}>✏️</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={(e) => {
                         openActionMenuForUser(a.booking.userid, a.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
@@ -1092,6 +1105,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                     </TouchableOpacity>
                   </View>
+                  </View>
+                  {expandedNoteIds.has(a.booking.tsbookingid) && (
+                    <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
+                      <Text style={{ fontSize: 13, color: '#555' }}>{(a.booking as any).note?.trim() ? (a.booking as any).note : 'No note provided.'}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -1119,11 +1139,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     backgroundColor: '#fff',
                     borderRadius: 12,
                     padding: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     marginBottom: 10,
                   }}
                 >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={(e) => {
@@ -1150,6 +1169,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </View>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => setExpandedNoteIds(prev => {
+                      const n = new Set(prev);
+                      if (n.has(p.booking.tsbookingid)) n.delete(p.booking.tsbookingid);
+                      else n.add(p.booking.tsbookingid);
+                      return n;
+                    })}
+                    style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
+                  >
+                    <Text style={{ fontSize: 16 }}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={(e) => {
                       openActionMenuForUser(p.booking.userid, p.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
@@ -1162,6 +1193,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   >
                     <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                   </TouchableOpacity>
+                  </View>
+                  {expandedNoteIds.has(p.booking.tsbookingid) && (
+                    <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
+                      <Text style={{ fontSize: 13, color: '#555' }}>{(p.booking as any).note?.trim() ? (p.booking as any).note : 'No note provided.'}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -1215,9 +1253,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             )}
           </View>
 
-          <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Staff List</Text>
+          <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Administrator List</Text>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
-            <Text style={{ color: '#555' }}>No staff yet.</Text>
+            <Text style={{ color: '#555' }}>No administrators yet.</Text>
           </View>
 
           <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Block List</Text>

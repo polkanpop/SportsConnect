@@ -274,18 +274,19 @@ export default function EventCreateScreen() {
   })
 
   // Fetch events and training sessions to mark used bookings
-  const { data: eventsCombined, refetch: refetchEventsCombined } = useQuery({
+  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({
     queryKey: ['eventsCombinedForCreate'],
     queryFn: () => listEventsCombinedCached(),
     staleTime: 60_000,
   })
-  const { data: sessionsCombined, refetch: refetchSessionsCombined } = useQuery({
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
     queryKey: ['trainingSessionsCombinedForCreate'],
     queryFn: () => listTrainingSessionsCombined(),
     staleTime: 60_000,
   })
   const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:CombinedEvent)=>Number((e as any)?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
   const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:CombinedTrainingSession)=>Number((s as any)?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [sessionsCombined])
+  const bookingSelectionLoading = bookingsLoading || enriching || eventsCombinedLoading || sessionsCombinedLoading
 
   // Derived list of enriched bookings that are not already used by events/training
   const availableEnrichedBookings = useMemo(() => {
@@ -676,10 +677,10 @@ export default function EventCreateScreen() {
                 <Image source={ICONS.arrowdown} style={[styles.expandIcon, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
               </TouchableOpacity>
             </View>
-            {bookingsLoading && <ActivityIndicator size="small" color="#555" />}
+            {bookingSelectionLoading && <ActivityIndicator size="small" color="#555" />}
             {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || 'Failed loading bookings'}</Text>}
-            {!bookingsLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
-            {!bookingsLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
+            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
+            {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
               <Text style={styles.smallText}>No available courts for event booking.</Text>
             )}
             {selectedBooking && (
@@ -969,18 +970,18 @@ const styles = StyleSheet.create({
   bookingTag: { marginLeft:6, backgroundColor:'#444', paddingHorizontal:6, paddingVertical:2, borderRadius:8 },
   bookingTagEvent: { backgroundColor:'#ff6b3b' },
   bookingTagTraining: { backgroundColor:'#6a5acd' },
-  bookingTagText: { color:'#fff', fontSize:10, fontWeight:'700' },
+  bookingTagText: { color:'#fff', fontSize:12, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#bbb', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   checkboxBoxChecked: { backgroundColor: '#FF5733', borderColor: '#FF5733' },
   checkboxTick: { color: '#fff', fontWeight: '900', fontSize: 14, marginTop: -1 },
   checkboxLabel: { marginLeft: 10, color: '#222', fontWeight: '700' },
-  bookingMeta: { fontSize:11, color:'#555', marginTop:2 },
+  bookingMeta: { fontSize:12, color:'#555', marginTop:2 },
   bookingArrow: { width:16, height:16, tintColor:'#333' },
   selectedBookingBox: { backgroundColor:'#e9e9e9', padding:12, borderRadius:12, marginTop:6 },
   selectedBookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
-  selectedBookingMeta: { fontSize:11, color:'#444', marginTop:4 },
+  selectedBookingMeta: { fontSize:12, color:'#444', marginTop:4 },
   fieldLabel: { fontSize:13, fontWeight:'600', color:'#333', marginBottom:6, marginTop:4 },
   input: { backgroundColor:'#fff', borderWidth:1, borderColor:'#ddd', borderRadius:10, paddingHorizontal:12, paddingVertical:10, fontSize:14, color:'#222', marginBottom:12 },
   inputMultiline: { minHeight:100, textAlignVertical:'top' },

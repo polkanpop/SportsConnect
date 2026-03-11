@@ -12,6 +12,7 @@ import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { getCache, invalidateCache } from '@/lib/cache'
+import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import {
   autocompleteCourtAddress,
   cloudinarySignUpload,
@@ -21,6 +22,8 @@ import {
   geocodeCourtAddress,
   geocodeCourtPlaceId,
   getPlayingCourtInfo,
+  getUserInfoByUserIdCached,
+  listCourtBookingsByCourtId,
   listPlayingCourtsByCourtId,
   listCourtAvailabilityCached,
   listCourtInfoCached,
@@ -29,8 +32,10 @@ import {
   patchPlayingCourt,
   patchPlayingCourtInfo,
   patchService,
+  updateCourtBooking,
   type CourtAddressSuggestion,
   type CourtAvailabilityRow,
+  type CourtBookingRow,
   type CourtInfoRow,
   type CourtRow,
   type PlayingCourtInfoRow,
@@ -48,7 +53,7 @@ type WeekDayKey = typeof WEEK_DAYS[number]
 
 type Venue = 'Indoor' | 'Outdoor' | 'Both'
 
-type EditMode = 'main' | 'sub'
+type EditMode = 'main' | 'sub' | 'booking'
 
 type PlayingCourtPart = 'full' | 'half_a' | 'half_b'
 
@@ -156,20 +161,23 @@ function hhmmFromDbTime(value: any): string {
   return `${m[1]}:${m[2]}`
 }
 
+function formatYmdToDmy(value: string | null | undefined): string {
+  const s = String(value || '').trim()
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return s
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
+
 // Builds the main baseline snapshot from raw loaded values (NOT from React state).
 // Must stay in exact sync with the currentMainSnapshot useMemo.
 function buildMainSnapshotFromRaw(args: {
   name: string
   address: string
   venue: Venue
+  autoApprove: boolean
   images: string[]
-  scheduleDays: WeekDayKey[]
-  startTime: string
-  endTime: string
-  availabilityStatus: 'available' | 'unavailable'
   serviceDrafts: ServiceEditDraft[]
 }): string {
-  const scheduleDaysCanonical = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => args.scheduleDays.includes(d))
   const imagesCanonical = dedupeStrings(args.images).slice().sort()
   const normalizedServices = args.serviceDrafts.map((d) => ({
     key: typeof d.serviceid === 'number' ? `id:${d.serviceid}` : `local:${d.localId}`,
@@ -187,11 +195,8 @@ function buildMainSnapshotFromRaw(args: {
     name: args.name.trim(),
     address: args.address.trim(),
     venue: args.venue,
+    autoApprove: !!args.autoApprove,
     images: imagesCanonical,
-    scheduleDays: scheduleDaysCanonical,
-    startTime: args.startTime.trim(),
-    endTime: args.endTime.trim(),
-    availabilityStatus: args.availabilityStatus,
     verified: null,
     services: normalizedServices,
   })
@@ -225,6 +230,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
   const [editVenue, setEditVenue] = useState<Venue>('Indoor')
+  const [editAutoApprove, setEditAutoApprove] = useState(false)
   const [editImages, setEditImages] = useState<string[]>([])
 
   const [scheduleDays, setScheduleDays] = useState<WeekDayKey[]>([...WEEK_DAYS])
@@ -235,10 +241,27 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   const [editMode, setEditMode] = useState<EditMode>('main')
   const [selectedSubBaseName, setSelectedSubBaseName] = useState<string | null>(null)
 
+  // Booking tab state
+  const [courtBookings, setCourtBookings] = useState<CourtBookingRow[]>([])
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
+  const [bookingUserNames, setBookingUserNames] = useState<Record<number, string>>({})
+  const [bookingUserPfps, setBookingUserPfps] = useState<Record<number, string | null>>({})
+  const [bookingOwner, setBookingOwner] = useState<{ userid: number; name: string; pfp: string | null } | null>(null)
+  const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, string>>({})
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<number>>(new Set())
+  const [bookingSelectedBaseName, setBookingSelectedBaseName] = useState<string | null>(null)
+  const [bookingSelectedPcId, setBookingSelectedPcId] = useState<number | null>(null)
+  const [bookingSelectedDate, setBookingSelectedDate] = useState<string | null>(null)
+  const [bookingWeekOffset, setBookingWeekOffset] = useState(0)
+
   const [selectedSubPart, setSelectedSubPart] = useState<PlayingCourtPart>('full')
   const [subEditName, setSubEditName] = useState('')
   const [subEditImages, setSubEditImages] = useState<string[]>([])
   const [subInfoLoading, setSubInfoLoading] = useState(false)
+
+  const [selectedVenueCourtBaseName, setSelectedVenueCourtBaseName] = useState<string | null>(null)
+  const [venueCourtBaseEditName, setVenueCourtBaseEditName] = useState('')
 
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null)
   const [addressSuggestions, setAddressSuggestions] = useState<CourtAddressSuggestion[]>([])
@@ -457,6 +480,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       setEditName(name)
       setEditAddress(address)
       setEditVenue(venue)
+      setEditAutoApprove(Boolean((info as any)?.auto_approve))
       setEditImages(images)
       setSelectedPlaceId(null)
       setAddressSuggestions([])
@@ -470,9 +494,8 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       // Computed from the same raw values we just set into state, so the
       // baseline is guaranteed to match the form on first render.
       const baseline = buildMainSnapshotFromRaw({
-        name, address, venue, images,
-        scheduleDays: schedDays, startTime: schedStart, endTime: schedEnd,
-        availabilityStatus: schedStatus, serviceDrafts: drafts,
+        name, address, venue, autoApprove: Boolean((info as any)?.auto_approve), images,
+        serviceDrafts: drafts,
       })
       setMainBaselineSnapshot(baseline)
     } catch {
@@ -521,6 +544,81 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     }, [])
   )
 
+  const loadCourtBookings = useCallback(async (courtid: number) => {
+    setBookingLoading(true)
+    setBookingError(null)
+    try {
+      const bookings = await listCourtBookingsByCourtId(courtid)
+      setCourtBookings(bookings)
+      // Enrich user info
+      const uniqueUserIds = [...new Set(bookings.map(b => b.userid).filter(Boolean))]
+      const names: Record<number, string> = {}
+      const pfps: Record<number, string | null> = {}
+      await Promise.all(uniqueUserIds.map(async (uid) => {
+        try {
+          const info = await getUserInfoByUserIdCached(uid)
+          names[uid] = info?.name || `User ${uid}`
+          pfps[uid] = info?.pfp || null
+        } catch {
+          names[uid] = `User ${uid}`
+          pfps[uid] = null
+        }
+      }))
+      setBookingUserNames(names)
+      setBookingUserPfps(pfps)
+    } catch (err: any) {
+      setBookingError(err?.message || 'Failed to load bookings')
+    } finally {
+      setBookingLoading(false)
+    }
+  }, [])
+
+  const bookingsLoadedForCourtRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!selected || editMode !== 'booking') return
+    if (bookingsLoadedForCourtRef.current === selected.court.courtid) return
+    bookingsLoadedForCourtRef.current = selected.court.courtid
+    loadCourtBookings(selected.court.courtid)
+  }, [editMode, selected?.court?.courtid]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let cancelled = false
+    if (editMode !== 'booking' || !selected) {
+      setBookingOwner(null)
+      return
+    }
+    const ownerRaw = (selected.court as any)?.ownerid
+    const ownerid = typeof ownerRaw === 'number' ? ownerRaw : Number(ownerRaw)
+    if (!Number.isFinite(ownerid)) {
+      setBookingOwner(null)
+      return
+    }
+
+    ;(async () => {
+      try {
+        const info = await getUserInfoByUserIdCached(ownerid)
+        if (cancelled) return
+        setBookingOwner({ userid: ownerid, name: String(info?.name || `User ${ownerid}`), pfp: info?.pfp || null })
+      } catch {
+        if (!cancelled) setBookingOwner({ userid: ownerid, name: `User ${ownerid}`, pfp: null })
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [editMode, selected?.court?.courtid])
+
+  // Reset booking cache when court changes
+  useEffect(() => {
+    bookingsLoadedForCourtRef.current = null
+    setBookingSelectedBaseName(null)
+    setBookingSelectedPcId(null)
+    setBookingSelectedDate(null)
+    setBookingWeekOffset(0)
+  }, [selectedCourtId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!selected) return
     if (editMode !== 'main') return
@@ -534,6 +632,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     setEditAddress(String(info?.address || selected.court.courtinfo || ''))
     originalAddressRef.current = String(info?.address || selected.court.courtinfo || '').trim()
     setEditVenue(normalizeVenueToChoice(info?.venue))
+    setEditAutoApprove(Boolean((info as any)?.auto_approve))
     setEditImages(
       dedupeStrings(Array.isArray(info?.images) ? (info!.images!.filter((x: any) => typeof x === 'string') as string[]) : []).slice(0, 3)
     )
@@ -564,6 +663,65 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     }
     return out
   }, [playingCourts])
+
+  useEffect(() => {
+    if (editMode !== 'main') return
+    if (subCourtOptions.length === 0) {
+      setSelectedVenueCourtBaseName(null)
+      setVenueCourtBaseEditName('')
+      return
+    }
+    const current = String(selectedVenueCourtBaseName || '').trim().toLowerCase()
+    const exists = subCourtOptions.some((name) => name.toLowerCase() === current)
+    const nextBase = exists
+      ? (subCourtOptions.find((name) => name.toLowerCase() === current) || subCourtOptions[0])
+      : subCourtOptions[0]
+    setSelectedVenueCourtBaseName(nextBase)
+  }, [editMode, selectedVenueCourtBaseName, subCourtOptions])
+
+  useEffect(() => {
+    if (editMode !== 'main') return
+    const selectedBase = String(selectedVenueCourtBaseName || '').trim().toLowerCase()
+    if (!selectedBase) {
+      setVenueCourtBaseEditName('')
+      return
+    }
+    const matched = subCourtOptions.find((name) => name.toLowerCase() === selectedBase) || ''
+    setVenueCourtBaseEditName(matched)
+  }, [editMode, selectedVenueCourtBaseName, subCourtOptions])
+
+  const bookingBaseNames = useMemo(() => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const pc of playingCourts) {
+      const base = String(pc.base_name || '').trim()
+      if (base && !seen.has(base)) { seen.add(base); result.push(base) }
+    }
+    return result
+  }, [playingCourts])
+
+  const bookingWeekDays = useMemo(() => {
+    const today = new Date()
+    const dayIdx = today.getDay()
+    const offsetToMonday = (dayIdx + 6) % 7
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + bookingWeekOffset * 7)
+    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
+      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      return { label, d, dateStr: ds }
+    })
+  }, [bookingWeekOffset])
+
+  // Auto-select first base and full court when owner enters booking tab
+  useEffect(() => {
+    if (editMode !== 'booking') return
+    if (bookingBaseNames.length === 0) return
+    if (bookingSelectedBaseName) return // already selected
+    const firstBase = bookingBaseNames[0]
+    setBookingSelectedBaseName(firstBase)
+    const firstFullPc = playingCourts.find((pc) => pc.base_name === firstBase && String((pc as any).part || '').toLowerCase() === 'full')
+    if (firstFullPc) setBookingSelectedPcId((firstFullPc as any).playingcourtid)
+  }, [editMode, bookingBaseNames, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedSubPlayingCourtIds = useMemo(() => {
     const base = String(selectedSubBaseName || '').trim().toLowerCase()
@@ -646,10 +804,6 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     const originalAddr = String(originalAddressRef.current || '').trim()
     const addressChangedFromOriginal = canonicalizeAddress(address) !== canonicalizeAddress(originalAddr)
 
-    // User interactions can reorder scheduleDays (toggle off/on appends).
-    // Canonicalize to WEEK_DAYS ordering so reverting selections re-disables Save.
-    const scheduleDaysCanonical = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => scheduleDays.includes(d))
-
     // Canonicalize arrays so order-only differences don't keep Save enabled.
     const imagesCanonical = dedupeStrings(editImages).slice().sort()
 
@@ -661,15 +815,14 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       name,
       address,
       venue: editVenue,
+      autoApprove: !!editAutoApprove,
       images: imagesCanonical,
-      scheduleDays: scheduleDaysCanonical,
-      startTime: String(startTime || '').trim(),
-      endTime: String(endTime || '').trim(),
-      availabilityStatus,
+      venueBaseFrom: String(selectedVenueCourtBaseName || '').trim(),
+      venueBaseTo: String(venueCourtBaseEditName || '').trim(),
       verified,
       services: normalizedServicesSnapshot,
     })
-  }, [availabilityStatus, editAddress, editImages, editName, editVenue, endTime, normalizedServicesSnapshot, scheduleDays, startTime, verifiedCoord])
+  }, [editAddress, editAutoApprove, editImages, editName, editVenue, normalizedServicesSnapshot, selectedVenueCourtBaseName, venueCourtBaseEditName, verifiedCoord])
 
   const mainIsDirty = useMemo(() => {
     if (!mainBaselineSnapshot) return false
@@ -681,12 +834,19 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   }, [mainIsDirty])
 
   const currentSubSnapshot = useMemo(() => {
-    return JSON.stringify({
+    const base: any = {
       playingcourtid: selectedSubPlayingCourtId ?? null,
       name: String(subEditName || '').trim(),
       images: dedupeStrings(subEditImages || []).slice().sort(),
-    })
-  }, [selectedSubPlayingCourtId, subEditImages, subEditName])
+    }
+    if (selectedSubPart === 'full') {
+      base.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => scheduleDays.includes(d))
+      base.startTime = String(startTime || '').trim()
+      base.endTime = String(endTime || '').trim()
+      base.availabilityStatus = availabilityStatus
+    }
+    return JSON.stringify(base)
+  }, [selectedSubPlayingCourtId, subEditImages, subEditName, selectedSubPart, scheduleDays, startTime, endTime, availabilityStatus])
 
   const subIsDirty = useMemo(() => {
     if (!subBaselineSnapshot) return false
@@ -698,9 +858,10 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   }, [subIsDirty])
 
   useEffect(() => {
-    // Schedule editing is in Main mode.
-    if (editMode !== 'main') return
-    const pid = mainSchedulePlayingCourtId
+    // Schedule editing is in Court (sub) mode, full part only.
+    if (editMode !== 'sub' || selectedSubPart !== 'full') return
+    const pid = selectedSubFullPlayingCourtId
+    if (!pid) return
     const slot = (availability || []).find((s: any) => Number(s?.playingcourtid) === Number(pid)) as any
     if (!slot) {
       setScheduleDays([...WEEK_DAYS])
@@ -713,7 +874,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     setStartTime(hhmmFromDbTime(slot.start_time) || '08:00')
     setEndTime(hhmmFromDbTime(slot.end_time) || '22:00')
     setAvailabilityStatus(String(slot.status || '').toLowerCase() === 'unavailable' ? 'unavailable' : 'available')
-  }, [availability, editMode, mainSchedulePlayingCourtId])
+  }, [availability, editMode, selectedSubPart, selectedSubFullPlayingCourtId])
 
   useEffect(() => {
     if (editMode !== 'sub') return
@@ -726,6 +887,22 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     }
 
     setSubEditName(String((row as any).name || '').trim())
+
+    // Pre-load schedule/time from availability for full court baseline
+    let baseSchedDays: WeekDayKey[] = [...WEEK_DAYS]
+    let baseStart = '08:00'
+    let baseEnd = '22:00'
+    let baseAvailStat: 'available' | 'unavailable' = 'available'
+    if (selectedSubPart === 'full') {
+      const slot = (availability || []).find((s: any) => Number(s?.playingcourtid) === Number(pid)) as any
+      if (slot) {
+        baseSchedDays = parseScheduleDays(slot.booking_date)
+        baseStart = hhmmFromDbTime(slot.start_time) || '08:00'
+        baseEnd = hhmmFromDbTime(slot.end_time) || '22:00'
+        baseAvailStat = String(slot.status || '').toLowerCase() === 'unavailable' ? 'unavailable' : 'available'
+      }
+    }
+
     let cancelled = false
     ;(async () => {
       setSubInfoLoading(true)
@@ -735,16 +912,29 @@ export default function CourtPanel(props: { ownerId: number | null }) {
         const imgs = Array.isArray((info as any)?.images) ? ((info as any).images as any[]).filter((x) => typeof x === 'string') as string[] : []
         const subImgs = dedupeStrings(imgs).slice(0, 1)
         setSubEditImages(subImgs)
-        // Set sub baseline from local vars, same pattern as loadCourtData
-        setSubBaselineSnapshot(JSON.stringify({
+        const baselineObj: any = {
           playingcourtid: pid,
           name: String((row as any).name || '').trim(),
           images: dedupeStrings(subImgs).slice().sort(),
-        }))
+        }
+        if (selectedSubPart === 'full') {
+          baselineObj.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => baseSchedDays.includes(d))
+          baselineObj.startTime = baseStart
+          baselineObj.endTime = baseEnd
+          baselineObj.availabilityStatus = baseAvailStat
+        }
+        setSubBaselineSnapshot(JSON.stringify(baselineObj))
       } catch {
         if (cancelled) return
         setSubEditImages([])
-        setSubBaselineSnapshot(JSON.stringify({ playingcourtid: pid, name: String((row as any).name || '').trim(), images: [] }))
+        const baselineObjFallback: any = { playingcourtid: pid, name: String((row as any).name || '').trim(), images: [] }
+        if (selectedSubPart === 'full') {
+          baselineObjFallback.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => baseSchedDays.includes(d))
+          baselineObjFallback.startTime = baseStart
+          baselineObjFallback.endTime = baseEnd
+          baselineObjFallback.availabilityStatus = baseAvailStat
+        }
+        setSubBaselineSnapshot(JSON.stringify(baselineObjFallback))
       } finally {
         if (cancelled) return
         setSubInfoLoading(false)
@@ -753,7 +943,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     return () => {
       cancelled = true
     }
-  }, [editMode, selectedSubPlayingCourtId, selectedSubPlayingCourtRow])
+  }, [editMode, selectedSubPlayingCourtId, selectedSubPlayingCourtRow, selectedSubPart]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Switching which sub-court half is selected should not be treated as an edit.
@@ -1125,7 +1315,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       return
     }
     if (editMode === 'sub' && subInfoLoading) {
-      Alert.alert('Please wait', 'Sub-court info is still loading.')
+      Alert.alert('Please wait', 'Court info is still loading.')
       return
     }
 
@@ -1143,24 +1333,9 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       if (editMode === 'main') {
         const nm = editName.trim()
         const addr = editAddress.trim()
-        const start = startTime.trim()
-        const end = endTime.trim()
 
         if (!nm || !addr) {
           Alert.alert('Missing info', 'Please fill in name and address.')
-          return
-        }
-
-        if (!HHMM_24H_RE.test(start) || !HHMM_24H_RE.test(end)) {
-          Alert.alert('Invalid time', 'Please enter a valid time (00:00–23:59).')
-          return
-        }
-        if (scheduleDays.length === 0) {
-          Alert.alert('Invalid schedule', 'Please select at least one day.')
-          return
-        }
-        if (hhmmToMinutes(start) >= hhmmToMinutes(end)) {
-          Alert.alert('Invalid time range', 'Start time must be before end time.')
           return
         }
 
@@ -1182,6 +1357,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
           name: nm,
           address: addr,
           venue: venueNormalized,
+          auto_approve: !!editAutoApprove,
           images: editImages,
           ...(addressChanged && verifiedCoord
             ? {
@@ -1192,21 +1368,26 @@ export default function CourtPanel(props: { ownerId: number | null }) {
             : {}),
         })
 
-        // ---- Availability / schedule (apply to all playingcourts in this court) ----
-        if (playingCourts.length) {
-          const patch = {
-            status: availabilityStatus,
-            booking_date: scheduleDays,
-            start_time: `${start}:00`,
-            end_time: `${end}:00`,
+        const baseFrom = String(selectedVenueCourtBaseName || '').trim()
+        const baseTo = String(venueCourtBaseEditName || '').trim()
+        if (baseFrom && baseTo && baseFrom.toLowerCase() !== baseTo.toLowerCase()) {
+          const renameTargets = (playingCourts || []).filter(
+            (pc) => String((pc as any).base_name || '').trim().toLowerCase() === baseFrom.toLowerCase()
+          )
+          if (renameTargets.length > 0) {
+            await Promise.all(renameTargets.map((pc) => patchPlayingCourt(Number((pc as any).playingcourtid), { base_name: baseTo } as any)))
+            setPlayingCourtsLoading(true)
+            try {
+              const pcs = await listPlayingCourtsByCourtId(courtid)
+              setPlayingCourts(Array.isArray(pcs) ? (pcs as PlayingCourtRow[]) : [])
+            } finally {
+              setPlayingCourtsLoading(false)
+            }
+            setSelectedVenueCourtBaseName(baseTo)
+            if (String(selectedSubBaseName || '').trim().toLowerCase() === baseFrom.toLowerCase()) {
+              setSelectedSubBaseName(baseTo)
+            }
           }
-          const ids = playingCourts
-            .map((pc: any) => pc?.playingcourtid)
-            .filter((pid: any) => typeof pid === 'number' && Number.isFinite(pid)) as number[]
-          const ops = ids.map((pid) => updateCourtAvailabilityByPlayingCourtId(pid, patch as any, { courtid }))
-          const res = await Promise.allSettled(ops)
-          const rejected = res.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined
-          if (rejected) throw rejected.reason
         }
 
         // ---- Services (persist only changes) ----
@@ -1303,7 +1484,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
         }
       } else {
         if (!selectedSubBaseName || selectedSubPlayingCourtIds.length === 0) {
-          Alert.alert('Select sub-court', 'Please choose a sub-court to edit.')
+          Alert.alert('Select court', 'Please choose a court to edit.')
           return
         }
         if (!selectedSubPlayingCourtId) {
@@ -1311,7 +1492,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
           return
         }
         if (!subEditName.trim()) {
-          Alert.alert('Missing info', 'Please enter a sub-court name.')
+          Alert.alert('Missing info', 'Please enter a court name.')
           return
         }
 
@@ -1327,6 +1508,22 @@ export default function CourtPanel(props: { ownerId: number | null }) {
           setPlayingCourts(Array.isArray(pcs) ? (pcs as PlayingCourtRow[]) : [])
         } finally {
           setPlayingCourtsLoading(false)
+        }
+
+        // ---- Availability / schedule (full court → all parts of this base) ----
+        if (selectedSubPart === 'full' && selectedSubPlayingCourtIds.length > 0) {
+          const schedStart = startTime.trim()
+          const schedEnd = endTime.trim()
+          if (HHMM_24H_RE.test(schedStart) && HHMM_24H_RE.test(schedEnd) && scheduleDays.length > 0 && hhmmToMinutes(schedStart) < hhmmToMinutes(schedEnd)) {
+            const patch = {
+              status: availabilityStatus,
+              booking_date: scheduleDays,
+              start_time: `${schedStart}:00`,
+              end_time: `${schedEnd}:00`,
+            }
+            const ops = selectedSubPlayingCourtIds.map((pid2) => updateCourtAvailabilityByPlayingCourtId(pid2, patch as any, { courtid }))
+            await Promise.allSettled(ops)
+          }
         }
         await loadAvailability(courtid)
       }
@@ -1367,6 +1564,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     }
   }, [
     editAddress,
+    editAutoApprove,
     editImages,
     editName,
     editVenue,
@@ -1514,12 +1712,18 @@ export default function CourtPanel(props: { ownerId: number | null }) {
       refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={onRefresh} />}
     >
       <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
-        <Text style={styles.sectionTitle}>My Court</Text>
+        <Text style={styles.sectionTitle}>My Venue</Text>
       </View>
 
       {loading ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
-          <Text style={{ color: COLORS.neutral600 }}>Loading…</Text>
+          <SkeletonPulse>
+            <SkeletonBox width={140} height={22} radius={8} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <SkeletonBox width={180} height={96} radius={12} />
+              <SkeletonBox width={180} height={96} radius={12} />
+            </View>
+          </SkeletonPulse>
         </View>
       ) : error ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
@@ -1537,12 +1741,13 @@ export default function CourtPanel(props: { ownerId: number | null }) {
 
       {!!selected && (
         <View style={{ paddingHorizontal: 12, paddingTop: 6 }}>
-          <Text style={styles.sectionTitle}>Edit Court</Text>
+          <Text style={styles.sectionTitle}>Management</Text>
 
           <View style={[styles.segmented, { marginTop: 10 }]}>
             {([
-              { key: 'main', label: 'Main Court' },
-              { key: 'sub', label: 'Sub-Court' },
+              { key: 'main', label: 'Venue' },
+              { key: 'sub', label: 'Court' },
+              { key: 'booking', label: 'Booking' },
             ] as const).map((opt) => {
               const active = editMode === opt.key
               return (
@@ -1558,10 +1763,264 @@ export default function CourtPanel(props: { ownerId: number | null }) {
             })}
           </View>
 
-          {editMode === 'main' ? (
+          {editMode === 'booking' ? (
+            (() => {
+              const pcAvailIds = (availability || []).filter((a) => a.playingcourtid === bookingSelectedPcId).map((a) => a.availabilityid)
+              const pcBookings = courtBookings.filter((b) => pcAvailIds.includes(b.availabilityid))
+              // Parse booking_date weekday array for selected playing court
+              const pcAvailRow = (availability || []).find((a) => a.playingcourtid === bookingSelectedPcId) || null
+              const availableWeekdays: string[] = (() => {
+                if (!pcAvailRow) return []
+                const bd = (pcAvailRow as any).booking_date
+                if (typeof bd === 'string') { try { const p = JSON.parse(bd); return Array.isArray(p) ? p : [] } catch { return [] } }
+                return Array.isArray(bd) ? bd : []
+              })()
+              const bookedDates = new Set(pcBookings.map((b) => typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null).filter(Boolean) as string[])
+              const bookingApplicants = pcBookings.filter((b) => {
+                const s = String(b.status ?? '').toLowerCase()
+                return !s || s === 'pending' || s === 'waiting'
+              })
+              const bookingBlocked = pcBookings.filter((b) => {
+                const s = String(b.status ?? '').toLowerCase()
+                const bs = String(b.bookingstatus ?? '').toLowerCase()
+                return s.includes('reject') || bs.includes('cancel')
+              })
+              const dateBookings = bookingSelectedDate ? pcBookings.filter((b) => (typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) === bookingSelectedDate) : []
+
+              const renderBookingRow = (b: CourtBookingRow, showActions: boolean) => {
+                const uid = b.userid
+                const displayName = bookingUserNames[uid] || `User ${uid}`
+                const pfpUri = bookingUserPfps[uid] || null
+                const noteExp = expandedNoteIds.has(b.courtbookingid)
+                const statusRaw = String(b.status ?? b.bookingstatus ?? '')
+                return (
+                  <View key={b.courtbookingid} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                        {pfpUri ? <Image source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
+                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : 'Unknown time'}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
+                          <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>Status: {statusRaw || 'pending'}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {showActions && (
+                          <>
+                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'approve' })); try { await updateCourtBooking(b.courtbookingid, { status: 'approved', bookingstatus: 'upcoming' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'approved', bookingstatus: 'upcoming' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || 'Failed to approve') } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FED7AA', alignItems: 'center', justifyContent: 'center', marginRight: 10, opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1 }}>
+                              {mutatingBookingIds[b.courtbookingid] === 'approve' ? <ActivityIndicator size={14} /> : <Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />}
+                            </TouchableOpacity>
+                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'reject' })); try { await updateCourtBooking(b.courtbookingid, { status: 'rejected', bookingstatus: 'cancelled' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'rejected', bookingstatus: 'cancelled' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || 'Failed to reject') } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1, marginRight: 8 }}>
+                              {mutatingBookingIds[b.courtbookingid] === 'reject' ? <ActivityIndicator size={14} /> : <Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />}
+                            </TouchableOpacity>
+                          </>
+                        )}
+                        <TouchableOpacity activeOpacity={0.75} onPress={() => setExpandedNoteIds(prev => { const n = new Set(prev); if (n.has(b.courtbookingid)) n.delete(b.courtbookingid); else n.add(b.courtbookingid); return n })} style={{ padding: 6 }}>
+                          <Text style={{ fontSize: 16 }}>✏️</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    {noteExp && (
+                      <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: COLORS.neutral400 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
+                        <Text style={{ fontSize: 13, color: '#555' }}>{b.note?.trim() ? b.note : 'No note provided.'}</Text>
+                      </View>
+                    )}
+                  </View>
+                )
+              }
+
+              return (
+                <>
+                  {/* Court selector pills */}
+                  {bookingBaseNames.length > 0 && (
+                    <>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4, gap: 8, paddingTop: 10 }}>
+                        {bookingBaseNames.map((bn) => {
+                          const active = bookingSelectedBaseName === bn
+                          return (
+                            <TouchableOpacity key={bn} onPress={() => { setBookingSelectedBaseName(bn); setBookingSelectedPcId(null); setBookingSelectedDate(null) }} style={[styles.subCourtPill, active && styles.subCourtPillActive]} activeOpacity={0.85}>
+                              <Text style={[styles.subCourtPillText, active && styles.subCourtPillTextActive]} numberOfLines={1}>{bn}</Text>
+                            </TouchableOpacity>
+                          )
+                        })}
+                      </ScrollView>
+                      {/* Part tabs */}
+                      {bookingSelectedBaseName && (
+                        <View style={[styles.segmented, { marginTop: 8 }]}>
+                          {playingCourts.filter((pc) => pc.base_name === bookingSelectedBaseName).map((pc) => {
+                            const partLabel = String(pc.name || pc.base_name || `Court ${pc.playingcourtid}`)
+                            const active = bookingSelectedPcId === pc.playingcourtid
+                            return (
+                              <TouchableOpacity key={pc.playingcourtid} onPress={() => { setBookingSelectedPcId(pc.playingcourtid); setBookingSelectedDate(null) }} style={[styles.segment, active && styles.segmentActive]} activeOpacity={0.8}>
+                                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{partLabel}</Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  {/* Schedule calendar for selected pc */}
+                  {bookingSelectedPcId != null && (
+                    <View style={{ marginTop: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>Schedule</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <TouchableOpacity disabled={bookingWeekOffset === 0} onPress={() => setBookingWeekOffset((w) => w - 1)} style={{ padding: 6, borderRadius: 8, backgroundColor: '#e0e0e0', opacity: bookingWeekOffset === 0 ? 0.35 : 1 }}>
+                            <Image source={ICONS.arrowright} style={{ width: 18, height: 18, tintColor: '#333', transform: [{ rotate: '180deg' }] }} resizeMode="contain" />
+                          </TouchableOpacity>
+                          <TouchableOpacity disabled={bookingWeekOffset === 4} onPress={() => setBookingWeekOffset((w) => w + 1)} style={{ padding: 6, borderRadius: 8, backgroundColor: '#e0e0e0', opacity: bookingWeekOffset === 4 ? 0.35 : 1 }}>
+                            <Image source={ICONS.arrowright} style={{ width: 18, height: 18, tintColor: '#333' }} resizeMode="contain" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={styles.weekRow}>
+                        {bookingWeekDays.map((d) => {
+                          const hasBookings = bookedDates.has(d.dateStr)
+                          const isSelected = bookingSelectedDate === d.dateStr
+                          const isAvailable = availableWeekdays.length === 0 || availableWeekdays.includes(d.label)
+                          const today = new Date()
+                          const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                          const isPast = bookingWeekOffset === 0 && d.d < todayOnly
+                          return (
+                            <TouchableOpacity
+                              key={d.dateStr}
+                              onPress={() => {
+                                if (!isAvailable) return
+                                setBookingSelectedDate((prev) => prev === d.dateStr ? null : d.dateStr)
+                              }}
+                              style={[
+                                styles.dayCell,
+                                isSelected && { backgroundColor: '#f97316', borderColor: '#f97316' },
+                                hasBookings && !isSelected && { backgroundColor: '#FED7AA', borderColor: '#FED7AA' },
+                                isAvailable && !hasBookings && !isSelected && { backgroundColor: '#fff3e0' },
+                                !isAvailable && { opacity: 0.35 },
+                              ]}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.dayLabel, (isSelected || hasBookings) && { color: '#7c2d12' }]} numberOfLines={1}>{d.label}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? '#fff' : '#111', marginTop: 4 }}>{d.d.getDate()}</Text>
+                            </TouchableOpacity>
+                          )
+                        })}
+                      </View>
+                      {/* Bookings for selected date */}
+                      {bookingSelectedDate && (
+                        <View style={{ marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 8 }}>Bookings on {formatYmdToDmy(bookingSelectedDate)}</Text>
+                          {dateBookings.length === 0 ? (
+                            <Text style={{ color: '#888', fontSize: 13 }}>No bookings for this date.</Text>
+                          ) : (
+                            dateBookings.map((b) => {
+                              const uid = b.userid
+                              const displayName = bookingUserNames[uid] || `User ${uid}`
+                              const pfpUri = bookingUserPfps[uid] || null
+                              return (
+                                <TouchableOpacity key={b.courtbookingid} activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#FED7AA' }}>
+                                  {pfpUri ? <Image source={{ uri: pfpUri }} style={{ width: 34, height: 34, borderRadius: 17 }} /> : <Image source={ICONS.accountCircle} style={{ width: 34, height: 34 }} resizeMode="contain" />}
+                                  <View style={{ flex: 1, marginLeft: 8 }}>
+                                    <Text style={{ fontWeight: '700', fontSize: 13 }}>{displayName}</Text>
+                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 1 }}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : ''}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 12, color: '#9a3412' }}>{String(b.status ?? b.bookingstatus ?? 'pending')}</Text>
+                                </TouchableOpacity>
+                              )
+                            })
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Booking error / loading */}
+                  {bookingError && <Text style={{ color: 'red', marginBottom: 8, marginTop: 10 }}>Failed to load: {bookingError}</Text>}
+                  {bookingLoading && <View style={{ paddingVertical: 16, alignItems: 'center' }}><ActivityIndicator size="small" color={COLORS.neutral800} /></View>}
+
+                  {/* Applicant List */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 6, color: '#111' }}>Applicant List</Text>
+                  {bookingApplicants.length === 0 ? (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No applicants.</Text></View>
+                  ) : bookingApplicants.map((b) => renderBookingRow(b, true))}
+
+                  {/* Owner List */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>
+                  {!bookingOwner ? (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No owner profile found.</Text></View>
+                  ) : (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(bookingOwner.userid) } } as any)}
+                        style={{ flexDirection: 'row', alignItems: 'center' }}
+                      >
+                        {bookingOwner.pfp ? (
+                          <Image source={{ uri: bookingOwner.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} />
+                        ) : (
+                          <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
+                        )}
+                        <View style={{ marginLeft: 10, flex: 1 }}>
+                          <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{bookingOwner.name}</Text>
+                          <Text style={{ color: '#555', marginTop: 2 }} numberOfLines={1}>Owner</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Administrator List */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Administrator List</Text>
+                  <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No administrators yet.</Text></View>
+
+                  {/* Block List */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Block List</Text>
+                  {bookingBlocked.length === 0 ? (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No blocked bookings.</Text></View>
+                  ) : bookingBlocked.map((b) => renderBookingRow(b, false))}
+                </>
+              )
+            })()
+          ) : editMode === 'main' ? (
             <>
+              <Text style={styles.label}>Venue Name</Text>
+              <TextInput value={editName} onChangeText={setEditName} placeholder="Venue name" style={styles.input} />
+
               <Text style={styles.label}>Court Name</Text>
-              <TextInput value={editName} onChangeText={setEditName} placeholder="Court name" style={styles.input} />
+              {playingCourtsLoading ? (
+                <SkeletonPulse>
+                  <View style={styles.subCourtRow}>
+                    <SkeletonBox width={108} height={36} radius={18} />
+                    <SkeletonBox width={118} height={36} radius={18} />
+                    <SkeletonBox width={96} height={36} radius={18} />
+                  </View>
+                </SkeletonPulse>
+              ) : subCourtOptions.length === 0 ? (
+                <Text style={styles.helperText}>No courts found.</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subCourtRow}>
+                  {subCourtOptions.map((base) => {
+                    const active = String(selectedVenueCourtBaseName || '').trim().toLowerCase() === base.toLowerCase()
+                    return (
+                      <TouchableOpacity
+                        key={`main-${base}`}
+                        onPress={() => setSelectedVenueCourtBaseName(base)}
+                        activeOpacity={0.85}
+                        style={[styles.subCourtPill, active && styles.subCourtPillActive]}
+                      >
+                        <Text style={[styles.subCourtPillText, active && styles.subCourtPillTextActive]} numberOfLines={1}>
+                          {base}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+              )}
+              <TextInput
+                value={venueCourtBaseEditName}
+                onChangeText={setVenueCourtBaseEditName}
+                placeholder="Court name"
+                style={styles.input}
+              />
 
               <Text style={styles.label}>Address</Text>
               <View style={styles.addressRow}>
@@ -1643,71 +2102,21 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 })}
               </View>
 
-              <Text style={styles.label}>Availability</Text>
-              <View style={styles.segmented}>
-                {(['available', 'unavailable'] as const).map((v) => {
-                  const active = availabilityStatus === v
-                  return (
-                    <TouchableOpacity key={v} onPress={() => setAvailabilityStatus(v)} style={[styles.segment, active && styles.segmentActive]} activeOpacity={0.8}>
-                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v === 'available' ? 'Available' : 'Unavailable'}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-
-              <Text style={styles.label}>Schedule</Text>
-              <View style={styles.weekRow}>
-                {WEEK_DAYS.map((label) => {
-                  const active = scheduleDays.includes(label)
-                  return (
-                    <TouchableOpacity
-                      key={label}
-                      onPress={() => setScheduleDays((prev) => (prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]))}
-                      style={[styles.dayCell, active && styles.dayCellSelected]}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.dayLabel, active && styles.dayLabelSelected]}>{label}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-
-              <View style={styles.timeRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Start Time</Text>
-                  <TextInput
-                    value={startTime}
-                    onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
-                    placeholder="08:00"
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    maxLength={5}
-                    style={styles.input}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>End Time</Text>
-                  <TextInput
-                    value={endTime}
-                    onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
-                    placeholder="22:00"
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    maxLength={5}
-                    style={styles.input}
-                  />
-                </View>
-              </View>
-
               <Text style={styles.label}>Services</Text>
             </>
           ) : (
             <>
-              <Text style={styles.label}>Select Sub-Court</Text>
+              <Text style={styles.label}>Select Court</Text>
               {playingCourtsLoading ? (
-                <Text style={styles.helperText}>Loading…</Text>
+                <SkeletonPulse>
+                  <View style={styles.subCourtRow}>
+                    <SkeletonBox width={108} height={36} radius={18} />
+                    <SkeletonBox width={118} height={36} radius={18} />
+                    <SkeletonBox width={96} height={36} radius={18} />
+                  </View>
+                </SkeletonPulse>
               ) : subCourtOptions.length === 0 ? (
-                <Text style={styles.helperText}>No sub-courts found.</Text>
+                <Text style={styles.helperText}>No courts found.</Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subCourtRow}>
                   {subCourtOptions.map((base) => {
@@ -1752,8 +2161,8 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 })}
               </View>
 
-              <Text style={styles.label}>Sub-Court Name</Text>
-              <TextInput value={subEditName} onChangeText={setSubEditName} placeholder="Sub-court name" style={styles.input} />
+              <Text style={styles.label}>Court Name</Text>
+              <TextInput value={subEditName} onChangeText={setSubEditName} placeholder="Court name" style={styles.input} />
 
               <Text style={styles.label}>Images</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
@@ -1781,13 +2190,76 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                   </View>
                 )}
               </ScrollView>
+
+              {selectedSubPart === 'full' && (
+                <>
+                  <Text style={styles.label}>Availability</Text>
+                  <View style={styles.segmented}>
+                    {(['available', 'unavailable'] as const).map((v) => {
+                      const active = availabilityStatus === v
+                      return (
+                        <TouchableOpacity key={v} onPress={() => setAvailabilityStatus(v)} style={[styles.segment, active && styles.segmentActive]} activeOpacity={0.8}>
+                          <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v === 'available' ? 'Available' : 'Unavailable'}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                  <Text style={styles.label}>Schedule</Text>
+                  <View style={styles.weekRow}>
+                    {WEEK_DAYS.map((label) => {
+                      const active = scheduleDays.includes(label)
+                      return (
+                        <TouchableOpacity
+                          key={label}
+                          onPress={() => setScheduleDays((prev) => (prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]))}
+                          style={[styles.dayCell, active && styles.dayCellSelected]}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={[styles.dayLabel, active && styles.dayLabelSelected]}>{label}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                  <View style={styles.timeRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>Start Time</Text>
+                      <TextInput
+                        value={startTime}
+                        onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
+                        placeholder="08:00"
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        maxLength={5}
+                        style={styles.input}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.label}>End Time</Text>
+                      <TextInput
+                        value={endTime}
+                        onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
+                        placeholder="22:00"
+                        keyboardType="number-pad"
+                        inputMode="numeric"
+                        maxLength={5}
+                        style={styles.input}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
             </>
           )}
 
           {editMode === 'main' ? (
             <>
           {servicesLoading ? (
-            <Text style={styles.helperText}>Loading…</Text>
+            <SkeletonPulse>
+              <View style={{ marginTop: 8, gap: 10 }}>
+                <SkeletonBox width={'100%'} height={116} radius={12} />
+                <SkeletonBox width={'100%'} height={116} radius={12} />
+              </View>
+            </SkeletonPulse>
           ) : serviceDrafts.filter((d) => !d.deleted).length === 0 ? (
             <Text style={styles.helperText}>No services yet.</Text>
           ) : (
@@ -1965,9 +2437,25 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 </View>
               )}
             </ScrollView>
+
+            <TouchableOpacity
+              onPress={() => setEditAutoApprove((v) => !v)}
+              activeOpacity={0.85}
+              style={styles.autoApproveRow}
+            >
+              <View style={[styles.autoApproveBox, editAutoApprove && styles.autoApproveBoxActive]}>
+                {editAutoApprove ? <Image source={ICONS.tick} style={styles.autoApproveTick} resizeMode="contain" /> : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.autoApproveTitle}>Auto-approve bookings</Text>
+                <Text style={styles.autoApproveHint}>When enabled, new booking requests are approved automatically.</Text>
+              </View>
+            </TouchableOpacity>
           </>
           ) : null}
 
+          {editMode !== 'booking' && (
+            <>
           <TouchableOpacity
             onPress={onSave}
             disabled={saveDisabled}
@@ -1983,6 +2471,8 @@ export default function CourtPanel(props: { ownerId: number | null }) {
           {saveSuccessMessage ? <Text style={styles.saveSuccessText}>{saveSuccessMessage}</Text> : null}
 
           {availabilityLoading ? <Text style={{ marginTop: 8, color: COLORS.neutral600 }}>Loading schedule…</Text> : null}
+            </>
+          )}
         </View>
       )}
 
@@ -1991,7 +2481,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Remove image?</Text>
             <Text style={styles.modalText}>
-              {removeImageContext === 'sub' ? 'This will remove the image from the sub-court.' : 'This will remove the image from the court.'}
+              {removeImageContext === 'sub' ? 'This will remove the image from the court.' : 'This will remove the image from the venue.'}
             </Text>
             <View style={styles.modalRow}>
               <TouchableOpacity
@@ -2097,6 +2587,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    alignSelf: 'flex-start',
   },
   cardSelected: {
     borderColor: COLORS.brandOrangeDeep,
@@ -2229,8 +2720,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   subCourtPillActive: {
-    backgroundColor: COLORS.blue600,
-    borderColor: COLORS.blue600,
+    backgroundColor: COLORS.brandOrangeDeep,
+    borderColor: COLORS.brandOrangeDeep,
   },
   subCourtPillText: {
     fontSize: 13,
@@ -2250,8 +2741,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayCellSelected: {
-    backgroundColor: COLORS.green,
-    borderColor: COLORS.green,
+    backgroundColor: COLORS.orange200,
+    borderColor: COLORS.orange200,
   },
   dayLabel: {
     fontSize: 12,
@@ -2466,6 +2957,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     textAlign: 'center',
+  },
+  autoApproveRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  autoApproveBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoApproveBoxActive: {
+    backgroundColor: COLORS.brandOrangeDeep,
+    borderColor: COLORS.brandOrangeDeep,
+  },
+  autoApproveTick: {
+    width: 14,
+    height: 14,
+    tintColor: '#fff',
+  },
+  autoApproveTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#111',
+  },
+  autoApproveHint: {
+    marginTop: 2,
+    fontSize: 12,
+    color: COLORS.neutral700,
+    fontWeight: '600',
   },
   serviceHeaderActions: {
     flexDirection: 'row',

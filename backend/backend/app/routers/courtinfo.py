@@ -105,7 +105,7 @@ async def list_courts(courtids: str | None = Query(default=None)):
     try:
         # Keep select list aligned with the actual DB schema.
         # NOTE: courtinfo does NOT have city/state/postal_code/accuracy_score columns in current schema.
-        select_cols = "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type"
+        select_cols = "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type,auto_approve"
         data_all = rest_select(
             "courtinfo",
             select_cols,
@@ -129,7 +129,7 @@ async def get_court_by_courtid(courtid: int):
     try:
         data = rest_select(
             "courtinfo",
-            "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type",
+            "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type,auto_approve",
             filters={"courtid": courtid},
             single=True,
         )
@@ -154,7 +154,7 @@ async def patch_courtinfo_by_courtid(courtid: int, body: dict, current_user: str
 
     existing = rest_select(
         "courtinfo",
-        "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type",
+        "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type,auto_approve",
         filters={"courtid": courtid},
         single=True,
     )
@@ -190,6 +190,9 @@ async def patch_courtinfo_by_courtid(courtid: int, body: dict, current_user: str
         if venue_norm is None:
             raise HTTPException(status_code=400, detail="Invalid venue")
         patch["venue"] = venue_norm
+    if "auto_approve" in body:
+        v = body.get("auto_approve")
+        patch["auto_approve"] = bool(v) if v is not None else False
 
     patch = {k: v for k, v in patch.items() if v is not None}
     if not patch:
@@ -209,7 +212,7 @@ async def get_court(courtinfoid: int):
     try:
         data = rest_select(
             "courtinfo",
-            "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type",
+            "courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability,accuracy_type,auto_approve",
             filters={"courtinfoid": courtinfoid},
             single=True,
         )

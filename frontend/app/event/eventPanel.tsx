@@ -248,6 +248,7 @@ export default function EventPanel({ organizerId }: Props) {
 	const [pendingCloudinaryDeletes, setPendingCloudinaryDeletes] = useState<string[]>([]);
 	const [savingEvent, setSavingEvent] = useState(false);
 	const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, "approve" | "reject">>({});
+	const [expandedNoteEventIds, setExpandedNoteEventIds] = useState<Set<number>>(new Set());
 
 	const lastHydratedEventIdRef = useRef<number | null>(null);
 	const initialEditSnapshotRef = useRef<string>("");
@@ -892,7 +893,7 @@ export default function EventPanel({ organizerId }: Props) {
 					<Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 4 }}>No events yet</Text>
 					<Text style={{ color: "#555" }}>Create an event to manage applicants here.</Text>
 					<TouchableOpacity
-						style={{ marginTop: 10, backgroundColor: "#16a34a", paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
+						style={{ marginTop: 10, backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
 						onPress={() => router.push("/event/eventCreate" as any)}
 					>
 						<Text style={{ color: "#fff", fontWeight: "700" }}>Create Event</Text>
@@ -1071,11 +1072,10 @@ export default function EventPanel({ organizerId }: Props) {
 										backgroundColor: "#fff",
 										borderRadius: 12,
 										padding: 12,
-										flexDirection: "row",
-										alignItems: "center",
 										marginBottom: 10,
 									}}
 								>
+									<View style={{ flexDirection: "row", alignItems: "center" }}>
 										<TouchableOpacity
 											activeOpacity={0.75}
 											onPress={() => router.push({ pathname: "/event/profileSpectate", params: { userid: String(a.booking.userid) } } as any)}
@@ -1144,6 +1144,18 @@ export default function EventPanel({ organizerId }: Props) {
 											)}
 										</TouchableOpacity>
 										<TouchableOpacity
+											activeOpacity={0.75}
+											onPress={() => setExpandedNoteEventIds(prev => {
+												const n = new Set(prev);
+												if (n.has(a.booking.eventbookingid)) n.delete(a.booking.eventbookingid);
+												else n.add(a.booking.eventbookingid);
+												return n;
+											})}
+											style={{ padding: 6, alignItems: "center", justifyContent: "center", marginLeft: 2 }}
+										>
+											<Text style={{ fontSize: 16 }}>✏️</Text>
+										</TouchableOpacity>
+										<TouchableOpacity
 											activeOpacity={0.7}
 											onPress={(e) => {
 												openActionMenuForUser(a.booking.userid, a.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
@@ -1158,6 +1170,13 @@ export default function EventPanel({ organizerId }: Props) {
 											<Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: "#111827" }} resizeMode="contain" />
 										</TouchableOpacity>
 									</View>
+									</View>
+									{expandedNoteEventIds.has(a.booking.eventbookingid) && (
+										<View style={{ marginTop: 8, backgroundColor: "#f9fafb", borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: "#d1d5db" }}>
+											<Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 4 }}>Note</Text>
+											<Text style={{ fontSize: 13, color: "#555" }}>{(a.booking as any).note?.trim() ? (a.booking as any).note : "No note provided."}</Text>
+										</View>
+									)}
 								</View>
 							))}
 						</View>
@@ -1288,9 +1307,9 @@ export default function EventPanel({ organizerId }: Props) {
 						)}
 					</View>
 
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Staff List</Text>
+					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Administrator List</Text>
 					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
-						<Text style={{ color: "#555" }}>No staff yet.</Text>
+						<Text style={{ color: "#555" }}>No administrators yet.</Text>
 					</View>
 
 					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Block List</Text>
@@ -1490,7 +1509,7 @@ export default function EventPanel({ organizerId }: Props) {
 							disabled={savingEvent || !isDirty}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : "#16a34a",
+								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : COLORS.brandOrangeDeep,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",
@@ -1504,7 +1523,7 @@ export default function EventPanel({ organizerId }: Props) {
 							onPress={() => setConfirmCancelVisible(true)}
 							style={{
 								marginTop: 10,
-								backgroundColor: cancellingEvent || !canCancelSelectedEvent ? "#9ca3af" : "#B91C1C",
+								backgroundColor: cancellingEvent || !canCancelSelectedEvent ? "#9ca3af" : COLORS.brandOrangeDeep,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",

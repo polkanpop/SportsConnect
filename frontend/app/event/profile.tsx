@@ -403,7 +403,7 @@ export default function Profile() {
               />
             </TouchableOpacity>
             {showBioSuccess && (
-              <Text style={{ marginLeft: 10, fontSize: 10, color: 'green', fontStyle: 'italic' }}>
+              <Text style={{ marginLeft: 10, fontSize: 12, color: 'green', fontStyle: 'italic' }}>
                 change successfully
               </Text>
             )}
@@ -446,7 +446,7 @@ export default function Profile() {
               />
             </TouchableOpacity>
             {showContactLog && (
-              <Text style={{ marginLeft: 10, fontSize: 10, color: '#888', flex: 1, fontStyle: 'italic' }}>
+              <Text style={{ marginLeft: 10, fontSize: 12, color: '#888', flex: 1, fontStyle: 'italic' }}>
                 {contactVisible 
                   ? "Your contact information is now visible" 
                   : "Your contact information is now hidden"}

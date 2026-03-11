@@ -252,10 +252,11 @@ export default function TsCreate() {
     return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
   }, [enrichedBookings, selectedBookingId])
 
-  const { data: sessionsCombined, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
-  const { data: eventsCombined, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
+  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
   const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>Number(s?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [sessionsCombined])
   const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:any)=>Number(e?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
+  const bookingSelectionLoading = bookingsLoading || enriching || sessionsCombinedLoading || eventsCombinedLoading
 
   const availableEnrichedBookings = useMemo(() => {
     if (!enrichedBookings) return [] as EnrichedBooking[]
@@ -576,10 +577,10 @@ export default function TsCreate() {
                 <Image source={ICONS.arrowdown} style={[styles.expandIcon, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
               </TouchableOpacity>
             </View>
-            {bookingsLoading && <ActivityIndicator size="small" color="#555" />}
+            {bookingSelectionLoading && <ActivityIndicator size="small" color="#555" />}
             {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || 'Failed loading bookings'}</Text>}
-            {!bookingsLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
-            {!bookingsLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
+            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
+            {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
               <Text style={styles.smallText}>No available courts for training session booking.</Text>
             )}
             {selectedBookingId && (
@@ -859,13 +860,13 @@ const styles = StyleSheet.create({
   bookingTag: { marginLeft:6, backgroundColor:'#444', paddingHorizontal:6, paddingVertical:2, borderRadius:8 },
   bookingTagEvent: { backgroundColor:'#ff6b3b' },
   bookingTagTraining: { backgroundColor:'#6a5acd' },
-  bookingTagText: { color:'#fff', fontSize:10, fontWeight:'700' },
+  bookingTagText: { color:'#fff', fontSize:12, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
-  bookingMeta: { fontSize:11, color:'#555', marginTop:2 },
+  bookingMeta: { fontSize:12, color:'#555', marginTop:2 },
   bookingArrow: { width:16, height:16, tintColor:'#333' },
   selectedBookingBox: { backgroundColor:'#e9e9e9', padding:12, borderRadius:12, marginTop:6 },
   selectedBookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
-  selectedBookingMeta: { fontSize:11, color:'#444', marginTop:4 },
+  selectedBookingMeta: { fontSize:12, color:'#444', marginTop:4 },
   fieldLabel: { fontSize:13, fontWeight:'600', color:'#333', marginBottom:6, marginTop:4 },
   input: { backgroundColor:'#fff', borderWidth:1, borderColor:'#ddd', borderRadius:10, paddingHorizontal:12, paddingVertical:10, fontSize:14, color:'#222', marginBottom:12 },
   inputMultiline: { minHeight:100, textAlignVertical:'top' },

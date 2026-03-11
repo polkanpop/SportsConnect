@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator, Pressable } from 'react-native'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator, Pressable, useWindowDimensions } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useRouter } from 'expo-router'
@@ -133,6 +135,34 @@ export default function CourtRegisterPage() {
 
   const [playingCourts, setPlayingCourts] = useState<PlayingCourtDraft[]>([])
   const [expandedCourtIdxs, setExpandedCourtIdxs] = useState<Set<number>>(new Set())
+  // Image zoom
+  const [zoomImageUri, setZoomImageUri] = useState<string | null>(null)
+  const zoomWindow = useWindowDimensions()
+  const zoomFrameW = Math.max(260, Math.min(Math.round(zoomWindow.width * 0.92), 560))
+  const zoomFrameH = Math.max(260, Math.min(Math.round(zoomWindow.height * 0.72), 640))
+  const zoomScale = useSharedValue(1)
+  const zoomTX = useSharedValue(0)
+  const zoomTY = useSharedValue(0)
+  const zoomBaseScale = useSharedValue(1)
+  const zoomBaseX = useSharedValue(0)
+  const zoomBaseY = useSharedValue(0)
+  const zoomAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: zoomTX.value }, { translateY: zoomTY.value }, { scale: zoomScale.value }],
+  }))
+  const zoomGesture = useMemo(() => {
+    const pinch = Gesture.Pinch()
+      .onUpdate((e) => { zoomScale.value = Math.max(1, Math.min(zoomBaseScale.value * e.scale, 4)) })
+      .onEnd(() => { zoomBaseScale.value = zoomScale.value })
+    const pan = Gesture.Pan()
+      .onUpdate((e) => { if (zoomScale.value <= 1) return; zoomTX.value = zoomBaseX.value + e.translationX; zoomTY.value = zoomBaseY.value + e.translationY })
+      .onEnd(() => { zoomBaseX.value = zoomTX.value; zoomBaseY.value = zoomTY.value })
+    return Gesture.Simultaneous(pinch, pan)
+  }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomScale, zoomTX, zoomTY])
+  useEffect(() => {
+    if (!zoomImageUri) return
+    zoomScale.value = 1; zoomTX.value = 0; zoomTY.value = 0
+    zoomBaseScale.value = 1; zoomBaseX.value = 0; zoomBaseY.value = 0
+  }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomImageUri, zoomScale, zoomTX, zoomTY])
   const [playingCourtModalVisible, setPlayingCourtModalVisible] = useState(false)
   const [pcFullName, setPcFullName] = useState('')
   const [pcFullPrice, setPcFullPrice] = useState('')
@@ -649,7 +679,7 @@ export default function CourtRegisterPage() {
     const fullName = pcFullName.trim()
     const fullPrice = pcFullPrice.trim()
     if (!fullName) {
-      Alert.alert('Missing info', 'Please enter a sub-court name.')
+      Alert.alert('Missing info', 'Please enter a court name.')
       return
     }
     if (!fullPrice || !Number.isFinite(toNumberFromInput(fullPrice)) || toNumberFromInput(fullPrice) < 0) {
@@ -920,7 +950,7 @@ export default function CourtRegisterPage() {
     }
 
     if (playingCourts.length === 0) {
-      Alert.alert('Sub-court required', 'Please add at least one sub-court in the “Sub-court” section.')
+      Alert.alert('Court required', 'Please add at least one court in the “Court” section.')
       return
     }
 
@@ -1069,7 +1099,7 @@ export default function CourtRegisterPage() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Court Register</Text>
+        <Text style={styles.headerTitle}>Venue Register</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -1181,7 +1211,7 @@ export default function CourtRegisterPage() {
         })}
       </View>
 
-      <Text style={styles.label}>Sub-court</Text>
+      <Text style={styles.label}>Court</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1239,7 +1269,7 @@ export default function CourtRegisterPage() {
             activeOpacity={0.85}
             style={styles.coverPressable}
           >
-            <Text style={styles.addCourtCoverText}>Add sub court</Text>
+            <Text style={styles.addCourtCoverText}>Add Court</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1395,9 +1425,9 @@ export default function CourtRegisterPage() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                   {svcImages.map((uri) => (
                     <View key={uri} style={styles.coverFrame}>
-                      <View style={styles.coverPressable}>
+                      <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                         <Image source={{ uri }} style={styles.coverImage} />
-                      </View>
+                      </TouchableOpacity>
                       <TouchableOpacity onPress={() => removeServiceImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                         <Text style={styles.removeXText}>×</Text>
                       </TouchableOpacity>
@@ -1450,9 +1480,9 @@ export default function CourtRegisterPage() {
       >
         {remoteImageUrls.map((uri) => (
           <View key={uri} style={[styles.coverFrame, (submitting || imageUploading) && styles.btnDisabled]}>
-            <View style={styles.coverPressable}>
+            <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
               <Image source={{ uri }} style={styles.coverImage} />
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => requestRemoveImage(uri)}
               style={styles.removeXBtn}
@@ -1490,7 +1520,7 @@ export default function CourtRegisterPage() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCardTall}>
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Add Sub-Court</Text>
+              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Add Court</Text>
               <TouchableOpacity
                 onPress={() => setPlayingCourtModalVisible(false)}
                 style={styles.modalCloseXBtn}
@@ -1501,7 +1531,7 @@ export default function CourtRegisterPage() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.label}>Sub-Court name</Text>
+              <Text style={styles.label}>Court Name</Text>
               <TextInput
                 value={pcFullName}
                 onChangeText={setPcFullName}
@@ -1572,9 +1602,9 @@ export default function CourtRegisterPage() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {pcImages.map((uri) => (
                   <View key={uri} style={styles.coverFrame}>
-                    <View style={styles.coverPressable}>
+                    <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                       <Image source={{ uri }} style={styles.coverImage} />
-                    </View>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => removePlayingCourtImage('full', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                       <Text style={styles.removeXText}>×</Text>
                     </TouchableOpacity>
@@ -1617,7 +1647,7 @@ export default function CourtRegisterPage() {
 
               {pcAllowHalf && (
                 <>
-                  <Text style={styles.label}>Choose Sub-Court Half:</Text>
+                  <Text style={styles.label}>Choose Court Half:</Text>
                   <View style={styles.halfTabsRow}>
                     <TouchableOpacity
                       onPress={() => setPcHalfTab('half1')}
@@ -1661,9 +1691,9 @@ export default function CourtRegisterPage() {
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf1Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
-                            <View style={styles.coverPressable}>
+                            <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <Image source={{ uri }} style={styles.coverImage} />
-                            </View>
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half1', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                               <Text style={styles.removeXText}>×</Text>
                             </TouchableOpacity>
@@ -1710,9 +1740,9 @@ export default function CourtRegisterPage() {
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf2Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
-                            <View style={styles.coverPressable}>
+                            <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <Image source={{ uri }} style={styles.coverImage} />
-                            </View>
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half2', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                               <Text style={styles.removeXText}>×</Text>
                             </TouchableOpacity>
@@ -1892,6 +1922,23 @@ export default function CourtRegisterPage() {
           </View>
         </View>
       </Modal>
+
+      {/* Image Zoom Modal */}
+      <Modal visible={!!zoomImageUri} transparent animationType="fade" onRequestClose={() => setZoomImageUri(null)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }} onPress={() => setZoomImageUri(null)}>
+            {!!zoomImageUri && (
+              <GestureDetector gesture={zoomGesture}>
+                <Animated.Image
+                  source={{ uri: zoomImageUri }}
+                  style={[{ width: zoomFrameW, height: zoomFrameH }, zoomAnimStyle]}
+                  resizeMode="contain"
+                />
+              </GestureDetector>
+            )}
+          </Pressable>
+        </GestureHandlerRootView>
+      </Modal>
     </View>
   )
 }
@@ -1985,9 +2032,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.neutral200,
     alignItems: 'center',
   },
-  dayCellSelected: { borderColor: COLORS.neutral800 },
+  dayCellSelected: { backgroundColor: COLORS.orange200, borderColor: COLORS.orange200 },
   dayLabel: { fontSize: 12, fontWeight: '600', color: COLORS.neutral600 },
-  dayLabelSelected: { color: COLORS.neutral800 },
+  dayLabelSelected: { color: COLORS.brown900 },
 
   timeRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
 
