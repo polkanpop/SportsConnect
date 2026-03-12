@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg, paddingHorizontal: 28, paddingTop: 80 },
   logoWrapper: { alignItems: 'center', marginBottom: 32 },
   logo: { width: 80, height: 80 },
-  title: { fontSize: 30, fontWeight: '700', color: COLORS.green700, marginTop: 8 },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.green700, marginTop: 8 },
   helper: { color: COLORS.dark300, marginBottom: 20, textAlign: 'center' },
   input: { width: '100%', backgroundColor: COLORS.white, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.dark300, marginBottom: 16, color: COLORS.dark300 },
   button: { backgroundColor: COLORS.green700, width: '100%', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginBottom: 16 },

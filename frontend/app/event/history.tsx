@@ -67,7 +67,7 @@ function formatStatusLabel(raw?: string | null): string {
   if (v.includes('upcoming')) return 'Upcoming'
   if (v.includes('approve')) return 'Approved'
   if (v.includes('paid')) return 'Paid'
-  if (v.includes('pending')) return 'Pending'
+  if (v.includes('pending')) return 'Joined'
   return v.charAt(0).toUpperCase() + v.slice(1)
 }
 
@@ -79,7 +79,7 @@ function formatStatusPlain(raw?: string | null): string {
   if (v.includes('upcoming')) return 'upcoming'
   if (v.includes('approve')) return 'approved'
   if (v.includes('paid')) return 'paid'
-  if (v.includes('pending')) return 'pending'
+  if (v.includes('pending')) return 'joined'
   return v
 }
 
@@ -426,7 +426,7 @@ export default function HistoryPage() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>History</Text>
+        <Text pointerEvents="none" style={styles.headerTitle}>History</Text>
       </View>
 
       <View style={styles.subHeader}>
@@ -480,10 +480,6 @@ export default function HistoryPage() {
             const n = meta?.court_name ?? meta?.courtName
             return typeof n === 'string' && n.trim() ? n.trim() : ''
           })()
-
-          const bookingStatusLabel = (item.kind === 'event_booking' || item.kind === 'session_booking')
-            ? (formatStatusPlain(statusRaw) || 'pending')
-            : ''
 
           const createdType = (() => {
             if (item.kind !== 'created_event' && item.kind !== 'created_session') return ''
@@ -556,7 +552,6 @@ export default function HistoryPage() {
                   <Text style={styles.title}>{item.title}</Text>
                   {!!schedule && (
                     <View style={styles.scheduleWrap}>
-                      <Text style={styles.scheduleText}>Date: {schedule.date}</Text>
                       <Text style={styles.scheduleText}>Time: {schedule.time}</Text>
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && (
                         <Text style={styles.scheduleText}>Type: {createdType}</Text>
@@ -575,24 +570,11 @@ export default function HistoryPage() {
                   {item.kind === 'court_booking' && !!courtType && (
                     <Text style={styles.metaText}>Type: {courtType}</Text>
                   )}
-                  {(item.kind === 'event_booking' || item.kind === 'session_booking') && (
-                    <View style={styles.transitionRow}>
-                      <Text style={styles.transitionText}>{bookingStatusLabel}</Text>
-                    </View>
-                  )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !schedule && (
                     <Text style={styles.metaText}>Type: {createdType}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !schedule && (
                     <Text style={styles.metaText}>Court: {courtName}</Text>
-                  )}
-
-                  {!!(item.fromStatus && item.toStatus && String(item.fromStatus) !== String(item.toStatus)) && item.kind !== 'event_booking' && item.kind !== 'session_booking' && (
-                    <View style={styles.transitionRow}>
-                      <Text style={styles.transitionText}>
-                        {String(item.fromStatus || '—')} {'→'} {String(item.toStatus || '—')}
-                      </Text>
-                    </View>
                   )}
 
                   {typeof item.amount === 'number' && (

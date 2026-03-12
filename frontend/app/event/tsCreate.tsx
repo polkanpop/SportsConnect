@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native'
+import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import * as ImagePicker from 'expo-image-picker'
+import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   adjustTrainingSessionParticipants,
   createTrainingSessionBooking,
   createTrainingSessionWithInfo,
   CreateTrainingSessionWithInfoPayload,
+  cloudinarySignUpload,
   invalidateTrainingSessionsCombinedCache,
   listCourtBookings,
   CourtBookingRow,
@@ -24,6 +28,41 @@ import { useFocusEffect } from 'expo-router'
 import { appendHistory } from '@/storage/history'
 
 interface EnrichedBooking extends CourtBookingRow { courtName?: string; address?: string; courtid?: number }
+
+const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
+const IMAGE_TILE_HEIGHT = 120
+
+const CLOUDINARY_DELIVERY_WIDTH = 1280
+const CLOUDINARY_DELIVERY_HEIGHT = Math.max(
+  1,
+  Math.round((CLOUDINARY_DELIVERY_WIDTH * IMAGE_TILE_HEIGHT) / Math.max(1, IMAGE_TILE_WIDTH))
+)
+
+const dedupeStrings = (arr: string[]) => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const s of arr) {
+    const v = String(s || '').trim()
+    if (!v || seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+  }
+  return out
+}
+
+const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
+  try {
+    const marker = '/upload/'
+    const idx = secureUrl.indexOf(marker)
+    if (idx < 0) return secureUrl
+    const before = secureUrl.slice(0, idx + marker.length)
+    const after = secureUrl.slice(idx + marker.length)
+    const transform = `c_fill,w_${CLOUDINARY_DELIVERY_WIDTH},h_${CLOUDINARY_DELIVERY_HEIGHT},q_auto,f_auto`
+    return `${before}${transform}/${after}`
+  } catch {
+    return secureUrl
+  }
+}
 
 export default function TsCreate() {
   const router = useRouter()
@@ -72,6 +111,10 @@ export default function TsCreate() {
   const [participantsCap, setParticipantsCap] = useState<string>('')
   const [participantsCapError, setParticipantsCapError] = useState<string | null>(null)
   const [description, setDescription] = useState('')
+  const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([])
+  const [imageUploading, setImageUploading] = useState(false)
+  const [removeImageConfirmVisible, setRemoveImageConfirmVisible] = useState(false)
+  const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null)
   const [addMeToParticipants, setAddMeToParticipants] = useState(true)
   const [autoApprove, setAutoApprove] = useState<boolean>(false)
   const [monetize, setMonetize] = useState<boolean>(false)
@@ -84,6 +127,93 @@ export default function TsCreate() {
   const [successData, setSuccessData] = useState<any | null>(null)
   const [previewOpen, setPreviewOpen] = useState<boolean>(true)
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
+
+  const uploadOneToCloudinary = useCallback(
+    async (localUri: string, idx: number) => {
+      if (typeof userId !== 'number') throw new Error('Not signed in')
+
+      const resized = await ImageManipulator.manipulateAsync(
+        localUri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+      )
+
+      const publicId = `training_${userId}_${Date.now()}_${idx}`
+      const sign = await cloudinarySignUpload({ public_id: publicId, overwrite: true })
+      const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(sign.cloudName)}/image/upload`
+
+      const form = new FormData()
+      form.append('file', {
+        uri: resized.uri,
+        name: `${publicId}.jpg`,
+        type: 'image/jpeg',
+      } as any)
+      form.append('api_key', sign.apiKey)
+      form.append('timestamp', String(sign.timestamp))
+      form.append('signature', sign.signature)
+      if (sign.uploadPreset) form.append('upload_preset', String(sign.uploadPreset))
+      if (sign.folder) form.append('folder', String(sign.folder))
+      form.append('public_id', publicId)
+      form.append('overwrite', 'true')
+
+      const resp = await fetch(endpoint, { method: 'POST', body: form })
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok) {
+        const msg = json?.error?.message || `Upload failed (HTTP ${resp.status})`
+        throw new Error(msg)
+      }
+      const secureUrl: string | undefined = json?.secure_url
+      if (!secureUrl) throw new Error('Upload succeeded but missing secure_url')
+      return applyCloudinaryDeliveryOptimizations(secureUrl)
+    },
+    [userId],
+  )
+
+  const pickImages = useCallback(async () => {
+    if (imageUploading) return
+    if (typeof userId !== 'number') {
+      Alert.alert('Not signed in', 'Please sign in first.')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      quality: 0.9,
+    } as any)
+
+    if (result.canceled) return
+    const picked = (result.assets || []).map((a) => a.uri).filter(Boolean)
+    if (picked.length === 0) return
+
+    setImageUploading(true)
+    try {
+      const uploadedUrl = await uploadOneToCloudinary(picked[0], remoteImageUrls.length)
+      setRemoteImageUrls((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message || 'Please try again')
+    } finally {
+      setImageUploading(false)
+    }
+  }, [imageUploading, remoteImageUrls.length, uploadOneToCloudinary, userId])
+
+  const requestRemoveImage = useCallback((uri: string) => {
+    setRemoveImageCandidateUri(uri)
+    setRemoveImageConfirmVisible(true)
+  }, [])
+
+  const onConfirmRemoveImage = useCallback(() => {
+    if (removeImageCandidateUri) setRemoteImageUrls((prev) => prev.filter((u) => u !== removeImageCandidateUri))
+    setRemoveImageConfirmVisible(false)
+    setRemoveImageCandidateUri(null)
+  }, [removeImageCandidateUri])
 
   const formatRange = useCallback((start?: string | null, end?: string | null) => {
     if (!start) return 'Unknown date'
@@ -122,10 +252,11 @@ export default function TsCreate() {
     return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
   }, [enrichedBookings, selectedBookingId])
 
-  const { data: sessionsCombined, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
-  const { data: eventsCombined, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
+  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
   const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>Number(s?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [sessionsCombined])
   const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:any)=>Number(e?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
+  const bookingSelectionLoading = bookingsLoading || enriching || sessionsCombinedLoading || eventsCombinedLoading
 
   const availableEnrichedBookings = useMemo(() => {
     if (!enrichedBookings) return [] as EnrichedBooking[]
@@ -175,6 +306,7 @@ export default function TsCreate() {
         courtbookingid: selectedBookingId,
         title: title.trim(),
         description: description.trim() || undefined,
+        images: remoteImageUrls.length ? remoteImageUrls : undefined,
         participants_cap: participantsCapNum,
         auto_approve: autoApprove,
         monetize,
@@ -224,6 +356,7 @@ export default function TsCreate() {
           coachName: null,
           title: infoRow?.title ?? title.trim(),
           description: infoRow?.description ?? (description.trim() || null),
+          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
           numberofpeople: infoRow?.numberofpeople ?? 0,
           participants_cap: infoRow?.participants_cap ?? participantsCapNum,
           entry_fee: infoRow?.entry_fee ?? null,
@@ -249,7 +382,10 @@ export default function TsCreate() {
         }
 
         qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
-        qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], infoRow)
+        qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], {
+          ...(infoRow || {}),
+          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
+        })
       }
 
       const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
@@ -441,10 +577,10 @@ export default function TsCreate() {
                 <Image source={ICONS.arrowdown} style={[styles.expandIcon, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
               </TouchableOpacity>
             </View>
-            {bookingsLoading && <ActivityIndicator size="small" color="#555" />}
+            {bookingSelectionLoading && <ActivityIndicator size="small" color="#555" />}
             {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || 'Failed loading bookings'}</Text>}
-            {!bookingsLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
-            {!bookingsLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
+            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
+            {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
               <Text style={styles.smallText}>No available courts for training session booking.</Text>
             )}
             {selectedBookingId && (
@@ -494,6 +630,37 @@ export default function TsCreate() {
             {!!participantsCapError && <Text style={styles.inlineErrorText}>{participantsCapError}</Text>}
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput value={description} onChangeText={setDescription} placeholder="Describe the session details..." placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
+
+            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Images</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+              {remoteImageUrls.map((uri) => (
+                <View key={uri} style={styles.coverFrame}>
+                  <View style={styles.coverPressable}>
+                    <Image source={{ uri }} style={styles.coverImage} />
+                  </View>
+                  <TouchableOpacity onPress={() => requestRemoveImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
+                    <Text style={styles.removeXText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {remoteImageUrls.length < 6 && (
+                <View style={styles.coverFrame}>
+                  <TouchableOpacity
+                    onPress={pickImages}
+                    disabled={imageUploading}
+                    activeOpacity={0.85}
+                    style={styles.coverPressable}
+                  >
+                    {imageUploading ? (
+                      <ActivityIndicator size="small" color={COLORS.neutral800} />
+                    ) : (
+                      <Text style={styles.addPlus}>+</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.checkboxRow}
@@ -629,6 +796,37 @@ export default function TsCreate() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        transparent={true}
+        visible={removeImageConfirmVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setRemoveImageConfirmVisible(false)
+          setRemoveImageCandidateUri(null)
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remove image</Text>
+            <Text style={styles.modalBody}>Do you want to remove this image?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalCancel]}
+                onPress={() => {
+                  setRemoveImageConfirmVisible(false)
+                  setRemoveImageCandidateUri(null)
+                }}
+              >
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={onConfirmRemoveImage}>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -662,16 +860,47 @@ const styles = StyleSheet.create({
   bookingTag: { marginLeft:6, backgroundColor:'#444', paddingHorizontal:6, paddingVertical:2, borderRadius:8 },
   bookingTagEvent: { backgroundColor:'#ff6b3b' },
   bookingTagTraining: { backgroundColor:'#6a5acd' },
-  bookingTagText: { color:'#fff', fontSize:10, fontWeight:'700' },
+  bookingTagText: { color:'#fff', fontSize:12, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
-  bookingMeta: { fontSize:11, color:'#555', marginTop:2 },
+  bookingMeta: { fontSize:12, color:'#555', marginTop:2 },
   bookingArrow: { width:16, height:16, tintColor:'#333' },
   selectedBookingBox: { backgroundColor:'#e9e9e9', padding:12, borderRadius:12, marginTop:6 },
   selectedBookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
-  selectedBookingMeta: { fontSize:11, color:'#444', marginTop:4 },
+  selectedBookingMeta: { fontSize:12, color:'#444', marginTop:4 },
   fieldLabel: { fontSize:13, fontWeight:'600', color:'#333', marginBottom:6, marginTop:4 },
   input: { backgroundColor:'#fff', borderWidth:1, borderColor:'#ddd', borderRadius:10, paddingHorizontal:12, paddingVertical:10, fontSize:14, color:'#222', marginBottom:12 },
   inputMultiline: { minHeight:100, textAlignVertical:'top' },
+  imagesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 6, paddingBottom: 6 },
+  coverFrame: {
+    width: IMAGE_TILE_WIDTH,
+    height: IMAGE_TILE_HEIGHT,
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderStyle: 'dashed',
+    backgroundColor: COLORS.neutral0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  coverPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  addPlus: { fontSize: 28, fontWeight: '700', color: COLORS.neutral800, marginTop: -1 },
+  removeXBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.neutral0,
+    borderWidth: 1,
+    borderColor: COLORS.neutral200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeXText: { fontSize: 20, lineHeight: 20, fontWeight: '900', color: COLORS.neutral925, marginTop: -1 },
   toggleRow: { flexDirection:'row', marginTop:4 },
   toggleBtn: { flex:1, paddingVertical:12, backgroundColor:'#e0e0e0', marginRight:8, borderRadius:12, alignItems:'center', justifyContent:'center', flexDirection:'row' },
   toggleBtnActive: { backgroundColor:'#FFAA33' },

@@ -134,13 +134,16 @@ export default function SettingsPage() {
         </View>
 
         {/* Section Two */}
-        <View style={styles.card}>
-          <SettingRow icon={ICONS.supportCentre} label="Contact Support Centre" />
-          <SettingRow icon={ICONS.comment} label="Share your feedback" />
-          <SettingRow icon={ICONS.checkBoxLight} label="Term of Services" />
-          <SettingRow icon={ICONS.users} label="About us" />
-          <SettingRow icon={ICONS.signout} label="Sign Out" onPress={openSignOutModal} />
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={openSignOutModal}
+          style={styles.signOutButton}
+        >
+          <View style={styles.signOutButtonLeft}>
+            <Image source={ICONS.signout} style={styles.signOutIcon} />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Sign Out Confirmation Modal */}
@@ -203,7 +206,7 @@ const SettingRow = ({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
     marginTop: 25,
@@ -232,7 +235,7 @@ const styles = StyleSheet.create({
   username: {
     marginTop: 0,
     marginBottom: 16,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "600",
     color: "#000000",
   },
@@ -266,6 +269,32 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     tintColor: "#000",
+  },
+
+  signOutButton: {
+    marginTop: 28,
+    backgroundColor: '#EF4444',
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  signOutButtonLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  signOutIcon: {
+    width: 22,
+    height: 22,
+    tintColor: '#FFFFFF',
+  },
+  signOutText: {
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   // Modal styles
   modalBackdrop: {

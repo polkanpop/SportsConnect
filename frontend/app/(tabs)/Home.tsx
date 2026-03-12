@@ -4,6 +4,7 @@ import { COLORS } from "@/constants/colors";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Image as ExpoImage } from 'expo-image'
+import * as Location from 'expo-location'
 import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
@@ -12,6 +13,8 @@ import {
   FavouriteCourt,
   listCourtInfoCached,
   CourtInfoRow,
+  listEventsCombinedCached,
+  type CombinedEvent,
 } from "@/lib/backendApi";
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { favouritesEvents } from "@/lib/favouritesEvents";
@@ -20,13 +23,15 @@ import { useUserInfo } from "@/hooks/use-user-info";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventPanel from "@/app/event/eventPanel";
+import CourtPanel from "@/app/event/courtPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
   const router = useRouter();
 
-  const [activeView, setActiveView] = useState<Exclude<ManagementPanelKey, 'court'>>('user');
+  const [activeView, setActiveView] = useState<ManagementPanelKey>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
+  const [courtPanelMounted, setCourtPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
   const [uiLanguage, setUiLanguage] = useState<'en' | 'vi'>('en');
@@ -61,29 +66,12 @@ export default function Home() {
   const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 
-  // Define different label styles based on the icon sizes
-  const labelStyles = {
-    first: {
-      fontWeight: "600" as const,
-      fontSize: 14,
-      marginTop: 5,
-      bottom: 3,
-      textAlign: "center" as const,
-    },
-    second: {
-      fontWeight: "600" as const,
-      fontSize: 13,
-      marginTop: 1,
-      marginBottom: 2,
-      textAlign: "center" as const,
-    },
-    third: {
-      fontWeight: "600" as const,
-      fontSize: 13,
-      marginBottom: 10,
-      bottom: -4,
-      textAlign: "center" as const,
-    },
+  const categoryLabelStyle = {
+    fontWeight: "600" as const,
+    fontSize: 14,
+    marginTop: 6,
+    textAlign: "center" as const,
+    color: '#111',
   };
 
   // Category data with navigation routes
@@ -91,25 +79,25 @@ export default function Home() {
     {
       icon: ICONS.coachIcon,
       label: "Coach",
-      color: "rgba(151, 251, 104, 1)",
-      iconStyle: { width: 50, height: 50,top:6 },
-      labelStyle: labelStyles.first,
+      color: COLORS.orangeSoft,
+      iconStyle: { width: 50, height: 50 },
+      labelStyle: categoryLabelStyle,
       route: "/event/tsList",
     },
     {
       icon: ICONS.event_category,
       label: "Event",
-      color: "#91ffffff",
+      color: COLORS.orangeSoft,
       iconStyle: { width: 50, height: 50 },
-      labelStyle: labelStyles.second,
+      labelStyle: categoryLabelStyle,
       route: "/event/eventList",
     },
     {
       icon: ICONS.court,
       label: "Court",
-      color: "#ffcc4bff",
-      iconStyle: { width: 50, height: 50, bottom: -4 },
-      labelStyle: labelStyles.third,
+      color: COLORS.orangeSoft,
+      iconStyle: { width: 50, height: 50 },
+      labelStyle: categoryLabelStyle,
       // Updated to point to the new simplified court list screen
       route: "/event/courtList",
     },
@@ -186,6 +174,105 @@ export default function Home() {
 
   const lastUserIdRef = React.useRef<number | null>(null);
 
+  const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180
+    const R = 6371 // km
+    const dLat = toRad(lat2 - lat1)
+    const dLon = toRad(lon2 - lon1)
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
+  const [nearbyEvents, setNearbyEvents] = useState<CombinedEvent[]>([])
+  const [nearbyEventsLoading, setNearbyEventsLoading] = useState(false)
+  const [nearbyEventsError, setNearbyEventsError] = useState<string | null>(null)
+  const [nearbyEventsOrigin, setNearbyEventsOrigin] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  function parseMaybeTimestamp(raw: unknown): Date | null {
+    if (typeof raw !== 'string') return null
+    const s = raw.trim()
+    if (!s) return null
+
+    // Fast path (ISO or JS-parseable)
+    let d = new Date(s)
+    if (!Number.isNaN(d.getTime())) return d
+
+    // Common Postgres format: "YYYY-MM-DD HH:mm:ss" (Hermes can treat this as Invalid Date)
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+    if (m) {
+      d = new Date(`${m[1]}T${m[2]}:00`)
+      if (!Number.isNaN(d.getTime())) return d
+    }
+
+    return null
+  }
+
+  const loadNearbyEvents = useCallback(async () => {
+    setNearbyEventsLoading(true)
+    setNearbyEventsError(null)
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync()
+      if (!perm.granted) {
+        setNearbyEvents([])
+        return
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const userLat = pos?.coords?.latitude
+      const userLon = pos?.coords?.longitude
+      if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
+        setNearbyEvents([])
+        return
+      }
+
+      setNearbyEventsOrigin({ latitude: userLat as number, longitude: userLon as number })
+
+      const all = await listEventsCombinedCached()
+      const normalized = Array.isArray(all) ? all : []
+
+      const filtered = normalized
+        .filter((ev) => {
+          const st = String(ev?.status ?? '').toLowerCase()
+          if (st.includes('cancel') || st.includes('complete')) return false
+
+          // Hide past events (prefer end time when available).
+          const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+          const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+          const start = parseMaybeTimestamp(startRaw)
+          const end = parseMaybeTimestamp(endRaw)
+          const nowTs = Date.now()
+
+          if (end && !Number.isNaN(end.getTime())) {
+            if (end.getTime() < nowTs) return false
+          } else if (start && !Number.isNaN(start.getTime())) {
+            if (start.getTime() < nowTs) return false
+          }
+          return true
+        })
+        .filter((ev) => {
+          const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
+          const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+          const d = haversineKm(userLat as number, userLon as number, lat, lon)
+          return d <= 20
+        })
+
+      setNearbyEvents(filtered)
+    } catch (e: any) {
+      setNearbyEvents([])
+      setNearbyEventsError(e?.message || String(e))
+    } finally {
+      setNearbyEventsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadNearbyEvents()
+  }, [loadNearbyEvents])
+
   const asStringArrayLoose = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
     if (typeof v !== 'string') return [];
@@ -212,6 +299,50 @@ export default function Home() {
     if (s.includes(',')) return s.split(',').map((x) => x.trim()).filter(Boolean);
     return [s];
   };
+
+  const formatKmLabel = (km: number | null | undefined) => {
+    if (km == null || !Number.isFinite(km)) return null
+    const rounded = km < 10 ? Math.round(km * 10) / 10 : Math.round(km)
+    return `${String(rounded).replace('.', ',')} km`
+  }
+
+  const formatEventDateTimeLine = (ev: CombinedEvent) => {
+    const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+    const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+    const start = parseMaybeTimestamp(startRaw)
+    const end = parseMaybeTimestamp(endRaw)
+    if (!start || Number.isNaN(start.getTime())) return null
+
+    const pad2 = (n: number) => String(n).padStart(2, '0')
+    const startTime = `${pad2(start.getHours())}:${pad2(start.getMinutes())}`
+    let timeRange = startTime
+    if (end && !Number.isNaN(end.getTime())) {
+      const endTime = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`
+      timeRange = `${startTime}–${endTime}`
+    }
+
+    const dateLabel = start
+      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      .replace(',', '')
+    return `${timeRange} · ${dateLabel}`
+  }
+
+  const visibleNearbyEvents = React.useMemo(() => {
+    const nowTs = now.getTime()
+    return (Array.isArray(nearbyEvents) ? nearbyEvents : []).filter((ev) => {
+      const st = String(ev?.status ?? '').toLowerCase()
+      if (st.includes('cancel') || st.includes('complete')) return false
+
+      const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+      const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+      const start = parseMaybeTimestamp(startRaw)
+      const end = parseMaybeTimestamp(endRaw)
+
+      if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
+      if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
+      return true
+    })
+  }, [nearbyEvents, now])
 
   const loadFavorites = async (force: boolean = false) => {
     // Abort any in-flight load to avoid race conditions when user switches rapidly
@@ -296,6 +427,7 @@ export default function Home() {
   // Avoid remounting EventPanel on every hop into "Event" view (prevents constant refetch/refresh UX)
   useEffect(() => {
     if (activeView === 'event') setEventPanelMounted(true);
+    if (activeView === 'court') setCourtPanelMounted(true);
   }, [activeView]);
 
 
@@ -417,7 +549,7 @@ export default function Home() {
 
           {/* Your Choices (Favorites) Section */}
           <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8 }}>
+            <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8, paddingHorizontal: 10 }}>
               Your choices
             </Text>
             {favError && (
@@ -463,7 +595,7 @@ export default function Home() {
                   }}
                 >
                   <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>Add more...</Text>
-                  <Text style={{ fontSize: 10, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
+                  <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
                 </TouchableOpacity>
               )}
               {!loadingFavs && favoriteLocations.map(fav => {
@@ -542,7 +674,7 @@ export default function Home() {
                               numberOfLines={1}
                               style={{
                                 color: '#fff',
-                                fontSize: 16,
+                                fontSize: 13,
                                 fontWeight: '800',
                               }}
                             >
@@ -585,7 +717,7 @@ export default function Home() {
                               numberOfLines={1}
                               style={{
                                 color: '#fff',
-                                fontSize: 16,
+                                fontSize: 13,
                                 fontWeight: '800',
                               }}
                             >
@@ -641,50 +773,155 @@ export default function Home() {
 
           {/* Event Section */}
           <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
+            <Text style={{ fontWeight: "600", fontSize: 18, marginTop: 14, marginBottom: 12, paddingHorizontal: 10 }}>
               Event
             </Text>
-            <SkeletonPulse>
+            {nearbyEventsLoading ? (
+              <SkeletonPulse>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 10 }}
+                >
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <SkeletonBox
+                      key={index}
+                      width={320}
+                      height={190}
+                      radius={16}
+                      style={{ marginRight: index < 2 ? 16 : 0 }}
+                    />
+                  ))}
+                </ScrollView>
+              </SkeletonPulse>
+            ) : visibleNearbyEvents.length === 0 ? (
+              <Text style={{ paddingHorizontal: 10, color: '#666' }}>
+                There is no current event
+              </Text>
+            ) : (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 10 }}
               >
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <SkeletonBox
-                    key={index}
-                    width={240}
-                    height={160}
-                    radius={8}
-                    style={{ marginRight: index < 2 ? 16 : 0 }}
-                  />
-                ))}
-              </ScrollView>
-            </SkeletonPulse>
-          </View>
+                {visibleNearbyEvents.slice(0, 10).map((ev) => {
+                  const CARD_W = 320
+                  const CARD_H = 190
+                  const title =
+                    String((ev as any)?.title ?? (ev as any)?.event_title ?? (ev as any)?.name ?? (ev as any)?.court_name ?? '').trim() ||
+                    `Event ${ev.eventid}`
+                  const dateTimeLine = formatEventDateTimeLine(ev)
+                  const origin = nearbyEventsOrigin
+                  const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
+                  const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
+                  const distanceKm = origin && Number.isFinite(lat) && Number.isFinite(lon)
+                    ? haversineKm(origin.latitude, origin.longitude, lat as number, lon as number)
+                    : null
+                  const distanceLabel = distanceKm != null ? formatKmLabel(distanceKm) : null
+                  const approxDistanceLabel = distanceLabel ? `≈ ${distanceLabel}` : null
 
-          {/* Recommend Section */}
-          <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontWeight: "600", fontSize: 18, marginVertical: 8 }}>
-              Recommend for you
-            </Text>
-            <SkeletonPulse>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: 10 }}
-              >
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <SkeletonBox
-                    key={index}
-                    width={240}
-                    height={160}
-                    radius={8}
-                    style={{ marginRight: index < 2 ? 16 : 0 }}
-                  />
-                ))}
+                  const images = asStringArrayLoose((ev as any)?.images)
+                  const heroUriRaw = images[0]
+                  const heroUri = normalizeImageUri(heroUriRaw)
+                  const heroOptimized = heroUri
+                    ? optimizeRemoteImageUrl(heroUri, { width: 1200, height: 700, quality: 75, resize: 'cover' })
+                    : null
+
+                  return (
+                    <TouchableOpacity
+                      key={ev.eventid}
+                      activeOpacity={0.8}
+                      onPress={() => router.push(`/event/eventBooking?eventid=${ev.eventid}` as any)}
+                      style={{
+                        width: CARD_W,
+                        height: CARD_H,
+                        borderRadius: 16,
+                        backgroundColor: COLORS.neutral0,
+                        marginRight: 12,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        borderColor: COLORS.neutral350,
+                      }}
+                    >
+                      {/* Header (20%) */}
+                      <View
+                        style={{
+                          backgroundColor: COLORS.neutral0,
+                          paddingHorizontal: 12,
+                          paddingTop: 8,
+                          paddingBottom: 8,
+                          minHeight: 56,
+                          justifyContent: 'flex-start',
+                          borderBottomWidth: 1,
+                          borderBottomColor: COLORS.neutral350,
+                        }}
+                      >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            numberOfLines={3}
+                            style={{ fontSize: 16, lineHeight: 19, fontWeight: '900', color: COLORS.neutral975 }}
+                          >
+                            {title}
+                          </Text>
+                          {!!dateTimeLine && (
+                            <Text
+                              numberOfLines={1}
+                              style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: COLORS.neutral800 }}
+                            >
+                              {dateTimeLine}
+                            </Text>
+                          )}
+                        </View>
+
+                      </View>
+
+                      {/* Background image (80%) */}
+                      <View style={{ flex: 1, backgroundColor: COLORS.neutral150, position: 'relative' }}>
+                        {heroOptimized ? (
+                          <ExpoImage
+                            source={{ uri: heroOptimized as string }}
+                            style={{ width: '100%', height: '100%' }}
+                            contentFit="cover"
+                            cachePolicy="disk"
+                            transition={0}
+                            recyclingKey={`event:${ev.eventid}:${heroOptimized as string}`}
+                          />
+                        ) : (
+                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                            <Image
+                              source={ICONS.event_category}
+                              style={{ width: 34, height: 34, tintColor: COLORS.neutral600 }}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        )}
+
+                        {!!approxDistanceLabel && (
+                          <Text
+                            style={{
+                              position: 'absolute',
+                              right: 12,
+                              bottom: 10,
+                              fontSize: 14,
+                              fontWeight: '900',
+                              color: COLORS.brandOrangeDeep,
+                            }}
+                          >
+                            {approxDistanceLabel}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )
+                })}
               </ScrollView>
-            </SkeletonPulse>
+            )}
+
+            {!!nearbyEventsError && (
+              <Text style={{ paddingHorizontal: 10, marginTop: 8, color: COLORS.danger500, fontWeight: '700' }}>
+                {nearbyEventsError}
+              </Text>
+            )}
           </View>
           </ScrollView>
         )}
@@ -729,11 +966,45 @@ export default function Home() {
           )}
         </View>
 
-        {activeView !== 'user' && activeView !== 'event' && (
-          <View style={{ flex: 1, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ color: '#666' }}>This panel is coming soon.</Text>
-          </View>
-        )}
+        <View style={{ flex: 1, display: activeView === 'court' ? 'flex' : 'none' }}>
+          {courtPanelMounted ? (
+            <CourtPanel ownerId={currentUserId} />
+          ) : (
+            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+              <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
+                <SkeletonPulse>
+                  <SkeletonBox width={'100%'} height={54} radius={14} />
+                </SkeletonPulse>
+              </View>
+              <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 12 }}>
+                <SkeletonPulse>
+                  <SkeletonBox width={140} height={22} radius={8} style={{ marginBottom: 12 }} />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
+                    {Array.from({ length: 2 }).map((_, idx) => (
+                      <SkeletonBox
+                        key={idx}
+                        width={288}
+                        height={148}
+                        radius={14}
+                        style={{ marginRight: 18 }}
+                      />
+                    ))}
+                  </ScrollView>
+                  <SkeletonBox width={180} height={22} radius={8} style={{ marginTop: 10, marginBottom: 12 }} />
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <SkeletonBox
+                      key={idx}
+                      width={'100%'}
+                      height={56}
+                      radius={12}
+                      style={{ marginBottom: 10 }}
+                    />
+                  ))}
+                </SkeletonPulse>
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* Left Drawer Menu */}
         <Modal visible={menuVisible} transparent animationType="none" onRequestClose={closeMenu}>
@@ -766,7 +1037,7 @@ export default function Home() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
-                <Text style={{ fontSize: 24, lineHeight: 38, fontWeight: '800', color: '#111' }}>Menu</Text>
+                <Text style={{ fontSize: 20, lineHeight: 32, fontWeight: '800', color: '#111' }}>Menu</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={closeMenu}
@@ -778,7 +1049,7 @@ export default function Home() {
 
               {/* Language switch (UI only for now) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginTop: 6, marginBottom: 12 }}>
-                <Text style={{ flex: 1, marginRight: 12, fontSize: 20, lineHeight: 28, fontWeight: '800', color: '#111' }} numberOfLines={1}>Language</Text>
+                <Text style={{ flex: 1, marginRight: 12, fontSize: 16, lineHeight: 24, fontWeight: '700', color: '#111' }} numberOfLines={1}>Language</Text>
 
                 <View
                   style={{

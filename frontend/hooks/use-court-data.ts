@@ -36,7 +36,24 @@ export function useCreatePayment() {
 export function useCreateCourtBooking() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (payload: { availabilityid: number; userid: number; status: string; paymentid?: number|null; start_timestamp: string; end_timestamp: string; bookingdate: string }) => createCourtBooking(payload),
+    mutationFn: (payload: {
+      availabilityid: number
+      userid: number
+      status: string
+      paymentid?: number | null
+      start_timestamp: string
+      end_timestamp: string
+      bookingdate: string
+      note?: string | null
+      playingcourtid?: number | null
+      selected_court_name?: string | null
+      selected_base_name?: string | null
+      selected_part?: 'full' | 'half_a' | 'half_b' | null
+      selected_surface?: string | null
+      court_price_at_booking?: number | null
+      duration_minutes?: number | null
+      total_amount?: number | null
+    }) => createCourtBooking(payload),
     onSuccess: (_data, variables) => {
       // Invalidate availability queries (cannot reliably map availabilityid -> courtid here)
       queryClient.invalidateQueries({
@@ -76,7 +93,25 @@ export function useDeleteCourtBooking() {
 export function useCreateBookingWithPayment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (payload: { availabilityid: number; userid: number; status: string; paymentMethod: 'cash'|'vnpay'; start_timestamp: string; end_timestamp: string; bookingdate: string; amount: number; note?: string | null }) => {
+    mutationFn: async (payload: {
+      availabilityid: number
+      userid: number
+      status: string
+      paymentMethod: 'cash' | 'vnpay'
+      start_timestamp: string
+      end_timestamp: string
+      bookingdate: string
+      amount: number
+      note?: string | null
+      playingcourtid?: number | null
+      selected_court_name?: string | null
+      selected_base_name?: string | null
+      selected_part?: 'full' | 'half_a' | 'half_b' | null
+      selected_surface?: string | null
+      court_price_at_booking?: number | null
+      duration_minutes?: number | null
+      total_amount?: number | null
+    }) => {
       const paymentStatus = payload.paymentMethod === 'cash' ? 'pending' : 'paid'
       const payment = await createPayment({ status: paymentStatus, method: payload.paymentMethod, amount: payload.amount })
       const booking = await createCourtBooking({
@@ -88,6 +123,14 @@ export function useCreateBookingWithPayment() {
         end_timestamp: payload.end_timestamp,
         bookingdate: payload.bookingdate,
         note: payload.note ?? null,
+        playingcourtid: payload.playingcourtid ?? null,
+        selected_court_name: payload.selected_court_name ?? null,
+        selected_base_name: payload.selected_base_name ?? null,
+        selected_part: payload.selected_part ?? null,
+        selected_surface: payload.selected_surface ?? null,
+        court_price_at_booking: payload.court_price_at_booking ?? null,
+        duration_minutes: payload.duration_minutes ?? null,
+        total_amount: payload.total_amount ?? payload.amount ?? null,
       })
       return { booking, payment }
     },

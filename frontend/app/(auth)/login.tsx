@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   },
   logo: { width: 80, height: 80 }, // w-20 h-20
   appTitle: {
-    fontSize: 36, // text-4xl
+    fontSize: 28, // standardized heading
     fontWeight: '800', // font-extrabold
     color: COLORS.green700, // text-green-700
     marginTop: 8, // mt-2
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   },
   formWrapper: {},
   formTitle: {
-    fontSize: 30, // text-3xl (~30)
+    fontSize: 24, // standardized subheading
     fontWeight: '700', // font-bold
     color: COLORS.dark300,
     marginBottom: 24, // mb-6

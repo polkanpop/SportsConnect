@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   Modal,
@@ -14,12 +15,17 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
+import * as ImagePicker from 'expo-image-picker'
+import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
+import { COLORS } from '@/constants/colors'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import {
   approveTrainingSessionBooking,
   type CombinedTrainingSession,
+  cloudinarySignUpload,
   createBlock,
+  deleteCloudinaryAssetsByUrl,
   getPayment,
   getTrainingSessionInfoBySessionId,
   getTrainingSessionBookingsBySessionId,
@@ -94,6 +100,41 @@ const BASKETBALL_SILHOUETTES = [
 function fallbackSilhouetteBySessionId(sessionid: number) {
   const idx = Math.abs(Number(sessionid) || 0) % BASKETBALL_SILHOUETTES.length
   return BASKETBALL_SILHOUETTES[idx]
+}
+
+const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
+const IMAGE_TILE_HEIGHT = 120
+
+const CLOUDINARY_DELIVERY_WIDTH = 1280
+const CLOUDINARY_DELIVERY_HEIGHT = Math.max(
+  1,
+  Math.round((CLOUDINARY_DELIVERY_WIDTH * IMAGE_TILE_HEIGHT) / Math.max(1, IMAGE_TILE_WIDTH)),
+)
+
+const dedupeStrings = (arr: string[]) => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const s of arr) {
+    const v = String(s || '').trim()
+    if (!v || seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+  }
+  return out
+}
+
+const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
+  try {
+    const marker = '/upload/'
+    const idx = secureUrl.indexOf(marker)
+    if (idx < 0) return secureUrl
+    const before = secureUrl.slice(0, idx + marker.length)
+    const after = secureUrl.slice(idx + marker.length)
+    const transform = `c_fill,w_${CLOUDINARY_DELIVERY_WIDTH},h_${CLOUDINARY_DELIVERY_HEIGHT},q_auto,f_auto`
+    return `${before}${transform}/${after}`
+  } catch {
+    return secureUrl
+  }
 }
 
 type EnrichedBooking = {
@@ -175,6 +216,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const [blocking, setBlocking] = useState(false)
   const [confirmRemoveVisible, setConfirmRemoveVisible] = useState(false)
   const [removeCandidate, setRemoveCandidate] = useState<{ userid: number; name: string } | null>(null)
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<number>>(new Set())
 
   const [infoMeta, setInfoMeta] = useState<TrainingSessionInfoMeta | null>(null)
   const [infoLoading, setInfoLoading] = useState(false)
@@ -183,11 +225,134 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editCap, setEditCap] = useState('')
+  const [editImages, setEditImages] = useState<string[]>([])
+  const [imageUploading, setImageUploading] = useState(false)
+
+  const [removeImageConfirmVisible, setRemoveImageConfirmVisible] = useState(false)
+  const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null)
+
+  const [pendingCloudinaryDeletes, setPendingCloudinaryDeletes] = useState<string[]>([])
+
+  const lastHydratedSessionIdRef = useRef<number | null>(null)
+  const initialEditSnapshotRef = useRef<string>('')
+  const isDirtyRef = useRef<boolean>(false)
+
+  const makeEditSnapshot = useCallback((payload: { title: string; description: string; cap: string; images: string[] }) => {
+    const title = String(payload.title || '').trim()
+    const description = String(payload.description || '')
+    const cap = String(payload.cap || '').trim()
+    const images = dedupeStrings(Array.isArray(payload.images) ? payload.images : [])
+    return JSON.stringify({ title, description, cap, images })
+  }, [])
+
+  const currentEditSnapshot = useMemo(() => {
+    return makeEditSnapshot({ title: editTitle, description: editDescription, cap: editCap, images: editImages })
+  }, [editCap, editDescription, editImages, editTitle, makeEditSnapshot])
+
+  const isDirty = useMemo(() => {
+    if (!initialEditSnapshotRef.current) return false
+    return currentEditSnapshot !== initialEditSnapshotRef.current
+  }, [currentEditSnapshot])
+
+  useEffect(() => {
+    isDirtyRef.current = isDirty
+  }, [isDirty])
 
   const [saving, setSaving] = useState(false)
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
+
+  const uploadOneToCloudinary = useCallback(
+    async (localUri: string, idx: number) => {
+      if (typeof coachId !== 'number') throw new Error('Not signed in')
+
+      const resized = await ImageManipulator.manipulateAsync(
+        localUri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+      )
+
+      const publicId = `session_${coachId}_${Date.now()}_${idx}`
+      const sign = await cloudinarySignUpload({ public_id: publicId, overwrite: true } as any)
+      const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(sign.cloudName)}/image/upload`
+
+      const form = new FormData()
+      form.append('file', {
+        uri: resized.uri,
+        name: `${publicId}.jpg`,
+        type: 'image/jpeg',
+      } as any)
+      form.append('api_key', sign.apiKey)
+      form.append('timestamp', String(sign.timestamp))
+      form.append('signature', sign.signature)
+      if (sign.uploadPreset) form.append('upload_preset', String(sign.uploadPreset))
+      if (sign.folder) form.append('folder', String(sign.folder))
+      form.append('public_id', publicId)
+      form.append('overwrite', 'true')
+
+      const resp = await fetch(endpoint, { method: 'POST', body: form })
+      const json = await resp.json().catch(() => null)
+      if (!resp.ok) {
+        const msg = json?.error?.message || `Upload failed (HTTP ${resp.status})`
+        throw new Error(msg)
+      }
+      const secureUrl: string | undefined = json?.secure_url
+      if (!secureUrl) throw new Error('Upload succeeded but missing secure_url')
+      return applyCloudinaryDeliveryOptimizations(secureUrl)
+    },
+    [coachId],
+  )
+
+  const pickImage = useCallback(async () => {
+    if (imageUploading) return
+    if (typeof coachId !== 'number') {
+      Alert.alert('Not signed in', 'Please sign in first.')
+      return
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      allowsEditing: true,
+      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      quality: 0.9,
+    } as any)
+
+    if (result.canceled) return
+    const picked = (result.assets || []).map((a) => a.uri).filter(Boolean)
+    if (picked.length === 0) return
+
+    setImageUploading(true)
+    try {
+      const uploadedUrl = await uploadOneToCloudinary(picked[0], editImages.length)
+      setEditImages((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
+      setPendingCloudinaryDeletes((prev) => prev.filter((u) => u !== uploadedUrl))
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message || String(e))
+    } finally {
+      setImageUploading(false)
+    }
+  }, [coachId, editImages.length, imageUploading, uploadOneToCloudinary])
+
+  const requestRemoveImage = useCallback((uri: string) => {
+    setRemoveImageCandidateUri(uri)
+    setRemoveImageConfirmVisible(true)
+  }, [])
+
+  const onConfirmRemoveImage = useCallback(() => {
+    if (removeImageCandidateUri) {
+      setPendingCloudinaryDeletes((prev) => (prev.includes(removeImageCandidateUri) ? prev : [...prev, removeImageCandidateUri]))
+      setEditImages((prev) => prev.filter((u) => u !== removeImageCandidateUri))
+    }
+    setRemoveImageConfirmVisible(false)
+    setRemoveImageCandidateUri(null)
+  }, [removeImageCandidateUri])
 
   const canCancelSelectedSession = useMemo(() => {
     const s = String((selectedSession as any)?.status ?? '').toLowerCase()
@@ -399,6 +564,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     if (coachId == null) return
     if (selectedSessionId == null) return
 
+    const isNewSelection = lastHydratedSessionIdRef.current !== selectedSessionId
+    if (!isNewSelection && isDirtyRef.current) return
+    lastHydratedSessionIdRef.current = selectedSessionId
+    setPendingCloudinaryDeletes([])
+
     preferredSelectedSessionIdRef.current = selectedSessionId
     void AsyncStorage.setItem(selectedSessionStorageKey(coachId), String(selectedSessionId))
 
@@ -408,9 +578,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       try {
         const meta = await getTrainingSessionInfoBySessionId(selectedSessionId)
         setInfoMeta(meta)
-        setEditTitle(String(meta?.title || selectedSession?.title || ''))
-        setEditDescription(String(meta?.description || selectedSession?.description || ''))
-        setEditCap(meta?.participants_cap != null ? String(meta.participants_cap) : '')
+        const nextTitle = String(meta?.title || selectedSession?.title || '')
+        const nextDesc = String(meta?.description || selectedSession?.description || '')
+        const nextCap = meta?.participants_cap != null ? String(meta.participants_cap) : ''
+        const nextImages = asStringArray((meta as any)?.images)
+        setEditTitle(nextTitle)
+        setEditDescription(nextDesc)
+        setEditCap(nextCap)
+        setEditImages(nextImages)
+
+        initialEditSnapshotRef.current = makeEditSnapshot({ title: nextTitle, description: nextDesc, cap: nextCap, images: nextImages })
       } catch (e: any) {
         setInfoMeta(null)
         setInfoError(e?.message || String(e))
@@ -418,7 +595,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setInfoLoading(false)
       }
     })()
-  }, [coachId, selectedSessionId, selectedSession?.title, selectedSession?.description])
+  }, [coachId, makeEditSnapshot, selectedSessionId, selectedSession?.description, selectedSession?.title])
 
   useEffect(() => {
     if (coachId == null) return
@@ -468,6 +645,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const onSave = async () => {
     if (!infoMeta?.sessioninfoid) return
+    if (!isDirty) return
 
     const cap = safeNumberOrNull(editCap)
 
@@ -478,12 +656,25 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         title: editTitle.trim(),
         description: editDescription.trim(),
         participants_cap: cap,
+        images: editImages,
       })
+
+			const urlsToDelete = pendingCloudinaryDeletes.filter((u) => !editImages.includes(u))
+			if (urlsToDelete.length) {
+				try {
+					await deleteCloudinaryAssetsByUrl(urlsToDelete)
+				} catch (e: any) {
+					console.warn('[trainingSessionPanel] cloudinary delete failed', e?.message || String(e))
+				}
+			}
 
       // Refresh after save so the list reflects changes
       await loadSessions(selectedSessionId)
       const meta2 = await getTrainingSessionInfoBySessionId(selectedSessionId as number)
       setInfoMeta(meta2)
+      setEditImages(asStringArray((meta2 as any)?.images))
+			initialEditSnapshotRef.current = currentEditSnapshot
+			setPendingCloudinaryDeletes([])
     } catch (e: any) {
       setInfoError(e?.message || String(e))
     } finally {
@@ -610,6 +801,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const disabled = coachId == null
 
+  const sessionsPad = 0
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
@@ -640,10 +833,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             showsHorizontalScrollIndicator={false}
             removeClippedSubviews={false}
             style={{ overflow: 'visible' }}
-            contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 18, paddingBottom: 12 }}
+            contentContainerStyle={{ paddingHorizontal: sessionsPad, paddingTop: 18, paddingBottom: 12 }}
           >
             {Array.from({ length: 2 }).map((_, idx) => (
-              <SkeletonBox key={idx} width={288} height={148} radius={14} style={{ marginRight: 18 }} />
+              <SkeletonBox key={idx} width={288} height={148} radius={14} style={{ marginRight: idx < 1 ? 18 : 0 }} />
             ))}
           </ScrollView>
         </SkeletonPulse>
@@ -652,7 +845,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>No training sessions yet</Text>
           <Text style={{ color: '#555' }}>Create a training session to manage participants here.</Text>
           <TouchableOpacity
-            style={{ marginTop: 10, backgroundColor: '#16a34a', paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
+            style={{ marginTop: 10, backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
             onPress={() => router.push('/event/tsCreate' as any)}
           >
             <Text style={{ color: '#fff', fontWeight: '700' }}>Create Training Session</Text>
@@ -664,14 +857,14 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           showsHorizontalScrollIndicator={false}
           removeClippedSubviews={false}
           style={{ overflow: 'visible' }}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 18, paddingBottom: 12 }}
+          contentContainerStyle={{ paddingHorizontal: sessionsPad, paddingTop: 18, paddingBottom: 12 }}
         >
-          {sessions.map((s) => {
+          {sessions.map((s, idx) => {
             const selected = s.sessionid === selectedSessionId
             const accent = '#16a34a'
             const silhouette = fallbackSilhouetteBySessionId(s.sessionid)
             return (
-              <View key={s.sessionid} style={{ width: 288, marginRight: 18, overflow: 'visible' }}>
+              <View key={s.sessionid} style={{ width: 288, marginRight: idx < sessions.length - 1 ? 18 : 0, overflow: 'visible' }}>
                 {selected && (
                   <View
                     pointerEvents="none"
@@ -720,55 +913,66 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     overflow: 'hidden',
                   }}
                 >
-                  <Image
-                    source={silhouette}
-                    resizeMode="contain"
+
+                  <View
+                    pointerEvents="none"
                     style={{
                       position: 'absolute',
                       top: -14,
                       right: -18,
-                      width: 128,
-                      height: 128,
-                      opacity: selected ? 0.26 : 0.14,
-                      tintColor: selected ? '#ffffff' : accent,
+                      width: 120,
+                      height: 120,
                       zIndex: 0,
                     }}
-                  />
-                  <Text numberOfLines={1} style={{ fontWeight: '900', fontSize: 16, color: selected ? '#fff' : '#111' }}>
-                    {s.title || `Session #${s.sessionid}`}
-                  </Text>
-                  <Text style={{ marginTop: 6, color: selected ? 'rgba(255,255,255,0.92)' : '#555', fontWeight: '700', fontSize: 12 }}>
-                    {formatSessionDateLabel(s)}
-                  </Text>
-                  <Text
+                  >
+                    <Image
+                      source={silhouette}
+                      resizeMode="contain"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        opacity: selected ? 0.26 : 0.14,
+                        tintColor: selected ? '#ffffff' : accent,
+                      }}
+                    />
+                  </View>
+
+                  <View
+                    pointerEvents="none"
                     style={{
-                      color: selected ? '#ecfdf5' : '#374151',
-                      marginTop: 'auto',
-                      paddingBottom: 2,
-                      fontSize: 12,
-                      fontWeight: '900',
-                      letterSpacing: 0.6,
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      width: 46,
+                      height: 46,
+                      opacity: selected ? 0.95 : 0.9,
+                      zIndex: 2,
                     }}
                   >
-                    PARTICIPANTS: {s.numberofpeople ?? 0}/{s.participants_cap ?? '-'}
-                  </Text>
-                </TouchableOpacity>
+                    <Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+                  </View>
 
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: 'absolute',
-                    top: -24,
-                    right: -24,
-                    width: 56,
-                    height: 56,
-                    zIndex: 200,
-                    elevation: 24,
-                    opacity: selected ? 0.95 : 0.9,
-                  }}
-                >
-                  <Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: 48, height: 48, bottom: -13, right: -8 }} />
-                </View>
+                    <View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
+                      <Text numberOfLines={2} style={{ fontWeight: '900', fontSize: 16, lineHeight: 18, color: selected ? '#fff' : '#111' }}>
+                        {s.title || `Session #${s.sessionid}`}
+                      </Text>
+                      <Text style={{ marginTop: 6, color: selected ? 'rgba(255,255,255,0.92)' : '#555', fontWeight: '700', fontSize: 12 }}>
+                        {formatSessionDateLabel(s)}
+                      </Text>
+                      <Text
+                        style={{
+                          color: selected ? '#ecfdf5' : '#374151',
+                          marginTop: 'auto',
+                          paddingBottom: 2,
+                          fontSize: 12,
+                          fontWeight: '900',
+                          letterSpacing: 0.6,
+                        }}
+                      >
+                        PARTICIPANTS: {s.numberofpeople ?? 0}/{s.participants_cap ?? '-'}
+                      </Text>
+                    </View>
+                </TouchableOpacity>
               </View>
             )
           })}
@@ -801,11 +1005,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     backgroundColor: '#fff',
                     borderRadius: 12,
                     padding: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     marginBottom: 10,
                   }}
                 >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity
                     activeOpacity={0.75}
                     onPress={() =>
@@ -875,6 +1078,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setExpandedNoteIds(prev => {
+                        const n = new Set(prev);
+                        if (n.has(a.booking.tsbookingid)) n.delete(a.booking.tsbookingid);
+                        else n.add(a.booking.tsbookingid);
+                        return n;
+                      })}
+                      style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
+                    >
+                      <Text style={{ fontSize: 16 }}>✏️</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       activeOpacity={0.7}
                       onPress={(e) => {
                         openActionMenuForUser(a.booking.userid, a.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
@@ -889,6 +1105,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                     </TouchableOpacity>
                   </View>
+                  </View>
+                  {expandedNoteIds.has(a.booking.tsbookingid) && (
+                    <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
+                      <Text style={{ fontSize: 13, color: '#555' }}>{(a.booking as any).note?.trim() ? (a.booking as any).note : 'No note provided.'}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -916,11 +1139,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     backgroundColor: '#fff',
                     borderRadius: 12,
                     padding: 12,
-                    flexDirection: 'row',
-                    alignItems: 'center',
                     marginBottom: 10,
                   }}
                 >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={(e) => {
@@ -947,6 +1169,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </View>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => setExpandedNoteIds(prev => {
+                      const n = new Set(prev);
+                      if (n.has(p.booking.tsbookingid)) n.delete(p.booking.tsbookingid);
+                      else n.add(p.booking.tsbookingid);
+                      return n;
+                    })}
+                    style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
+                  >
+                    <Text style={{ fontSize: 16 }}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={(e) => {
                       openActionMenuForUser(p.booking.userid, p.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
@@ -959,6 +1193,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   >
                     <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                   </TouchableOpacity>
+                  </View>
+                  {expandedNoteIds.has(p.booking.tsbookingid) && (
+                    <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
+                      <Text style={{ fontSize: 13, color: '#555' }}>{(p.booking as any).note?.trim() ? (p.booking as any).note : 'No note provided.'}</Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -1012,9 +1253,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             )}
           </View>
 
-          <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Staff List</Text>
+          <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Administrator List</Text>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
-            <Text style={{ color: '#555' }}>No staff yet.</Text>
+            <Text style={{ color: '#555' }}>No administrators yet.</Text>
           </View>
 
           <Text style={{ fontSize: 18, fontWeight: '700', marginTop: 14, marginBottom: 8 }}>Block List</Text>
@@ -1132,6 +1373,124 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   }}
                 />
 
+                <Text style={{ fontWeight: '700', marginBottom: 6 }}>Images</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 6, paddingBottom: 6 }}
+                  style={{ marginBottom: 10 }}
+                >
+                  {editImages.map((uri) => (
+                    <View
+                      key={uri}
+                      style={{
+                        width: IMAGE_TILE_WIDTH,
+                        height: IMAGE_TILE_HEIGHT,
+                        alignSelf: 'flex-start',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: COLORS.neutral350,
+                        borderStyle: 'dashed',
+                        backgroundColor: COLORS.neutral0,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                        <Image source={{ uri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                      </View>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => requestRemoveImage(uri)}
+                        style={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: COLORS.neutral0,
+                          borderWidth: 1,
+                          borderColor: COLORS.neutral200,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text style={{ fontSize: 20, lineHeight: 20, fontWeight: '900', color: COLORS.neutral925, marginTop: -1 }}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  {editImages.length < 6 && (
+                    <View
+                      style={{
+                        width: IMAGE_TILE_WIDTH,
+                        height: IMAGE_TILE_HEIGHT,
+                        alignSelf: 'flex-start',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: COLORS.neutral350,
+                        borderStyle: 'dashed',
+                        backgroundColor: COLORS.neutral0,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        disabled={imageUploading}
+                        onPress={pickImage}
+                        style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        {imageUploading ? (
+                          <ActivityIndicator size="small" color={COLORS.neutral800} />
+                        ) : (
+                          <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.neutral800, marginTop: -1 }}>+</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </ScrollView>
+
+                <Modal
+                  visible={removeImageConfirmVisible}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => {
+                    setRemoveImageConfirmVisible(false)
+                    setRemoveImageCandidateUri(null)
+                  }}
+                >
+                  <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 18 }}>
+                    <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 16 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#111827' }}>Remove image</Text>
+                      <Text style={{ marginTop: 8, color: '#374151' }}>Do you want to remove this image?</Text>
+                      <View style={{ flexDirection: 'row', marginTop: 14 }}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            setRemoveImageConfirmVisible(false)
+                            setRemoveImageCandidateUri(null)
+                          }}
+                          style={{ flex: 1, backgroundColor: '#f3f4f6', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginRight: 10 }}
+                        >
+                          <Text style={{ fontWeight: '800', color: '#111827' }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={onConfirmRemoveImage}
+                          style={{ flex: 1, backgroundColor: removeImageCandidateUri ? '#2563eb' : '#9ca3af', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
+                          disabled={!removeImageCandidateUri}
+                        >
+                          <Text style={{ fontWeight: '900', color: '#fff' }}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+
                 <Text style={{ fontWeight: '700', marginBottom: 6 }}>Participants cap</Text>
                 <TextInput
                   value={editCap}
@@ -1142,10 +1501,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 />
 
                 <TouchableOpacity
-                  disabled={saving}
+                  disabled={saving || !isDirty}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving ? '#9ca3af' : '#16a34a',
+                    backgroundColor: saving || !isDirty ? '#9ca3af' : '#16a34a',
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',

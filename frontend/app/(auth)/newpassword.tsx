@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
 	container: { flex: 1, backgroundColor: COLORS.bg, paddingHorizontal: 28, paddingTop: 80 },
 	logoWrapper: { alignItems: 'center', marginBottom: 32 },
 	logo: { width: 80, height: 80 },
-	title: { fontSize: 28, fontWeight: '700', color: COLORS.green700, marginTop: 8 },
+	title: { fontSize: 24, fontWeight: '700', color: COLORS.green700, marginTop: 8 },
 	helper: { color: COLORS.dark300, marginBottom: 20, textAlign: 'center' },
 	passwordRow: { width: '100%', marginBottom: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, borderColor: COLORS.dark300, paddingRight: 12 },
 	passwordInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, color: COLORS.dark300 },

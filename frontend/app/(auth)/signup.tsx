@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 24, // mb-6
   },
   screenTitle: {
-    fontSize: 30, // text-3xl
+    fontSize: 24, // standardized heading
     fontWeight: '800', // font-extrabold
     color: COLOR.green700,
     letterSpacing: 0.5, // tracking-wide approx

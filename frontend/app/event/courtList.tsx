@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listCourts } from '@/lib/backendApi'
-import { useQuery } from '@tanstack/react-query'
+import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -47,7 +46,7 @@ function asArray(v: CourtInfoRow['venue'] | undefined | null): string[] {
   return []
 }
 
-const LIST_ACCENT = '#2563eb' // Courts
+const LIST_ACCENT = COLORS.orangeAccent // Courts
 
 const CourtListScreen = () => {
   const router = useRouter()
@@ -55,30 +54,7 @@ const CourtListScreen = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'venue' | 'price' | 'distance' | null>(null)
-    // Price filter state (inputs interpret value as thousands: 50 => 50,000 VND)
-    const [minPriceK, setMinPriceK] = useState<string>('')
-    const [maxPriceK, setMaxPriceK] = useState<string>('')
-    const minPrice = useMemo(() => {
-      const v = parseInt(minPriceK, 10); return Number.isNaN(v) ? null : v * 1000
-    }, [minPriceK])
-    const maxPrice = useMemo(() => {
-      const v = parseInt(maxPriceK, 10); return Number.isNaN(v) ? null : v * 1000
-    }, [maxPriceK])
-
-    // Fetch courts base data (price per hour)
-    const { data: courtsBase } = useQuery({ queryKey: ['courts'], queryFn: () => listCourts() })
-    const priceByCourtId: Record<number, number> = useMemo(() => {
-      const map: Record<number, number> = {}
-      Array.isArray(courtsBase) && courtsBase.forEach((c: any) => { if (typeof c.courtid === 'number' && c.price != null) map[c.courtid] = Number(c.price) })
-      return map
-    }, [courtsBase])
-
-    const formatCurrency = (n: number | null | undefined) => {
-      if (n == null) return ''
-      const s = String(Math.round(Number(n)))
-      return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-    }
+  const [openFilter, setOpenFilter] = useState<'venue' | 'distance' | null>(null)
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
   const [favouriteCourtIds, setFavouriteCourtIds] = useState<number[]>([])
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false)
@@ -273,13 +249,9 @@ const CourtListScreen = () => {
       const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venueArr.includes(sel))
       const favOk = !showFavouritesOnly || favouriteCourtIds.includes(c.courtid)
       if (!(venueOk && favOk)) return false
-      // Price filter
-      const price = priceByCourtId[c.courtid]
-      if (minPrice != null && (price == null || price < minPrice)) return false
-      if (maxPrice != null && (price == null || price > maxPrice)) return false
       return true
     })
-  }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds, minPrice, maxPrice, priceByCourtId])
+  }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds])
 
   const displayCourts = useMemo(() => {
     let list = filteredCourts
@@ -319,7 +291,7 @@ const CourtListScreen = () => {
   useEffect(() => {
     setVisibleCount(BATCH_SIZE)
     setLoadingMore(false)
-  }, [search, selectedVenues, showFavouritesOnly, minPriceK, maxPriceK, closeToMe, selectedDistanceKm])
+  }, [search, selectedVenues, showFavouritesOnly, closeToMe, selectedDistanceKm])
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore) return
@@ -412,6 +384,8 @@ const CourtListScreen = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Court List</Text>
+        <View style={styles.headerSpacer} />
       </View>
       {/* Search row */}
       <View style={styles.searchRow}>
@@ -446,13 +420,6 @@ const CourtListScreen = () => {
               <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
               <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>Favourite</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, (minPriceK || maxPriceK || openFilter === 'price') && styles.filterButtonActive]}
-              onPress={() => setOpenFilter(openFilter === 'price' ? null : 'price')}
-            >
-              <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'price' || minPriceK || maxPriceK) && styles.filterTextActive]}>Price</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.filterButton, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
@@ -465,8 +432,7 @@ const CourtListScreen = () => {
             </TouchableOpacity>
           </ScrollView>
         </View>
-        {/* Subheader */}
-        <Text style={styles.sectionTitle}>Court</Text>
+        {/* Subheader removed (title is in header row) */}
 
         {/* Dropdown */}
         {openFilter === 'venue' && (
@@ -482,50 +448,6 @@ const CourtListScreen = () => {
                 )
               })}
             </ScrollView>
-          </View>
-        )}
-        {openFilter === 'price' && (
-          <View style={[styles.dropdownWrapper, styles.priceDropdownWrapper]}> 
-            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10 }]}> 
-              <View style={styles.priceDropdownHeader}>
-                <Text style={styles.priceFilterTitle}>Price Range (×1,000₫)</Text>
-              </View>
-              <View style={styles.priceInputsRow}>
-                <View style={styles.priceInputWrapper}>
-                  <Text style={styles.priceLabel}>Min</Text>
-                  <TextInput
-                    value={minPriceK}
-                    onChangeText={t => setMinPriceK(t.replace(/[^0-9]/g, ''))}
-                    placeholder="e.g. 50"
-                    placeholderTextColor={COLORS.neutral650}
-                    keyboardType="numeric"
-                    style={styles.priceInput}
-                  />
-                </View>
-                <View style={styles.priceInputWrapper}>
-                  <Text style={styles.priceLabel}>Max</Text>
-                  <TextInput
-                    value={maxPriceK}
-                    onChangeText={t => setMaxPriceK(t.replace(/[^0-9]/g, ''))}
-                    placeholder="e.g. 120"
-                    placeholderTextColor={COLORS.neutral650}
-                    keyboardType="numeric"
-                    style={styles.priceInput}
-                  />
-                </View>
-              </View>
-              <View style={styles.priceFooterRow}>
-                <TouchableOpacity
-                  style={[styles.clearPriceBtn, styles.priceCloseBtn]}
-                  onPress={() => { setMinPriceK(''); setMaxPriceK(''); }}
-                >
-                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Clear</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.clearPriceBtn, styles.priceCloseBtn]} onPress={() => { setOpenFilter(null) }}>
-                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </View>
         )}
 
@@ -684,13 +606,6 @@ const CourtListScreen = () => {
                       ))}
                       {distanceNode}
                     </View>
-                    {priceByCourtId[c.courtid] != null && (
-                      <View style={styles.entryRow}>
-                        <View style={[styles.tag, styles.priceTag, styles.entryTagRow]}>
-                          <Text style={[styles.tagText, styles.priceTagText]}>{`${formatCurrency(priceByCourtId[c.courtid])}₫/hr`}</Text>
-                        </View>
-                      </View>
-                    )}
                   </View>
                 </TouchableOpacity>
 
@@ -725,6 +640,8 @@ export default CourtListScreen
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.neutral0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, marginBottom: 13 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 20, fontWeight: '700', color: COLORS.neutral925 },
+  headerSpacer: { width: 40 },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 4 },
   backButton: { padding: 8, marginRight: 8, borderRadius: 28, backgroundColor: COLORS.neutral175 },
   backIcon: { width: 24, height: 24, tintColor: COLORS.neutral925, resizeMode: 'contain' },
@@ -759,8 +676,7 @@ const styles = StyleSheet.create({
   tickBoxSelected: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
   tickText: { color: COLORS.neutral0, fontSize: 14 },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  // Push list a bit further down
-  list: { flex: 1, marginTop: 14 },
+  list: { flex: 1 },
   loadMoreWrap: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   loadMoreText: { color: LIST_ACCENT, fontWeight: '700', fontSize: 13 },
   statusText: { color: COLORS.neutral800, fontSize: 12, paddingVertical: 12, textAlign: 'center' },
@@ -773,13 +689,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 140,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: LIST_ACCENT,
     borderLeftWidth: 5,
     borderLeftColor: LIST_ACCENT,
     overflow: 'hidden',
   },
   bookmarkWrap: { position: 'absolute', top: -3, right: -6, zIndex: 50, elevation: 50 },
-  bookmarkIcon: { width: 32, height: 32, tintColor: COLORS.gold, resizeMode: 'contain' },
+  bookmarkIcon: { width: 32, height: 32, left: -8, tintColor: COLORS.gold, resizeMode: 'contain' },
   cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
   cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
   cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },

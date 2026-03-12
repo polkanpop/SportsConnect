@@ -1,31 +1,42 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput, Modal } from 'react-native'
+import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, TextInput, Modal, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { CourtBookingRow, listCourts, createServiceBookings, listServicesByCourtId, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, listServicesByCourtId, listPlayingCourtsByCourtId, getPlayingCourtInfo, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useUserId } from '@/hooks/use-user-id'
 import { appendHistory } from '@/storage/history'
+import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 
 type AvailabilityRow = {
   availabilityid: number
   courtid: number
+  playingcourtid?: number | null
   status: string
   start_time: string
   end_time: string
-  booking_date: string[] | string
+  booking_date: string[]
 }
+
+const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
+const IMAGE_TILE_HEIGHT = 120
 
 // Format helpers
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
+function formatHm(v: unknown) {
+  const s = String(v ?? '').trim()
+  const m = s.match(/^(\d{1,2}):(\d{2})/)
+  if (!m) return s
+  return `${m[1].padStart(2, '0')}:${m[2]}`
+}
 
 // Format a start/end timestamp into same style used by event list: "Thu, Nov 20, 09:00 - 10:30"
 function formatRange(start?: string | null, end?: string | null) {
@@ -71,17 +82,7 @@ export default function CourtBooking() {
 
   const { data: courtInfoData, isLoading: courtInfoLoading, error: courtInfoError } = useCourtInfo()
   const courtInfo = courtInfoData?.find?.((c:any)=> c.courtid === courtid)
-  const { data: availabilityRows, isLoading: availabilityLoading, error: availabilityError } = useCourtAvailability(courtid)
-  const availability: AvailabilityRow | null = Array.isArray(availabilityRows) && availabilityRows.length ? {
-    ...availabilityRows[0],
-    booking_date: (() => {
-      const bd: any = availabilityRows[0].booking_date
-      if (typeof bd === 'string') {
-        try { const parsed = JSON.parse(bd); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
-      }
-      return Array.isArray(bd) ? bd : []
-    })()
-  } : null
+  const { data: availabilityRows, isLoading: availabilityLoading, error: availabilityError, refetch: refetchAvailability } = useCourtAvailability(courtid)
   const loading = courtInfoLoading || availabilityLoading
   const error = (courtInfoError as any)?.message || (availabilityError as any)?.message || null
   // selectedDateStr holds the absolute date string (YYYY-MM-DD) for the selected day
@@ -98,6 +99,10 @@ export default function CourtBooking() {
   const [servicesExpanded, setServicesExpanded] = useState(true)
   const [serviceQtyById, setServiceQtyById] = useState<Record<number, number>>({})
   const [serviceTouchedById, setServiceTouchedById] = useState<Record<number, boolean>>({})
+  // Playing court selector
+  const [selectedPlayingCourtId, setSelectedPlayingCourtId] = useState<number | null>(null)
+  const [selectedBaseName, setSelectedBaseName] = useState<string | null>(null)
+  const [pcImages, setPcImages] = useState<Record<number, string[]>>({})
   // Week navigation (0 = current week, can move forward to +2)
   const [weekOffset, setWeekOffset] = useState(0)
   // Derived duration (minutes) of selected booking window
@@ -120,11 +125,6 @@ export default function CourtBooking() {
     return !(s.includes('cancel') || s.includes('complete') || s.includes('reject'))
   }, [])
 
-  // Only block duplicates for the same availability when the existing booking is still active.
-  const hasBookingForCurrentAvailability = !!(
-    availability && bookings.some(b => b.availabilityid === availability.availabilityid && isActiveCourtBooking(b))
-  )
-
   // Ensure we see fresh bookings after navigating back from Details/cancel.
   useFocusEffect(
     useCallback(() => {
@@ -145,15 +145,136 @@ export default function CourtBooking() {
     })
   }, [weekOffset])
 
-  const availableDayKeys = (availability?.booking_date as string[] | undefined) || []
+  const { data: servicesData, isLoading: servicesLoading } = useQuery({
+    queryKey: ['courtServices', courtid],
+    queryFn: () => listServicesByCourtId(courtid),
+    enabled: Number.isFinite(courtid),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Playing courts for this venue
+  const { data: playingCourtsData, isLoading: playingCourtsLoading } = useQuery({
+    queryKey: ['playingCourts', courtid],
+    queryFn: () => listPlayingCourtsByCourtId(courtid),
+    enabled: Number.isFinite(courtid),
+    staleTime: 5 * 60 * 1000,
+  })
+  const playingCourts: PlayingCourtRow[] = Array.isArray(playingCourtsData) ? playingCourtsData : []
+
+  const baseNames = useMemo(() => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const pc of playingCourts) {
+      const base = String(pc.base_name || '').trim()
+      if (base && !seen.has(base)) { seen.add(base); result.push(base) }
+    }
+    return result
+  }, [playingCourts])
+
+  const baseGroupCourts = useMemo(() => playingCourts.filter((pc) => pc.base_name === selectedBaseName), [playingCourts, selectedBaseName])
+  const basePlayingCourtIdSet = useMemo(() => new Set(baseGroupCourts.map((pc) => Number(pc.playingcourtid))), [baseGroupCourts])
+
+  const baseMetaByName = useMemo(() => {
+    const map = new Map<string, { surfaceText: string; priceText: string }>()
+    for (const base of baseNames) {
+      const rows = playingCourts.filter((pc) => pc.base_name === base)
+      const full = rows.find((pc) => String((pc as any).part || '').toLowerCase() === 'full') || rows[0]
+      const priceValue = Number((full as any)?.price || 0)
+      const priceText = Number.isFinite(priceValue)
+        ? `${new Intl.NumberFormat('vi-VN').format(Math.max(0, priceValue))}đ`
+        : '0đ'
+      const surfaceText = String((full as any)?.surface || '').trim()
+      map.set(base, { surfaceText, priceText })
+    }
+    return map
+  }, [baseNames, playingCourts])
+
+  const selectedPc = useMemo(() => playingCourts.find((pc) => pc.playingcourtid === selectedPlayingCourtId) || null, [playingCourts, selectedPlayingCourtId])
+
+  const courtAmount = useMemo(() => (selectedPc?.price ? Number(selectedPc.price) : 0), [selectedPc])
+
+  // Full court of selected base (for showing schedule before part selection)
+  const fullPcForBase = useMemo(() =>
+    playingCourts.find((pc) => pc.base_name === selectedBaseName && String((pc as any).part || '').toLowerCase() === 'full') || null,
+  [playingCourts, selectedBaseName])
+
+  // Normalize courtavailability rows.
+  // Important: in many setups `courtavailability.playingcourtid` is NULL (court-level schedule).
+  // When playingcourtid is missing, we still want to show the schedule + allow booking.
+  const normalizedAvailRows: AvailabilityRow[] = useMemo(() => {
+    const rows = Array.isArray(availabilityRows) ? availabilityRows : []
+    return rows.map((r: any) => {
+      let bd: any = r?.booking_date
+      if (typeof bd === 'string') {
+        try { bd = JSON.parse(bd) } catch { bd = bd }
+      }
+      if (bd && typeof bd === 'object' && !Array.isArray(bd)) {
+        // Handle shapes like { days: [...] } or { Mon: true, Tue: false }
+        if (Array.isArray((bd as any).days)) bd = (bd as any).days
+        else bd = Object.entries(bd).filter(([, v]) => !!v).map(([k]) => k)
+      }
+      const playingcourtidRaw = (r as any)?.playingcourtid
+      const playingcourtid = playingcourtidRaw == null ? null : (Number.isFinite(Number(playingcourtidRaw)) ? Number(playingcourtidRaw) : null)
+      return {
+        ...r,
+        playingcourtid,
+        booking_date: Array.isArray(bd) ? bd.map(String) : [],
+      } as AvailabilityRow
+    })
+  }, [availabilityRows])
+
+  const { scheduleAvailability, availability } = useMemo(() => {
+    const first = normalizedAvailRows[0] ?? null
+    const nullPid = normalizedAvailRows.find((r) => r.playingcourtid == null) ?? null
+    const findByPid = (pid: number | null | undefined) => {
+      if (pid == null) return null
+      return normalizedAvailRows.find((r) => Number(r.playingcourtid) === Number(pid)) ?? null
+    }
+
+    let schedule: AvailabilityRow | null = null
+
+    if (playingCourts.length === 0) {
+      schedule = first
+    } else {
+      // Prefer selected base FULL-court; else any availability within base.
+      if (selectedBaseName != null) {
+        if (fullPcForBase) schedule = findByPid(Number(fullPcForBase.playingcourtid))
+        if (!schedule && basePlayingCourtIdSet.size > 0) {
+          schedule = normalizedAvailRows.find((r) => r.playingcourtid != null && basePlayingCourtIdSet.has(Number(r.playingcourtid))) ?? null
+        }
+      }
+      // Fallback: if availability rows are court-level (playingcourtid NULL), use that.
+      if (!schedule) schedule = nullPid ?? first
+    }
+
+    let booking: AvailabilityRow | null = null
+    if (selectedPlayingCourtId != null) booking = findByPid(selectedPlayingCourtId)
+    if (!booking) booking = schedule ?? nullPid ?? first
+
+    return { scheduleAvailability: schedule, availability: booking }
+  }, [
+    normalizedAvailRows,
+    playingCourts.length,
+    selectedBaseName,
+    selectedPlayingCourtId,
+    fullPcForBase,
+    basePlayingCourtIdSet,
+  ])
+
+  // Only block duplicates for the same availability when the existing booking is still active.
+  const hasBookingForCurrentAvailability = !!(
+    availability && bookings.some(b => b.availabilityid === availability.availabilityid && isActiveCourtBooking(b))
+  )
+
+  const availableDayKeys = scheduleAvailability?.booking_date || []
 
   // Slots: generate 30-min increments between start_time & end_time
   const timeSlots = useMemo(() => {
-    if (!availability) return []
-    const start = availability.start_time // '08:00'
-    const end = availability.end_time
-    const [sh, sm] = start.split(':').map(Number)
-    const [eh, em] = end.split(':').map(Number)
+    if (!scheduleAvailability) return []
+    const start = scheduleAvailability.start_time // '08:00'
+    const end = scheduleAvailability.end_time
+    const [sh, sm] = String(start).split(':').map(Number)
+    const [eh, em] = String(end).split(':').map(Number)
     const startMinutes = sh * 60 + sm
     const endMinutes = eh * 60 + em
     const slots: string[] = []
@@ -162,24 +283,45 @@ export default function CourtBooking() {
       slots.push(`${hh}:${mm}`)
     }
     return slots
-  }, [availability])
+  }, [scheduleAvailability])
 
   // Derived validity and button enable state
-  const isDaySelectable = useCallback((dayKey: string) => availableDayKeys.includes(dayKey), [availableDayKeys])
-  // Courts pricing (price per hour) fetched from /courts
-  const { data: courtsData } = useQuery({ queryKey: ['courts'], queryFn: () => listCourts() })
-  const pricePerHour: number | null = courtsData?.find?.((c: any) => c.courtid === courtid)?.price ?? null
-  const courtAmount = useMemo(() => {
-    if (pricePerHour == null || !startSlot || !endSlot) return 0
-    return Math.round(Number(pricePerHour) * (durationMinutes / 60)) // prorated (e.g. 90m = 1.5h)
-  }, [pricePerHour, durationMinutes, startSlot, endSlot])
+  const isDaySelectable = useCallback(
+    (dayKey: string) => availableDayKeys.length === 0 || availableDayKeys.includes(dayKey),
+    [availableDayKeys]
+  )
 
-  const { data: servicesData, isLoading: servicesLoading } = useQuery({
-    queryKey: ['courtServices', courtid],
-    queryFn: () => listServicesByCourtId(courtid),
-    enabled: Number.isFinite(courtid),
-    staleTime: 5 * 60 * 1000,
-  })
+  // Load images for each playing court
+  useEffect(() => {
+    if (!playingCourts.length) return
+    void Promise.all(playingCourts.map(async (pc) => {
+      try {
+        const info = await getPlayingCourtInfo(pc.playingcourtid)
+        if (info.images?.length) {
+          setPcImages(prev => ({ ...prev, [pc.playingcourtid]: info.images! }))
+        }
+      } catch {}
+    }))
+  }, [playingCourts.length])
+
+  // Reset schedule and part selection when base court changes
+  useEffect(() => {
+    setSelectedPlayingCourtId(null)
+    setSelectedDateStr(null)
+    setShowTimePicker(false)
+    setStartSlot(null)
+    setEndSlot(null)
+  }, [selectedBaseName]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select first base to avoid empty schedule state when courts are present.
+  useEffect(() => {
+    if (selectedBaseName != null) return
+    if (!baseNames.length) return
+    setSelectedBaseName(baseNames[0])
+  }, [baseNames, selectedBaseName])
+
+  // Reset schedule when playing court part changes
+  // Keep selected day/time when choosing full/half to avoid forcing users to restart.
 
   const servicesTotal = useMemo(() => {
     const rows: ServiceRow[] = Array.isArray(servicesData) ? servicesData : []
@@ -200,8 +342,8 @@ export default function CourtBooking() {
       return `Confirm Booking - ${new Intl.NumberFormat('vi-VN').format(totalAmount)}₫`
     } catch { return `Confirm Booking - ${totalAmount}₫` }
   }, [totalAmount])
-  // Disallow duplicate booking for same availability
-  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !hasBookingForCurrentAvailability)
+  // Disallow duplicate booking for same availability; require part selection when playing courts exist
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey)) return
@@ -240,16 +382,29 @@ export default function CourtBooking() {
     if (!bookingDateStr) { setSubmitError('Selected date missing'); setSubmitting(false); return }
     const startTs = `${bookingDateStr} ${startSlot}:00`
     const endTs = `${bookingDateStr} ${endSlot}:00`
+    const selectedPart = (() => {
+      const p = String((selectedPc as any)?.part || '').toLowerCase()
+      if (p === 'full' || p === 'half_a' || p === 'half_b') return p as 'full' | 'half_a' | 'half_b'
+      return null
+    })()
     bookingMutation.mutate({
       availabilityid: availability.availabilityid,
       userid: userId,
-      status: 'approved',
+      status: 'pending',
       paymentMethod: paymentMethod,
       start_timestamp: startTs,
       end_timestamp: endTs,
       bookingdate: bookingDateStr,
       amount: totalAmount || 0,
       note: noteText.trim() ? noteText.trim() : null,
+      playingcourtid: selectedPc?.playingcourtid ?? availability.playingcourtid ?? null,
+      selected_court_name: selectedPc?.name ?? null,
+      selected_base_name: selectedPc?.base_name ?? selectedBaseName ?? null,
+      selected_part: selectedPart,
+      selected_surface: selectedPc?.surface ?? null,
+      court_price_at_booking: Number.isFinite(Number(courtAmount)) ? Number(courtAmount) : null,
+      duration_minutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : null,
+      total_amount: Number.isFinite(Number(totalAmount)) ? Number(totalAmount) : null,
     }, {
       onSuccess: async (data) => {
         // Persist selected service line items (servicebooking table) if any were chosen.
@@ -357,6 +512,12 @@ export default function CourtBooking() {
     if (userId != null) refetchUserBookings()
   }, [userId, refetchUserBookings]))
 
+  // Keep courtavailability data fresh when revisiting this screen.
+  useFocusEffect(useCallback(() => {
+    if (!Number.isFinite(courtid)) return
+    void refetchAvailability()
+  }, [courtid, refetchAvailability]))
+
   // Poll for external deletions (simple immediate sync after manual DB changes)
   useEffect(() => {
     if (userId == null) return
@@ -375,13 +536,19 @@ export default function CourtBooking() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Image source={ICONS.arrowLeft} style={styles.backIcon} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Court Booking</Text>
+          <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginLeft: -44 }]}>Court Booking</Text>
         </View>
       </SafeAreaView>
 
       {/* Section 1: Court details (title removed) */}
       <View style={styles.sectionCard}>
-        {loading && <Text style={styles.statusText}>Loading...</Text>}
+        {loading && (
+          <SkeletonPulse>
+            <SkeletonBox width={'55%'} height={22} radius={8} style={{ marginBottom: 12 }} />
+            <SkeletonBox width={'100%'} height={14} radius={7} style={{ marginBottom: 8 }} />
+            <SkeletonBox width={'70%'} height={14} radius={7} />
+          </SkeletonPulse>
+        )}
         {error && <Text style={styles.errorText}>{error}</Text>}
         {!loading && !error && (
           <View>
@@ -409,87 +576,226 @@ export default function CourtBooking() {
             {availability && (
               <View style={styles.metaRow}>
                 <Image source={ICONS.clock} style={styles.metaIcon} />
-                <Text style={styles.availabilityMeta}>Opening {availability.start_time} - {availability.end_time}</Text>
+                <Text style={styles.availabilityMeta}>Opening {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}</Text>
               </View>
             )}
           </View>
         )}
       </View>
 
-      {/* Section 2: Date & Time & Payment */}
-      <View style={styles.sectionCard}>
-        <View style={styles.scheduleHeaderRow}>
-          <Text style={styles.sectionTitle}>Schedule</Text>
-          <View style={styles.weekNavInline}>
-            <TouchableOpacity
-              disabled={weekOffset === 0}
-              onPress={() => { if (weekOffset > 0) setWeekOffset(w => w - 1) }}
-              style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}
-            >
-              <Image source={ICONS.arrowright} style={[styles.navIcon,{ transform:[{ rotate:'180deg'}]}]} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={weekOffset === 2}
-              onPress={() => { if (weekOffset < 2) setWeekOffset(w => w + 1) }}
-              style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}
-            >
-              <Image source={ICONS.arrowright} style={styles.navIcon} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View style={styles.weekRow}>
-          {weekDaysDetailed.map(d => {
-            const today = new Date();
-            const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-            const pastDisabled = weekOffset === 0 && d.date < todayOnly
-            const disabled = !isDaySelectable(d.key) || pastDisabled
-            const selected = selectedDateStr === d.dateStr
-            return (
-              <TouchableOpacity
-                key={d.key}
-                disabled={disabled}
-                onPress={() => onSelectDay(d.dateStr, d.key)}
-                style={[styles.dayCell, selected && styles.dayCellSelected, disabled && styles.dayCellDisabled]}
-              >
-                <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
-                <Text style={styles.dayDate}>{d.date.getDate()}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-        {showTimePicker && availability && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={styles.subHeading}>Select Time</Text>
-            <Text style={styles.smallText}>Start</Text>
-            <View style={styles.slotRow}>
-              {timeSlots.map(ts => (
-                <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
-                  <Text style={styles.slotText}>{ts}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {startSlot && (
-              <>
-                <Text style={[styles.smallText,{marginTop:12}]}>End</Text>
-                <View style={styles.slotRow}>
-                  {timeSlots.filter(ts => ts > startSlot!).map(ts => (
-                    <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
-                      <Text style={styles.slotText}>{ts}</Text>
+      {/* Court selector: Step 1 pills → Step 2 schedule → Step 3 image cards */}
+      {(playingCourtsLoading || playingCourts.length > 0) && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Court</Text>
+          {playingCourtsLoading ? (
+            <SkeletonPulse>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <SkeletonBox width={96} height={34} radius={18} />
+                <SkeletonBox width={110} height={34} radius={18} />
+                <SkeletonBox width={88} height={34} radius={18} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+                <SkeletonBox width={150} height={170} radius={14} />
+                <SkeletonBox width={150} height={170} radius={14} />
+              </View>
+            </SkeletonPulse>
+          ) : (
+            <>
+              {/* Step 1: Base court pills */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {baseNames.map((bn) => {
+                  const active = selectedBaseName === bn
+                  const meta = baseMetaByName.get(bn)
+                  return (
+                    <TouchableOpacity
+                      key={bn}
+                      onPress={() => setSelectedBaseName(bn)}
+                      style={{ minWidth: 116, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: active ? COLORS.brandOrangeDeep : '#E5E7EB', backgroundColor: active ? COLORS.brandOrangeDeep : '#fff' }}
+                      activeOpacity={0.8}
+                    >
+                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: active ? '#fff' : '#222' }}>{bn}</Text>
+                      {!!meta?.surfaceText && (
+                        <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 11, fontWeight: '700', color: active ? '#ffe7d1' : '#666', textTransform: 'capitalize' }}>{meta.surfaceText}</Text>
+                      )}
+                      <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, fontWeight: '800', color: active ? '#fff' : '#111' }}>{meta?.priceText || '0đ'}</Text>
                     </TouchableOpacity>
-                  ))}
+                  )
+                })}
+              </ScrollView>
+
+              {/* Step 2: Schedule (shown when base court selected) */}
+              {selectedBaseName != null && (
+                <>
+                  <View style={[styles.scheduleHeaderRow, { marginTop: 16 }]}>
+                    <Text style={styles.sectionTitle}>Schedule</Text>
+                    <View style={styles.weekNavInline}>
+                      <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
+                        <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
+                      </TouchableOpacity>
+                      <TouchableOpacity disabled={weekOffset === 2} onPress={() => { if (weekOffset < 2) setWeekOffset((w) => w + 1) }} style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}>
+                        <Image source={ICONS.arrowright} style={styles.navIcon} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={styles.weekRow}>
+                    {weekDaysDetailed.map((d) => {
+                      const today = new Date()
+                      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                      const isPast = weekOffset === 0 && d.date < todayOnly
+                      const isAvailable = isDaySelectable(d.key)
+                      const selected = selectedDateStr === d.dateStr
+                      return (
+                        <TouchableOpacity
+                          key={d.key}
+                          onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }}
+                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#FED7AA' }, (!isAvailable || isPast) && styles.dayCellDisabled]}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
+                          <Text style={styles.dayDate}>{d.date.getDate()}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                  {showTimePicker && scheduleAvailability && (
+                    <View style={{ marginTop: 16 }}>
+                      <Text style={styles.subHeading}>Select Time</Text>
+                      <Text style={styles.smallText}>Start</Text>
+                      <View style={styles.slotRow}>
+                        {timeSlots.map((ts) => (
+                          <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
+                            <Text style={styles.slotText}>{ts}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      {startSlot && (
+                        <>
+                          <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
+                          <View style={styles.slotRow}>
+                            {timeSlots.filter((ts) => ts > startSlot!).map((ts) => (
+                              <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
+                                <Text style={styles.slotText}>{ts}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                          {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
+                        </>
+                      )}
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Step 3: Part image cards (shown after time span selected) */}
+              {selectedDateStr && startSlot && endSlot && !durationInvalid && (
+                <View style={{ marginTop: 16 }}>
+                  <Text style={styles.subHeading}>Select Court</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 8 }}>
+                    {baseGroupCourts.map((pc) => {
+                      const courtLabel = String(pc.name || pc.base_name || `Court ${pc.playingcourtid}`)
+                      const active = selectedPlayingCourtId === pc.playingcourtid
+                      const imgs = pcImages[pc.playingcourtid] || []
+                      const rawImg = imgs[0]
+                      const imageUri = typeof rawImg === 'string' && rawImg.trim()
+                        ? optimizeRemoteImageUrl(rawImg, { width: 800, height: 400, quality: 80, resize: 'cover' })
+                        : null
+                      const priceValue = Number(pc.price || 0)
+                      const priceText = Number.isFinite(priceValue)
+                        ? `${new Intl.NumberFormat('vi-VN').format(Math.max(0, priceValue))}đ`
+                        : '0đ'
+                      return (
+                        <TouchableOpacity
+                          key={pc.playingcourtid}
+                          onPress={() => setSelectedPlayingCourtId(pc.playingcourtid)}
+                          style={[styles.selectCourtCard, active && styles.selectCourtCardActive]}
+                          activeOpacity={0.8}
+                        >
+                          <View style={styles.selectCourtImageWrap}>
+                            {imageUri ? (
+                              <ExpoImage source={{ uri: imageUri }} style={styles.selectCourtImage} contentFit="cover" />
+                            ) : (
+                              <View style={styles.selectCourtImagePlaceholder}>
+                                <Text style={{ color: '#aaa', fontSize: 12 }}>No image</Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.selectCourtInfoRow}>
+                            <Text numberOfLines={1} style={[styles.selectCourtName, active && { color: COLORS.brandOrangeDeep }]}>{courtLabel}</Text>
+                            <Text numberOfLines={1} style={[styles.selectCourtPriceInline, active && { color: COLORS.brandOrangeDeep }]}>{priceText}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
                 </View>
-                {endSlot && durationInvalid && (
-                  <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>
-                )}
-              </>
-            )}
+              )}
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Schedule for courts without playing court sub-division */}
+      {playingCourts.length === 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.scheduleHeaderRow}>
+            <Text style={styles.sectionTitle}>Schedule</Text>
+            <View style={styles.weekNavInline}>
+              <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
+                <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
+              </TouchableOpacity>
+              <TouchableOpacity disabled={weekOffset === 2} onPress={() => { if (weekOffset < 2) setWeekOffset((w) => w + 1) }} style={[styles.navBtn, weekOffset === 2 && styles.navBtnDisabled]}>
+                <Image source={ICONS.arrowright} style={styles.navIcon} />
+              </TouchableOpacity>
+            </View>
           </View>
-        )}
-        {/* Payment Method */}
-        <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionTitle}>
-            {pricePerHour != null ? `Payment (${new Intl.NumberFormat('vi-VN').format(pricePerHour)}₫/hr)` : 'Payment (price/hr)'}
-          </Text>
+          <View style={styles.weekRow}>
+            {weekDaysDetailed.map((d) => {
+              const today = new Date()
+              const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+              const isPast = weekOffset === 0 && d.date < todayOnly
+              const isAvailable = isDaySelectable(d.key)
+              const selected = selectedDateStr === d.dateStr
+              return (
+                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#FED7AA' }, (!isAvailable || isPast) && styles.dayCellDisabled]}>
+                  <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
+                  <Text style={styles.dayDate}>{d.date.getDate()}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          {showTimePicker && availability && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.subHeading}>Select Time</Text>
+              <Text style={styles.smallText}>Start</Text>
+              <View style={styles.slotRow}>
+                {timeSlots.map((ts) => (
+                  <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
+                    <Text style={styles.slotText}>{ts}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {startSlot && (
+                <>
+                  <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
+                  <View style={styles.slotRow}>
+                    {timeSlots.filter((ts) => ts > startSlot!).map((ts) => (
+                      <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
+                        <Text style={styles.slotText}>{ts}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Payment/Services/Note — always shown */}
+      <View style={styles.sectionCard}>
+        <View style={{ marginTop: 0 }}>
+          <Text style={styles.sectionTitle}>Payment</Text>
           <View style={styles.paymentRow}>
             <TouchableOpacity
               onPress={() => setPaymentMethod(paymentMethod === 'cash' ? null : 'cash')}
@@ -515,7 +821,13 @@ export default function CourtBooking() {
           {servicesExpanded && (
             <View style={styles.servicesWrapper}>
               {servicesLoading ? (
-                <Text style={styles.statusText}>Loading services...</Text>
+                <SkeletonPulse>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <SkeletonBox width={138} height={188} radius={14} />
+                    <SkeletonBox width={138} height={188} radius={14} />
+                    <SkeletonBox width={138} height={188} radius={14} />
+                  </View>
+                </SkeletonPulse>
               ) : (
                 (Array.isArray(servicesData) ? servicesData : []).length === 0 ? (
                   <Text style={styles.statusText}>This court have no services</Text>
@@ -681,9 +993,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '600', marginLeft: 12 },
   sectionCard: { backgroundColor: '#fafafa', marginHorizontal: 16, marginBottom: 20, padding: 16, borderRadius: 14, elevation: 2 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  courtName: { fontSize: 18, fontWeight: '700', color: '#222' },
-  courtAddress: { fontSize: 14, color: '#555', marginTop: 6, lineHeight: 20 },
-  availabilityMeta: { fontSize: 12, color: '#777', marginTop: 10, lineHeight: 18 },
+  courtName: { fontSize: 18, fontWeight: '700', color: '#222', flexShrink: 1 },
+  courtAddress: { flex: 1, fontSize: 14, color: '#555', marginTop: 6, lineHeight: 20, flexWrap: 'wrap' },
+  availabilityMeta: { flex: 1, fontSize: 12, color: '#777', marginTop: 10, lineHeight: 18, flexWrap: 'wrap' },
   statusText: { fontSize: 13, color: '#666' },
   errorText: { color: '#c00', marginTop: 8, fontSize: 13 },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
@@ -696,8 +1008,8 @@ const styles = StyleSheet.create({
   subHeading: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   smallText: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 4 },
   slotRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  slotBtn: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8 },
-  slotBtnActive: { backgroundColor: '#32CD32' },
+  slotBtn: { width: 62, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
+  slotBtnActive: { backgroundColor: COLORS.brandOrangeDeep },
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   paymentRow: { flexDirection: 'row', marginTop: 20 },
   payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', marginRight: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
@@ -761,7 +1073,23 @@ const styles = StyleSheet.create({
   modalBody: { fontSize:14, color:'#444', lineHeight:20 },
   modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
   modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
-  modalCancel: { backgroundColor: COLORS.danger },
+  modalCancel: { backgroundColor: COLORS.orange200 },
   modalConfirm: { backgroundColor: COLORS.brandOrangeDeep },
-  modalBtnText: { fontSize:14, fontWeight:'600', color: COLORS.neutral0 },
+  modalBtnText: { fontSize:14, fontWeight:'600', color: COLORS.brown900 },
+  selectCourtCard: { width: IMAGE_TILE_WIDTH, borderRadius: 14, overflow: 'hidden', borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#fff' },
+  selectCourtCardActive: { borderColor: COLORS.brandOrangeDeep },
+  selectCourtImageWrap: { width: '100%', height: IMAGE_TILE_HEIGHT },
+  selectCourtImage: { width: '100%', height: '100%' },
+  selectCourtImagePlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  selectCourtInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 9, columnGap: 8 },
+  selectCourtName: { flex: 1, fontSize: 13, fontWeight: '800', color: '#111' },
+  selectCourtPriceInline: { fontSize: 13, fontWeight: '900', color: '#111' },
+  // Playing court selector
+  pcCard: { width: 110, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f2f2f2', borderWidth: 2, borderColor: 'transparent', marginRight: 4 },
+  pcCardSelected: { borderColor: COLORS.brandOrangeYellow },
+  pcCardImage: { width: '100%', height: 70 },
+  pcCardImagePlaceholder: { width: '100%', height: 70, backgroundColor: '#e0e0e0' },
+  pcCardName: { fontSize: 12, fontWeight: '700', color: '#222', paddingHorizontal: 8, paddingTop: 6, paddingBottom: 2 },
+  pcCardPrice: { fontSize: 12, color: '#555', paddingHorizontal: 8, paddingBottom: 4 },
+  pcCardHalf: { fontSize: 12, color: '#b34700', paddingHorizontal: 8, paddingBottom: 6 },
 })
