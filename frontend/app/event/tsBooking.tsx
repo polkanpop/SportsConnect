@@ -5,18 +5,17 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import {
   adjustTrainingSessionParticipants,
   createPayment,
   createTrainingSessionBooking,
-  getTrainingSessionBookingsByUserId,
   invalidateTrainingSessionsCombinedCache,
   listTrainingSessionsCombined,
   listTrainingSessionsCombinedCached,
   CombinedTrainingSession,
   TrainingSessionBookingRow,
 } from '@/lib/backendApi'
-import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { appendHistory } from '@/storage/history'
 
@@ -52,7 +51,7 @@ export default function TrainingSessionBooking() {
   const params = useLocalSearchParams()
   const sessionid = params.sessionid ? parseInt(String(params.sessionid), 10) : NaN
   const { profile } = useAuthContext()
-  const { data: userId } = useUserId()
+  const { userId, dashboard } = useAppBootstrap()
 
   // Cached aggregated list (may be stale right after creation)
   const { data: sessionsCached, isLoading: loadingCached } = useQuery({
@@ -75,12 +74,8 @@ export default function TrainingSessionBooking() {
   const loadingSessions = loadingCached && !sessionsFresh
   const session: CombinedTrainingSession | null = useMemo(() => allSessions.find(s => s.sessionid === sessionid) || null, [allSessions, sessionid])
 
-  const { data: userSessionBookingsRaw } = useQuery({
-    queryKey: ['trainingSessionBookingsByUserId', userId],
-    queryFn: () => getTrainingSessionBookingsByUserId(userId as number),
-    enabled: typeof userId === 'number',
-    staleTime: 10_000,
-  })
+  const dashboardRaw = dashboard.data
+  const userSessionBookingsRaw = dashboardRaw?.training_bookings ?? []
 
   const alreadyBooked = useMemo(() => {
     if (typeof userId !== 'number') return false
@@ -147,7 +142,7 @@ export default function TrainingSessionBooking() {
       // (listTrainingSessionsCombinedCached uses fetchWithCache, so invalidate that too.)
       try { await invalidateTrainingSessionsCombinedCache() } catch {}
       queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
-      queryClient.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
 
       if (typeof userId === 'number') {
         void appendHistory(userId, {
@@ -196,7 +191,7 @@ export default function TrainingSessionBooking() {
               return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
             })
           })
-          queryClient.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         } catch {
           // Ignore count sync failures to avoid blocking booking
         }

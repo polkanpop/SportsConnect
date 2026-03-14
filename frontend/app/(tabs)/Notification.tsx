@@ -1,156 +1,235 @@
 import { ICONS } from "@/constants/icons";
-import { supabase } from "@/lib/supabase";
-import { useCallback, useEffect, useState } from "react";
-import { hydrateThenRefresh, setCache } from '@/lib/cache'
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { COLORS } from "@/constants/colors";
+import { markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
+import { router } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Image, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-interface NotificationRow {
-  notificationid: number;
-  status: string;
-  userid: number;
-  message: string;
-  time: string; // ISO/timestamp string
-  notificationtype: string; // enum in db
-  notificationtypeid: number;
-  title: string;
-}
-
 export default function NotificationsPage() {
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const { dashboard, notifications } = useAppBootstrap()
+  const [selectedCategory, setSelectedCategory] = useState<"All" | "Court" | "Event" | "Training">("All");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      await hydrateThenRefresh<NotificationRow[]>(
-        'cache:notifications:v1',
-        30 * 1000, // fresh TTL
-        60 * 1000, // allow cached fallback for a bit, but always refresh UI
-        async () => {
-          const { data, error } = await supabase
-            .from('notifications')
-            .select('notificationid,status,userid,message,time,notificationtype,notificationtypeid,title')
-            .order('time', { ascending: false })
-          if (error || !data) throw new Error(error?.message || 'Failed notifications')
-          return data as NotificationRow[]
-        },
-        (val) => setRows(Array.isArray(val) ? val : [])
-      )
-    } catch (e: any) {
-      setError(e.message || String(e))
-    } finally { setLoading(false) }
-  }, [])
+  const categoryParam: NotificationCategory | undefined = useMemo(() => {
+    if (selectedCategory === 'Court') return 'court'
+    if (selectedCategory === 'Event') return 'event'
+    if (selectedCategory === 'Training') return 'training'
+    return undefined
+  }, [selectedCategory])
+
+  const typeToCategory = (type: string): NotificationCategory | null => {
+    switch (type) {
+      case 'courtbooking':
+        return 'court'
+      case 'eventbooking':
+      case 'event':
+        return 'event'
+      case 'tsbooking':
+      case 'trainingsession':
+        return 'training'
+      default:
+        return null
+    }
+  }
+
+  const getRowCategory = (row: NotificationRow): NotificationCategory | null => {
+    return (row.category as any) || typeToCategory(row.notificationtype) || null
+  }
+
+  const sourceRows = useMemo(() => {
+    const base = Array.isArray(notifications) ? notifications : []
+    const filtered = categoryParam
+      ? base.filter((row) => getRowCategory(row) === categoryParam)
+      : base
+    return [...filtered].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+  }, [notifications, categoryParam])
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    setRows(sourceRows)
+  }, [sourceRows])
 
-  // Map notificationtype to new categories
-  const categories = ["All", "Event", "Coach", "Court"];
-  const typeToCategory = (type: string) => {
-    switch (type) {
-      case "eventbooking":
-        return "Event";
-      case "tsbooking":
-        return "Coach";
-      case "coach":
-        return "Coach";
-      case "courtbooking":
-        return "Court";
-      default:
-        return "Event";
+  const loading = dashboard.isLoading || actionLoading
+
+  const handleRefresh = useCallback(async () => {
+    setError(null)
+    try {
+      await dashboard.refetch?.()
+    } catch (e: any) {
+      setError(e?.message || String(e))
     }
-  };
-  const filteredNotifications = rows.filter(
-    (notif) => selectedCategory === "All" || typeToCategory(notif.notificationtype) === selectedCategory
-  );
+  }, [dashboard])
 
-  const handleNotificationClick = async (id: number) => {
+  const getIconFor = (row: NotificationRow) => {
+    const cat = getRowCategory(row)
+    const kind = (row.kind || '').toLowerCase()
+    if (cat === 'event') return ICONS.eventNoti
+    if (cat === 'training') return ICONS.tsNoti
+    if (cat === 'court') {
+      if (kind === 'submitted' || kind === 'incoming_booking') return ICONS.courtNotiPending
+      return ICONS.courtNoti
+    }
+    return ICONS.notifications
+  }
+
+  const getSectionTitle = (iso: string) => {
+    const d = new Date(iso)
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000
+    const t = d.getTime()
+    if (t >= startOfToday) return 'Today'
+    if (t >= startOfYesterday) return 'Yesterday'
+    return 'Earlier'
+  }
+
+  const formatRowTime = (iso: string) => {
+    const d = new Date(iso)
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const sections = useMemo(() => {
+    const buckets = new Map<string, NotificationRow[]>()
+    for (const r of rows) {
+      const title = getSectionTitle(r.time)
+      const arr = buckets.get(title) || []
+      arr.push(r)
+      buckets.set(title, arr)
+    }
+    const orderedTitles = ['Today', 'Yesterday', 'Earlier']
+    return orderedTitles
+      .filter(t => (buckets.get(t)?.length || 0) > 0)
+      .map(t => ({ title: t, data: buckets.get(t) || [] }))
+  }, [rows])
+
+  const handleNotificationClick = async (row: NotificationRow) => {
+    const id = row.notificationid
+
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+    if ((row.status || '').toLowerCase() !== 'unread') return
+
     // Optimistic update to mark read
     setUpdating(id);
     const idx = rows.findIndex(r => r.notificationid === id);
     if (idx === -1) return;
     const original = rows[idx];
-    const updated = { ...original, status: "read" };
+    const updated = { ...original, status: "read" } as NotificationRow;
     setRows(prev => {
       const copy = [...prev];
       copy[idx] = updated;
       return copy;
     });
-    // Best-effort cache sync
     try {
-      const copy = [...rows]
-      copy[idx] = updated as any
-      await setCache('cache:notifications:v1', copy, 30 * 1000, 60 * 1000)
-    } catch {}
-    const { error } = await supabase
-      .from("notifications")
-      .update({ status: "read" })
-      .eq("notificationid", id);
-    if (error) {
+      await markNotificationRead(id)
+    } catch (e: any) {
       // rollback
       setRows(prev => {
         const copy = [...prev];
         copy[idx] = original;
         return copy;
       });
-      try {
-        const copy = [...rows]
-        copy[idx] = original as any
-        await setCache('cache:notifications:v1', copy, 30 * 1000, 60 * 1000)
-      } catch {}
-      setError(error.message);
+      setError(e?.message || String(e))
+    } finally {
+      setUpdating(null);
     }
-    setUpdating(null);
   };
+
+  const handleMarkAllRead = async () => {
+    setActionLoading(true)
+    setError(null)
+    try {
+      await markAllNotificationsRead(categoryParam)
+      setRows(prev => prev.map(r => ({ ...r, status: 'read' })))
+    } catch (e: any) {
+      setError(e?.message || String(e))
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   const renderItem = ({ item }: { item: NotificationRow }) => (
     <TouchableOpacity
       style={[
         styles.notificationRow,
-        item.status !== "unread" && styles.viewedNotification,
+        (item.status || '').toLowerCase() !== "unread" && styles.viewedNotification,
         updating === item.notificationid && styles.updatingRow,
       ]}
-      onPress={() => handleNotificationClick(item.notificationid)}
+      onPress={() => handleNotificationClick(item)}
+      activeOpacity={0.85}
     >
-      <View style={styles.notificationLeft}>
-        <Image source={ICONS.calendar} style={styles.notificationIcon} />
-        <View style={styles.notificationContent}>
-          <Text style={styles.notificationTitle}>
+      <Image source={getIconFor(item)} style={styles.notificationIcon} />
+      <View style={styles.notificationContent}>
+        <View style={styles.titleTimeRow}>
+          <Text style={styles.notificationTitle} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text style={styles.notificationMessage}>{item.message}</Text>
+          <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
+        {expanded.has(item.notificationid) && (
+          <Text style={styles.notificationMessage}>{item.message}</Text>
+        )}
       </View>
-      <Text style={styles.notificationTime}>{new Date(item.time).toLocaleString()}</Text>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFF" }}>
-      {/* Header */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
       <View style={styles.header}>
+        <View style={styles.headerSideSpacer} />
         <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerSideSpacer} />
       </View>
 
-      {/* Category Tabs */}
-      <View style={styles.categoryContainer}>
-        {categories.map((category) => (
+      <View style={styles.topDivider} />
+
+      <View style={styles.toolbar}>
+        <View style={styles.dropdownWrap}>
           <TouchableOpacity
-            key={category}
-            style={[
-              styles.categoryTab,
-              selectedCategory === category && styles.selectedCategory,
-            ]}
-            onPress={() => setSelectedCategory(category)}
+            style={styles.dropdownButton}
+            onPress={() => setDropdownOpen(v => !v)}
+            activeOpacity={0.85}
           >
-            <Text style={styles.categoryText}>{category}</Text>
+            <Text style={styles.dropdownButtonText}>{selectedCategory}</Text>
+            <Image source={ICONS.arrowdown} style={[styles.dropdownArrow, dropdownOpen ? styles.dropdownArrowOpen : null]} />
           </TouchableOpacity>
-        ))}
+          {dropdownOpen && (
+            <View style={styles.dropdownMenu}>
+              {(['All', 'Court', 'Event', 'Training'] as const).map(opt => (
+                <TouchableOpacity
+                  key={opt}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setSelectedCategory(opt)
+                    setDropdownOpen(false)
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? styles.dropdownItemTextSelected : null]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.historyButtonContainer}
+          onPress={() => router.push('/event/history')}
+          activeOpacity={0.85}
+        >
+          <Image source={ICONS.clock} style={styles.historyIcon} />
+          <Text style={styles.historyText}>History</Text>
+        </TouchableOpacity>
       </View>
 
       {loading && (
@@ -160,13 +239,25 @@ export default function NotificationsPage() {
         <View style={styles.errorWrapper}><Text style={styles.errorText}>{error}</Text></View>
       )}
 
-      {/* Notifications List */}
-      <FlatList
-        data={filteredNotifications}
-        renderItem={renderItem}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.notificationid.toString()}
+        renderItem={renderItem}
+        renderSectionHeader={({ section }) => (
+          <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : null]}>
+            <Text style={styles.sectionHeaderText}>{section.title}</Text>
+            {section.title === 'Today' ? (
+              <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllRead} activeOpacity={0.85}>
+                <Text style={styles.markAllText}>Mark all as read</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.sectionHeaderActionSpacer} />
+            )}
+          </View>
+        )}
         refreshing={loading}
-        onRefresh={fetchNotifications}
+        onRefresh={handleRefresh}
+        stickySectionHeadersEnabled
       />
     </SafeAreaView>
   );
@@ -174,74 +265,192 @@ export default function NotificationsPage() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: "#fff", // Header color
-    paddingTop: 5,
-    paddingBottom: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom:3
-
+    backgroundColor: COLORS.neutral0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  headerSideSpacer: {
+    width: 78,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#000",
+    color: COLORS.neutral975,
   },
-  categoryContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 10,
-    backgroundColor: "#F0F0F0",
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
-  categoryTab: {
-    paddingVertical: 5,
+  dropdownWrap: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+    zIndex: 30,
+    width: 156,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 10,
+    backgroundColor: COLORS.neutral0,
   },
-  selectedCategory: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#FF5733", // Highlight the selected category
+  dropdownButtonText: {
+    fontSize: 14,
+    color: COLORS.neutral975,
+    fontWeight: '600',
   },
-  categoryText: {
-    fontSize: 16,
-    color: "#333",
+  dropdownArrow: {
+    width: 14,
+    height: 14,
+    tintColor: COLORS.neutral800,
+  },
+  dropdownArrowOpen: {
+    transform: [{ rotate: '180deg' }]
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 46,
+    left: 0,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: COLORS.neutral0,
+    zIndex: 40,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral200,
+  },
+  dropdownItemText: {
+    color: COLORS.neutral925,
+    fontSize: 14,
+  },
+  dropdownItemTextSelected: {
+    fontWeight: '700',
+    color: COLORS.orange,
+  },
+  historyButtonContainer: {
+    backgroundColor: COLORS.darkGray,
+    width: 156,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyIcon: {
+    width: 16,
+    height: 16,
+    marginRight: 6,
+    tintColor: COLORS.white,
+  },
+  historyText: {
+    fontSize: 14,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  markAllBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+  },
+  markAllText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.orange,
+  },
+  topDivider: {
+    height: 1,
+    backgroundColor: COLORS.neutral300,
+  },
+  sectionHeaderWrap: {
+    backgroundColor: COLORS.neutral0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  sectionHeaderWrapFirst: {
+    paddingTop: 24,
+  },
+  sectionHeaderActionSpacer: {
+    width: 100,
+  },
+  sectionHeaderText: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: COLORS.neutral925,
+    lineHeight: 24,
   },
   notificationRow: {
     flexDirection: "row",
+    alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
+    borderBottomColor: COLORS.neutral200,
   },
   viewedNotification: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: COLORS.neutral100,
   },
   updatingRow: {
     opacity: 0.6,
   },
-  notificationLeft: {
-    flexDirection: "row",
-    flex: 1,
-  },
   notificationIcon: {
-    width: 30,
-    height: 30,
-    marginRight: 10,
+    width: 42,
+    height: 42,
+    marginRight: 12,
   },
   notificationContent: {
     flex: 1,
   },
+  titleTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   notificationTitle: {
     fontWeight: "bold",
     fontSize: 16,
+    color: COLORS.neutral975,
+    flex: 1,
   },
   notificationMessage: {
     fontSize: 14,
-    color: "#666",
+    color: COLORS.neutral800,
+    marginTop: 4,
+    paddingRight: 6,
   },
   notificationTime: {
-    fontSize: 12,
-    color: "#888",
-    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.neutral700,
+    marginLeft: 6,
   },
   loadingWrapper: {
     paddingVertical: 8,
@@ -252,6 +461,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   errorText: {
-    color: '#c00'
+    color: COLORS.danger
   }
 });

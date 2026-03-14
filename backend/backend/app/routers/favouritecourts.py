@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
+from fastapi_cache.decorator import cache
 from ..rate_limit import limiter
 from ..db import rest_select, rest_upsert, rest_delete
+from ..cache_utils import invalidate_namespace, make_key_builder
 from ..models import FavouriteCourt, FavouriteCourtCreate
 
 router = APIRouter(prefix="/favouritecourts", tags=["favouritecourts"])
 
 
 @router.get("", response_model=list[FavouriteCourt])
+@cache(expire=60, key_builder=make_key_builder("favouritecourts"))
 async def list_favourite_courts(userid: int | None = Query(default=None), ids_only: bool = Query(default=False)):
     """Public list of favourite courts. Optionally filter by userid; ids_only returns only courtids."""
     try:
@@ -20,7 +23,7 @@ async def list_favourite_courts(userid: int | None = Query(default=None), ids_on
 
 @router.post("", response_model=FavouriteCourt)
 @limiter.limit("12/minute")
-async def add_favourite_court(request: Request, body: FavouriteCourtCreate):
+async def add_favourite_court(request: Request, body: FavouriteCourtCreate, background_tasks: BackgroundTasks):
     """Idempotent add: returns existing favourite if (userid,courtid) already present.
 
     Performs existence checks for referenced user & court to avoid 500 errors from FK violations.
@@ -50,6 +53,7 @@ async def add_favourite_court(request: Request, body: FavouriteCourtCreate):
         payload = {"userid": body.userid, "courtid": body.courtid}
         resp = rest_upsert("favouritecourts", payload)
         if isinstance(resp, list) and resp:
+            background_tasks.add_task(invalidate_namespace, "favouritecourts")
             return resp[0]
         return {"favouriteid": -1, **payload}
     except HTTPException:
@@ -60,7 +64,7 @@ async def add_favourite_court(request: Request, body: FavouriteCourtCreate):
 
 @router.post("/toggle")
 @limiter.limit("20/minute")  # toggle can be a bit higher to avoid frustration
-async def toggle_favourite(request: Request, body: FavouriteCourtCreate):
+async def toggle_favourite(request: Request, body: FavouriteCourtCreate, background_tasks: BackgroundTasks):
     """Toggle favourite for a user/court pair. Returns action and record.
 
     Response shape:
@@ -85,10 +89,12 @@ async def toggle_favourite(request: Request, body: FavouriteCourtCreate):
         if isinstance(existing, list) and existing:
             fav_id = existing[0]["favouriteid"]
             rest_delete("favouritecourts", {"favouriteid": fav_id})
+            background_tasks.add_task(invalidate_namespace, "favouritecourts")
             return {"action": "removed", "favourite": None}
         payload = {"userid": body.userid, "courtid": body.courtid}
         resp = rest_upsert("favouritecourts", payload)
         favourite = resp[0] if isinstance(resp, list) and resp else {"favouriteid": -1, **payload}
+        background_tasks.add_task(invalidate_namespace, "favouritecourts")
         return {"action": "added", "favourite": favourite}
     except HTTPException:
         raise
@@ -98,7 +104,7 @@ async def toggle_favourite(request: Request, body: FavouriteCourtCreate):
 
 @router.delete("/{favouriteid}")
 @limiter.limit("12/minute")
-async def remove_favourite_court(request: Request, favouriteid: int):
+async def remove_favourite_court(request: Request, favouriteid: int, background_tasks: BackgroundTasks):
     """Public delete favourite by primary key favouriteid."""
     try:
         # Optionally scope by user if we can resolve it quickly
@@ -106,6 +112,7 @@ async def remove_favourite_court(request: Request, favouriteid: int):
         if isinstance(row, dict) and "userid" in row:
             request.state.user_id = row["userid"]
         resp = rest_delete("favouritecourts", {"favouriteid": favouriteid})
+        background_tasks.add_task(invalidate_namespace, "favouritecourts")
         return {"deleted": True, "count": len(resp) if isinstance(resp, list) else 0}
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))

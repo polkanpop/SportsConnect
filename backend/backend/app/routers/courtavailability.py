@@ -1,9 +1,11 @@
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
 
 router = APIRouter(prefix="/courtavailability", tags=["courts"])
 
@@ -87,6 +89,7 @@ def _enforce_owner_by_playingcourtid(*, playingcourtid: int, current_user: str) 
     _enforce_owner_by_courtid(courtid=courtid, current_user=current_user)
 
 @router.get("", response_model=list[dict])
+@cache(expire=120, key_builder=make_key_builder("courtavailability"))
 def list_court_availability(
     courtid: int | None = Query(None),
     playingcourtid: int | None = Query(None),
@@ -129,6 +132,7 @@ def list_court_availability(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{availabilityid}", response_model=dict)
+@cache(expire=120, key_builder=make_key_builder("courtavailability"))
 def get_court_availability(availabilityid: int):
     try:
         row = rest_select("courtavailability", "*", filters={PRIMARY_KEY: availabilityid}, single=True)
@@ -139,7 +143,7 @@ def get_court_availability(availabilityid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_court_availability(body: dict, current_user: str = Depends(get_current_user)):
+def create_court_availability(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create an availability slot.
 
     New schema: body should include playingcourtid, start_time, end_time, status, booking_date.
@@ -166,13 +170,14 @@ def create_court_availability(body: dict, current_user: str = Depends(get_curren
         payload.pop("courtid", None)
 
         resp = rest_upsert("courtavailability", payload)
+        background_tasks.add_task(invalidate_namespace, "courtavailability")
         return resp[0] if isinstance(resp, list) and resp else body
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/by-courtid/{courtid}", response_model=list[dict])
-def patch_court_availability_by_courtid(courtid: int, body: dict, current_user: str = Depends(get_current_user)):
+def patch_court_availability_by_courtid(courtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Update availability slots for a court.
 
     Intended for updating the default schedule row created by /courts/register.
@@ -208,6 +213,7 @@ def patch_court_availability_by_courtid(courtid: int, body: dict, current_user: 
                 updated_all.extend([r for r in updated if isinstance(r, dict)])
             elif isinstance(updated, dict):
                 updated_all.append(updated)
+        background_tasks.add_task(invalidate_namespace, "courtavailability")
         return updated_all
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -219,6 +225,7 @@ def patch_court_availability_by_courtid(courtid: int, body: dict, current_user: 
 def patch_court_availability_by_playingcourtid(
     playingcourtid: int,
     body: dict,
+    background_tasks: BackgroundTasks,
     current_user: str = Depends(get_current_user),
 ):
     """Update availability slot(s) for a specific playing court.
@@ -250,11 +257,15 @@ def patch_court_availability_by_playingcourtid(
 
     try:
         updated = rest_update("courtavailability", {"playingcourtid": playingcourtid}, patch)
+        result: list[dict]
         if isinstance(updated, list):
-            return [r for r in updated if isinstance(r, dict)]
-        if isinstance(updated, dict):
-            return [updated]
-        return []
+            result = [r for r in updated if isinstance(r, dict)]
+        elif isinstance(updated, dict):
+            result = [updated]
+        else:
+            result = []
+        background_tasks.add_task(invalidate_namespace, "courtavailability")
+        return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

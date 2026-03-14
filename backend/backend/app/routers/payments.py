@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_insert
+from ..cache_utils import make_key_builder
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 PRIMARY_KEY = "paymentid"
 
 @router.get("", response_model=list[dict])
+@cache(expire=60, key_builder=make_key_builder("payments"))
 def list_payments(status: str | None = Query(None), method: str | None = Query(None), limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, str] = {}
@@ -21,6 +24,7 @@ def list_payments(status: str | None = Query(None), method: str | None = Query(N
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{paymentid}", response_model=dict)
+@cache(expire=60, key_builder=make_key_builder("payments"))
 def get_payment(paymentid: int):
     try:
         row = rest_select("payments", "*", filters={PRIMARY_KEY: paymentid}, single=True)

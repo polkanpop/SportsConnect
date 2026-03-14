@@ -1,13 +1,74 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_insert, rest_update
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
+from ..notifications_service import create_notification
 from datetime import datetime
 
 router = APIRouter(prefix="/courtbookings", tags=["bookings"])  # Route keeps plural for consistency, underlying table is singular
 
 PRIMARY_KEY = "courtbookingid"
 
+
+def _to_int(v):
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+
+def _enrich_court_bookings(rows: list[dict]) -> list[dict]:
+    if not isinstance(rows, list) or not rows:
+        return []
+
+    all_availability = rest_select("courtavailability", "availabilityid,courtid")
+    courtid_by_availabilityid: dict[int, int] = {}
+    for av in (all_availability if isinstance(all_availability, list) else []):
+        aid = _to_int(av.get("availabilityid"))
+        cid = _to_int(av.get("courtid"))
+        if aid is not None and cid is not None:
+            courtid_by_availabilityid[aid] = cid
+
+    all_courts = rest_select("courts", "courtid,courtinfo")
+    court_name_by_courtid: dict[int, str] = {}
+    for c in (all_courts if isinstance(all_courts, list) else []):
+        cid = _to_int(c.get("courtid"))
+        name = c.get("courtinfo")
+        if cid is not None and isinstance(name, str) and name.strip():
+            court_name_by_courtid[cid] = name.strip()
+
+    all_events = rest_select("events", "eventid,courtbookingid,time,status,organizerid")
+    events_by_cbid: dict[int, list[dict]] = {}
+    for ev in (all_events if isinstance(all_events, list) else []):
+        cbid = _to_int(ev.get("courtbookingid"))
+        if cbid is not None:
+            events_by_cbid.setdefault(cbid, []).append(ev)
+
+    all_sessions = rest_select("trainingsessions", "sessionid,courtbookingid,time,status,coachid")
+    sessions_by_cbid: dict[int, list[dict]] = {}
+    for ts in (all_sessions if isinstance(all_sessions, list) else []):
+        cbid = _to_int(ts.get("courtbookingid"))
+        if cbid is not None:
+            sessions_by_cbid.setdefault(cbid, []).append(ts)
+
+    out: list[dict] = []
+    for row in rows:
+        aid = _to_int(row.get("availabilityid"))
+        cbid = _to_int(row.get(PRIMARY_KEY))
+        courtid = courtid_by_availabilityid.get(aid) if aid is not None else None
+        court_name = court_name_by_courtid.get(courtid) if courtid is not None else None
+        out.append({
+            **row,
+            "courtid": courtid,
+            "court_name": court_name,
+            "linked_events": events_by_cbid.get(cbid or -1, []),
+            "linked_trainingsessions": sessions_by_cbid.get(cbid or -1, []),
+        })
+    return out
+
 @router.get("", response_model=list[dict])
+@cache(expire=120, key_builder=make_key_builder("courtbookings"))
 def list_court_bookings(userid: int | None = Query(None), courtid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     try:
         # If courtid provided, resolve bookings through playingcourt -> courtavailability -> courtbooking
@@ -26,7 +87,7 @@ def list_court_bookings(userid: int | None = Query(None), courtid: int | None = 
                     if isinstance(bookings, list):
                         all_bookings.extend(bookings)
             all_bookings.sort(key=lambda r: int(r.get(PRIMARY_KEY) or 0))
-            return all_bookings[offset: offset + limit]
+            return _enrich_court_bookings(all_bookings[offset: offset + limit])
         filters = {}
         if userid is not None:
             filters["userid"] = userid
@@ -36,22 +97,23 @@ def list_court_bookings(userid: int | None = Query(None), courtid: int | None = 
         data = rest_select("courtbooking", "*", filters=filters or None, order={"column": PRIMARY_KEY})
         if isinstance(data, list):
             data = data[offset: offset + limit]
-        return data if isinstance(data, list) else []
+        return _enrich_court_bookings(data if isinstance(data, list) else [])
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtbookingid}", response_model=dict)
+@cache(expire=120, key_builder=make_key_builder("courtbookings"))
 def get_court_booking(courtbookingid: int):
     try:
         row = rest_select("courtbooking", "*", filters={PRIMARY_KEY: courtbookingid}, single=True)
         if not row:
             raise HTTPException(status_code=404, detail="Court booking not found")
-        return row
+        return (_enrich_court_bookings([row])[0]) if isinstance(row, dict) else row
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_court_booking(body: dict, current_user: str = Depends(get_current_user)):
+def create_court_booking(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a court booking.
 
     Relaxed logic:
@@ -152,6 +214,7 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
         # - default: pending
         # - if venue auto_approve is true: approved/booked
         auto_approve = False
+        courtid: int | None = None
         try:
             availabilityid = payload.get("availabilityid")
             av = rest_select("courtavailability", "courtid", filters={"availabilityid": availabilityid}, single=True)
@@ -174,6 +237,55 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
         row = resp[0]
         if PRIMARY_KEY not in row:
             raise HTTPException(status_code=500, detail="Insert succeeded but missing primary key in response")
+
+        # Notifications (best-effort; never block booking creation)
+        try:
+            booking_id = int(row.get(PRIMARY_KEY))
+            base_name = payload.get("selected_base_name") or payload.get("selected_court_name") or "Court"
+
+            # Booker notification
+            if auto_approve:
+                create_notification(
+                    userid=final_userid,
+                    category="court",
+                    notificationtype="courtbooking",
+                    kind="approved",
+                    notificationtypeid=booking_id,
+                    title="Booking confirmed",
+                    message=f"Your booking for {base_name} has been approved.",
+                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name},
+                )
+            else:
+                create_notification(
+                    userid=final_userid,
+                    category="court",
+                    notificationtype="courtbooking",
+                    kind="submitted",
+                    notificationtypeid=booking_id,
+                    title="Booking submitted",
+                    message=f"Your booking for {base_name} is pending approval.",
+                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name},
+                )
+
+            # Owner notification (incoming booking)
+            if courtid is not None:
+                court = rest_select("courts", "courtid,ownerid", filters={"courtid": courtid}, single=True)
+                ownerid = int(court.get("ownerid")) if isinstance(court, dict) and court.get("ownerid") is not None else None
+                if ownerid is not None and ownerid != final_userid:
+                    create_notification(
+                        userid=ownerid,
+                        category="court",
+                        notificationtype="courtbooking",
+                        kind="incoming_booking",
+                        notificationtypeid=booking_id,
+                        title="New booking request",
+                        message=f"A user requested to book {base_name}.",
+                        data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "booker_userid": final_userid},
+                    )
+        except Exception as e:
+            print("[courtbookings] notification insert failed:", str(e))
+
+        background_tasks.add_task(invalidate_namespace, "courtbookings")
         return row
     except HTTPException:
         raise
@@ -184,23 +296,43 @@ def create_court_booking(body: dict, current_user: str = Depends(get_current_use
 
 
 @router.patch("/{courtbookingid}", response_model=dict)
-def update_court_booking(courtbookingid: int, body: dict, current_user: str = Depends(get_current_user)):
+def update_court_booking(courtbookingid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on a court booking.
 
     Used by the mobile app to cancel an upcoming booking by setting bookingstatus/status.
     """
     try:
-        existing = rest_select("courtbooking", "courtbookingid, userid", filters={PRIMARY_KEY: courtbookingid}, single=True)
+        existing = rest_select("courtbooking", "courtbookingid, userid, status, availabilityid", filters={PRIMARY_KEY: courtbookingid}, single=True)
         if not existing:
             raise HTTPException(status_code=404, detail="Court booking not found")
 
-        # Best-effort ownership check when auth subject is numeric.
+        # Ownership check:
+        # - booking owner may patch
+        # - court owner may approve/reject
+        auth_userid: int | None
         try:
             auth_userid = int(current_user)
-            if int(existing.get("userid")) != auth_userid:
-                raise HTTPException(status_code=403, detail="User does not own this court booking")
-        except ValueError:
-            pass
+        except Exception:
+            auth_userid = None
+
+        is_booking_owner = auth_userid is not None and int(existing.get("userid")) == auth_userid
+        is_court_owner = False
+        courtid: int | None = None
+        if not is_booking_owner and auth_userid is not None:
+            try:
+                av_id = existing.get("availabilityid")
+                av = rest_select("courtavailability", "courtid", filters={"availabilityid": av_id}, single=True)
+                courtid = int(av.get("courtid")) if isinstance(av, dict) and av.get("courtid") is not None else None
+                if courtid is not None:
+                    c = rest_select("courts", "courtid,ownerid", filters={"courtid": courtid}, single=True)
+                    ownerid = int(c.get("ownerid")) if isinstance(c, dict) and c.get("ownerid") is not None else None
+                    if ownerid is not None and ownerid == auth_userid:
+                        is_court_owner = True
+            except Exception:
+                is_court_owner = False
+
+        if not (is_booking_owner or is_court_owner):
+            raise HTTPException(status_code=403, detail="Not allowed to update this court booking")
 
         payload = dict(body or {})
         payload.pop(PRIMARY_KEY, None)
@@ -235,10 +367,44 @@ def update_court_booking(courtbookingid: int, body: dict, current_user: str = De
                     if is_blocking_status(s.get("status")):
                         raise HTTPException(status_code=409, detail="You must cancel the training session first.")
 
+        prev_status = str(existing.get("status") or "")
         resp = rest_update("courtbooking", {PRIMARY_KEY: courtbookingid}, payload)
-        if isinstance(resp, list) and resp:
-            return resp[0]
-        return payload
+        row = resp[0] if isinstance(resp, list) and resp else {**existing, **payload}
+
+        # Notifications for approval/rejection (best-effort)
+        try:
+            if "status" in payload and is_court_owner:
+                new_status = str(payload.get("status") or "")
+                if new_status and new_status.lower() != prev_status.lower():
+                    booker_userid = int(existing.get("userid"))
+                    base_name = row.get("selected_base_name") or row.get("selected_court_name") or "Court"
+                    if new_status.lower() == "approved":
+                        create_notification(
+                            userid=booker_userid,
+                            category="court",
+                            notificationtype="courtbooking",
+                            kind="approved",
+                            notificationtypeid=int(courtbookingid),
+                            title="Booking approved",
+                            message=f"Your booking for {base_name} has been approved.",
+                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name},
+                        )
+                    elif new_status.lower() == "rejected":
+                        create_notification(
+                            userid=booker_userid,
+                            category="court",
+                            notificationtype="courtbooking",
+                            kind="rejected",
+                            notificationtypeid=int(courtbookingid),
+                            title="Booking rejected",
+                            message=f"Your booking for {base_name} was rejected.",
+                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name},
+                        )
+        except Exception as e:
+            print("[courtbookings] notification update failed:", str(e))
+
+        background_tasks.add_task(invalidate_namespace, "courtbookings")
+        return row
     except HTTPException:
         raise
     except RuntimeError as e:

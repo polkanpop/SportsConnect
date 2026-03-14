@@ -2,6 +2,7 @@
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator, Pressable, useWindowDimensions } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useRouter } from 'expo-router'
@@ -11,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { getCache, invalidateCache, setCache } from '@/lib/cache'
 
 import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, getCourtInfoByCourtId, registerCourt, type CourtAddressSuggestion, type CourtRegisterRequest, upsertCourtInfoIntoCache } from '@/lib/backendApi'
-import { useUserId } from '@/hooks/use-user-id'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 
@@ -100,7 +101,7 @@ export default function CourtRegisterPage() {
       isMountedRef.current = false
     }
   }, [])
-  const { data: userid } = useUserId()
+  const { userId: userid } = useAppBootstrap()
 
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
@@ -1327,7 +1328,7 @@ export default function CourtRegisterPage() {
                         >
                           {s.images.map((uri) => (
                             <View key={uri} style={styles.thumbFrame}>
-                              <Image source={{ uri }} style={styles.thumbImage} />
+                              <ExpoImage source={{ uri }} style={styles.thumbImage} contentFit="cover" />
                             </View>
                           ))}
                         </ScrollView>
@@ -1426,7 +1427,7 @@ export default function CourtRegisterPage() {
                   {svcImages.map((uri) => (
                     <View key={uri} style={styles.coverFrame}>
                       <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
-                        <Image source={{ uri }} style={styles.coverImage} />
+                        <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => removeServiceImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                         <Text style={styles.removeXText}>×</Text>
@@ -1481,7 +1482,7 @@ export default function CourtRegisterPage() {
         {remoteImageUrls.map((uri) => (
           <View key={uri} style={[styles.coverFrame, (submitting || imageUploading) && styles.btnDisabled]}>
             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
-              <Image source={{ uri }} style={styles.coverImage} />
+              <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => requestRemoveImage(uri)}
@@ -1603,7 +1604,7 @@ export default function CourtRegisterPage() {
                 {pcImages.map((uri) => (
                   <View key={uri} style={styles.coverFrame}>
                     <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
-                      <Image source={{ uri }} style={styles.coverImage} />
+                      <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => removePlayingCourtImage('full', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                       <Text style={styles.removeXText}>×</Text>
@@ -1692,7 +1693,7 @@ export default function CourtRegisterPage() {
                         {pcHalf1Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
-                              <Image source={{ uri }} style={styles.coverImage} />
+                              <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half1', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                               <Text style={styles.removeXText}>×</Text>
@@ -1741,7 +1742,7 @@ export default function CourtRegisterPage() {
                         {pcHalf2Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
-                              <Image source={{ uri }} style={styles.coverImage} />
+                              <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half2', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                               <Text style={styles.removeXText}>×</Text>

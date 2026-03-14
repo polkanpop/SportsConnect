@@ -16,13 +16,19 @@ class CourtInfo(BaseModel):
     price: Optional[float] = None
 
 class Notification(BaseModel):
-    id: int  # primary key column 'id' in table
-    status: Optional[str] = None
-    user_id: Optional[int] = None
+    # Matches Supabase table column names (notifications.notificationid, notifications.userid)
+    notificationid: int
+    status: Optional[str] = None  # unread | read
+    userid: Optional[int] = None
+    title: Optional[str] = None
     message: Optional[str] = None
     time: Optional[str] = None  # timestamp string from Supabase
     notificationtype: Optional[str] = None
     notificationtypeid: Optional[int] = None
+    category: Optional[str] = None  # court | event | training (enum in SQL)
+    kind: Optional[str] = None  # submitted | approved | rejected | created | incoming_booking | etc.
+    data: Optional[dict] = None
+    read_at: Optional[str] = None
 
 class Profile(BaseModel):
     id: str

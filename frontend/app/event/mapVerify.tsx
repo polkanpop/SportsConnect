@@ -1,10 +1,11 @@
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
+import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap'
 import { setCache } from '@/lib/cache'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps'
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { type Region } from 'react-native-maps'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const COURT_REGISTER_VERIFY_STORAGE_KEY = '@courtRegisterVerifiedLocation'
@@ -45,9 +46,7 @@ export default function MapVerifyPage() {
   const [selectedCoord, setSelectedCoord] = useState<Coord | null>(initial)
   const [editMode, setEditMode] = useState(false)
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
-
-  const mapRef = useRef<MapView | null>(null)
-  const blink = useRef(new Animated.Value(1)).current
+  const [mapRegion, setMapRegion] = useState<Region | null>(null)
 
   const DEFAULT_DELTA = 0.005
 
@@ -71,17 +70,6 @@ export default function MapVerifyPage() {
   const lastValidRegionRef = useRef<Region | null>(null)
 
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(blink, { toValue: 0.25, duration: 550, useNativeDriver: true }),
-        Animated.timing(blink, { toValue: 1, duration: 550, useNativeDriver: true }),
-      ])
-    )
-    anim.start()
-    return () => anim.stop()
-  }, [blink])
-
-  useEffect(() => {
     if (!initial) return
     const region: Region = {
       latitude: initial.latitude,
@@ -90,13 +78,20 @@ export default function MapVerifyPage() {
       longitudeDelta: DEFAULT_DELTA,
     }
     lastValidRegionRef.current = region
-    const t = setTimeout(() => {
-      try {
-        mapRef.current?.animateToRegion(region, 700)
-      } catch {}
-    }, 50)
-    return () => clearTimeout(t)
+    setMapRegion(region)
   }, [initial])
+
+  const selectedMarkers = useMemo<DynamicMapMarker[]>(() => {
+    if (!selectedCoord) return []
+    return [
+      {
+        id: 'selected-location',
+        coordinate: selectedCoord,
+        title: 'Temporary Court',
+        pinColor: COLORS.brandOrangeDeep,
+      },
+    ]
+  }, [selectedCoord])
 
   const handleSubmit = async () => {
     if (!selectedCoord) return
@@ -141,49 +136,39 @@ export default function MapVerifyPage() {
       </View>
 
       <View style={styles.mapWrap}>
-        <MapView
-          ref={mapRef}
+        <DynamicMap
           style={styles.map}
-          provider={PROVIDER_GOOGLE}
-          showsPointsOfInterest={false}
-          showsBuildings={false}
-          showsIndoors={false}
-          customMapStyle={MAP_STYLE_HIDE_POI}
-          initialRegion={{
+          initialRegion={mapRegion ?? {
             latitude: initial.latitude,
             longitude: initial.longitude,
             latitudeDelta: DEFAULT_DELTA,
             longitudeDelta: DEFAULT_DELTA,
           }}
+          region={mapRegion ?? undefined}
+          markers={selectedMarkers}
+          showsPointsOfInterest={false}
+          showsBuildings={false}
+          showsIndoors={false}
+          customMapStyle={MAP_STYLE_HIDE_POI}
           onRegionChangeComplete={(r) => {
             // Keep center point inside Vietnam
             const center: Coord = { latitude: r.latitude, longitude: r.longitude }
             if (isInVietnam(center)) {
               lastValidRegionRef.current = r
+              setMapRegion(r)
               return
             }
             const fallback = lastValidRegionRef.current
             if (!fallback) return
-            try {
-              mapRef.current?.animateToRegion(fallback, 250)
-            } catch {}
+            setMapRegion(fallback)
           }}
-          onPress={(e) => {
+          onPress={(c) => {
             if (!editMode) return
-            const c = e.nativeEvent.coordinate
             if (!c) return
             if (!isInVietnam({ latitude: c.latitude, longitude: c.longitude })) return
             setSelectedCoord({ latitude: c.latitude, longitude: c.longitude })
           }}
-        >
-          {!!selectedCoord && (
-            <Marker coordinate={selectedCoord} title="Temporary Court">
-              <Animated.View style={[styles.markerOuter, { opacity: blink }]}>
-                <View style={styles.markerInner} />
-              </Animated.View>
-            </Marker>
-          )}
-        </MapView>
+        />
 
         <TouchableOpacity
           style={[
@@ -250,23 +235,6 @@ const styles = StyleSheet.create({
 
   mapWrap: { flex: 1, position: 'relative' },
   map: { flex: 1 },
-
-  markerOuter: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.orange200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  markerInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.orangeAccent,
-    borderWidth: 2,
-    borderColor: COLORS.neutral0,
-  },
 
   fab: {
     position: 'absolute',

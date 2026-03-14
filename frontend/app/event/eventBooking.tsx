@@ -5,17 +5,16 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import {
   adjustEventParticipants,
   createEventBooking,
   createPayment,
-  getEventBookingsByUserId,
   listEventsCombined,
   listEventsCombinedCached,
   CombinedEvent,
   EventBookingRow,
 } from '@/lib/backendApi'
-import { useUserId } from '@/hooks/use-user-id'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { appendHistory } from '@/storage/history'
 
@@ -57,7 +56,7 @@ export default function EventBooking() {
   const params = useLocalSearchParams()
   const eventid = params.eventid ? parseInt(String(params.eventid), 10) : NaN
   const { profile } = useAuthContext()
-  const { data: userId } = useUserId()
+  const { userId, dashboard } = useAppBootstrap()
 
   // Fetch combined events list & derive target event
   const { data: eventsCached, isLoading: loadingCached } = useQuery({
@@ -79,12 +78,8 @@ export default function EventBooking() {
   const loadingEvents = loadingCached && !eventsFresh
   const event: CombinedEvent | null = useMemo(() => allEvents.find(e => e.eventid === eventid) || null, [allEvents, eventid])
 
-  const { data: userEventBookingsRaw } = useQuery({
-    queryKey: ['eventBookingsByUserId', userId],
-    queryFn: () => getEventBookingsByUserId(userId as number),
-    enabled: typeof userId === 'number',
-    staleTime: 10_000,
-  })
+  const dashboardRaw = dashboard.data
+  const userEventBookingsRaw = dashboardRaw?.event_bookings ?? []
 
   const alreadyBooked = useMemo(() => {
     if (typeof userId !== 'number') return false
@@ -222,8 +217,8 @@ export default function EventBooking() {
               return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
             })
           })
-          queryClient.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
-          queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] })
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         } catch {
           // Ignore count sync failures to avoid blocking booking
         }

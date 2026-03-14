@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
@@ -15,7 +16,6 @@ import {
   CreateEventWithInfoPayload,
   cloudinarySignUpload,
   invalidateEventsCombinedCache,
-  listCourtBookings,
   CourtBookingRow,
   listCourtInfoCached,
   CourtInfoRow,
@@ -25,7 +25,7 @@ import {
   CombinedTrainingSession,
 } from '@/lib/backendApi'
 import { queryKeys } from '@/hooks/query-keys'
-import { useUserId } from '@/hooks/use-user-id'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { useFocusEffect } from 'expo-router'
 import { appendHistory } from '@/storage/history'
 
@@ -69,22 +69,14 @@ const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
 
 export default function EventCreateScreen() {
   const router = useRouter()
-  const { data: userId } = useUserId()
+  const { userId, dashboard } = useAppBootstrap()
   const qc = useQueryClient()
 
-  // Load user bookings (filtered by userid)
-  const { data: bookingsRaw, isLoading: bookingsLoading, error: bookingsError, refetch: refetchBookings } = useQuery({
-    queryKey: ['userCourtBookings', userId],
-    enabled: typeof userId === 'number',
-    queryFn: () => listCourtBookings({ userid: userId! })
-  })
-
-  // Fallback: if filtered result returns empty, fetch all then client-filter
-  const { data: bookingsAllRaw } = useQuery({
-    queryKey: ['courtBookingsAllFallback', userId],
-    enabled: typeof userId === 'number' && !bookingsLoading && Array.isArray(bookingsRaw) && bookingsRaw.length === 0,
-    queryFn: () => listCourtBookings()
-  })
+  const dashboardRaw = dashboard.data
+  const bookingsLoading = dashboard.isLoading
+  const bookingsError = dashboard.error
+  const bookingsRaw = dashboardRaw?.court_bookings ?? []
+  const bookingsAllRaw: CourtBookingRow[] = []
 
   // Effective bookings list combining filtered result or client-side filtered fallback
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {
@@ -515,8 +507,7 @@ export default function EventCreateScreen() {
             qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
           } catch {}
 
-          qc.invalidateQueries({ queryKey: ['eventBookingsByUserId', userId] })
-          qc.invalidateQueries({ queryKey: ['eventBookings', userId] })
+          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         })()
       }
 
@@ -644,16 +635,14 @@ export default function EventCreateScreen() {
     }
   }, [availableEnrichedBookings, selectedBookingId])
 
-  // Refresh bookings when screen gains focus (ensures newly created bookings appear)
+  // Refresh combined feeds on focus so booking usage tags stay current.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId === 'number') {
-        refetchBookings()
-        // refresh events and training sessions so used booking sets update
-        try { refetchEventsCombined() } catch {};
-        try { refetchSessionsCombined() } catch {};
+        try { refetchEventsCombined() } catch {}
+        try { refetchSessionsCombined() } catch {}
       }
-    }, [userId, refetchBookings])
+    }, [userId, refetchEventsCombined, refetchSessionsCombined])
   )
 
   return (
@@ -738,7 +727,7 @@ export default function EventCreateScreen() {
               {remoteImageUrls.map((uri) => (
                 <View key={uri} style={styles.coverFrame}>
                   <View style={styles.coverPressable}>
-                    <Image source={{ uri }} style={styles.coverImage} />
+                    <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                   </View>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                     <Text style={styles.removeXText}>×</Text>

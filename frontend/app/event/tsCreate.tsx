@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { View, Text, TouchableOpacity, Image, StyleSheet, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Alert, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
@@ -15,7 +16,6 @@ import {
   CreateTrainingSessionWithInfoPayload,
   cloudinarySignUpload,
   invalidateTrainingSessionsCombinedCache,
-  listCourtBookings,
   CourtBookingRow,
   listCourtInfoCached,
   listTrainingSessionsCombined,
@@ -23,7 +23,7 @@ import {
   listEventsCombinedCached,
 } from '@/lib/backendApi'
 import { queryKeys } from '@/hooks/query-keys'
-import { useUserId } from '@/hooks/use-user-id'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { useFocusEffect } from 'expo-router'
 import { appendHistory } from '@/storage/history'
 
@@ -66,20 +66,14 @@ const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
 
 export default function TsCreate() {
   const router = useRouter()
-  const { data: userId } = useUserId()
+  const { userId, dashboard } = useAppBootstrap()
   const qc = useQueryClient()
 
-  const { data: bookingsRaw, isLoading: bookingsLoading, error: bookingsError, refetch: refetchBookings } = useQuery({
-    queryKey: ['userCourtBookings', userId],
-    enabled: typeof userId === 'number',
-    queryFn: () => listCourtBookings({ userid: userId! })
-  })
-
-  const { data: bookingsAllRaw } = useQuery({
-    queryKey: ['courtBookingsAllFallback', userId],
-    enabled: typeof userId === 'number' && !bookingsLoading && Array.isArray(bookingsRaw) && bookingsRaw.length === 0,
-    queryFn: () => listCourtBookings()
-  })
+  const dashboardRaw = dashboard.data
+  const bookingsLoading = dashboard.isLoading
+  const bookingsError = dashboard.error
+  const bookingsRaw = dashboardRaw?.court_bookings ?? []
+  const bookingsAllRaw: CourtBookingRow[] = []
 
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {
     let base: CourtBookingRow[] = []
@@ -450,7 +444,7 @@ export default function TsCreate() {
             qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
           } catch {}
 
-          qc.invalidateQueries({ queryKey: ['trainingSessionBookingsByUserId', userId] })
+          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         })()
       }
 
@@ -557,7 +551,14 @@ export default function TsCreate() {
     }
   }, [availableEnrichedBookings, selectedBookingId])
 
-  useFocusEffect(useCallback(() => { if (typeof userId === 'number') { refetchBookings(); try { refetchSessionsCombined() } catch {}; try { refetchEventsCombined() } catch {} } }, [userId, refetchBookings]))
+  useFocusEffect(
+    useCallback(() => {
+      if (typeof userId === 'number') {
+        try { refetchSessionsCombined() } catch {}
+        try { refetchEventsCombined() } catch {}
+      }
+    }, [userId, refetchSessionsCombined, refetchEventsCombined])
+  )
 
   return (
     <View style={styles.screen}>
@@ -636,7 +637,7 @@ export default function TsCreate() {
               {remoteImageUrls.map((uri) => (
                 <View key={uri} style={styles.coverFrame}>
                   <View style={styles.coverPressable}>
-                    <Image source={{ uri }} style={styles.coverImage} />
+                    <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                   </View>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                     <Text style={styles.removeXText}>×</Text>

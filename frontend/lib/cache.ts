@@ -10,6 +10,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 type CacheEnvelope<T> = { v: T; exp?: number; swrExp?: number }
 
+const inFlightFetches = new Map<string, Promise<any>>()
+
+async function runSingleFlight<T>(key: string, fetcher: () => Promise<T>, ttlMs: number, swrMs?: number): Promise<T> {
+  const existing = inFlightFetches.get(key)
+  if (existing) return existing as Promise<T>
+
+  const promise = (async () => {
+    const fresh = await fetcher()
+    await setCache(key, fresh, ttlMs, swrMs)
+    return fresh
+  })()
+
+  inFlightFetches.set(key, promise)
+  try {
+    return await promise
+  } finally {
+    if (inFlightFetches.get(key) === promise) inFlightFetches.delete(key)
+  }
+}
+
 // Core get (returns null if missing or expired hard TTL)
 export async function getCache<T = any>(key: string): Promise<T | null> {
   try {
@@ -75,18 +95,14 @@ export async function fetchWithCache<T = any>(opts: {
       // Hard expiry check
       if (envelope.exp && now > envelope.exp) {
         // expired -> fetch fresh synchronously
-        const fresh = await fetcher()
-        await setCache(key, fresh, ttlMs, swrMs)
-        return fresh
+        return runSingleFlight(key, fetcher, ttlMs, swrMs)
       }
       // Still valid hard ttl
       const val = envelope.v
       // Stale-while-revalidate background pass
       if (envelope.swrExp && now > envelope.swrExp) {
         // Fire & forget refresh
-        Promise.resolve()
-          .then(fetcher)
-          .then(fresh => setCache(key, fresh, ttlMs, swrMs))
+        runSingleFlight(key, fetcher, ttlMs, swrMs)
           .catch(err => {
             if (onBackgroundRefreshError) onBackgroundRefreshError(err)
           })
@@ -95,9 +111,7 @@ export async function fetchWithCache<T = any>(opts: {
     } catch { /* fall through to fetch */ }
   }
   // No cache
-  const fresh = await fetcher()
-  await setCache(key, fresh, ttlMs, swrMs)
-  return fresh
+  return runSingleFlight(key, fetcher, ttlMs, swrMs)
 }
 
 // Utility: hydrate state from cache then refresh in background

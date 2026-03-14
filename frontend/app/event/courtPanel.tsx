@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { Image as ExpoImage } from 'expo-image'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 
@@ -1671,10 +1672,10 @@ export default function CourtPanel(props: { ownerId: number | null }) {
         >
           <View style={styles.cardImageWrap}>
             {imageUri ? (
-              <Image
+              <ExpoImage
                 source={{ uri: optimizeRemoteImageUrl(imageUri) }}
                 style={styles.cardImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ) : (
               <View style={styles.cardImageFallback}>
@@ -1797,7 +1798,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                   <View key={b.courtbookingid} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                        {pfpUri ? <Image source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
+                        {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
                           <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : 'Unknown time'}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
@@ -1919,7 +1920,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                               const pfpUri = bookingUserPfps[uid] || null
                               return (
                                 <TouchableOpacity key={b.courtbookingid} activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#FED7AA' }}>
-                                  {pfpUri ? <Image source={{ uri: pfpUri }} style={{ width: 34, height: 34, borderRadius: 17 }} /> : <Image source={ICONS.accountCircle} style={{ width: 34, height: 34 }} resizeMode="contain" />}
+                                  {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 34, height: 34, borderRadius: 17 }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 34, height: 34 }} resizeMode="contain" />}
                                   <View style={{ flex: 1, marginLeft: 8 }}>
                                     <Text style={{ fontWeight: '700', fontSize: 13 }}>{displayName}</Text>
                                     <Text style={{ color: '#555', fontSize: 12, marginTop: 1 }}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : ''}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
@@ -1956,7 +1957,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                         style={{ flexDirection: 'row', alignItems: 'center' }}
                       >
                         {bookingOwner.pfp ? (
-                          <Image source={{ uri: bookingOwner.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} />
+                          <ExpoImage source={{ uri: bookingOwner.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                         ) : (
                           <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                         )}
@@ -1985,7 +1986,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
               <Text style={styles.label}>Venue Name</Text>
               <TextInput value={editName} onChangeText={setEditName} placeholder="Venue name" style={styles.input} />
 
-              <Text style={styles.label}>Court Name</Text>
+              <Text style={styles.label}>Court List</Text>
               {playingCourtsLoading ? (
                 <SkeletonPulse>
                   <View style={styles.subCourtRow}>
@@ -1997,30 +1998,36 @@ export default function CourtPanel(props: { ownerId: number | null }) {
               ) : subCourtOptions.length === 0 ? (
                 <Text style={styles.helperText}>No courts found.</Text>
               ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subCourtRow}>
-                  {subCourtOptions.map((base) => {
+                <View style={{ marginBottom: 6 }}>
+                  {subCourtOptions.map((base, idx) => {
                     const active = String(selectedVenueCourtBaseName || '').trim().toLowerCase() === base.toLowerCase()
                     return (
-                      <TouchableOpacity
-                        key={`main-${base}`}
-                        onPress={() => setSelectedVenueCourtBaseName(base)}
-                        activeOpacity={0.85}
-                        style={[styles.subCourtPill, active && styles.subCourtPillActive]}
-                      >
-                        <Text style={[styles.subCourtPillText, active && styles.subCourtPillTextActive]} numberOfLines={1}>
-                          {base}
-                        </Text>
-                      </TouchableOpacity>
+                      <View key={`main-${base}`} style={{ marginBottom: 10 }}>
+                        <Text style={styles.label}>{`Court ${idx + 1}:`}</Text>
+                        {active ? (
+                          <TextInput
+                            value={venueCourtBaseEditName}
+                            onChangeText={setVenueCourtBaseEditName}
+                            placeholder={`Court ${idx + 1} name`}
+                            style={styles.input}
+                          />
+                        ) : (
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={() => {
+                              setSelectedVenueCourtBaseName(base)
+                              setVenueCourtBaseEditName(base)
+                            }}
+                            style={[styles.input, { justifyContent: 'center' }]}
+                          >
+                            <Text style={{ fontSize: 14, color: '#111' }} numberOfLines={1}>{base}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )
                   })}
-                </ScrollView>
+                </View>
               )}
-              <TextInput
-                value={venueCourtBaseEditName}
-                onChangeText={setVenueCourtBaseEditName}
-                placeholder="Court name"
-                style={styles.input}
-              />
 
               <Text style={styles.label}>Address</Text>
               <View style={styles.addressRow}>
@@ -2169,7 +2176,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 {(subEditImages || []).map((uri) => (
                   <View key={uri} style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
                     <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                      <Image source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} />
+                      <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => requestRemoveImage(uri, 'sub')} style={styles.removeXBtn} activeOpacity={0.85}>
                       <Text style={styles.removeXText}>×</Text>
@@ -2372,7 +2379,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                       {(d.images || []).map((uri) => (
                         <View key={uri} style={[styles.serviceCoverFrame, imageUploading && styles.btnDisabled]}>
                           <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                            <Image source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} />
+                            <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => removeServiceImage(d.localId, uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                             <Text style={styles.removeXText}>×</Text>
@@ -2421,7 +2428,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
               {editImages.map((uri) => (
                 <View key={uri} style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                    <Image source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} />
+                    <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri, 'main')} style={styles.removeXBtn} activeOpacity={0.85}>
                     <Text style={styles.removeXText}>×</Text>

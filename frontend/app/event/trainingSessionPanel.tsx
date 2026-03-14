@@ -15,6 +15,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
+import { Image as ExpoImage } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
@@ -1017,7 +1018,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                   >
                     {a.pfp ? (
-                      <Image source={{ uri: a.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} />
+                      <ExpoImage source={{ uri: a.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                     )}
@@ -1151,7 +1152,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                   >
                     {p.pfp ? (
-                      <Image source={{ uri: p.pfp }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E7EB' }} />
+                      <ExpoImage source={{ uri: p.pfp }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 40, height: 40 }} resizeMode="contain" />
                     )}
@@ -1235,7 +1236,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flexDirection: 'row', alignItems: 'center' }}
                   >
                     {h.pfp ? (
-                      <Image source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} />
+                      <ExpoImage source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                     )}
@@ -1398,7 +1399,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       }}
                     >
                       <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                        <Image source={{ uri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                        <ExpoImage source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                       </View>
                       <TouchableOpacity
                         activeOpacity={0.85}

@@ -6,7 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 type Json = Record<string, any>
 
-async function refreshAccessToken(): Promise<boolean> {
+let refreshTokenPromise: Promise<boolean> | null = null
+
+async function refreshAccessTokenRequest(): Promise<boolean> {
 	try {
 		const raw = await AsyncStorage.getItem('@backendAuth')
 		if (!raw) return false
@@ -36,6 +38,14 @@ async function refreshAccessToken(): Promise<boolean> {
 	return false
 }
 
+async function refreshAccessToken(): Promise<boolean> {
+	if (refreshTokenPromise) return refreshTokenPromise
+	refreshTokenPromise = refreshAccessTokenRequest().finally(() => {
+		refreshTokenPromise = null
+	})
+	return refreshTokenPromise
+}
+
 async function getLocalBackendToken(): Promise<{ token?: string; exp?: number } | null> {
 	try {
 		const raw = await AsyncStorage.getItem('@backendAuth')
@@ -51,44 +61,50 @@ async function getLocalBackendToken(): Promise<{ token?: string; exp?: number } 
 	} catch { return null }
 }
 
+function isProtectedEndpoint(path: string): boolean {
+	return /^(?:\/courtbookings|\/servicebookings|\/courts|\/events|\/eventbookings|\/trainingsessions|\/trainingsessioninfo|\/tsbookings|\/blocklist|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary|\/notifications|\/reviews|\/me|\/venues)/.test(path)
+}
+
+function isRefreshEndpoint(path: string): boolean {
+	return /^\/auth\/refresh(?:\?|$)/.test(path)
+}
+
+async function buildAuthHeader(): Promise<Record<string, string>> {
+	const backendTok = await getLocalBackendToken()
+	const now = Date.now()
+	if (backendTok?.token && backendTok.exp && backendTok.exp > now + 5_000) {
+		return { Authorization: `Bearer ${backendTok.token}` }
+	}
+
+	try {
+		const { data } = await supabase.auth.getSession()
+		const token = data?.session?.access_token
+		if (token) {
+			return { Authorization: `Bearer ${token}` }
+		}
+	} catch {}
+
+	try {
+		const localToken = await AsyncStorage.getItem('@localAuthToken')
+		if (localToken) return { Authorization: `Bearer ${localToken}` }
+	} catch {}
+
+	return {}
+}
+
 async function request(path: string, options: RequestInit & { debugLabel?: string } = {}, attempt: number = 0) {
 	const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`
 	const t0 = Date.now()
 	const debugLabel = options.debugLabel || path
-	// Attach Authorization Bearer token when Supabase session present
-	let authHeader: Record<string,string> = {}
-	// Prefer backend access token if present & not expired (allows Supabase session token to exist without overriding backend auth)
-	const backendTok = await getLocalBackendToken()
-	const now = Date.now()
-	if (backendTok?.token && backendTok.exp && backendTok.exp > now + 5_000) { // 5s skew buffer
-		authHeader = { Authorization: `Bearer ${backendTok.token}` }
-	} else {
-		// Attempt Supabase session token, else legacy local token fallback
-		try {
-			const { data } = await supabase.auth.getSession()
-			const token = data?.session?.access_token
-			if (token) {
-				authHeader = { Authorization: `Bearer ${token}` }
-			} else {
-				const localToken = await AsyncStorage.getItem('@localAuthToken')
-				if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
-			}
-		} catch {
-			try {
-				const localToken = await AsyncStorage.getItem('@localAuthToken')
-				if (localToken) authHeader = { Authorization: `Bearer ${localToken}` }
-			} catch {}
-		}
-	}
-	// Preflight: if this endpoint is protected (heuristic) ensure access token fresh
-	const isProtectedEndpoint = /^(?:\/courtbookings|\/servicebookings|\/courts|\/events|\/eventbookings|\/trainingsessions|\/trainingsessioninfo|\/tsbookings|\/blocklist|\/favouritecourts|\/courtavailability|\/courtinfo|\/userinfo|\/cloudinary)/.test(path)
-	if (isProtectedEndpoint) {
+	const protectedEndpoint = isProtectedEndpoint(path)
+	if (protectedEndpoint && !isRefreshEndpoint(path)) {
 		const bt = await getLocalBackendToken()
 		const nowMs = Date.now()
 		if (bt?.token && bt.exp && bt.exp <= nowMs + 30_000) { // expires within 30s or already
 			await refreshAccessToken()
 		}
 	}
+	const authHeader = await buildAuthHeader()
 	const res = await fetch(url, {
 		method: options.method || 'GET',
 		signal: options.signal,
@@ -110,8 +126,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		const detail = typeof detailRaw === 'string' ? detailRaw : (() => {
 			try { return JSON.stringify(detailRaw) } catch { return String(detailRaw) }
 		})()
-		// Broaden automatic refresh: any 401 Invalid token (expired or signature) triggers one retry
-		if (res.status === 401 && attempt === 0 && /Invalid token:/i.test(detail)) {
+		if (res.status === 401 && attempt === 0 && protectedEndpoint && !isRefreshEndpoint(path)) {
 			const refreshed = await refreshAccessToken()
 			if (refreshed) {
 				return request(path, options, 1)
@@ -120,6 +135,57 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		throw new Error(detail)
 	}
 	return data
+}
+
+// ---- Notifications ----
+
+export type NotificationCategory = 'court' | 'event' | 'training'
+export type NotificationStatus = 'unread' | 'read'
+
+export type NotificationRow = {
+	notificationid: number
+	status: NotificationStatus | string
+	userid: number
+	title: string
+	message: string
+	time: string
+	notificationtype: string
+	notificationtypeid?: number | null
+	category?: NotificationCategory | null
+	kind?: string | null
+	data?: Record<string, any> | null
+	read_at?: string | null
+}
+
+export async function listNotifications(params: {
+	category?: NotificationCategory
+	status?: NotificationStatus
+	limit?: number
+	offset?: number
+} = {}): Promise<NotificationRow[]> {
+	const qs = new URLSearchParams()
+	if (params.category) qs.set('category', params.category)
+	if (params.status) qs.set('status', params.status)
+	if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+	if (typeof params.offset === 'number') qs.set('offset', String(params.offset))
+	const suffix = qs.toString() ? `?${qs.toString()}` : ''
+	const data = await request(`/notifications${suffix}`, { debugLabel: 'listNotifications' })
+	return Array.isArray(data) ? (data as NotificationRow[]) : []
+}
+
+export async function markNotificationRead(notificationid: number): Promise<NotificationRow> {
+	return await request(`/notifications/${notificationid}/read`, {
+		method: 'PATCH',
+		debugLabel: 'markNotificationRead'
+	}) as NotificationRow
+}
+
+export async function markAllNotificationsRead(category?: NotificationCategory): Promise<{ ok: boolean }> {
+	const suffix = category ? `?category=${encodeURIComponent(category)}` : ''
+	return await request(`/notifications/mark_all_read${suffix}`, {
+		method: 'PATCH',
+		debugLabel: 'markAllNotificationsRead'
+	}) as { ok: boolean }
 }
 
 // ---- Auto status completion (upcoming -> completed) ----
@@ -772,6 +838,12 @@ export async function getUserInfoByUserId(userid: number) {
 	return null
 }
 
+export async function getMyIdentity(): Promise<UserInfoRow | null> {
+	const data = await request('/me/identity', { debugLabel: 'getMyIdentity' })
+	if (data && typeof data === 'object') return data as UserInfoRow
+	return null
+}
+
 export async function updateUserInfo(userid: number, data: Partial<UserInfoRow>) {
 	const path = `/userinfo/${encodeURIComponent(userid)}`
 	const res = await request(path, {
@@ -862,6 +934,15 @@ export async function getUserInfoByUserIdCached(userid: number) {
 	})
 }
 
+export async function getMyIdentityCached(userid: number) {
+	return fetchWithCache<UserInfoRow | null>({
+		key: `cache:me:identity:user:${userid}:v1`,
+		ttlMs: 60 * 1000,
+		swrMs: 120 * 1000,
+		fetcher: () => getMyIdentity(),
+	})
+}
+
 // ---- Court Info API ----
 // Existing backend endpoint: GET /courtinfo returns list of courtinfo rows.
 // Shape needed by Map: courtinfoid,courtid,name,address,latitude,longitude,venue,images,availability
@@ -937,8 +1018,8 @@ export async function upsertCourtInfoIntoCache(row: CourtInfoRow, opts?: { ttlMs
 export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 	return fetchWithCache<CourtInfoRow[]>({
 		key: 'cache:courtinfo:v1',
-		ttlMs: 15 * 1000,
-		swrMs: 15 * 1000,
+		ttlMs: 60 * 1000,
+		swrMs: 60 * 1000,
 		fetcher: () => listCourtInfo()
 	})
 }
@@ -1019,6 +1100,27 @@ export async function getPlayingCourtInfo(playingcourtid: number): Promise<Playi
 	return (row || { playingcourtid, images: [] }) as PlayingCourtInfoRow
 }
 
+// Bulk image fetch: one request returns images for ALL playing courts of a venue.
+export async function listPlayingCourtInfoByCourt(
+	courtid: number,
+	signal?: AbortSignal
+): Promise<Record<number, string[]>> {
+	if (!Number.isFinite(courtid)) return {}
+	const data = await request(`/playingcourts/info?courtid=${encodeURIComponent(String(courtid))}`, {
+		debugLabel: 'listPlayingCourtInfoByCourt',
+		signal,
+	})
+	const rows = Array.isArray(data) ? data : []
+	const out: Record<number, string[]> = {}
+	for (const row of rows) {
+		const pid = Number(row?.playingcourtid)
+		if (Number.isFinite(pid)) {
+			out[pid] = Array.isArray(row?.images) ? (row.images as any[]).filter(Boolean).map(String) : []
+		}
+	}
+	return out
+}
+
 export async function patchPlayingCourtInfo(
 	playingcourtid: number,
 	patch: Partial<Pick<PlayingCourtInfoRow, 'images'>>
@@ -1031,7 +1133,24 @@ export async function patchPlayingCourtInfo(
 	}) as Promise<PlayingCourtInfoRow>
 }
 
-// ---- Services ----
+// ---- Venue Booking Bundle ----
+export type VenueBookingBundle = {
+	courtinfo: CourtInfoRow | null
+	playing_courts: (PlayingCourtRow & { images: string[] })[]
+	availability: CourtAvailabilityRow[]
+	services: ServiceRow[]
+}
+
+export async function getVenueBookingData(courtid: number, signal?: AbortSignal): Promise<VenueBookingBundle> {
+	if (!Number.isFinite(courtid)) throw new Error('courtid required')
+	const data = await request(`/venues/${encodeURIComponent(String(courtid))}/booking-data`, {
+		debugLabel: 'getVenueBookingData',
+		signal,
+	})
+	return data as VenueBookingBundle
+}
+
+
 export type ServiceRow = {
 	serviceid: number
 	courtid: number
@@ -1112,6 +1231,10 @@ export type CourtBookingRow = {
 	court_price_at_booking?: number | null
 	duration_minutes?: number | null
 	total_amount?: number | null
+	courtid?: number | null
+	court_name?: string | null
+	linked_events?: any[]
+	linked_trainingsessions?: any[]
 }
 export async function createCourtBooking(payload: Omit<CourtBookingRow,'courtbookingid'>) {
 	return request('/courtbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createCourtBooking' }) as Promise<CourtBookingRow>
@@ -1375,6 +1498,18 @@ export async function listCourtAvailabilityAll(): Promise<CourtAvailabilityRow[]
 	return Array.isArray(data) ? (data as CourtAvailabilityRow[]) : []
 }
 
+export async function getCourtAvailabilityById(availabilityid: number): Promise<CourtAvailabilityRow | null> {
+	if (!Number.isFinite(availabilityid)) throw new Error('availabilityid required')
+	try {
+		const row = await request(`/courtavailability/${encodeURIComponent(String(availabilityid))}`, {
+			debugLabel: 'getCourtAvailabilityById',
+		})
+		return (row as CourtAvailabilityRow) || null
+	} catch {
+		return null
+	}
+}
+
 // ---- Event & Training Session Aggregation Helpers ----
 // These compose multiple REST endpoints into richer objects for UI screens.
 
@@ -1597,28 +1732,33 @@ function normalizeStringArrayLoose(v: unknown): string[] {
 
 // Aggregate events with related meta, court info and organizer name.
 export async function listEventsCombined(): Promise<CombinedEvent[]> {
-	const eventsData = await request('/events', { debugLabel: 'listEvents' })
+	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
+	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+		request('/events', { debugLabel: 'listEvents' }),
+		request('/eventinfo', { debugLabel: 'listEventInfoAll' }),
+		safeGet('/courtbookings', 'listCourtBookingsAll'),
+		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		safeGet('/userinfo', 'listUserInfoAll'),
+	])
+
 	if (!Array.isArray(eventsData)) return []
 	const events: EventRow[] = eventsData as EventRow[]
 
-	// Fetch event info in one call & map
-	const infoRowsRaw = await request('/eventinfo', { debugLabel: 'listEventInfoAll' })
+	// Map event info by event id
 	const infoByEventId = new Map<number, EventInfoMeta>()
 	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as EventInfoMeta[]) infoByEventId.set(r.eventid, r)
 
-	// Batch fetch courtbookings (single call) then filter needed ids
-	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
+	// Map court bookings by id
 	const bookingById = new Map<number, any>()
 	if (Array.isArray(allCourtBookings))
 		for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
 
-	// Get availability ids from bookings then batch fetch all availability slots once
-	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
-	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
+	// Map availability slots by id
 	const availabilityById = new Map<number, any>()
 	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
 
-	// Derive courtids
+	// Derive courtids from the already-resolved maps
+	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
 	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
 	let courtInfoRows: CourtInfoRow[] = []
 	if (courtIds.length) {
@@ -1628,8 +1768,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	// Batch userinfo single call then map by userid
-	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
+	// Map userinfo by userid
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
 
@@ -1801,23 +1940,29 @@ export async function createTrainingSessionWithInfo(payload: CreateTrainingSessi
 
 // Aggregate training sessions similarly.
 export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSession[]> {
-	const tsData = await request('/trainingsessions', { debugLabel: 'listTrainingSessions' })
+	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+		request('/trainingsessions', { debugLabel: 'listTrainingSessions' }),
+		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
+		safeGet('/courtbookings', 'listCourtBookingsAll'),
+		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		safeGet('/userinfo', 'listUserInfoAll'),
+	])
+
 	if (!Array.isArray(tsData)) return []
 	const sessions: TrainingSessionRow[] = tsData as TrainingSessionRow[]
 
-	const infoRowsRaw = await request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' })
 	const infoBySessionId = new Map<number, TrainingSessionInfoMeta>()
 	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as TrainingSessionInfoMeta[]) infoBySessionId.set(r.sessionid, r)
 
-	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
 	const bookingById = new Map<number, any>()
 	if (Array.isArray(allCourtBookings)) for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
 
-	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
-	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
 	const availabilityById = new Map<number, any>()
 	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
 
+	// Derive court IDs from the already-resolved maps
+	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
 	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
 	let courtInfoRows: CourtInfoRow[] = []
 	if (courtIds.length) {
@@ -1827,7 +1972,6 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
 
@@ -1867,23 +2011,29 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 
 // Aggregate training sessions created by a specific coach.
 export async function listTrainingSessionsCombinedByCoachId(coachid: number): Promise<CombinedTrainingSession[]> {
-	const tsData = await request(`/trainingsessions?coachid=${encodeURIComponent(coachid)}`, { debugLabel: 'listTrainingSessionsByCoachId' })
+	// Fetch coach's sessions and all independent lookup tables in parallel.
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+		request(`/trainingsessions?coachid=${encodeURIComponent(coachid)}`, { debugLabel: 'listTrainingSessionsByCoachId' }),
+		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
+		safeGet('/courtbookings', 'listCourtBookingsAll'),
+		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		safeGet('/userinfo', 'listUserInfoAll'),
+	])
+
 	if (!Array.isArray(tsData)) return []
 	const sessions: TrainingSessionRow[] = tsData as TrainingSessionRow[]
 
-	const infoRowsRaw = await request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' })
 	const infoBySessionId = new Map<number, TrainingSessionInfoMeta>()
 	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as TrainingSessionInfoMeta[]) infoBySessionId.set(r.sessionid, r)
 
-	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
 	const bookingById = new Map<number, any>()
 	if (Array.isArray(allCourtBookings)) for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
 
-	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
-	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
 	const availabilityById = new Map<number, any>()
 	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
 
+	// Derive court IDs from the already-resolved maps
+	const neededAvailabilityIds = [...new Set(sessions.map(s => bookingById.get(s.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
 	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
 	let courtInfoRows: CourtInfoRow[] = []
 	if (courtIds.length) {
@@ -1893,7 +2043,6 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
 	const nameByUserId = new Map<number, string | null>()
 	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
 
@@ -1942,6 +2091,70 @@ export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrai
 // Force refresh of the cached combined training sessions list.
 export async function invalidateTrainingSessionsCombinedCache(): Promise<void> {
 	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+}
+
+// ---- Dashboard ----
+// GET /api/me/dashboard — single bootstrap call that returns userinfo + bookings + favourites.
+export type DashboardResponse = {
+	userinfo: UserInfoRow | null
+	favourite_courts: FavouriteCourt[]
+	court_bookings: CourtBookingRow[]
+	event_bookings: EventBookingRow[]
+	training_bookings: TrainingSessionBookingRow[]
+	notifications?: NotificationRow[]
+	events_combined?: CombinedEvent[]
+	training_sessions_combined?: CombinedTrainingSession[]
+}
+
+export async function getDashboard(): Promise<DashboardResponse> {
+	const data = await request('/me/dashboard', { debugLabel: 'getDashboard' })
+	return data as DashboardResponse
+}
+
+// ---- Cancel Bookings ----
+
+export async function cancelCourtBooking(courtbookingid: number): Promise<any> {
+	if (!courtbookingid) throw new Error('courtbookingid required')
+	return request(`/courtbookings/${encodeURIComponent(courtbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ bookingstatus: 'cancelled', status: 'cancelled' }),
+		debugLabel: 'cancelCourtBooking',
+	})
+}
+
+export async function cancelEventBooking(eventbookingid: number): Promise<any> {
+	if (!eventbookingid) throw new Error('eventbookingid required')
+	return request(`/eventbookings/${encodeURIComponent(eventbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ bookingstatus: 'cancelled', status: 'cancelled' }),
+		debugLabel: 'cancelEventBooking',
+	})
+}
+
+export async function cancelTsBooking(tsbookingid: number): Promise<any> {
+	if (!tsbookingid) throw new Error('tsbookingid required')
+	return request(`/tsbookings/${encodeURIComponent(tsbookingid)}`, {
+		method: 'PATCH',
+		body: JSON.stringify({ bookingstatus: 'cancelled', status: 'cancelled' }),
+		debugLabel: 'cancelTsBooking',
+	})
+}
+
+// ---- Reviews ----
+
+export type ReviewIn = {
+	targettype: string   // 'court' | 'event' | 'trainingsession'
+	targetid: number
+	rating: number       // 1-5
+	comment: string
+}
+
+export async function postReview(payload: ReviewIn): Promise<{ reviewid: number }> {
+	return request('/reviews', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'postReview',
+	}) as Promise<{ reviewid: number }>
 }
 
 // ---- Session / Cache Purge ----

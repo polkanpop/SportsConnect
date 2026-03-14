@@ -1,7 +1,9 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi_cache.decorator import cache
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
 from ..db import rest_select, rest_update
 from ..models import CourtInfo
 
@@ -99,6 +101,7 @@ def _enforce_owner_by_courtid(*, courtid: int, current_user: str) -> None:
         raise HTTPException(status_code=403, detail="Not allowed")
 
 @router.get("", response_model=list[CourtInfo])
+@cache(expire=300, key_builder=make_key_builder("courtinfo"))
 async def list_courts(courtids: str | None = Query(default=None)):
     """List courtinfo rows. Optional filter: ?courtids=1,2,3
     (Client-side subset until REST helper supports IN filter)."""
@@ -125,6 +128,7 @@ async def list_courts(courtids: str | None = Query(default=None)):
 
 
 @router.get("/by-courtid/{courtid}", response_model=CourtInfo)
+@cache(expire=300, key_builder=make_key_builder("courtinfo"))
 async def get_court_by_courtid(courtid: int):
     try:
         data = rest_select(
@@ -201,6 +205,7 @@ async def patch_courtinfo_by_courtid(courtid: int, body: dict, current_user: str
     try:
         updated = rest_update("courtinfo", {"courtid": courtid}, patch)
         row = updated[0] if isinstance(updated, list) and updated else updated
+        await invalidate_namespace("courtinfo")
         return _attach_min_full_price(row)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -208,6 +213,7 @@ async def patch_courtinfo_by_courtid(courtid: int, body: dict, current_user: str
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtinfoid}", response_model=CourtInfo)
+@cache(expire=300, key_builder=make_key_builder("courtinfo"))
 async def get_court(courtinfoid: int):
     try:
         data = rest_select(

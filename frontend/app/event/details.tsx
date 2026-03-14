@@ -17,20 +17,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { queryKeys } from '@/hooks/query-keys'
-import { useUserId } from '@/hooks/use-user-id'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { appendHistory } from '@/storage/history'
 import {
   adjustEventParticipants,
   adjustTrainingSessionParticipants,
   getCourtBooking,
+  getCourt,
+  getCourtAvailabilityById,
+  getCourtInfoByCourtId,
   getEventBooking,
   getEventInfoByEventId,
   getTrainingSession,
   getTrainingSessionBooking,
   getTrainingSessionInfoBySessionId,
   getEvent,
-  listEventsByCourtBookingId,
-  listTrainingSessionsByCourtBookingId,
   listCourtAvailabilityAll,
   listCourtInfoCached,
   invalidateEventsCombinedCache,
@@ -145,7 +146,7 @@ export default function DetailsPage() {
   const queryClient = useQueryClient()
   const { id } = useLocalSearchParams<{ id?: string }>()
   const parsed = useMemo(() => parseUnifiedId(id), [id])
-  const { data: userId } = useUserId()
+  const { userId } = useAppBootstrap()
   const [busy, setBusy] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
 
@@ -211,24 +212,53 @@ export default function DetailsPage() {
     enabled: parsed.kind === 'court_booking',
   })
 
-  const courtBookingIdForDeps = useMemo(() => {
+  // Targeted 2-step lookup: availability → courtinfo (avoids bulk-list type-matching issues)
+  const availabilityIdForCourt = useMemo(() => {
     if (parsed.kind !== 'court_booking') return null
-    const raw = (courtBookingQuery.data as any)?.courtbookingid
+    const raw = courtBookingQuery.data?.availabilityid
     const n = Number(raw)
     return Number.isFinite(n) ? n : null
-  }, [parsed.kind, (courtBookingQuery.data as any)?.courtbookingid])
-  const linkedEventsByCourtBookingQuery = useQuery({
-    queryKey: ['details', 'linkedEventsByCourtBooking', courtBookingIdForDeps],
-    queryFn: () => listEventsByCourtBookingId(courtBookingIdForDeps as number),
-    enabled: parsed.kind === 'court_booking' && courtBookingIdForDeps != null,
-    staleTime: 0,
+  }, [parsed.kind, courtBookingQuery.data?.availabilityid])
+
+  const singleAvailQuery = useQuery({
+    queryKey: ['courtavailability', 'single', availabilityIdForCourt],
+    queryFn: () => getCourtAvailabilityById(availabilityIdForCourt!),
+    enabled: availabilityIdForCourt != null,
+    staleTime: 10 * 60_000,
   })
-  const linkedSessionsByCourtBookingQuery = useQuery({
-    queryKey: ['details', 'linkedSessionsByCourtBooking', courtBookingIdForDeps],
-    queryFn: () => listTrainingSessionsByCourtBookingId(courtBookingIdForDeps as number),
-    enabled: parsed.kind === 'court_booking' && courtBookingIdForDeps != null,
-    staleTime: 0,
+
+  const courtCourtId = useMemo(() => {
+    const raw = singleAvailQuery.data?.courtid
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  }, [singleAvailQuery.data?.courtid])
+
+  const singleCourtInfoQuery = useQuery({
+    queryKey: ['courtinfo', 'by-courtid', courtCourtId],
+    queryFn: () => getCourtInfoByCourtId(courtCourtId!),
+    enabled: courtCourtId != null,
+    staleTime: 10 * 60_000,
   })
+
+  const singleCourtQuery = useQuery({
+    queryKey: ['courts', courtCourtId],
+    queryFn: () => getCourt(courtCourtId!),
+    enabled: courtCourtId != null,
+    staleTime: 10 * 60_000,
+  })
+
+  const linkedEventsByCourtBookingQuery = {
+    data: Array.isArray((courtBookingQuery.data as any)?.linked_events) ? (courtBookingQuery.data as any).linked_events : [],
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  }
+  const linkedSessionsByCourtBookingQuery = {
+    data: Array.isArray((courtBookingQuery.data as any)?.linked_trainingsessions) ? (courtBookingQuery.data as any).linked_trainingsessions : [],
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  }
   const eventBookingQuery = useQuery({
     queryKey: ['details', 'eventBooking', parsed.kind === 'event_booking' ? parsed.id : null],
     queryFn: () => getEventBooking((parsed as any).id),
@@ -552,7 +582,7 @@ export default function DetailsPage() {
 
           // Refetch from server so other screens (e.g. courtBooking) clear "already booked" immediately.
           try {
-            await queryClient.invalidateQueries({ queryKey: ['courtbookings', 'user', userid] as any })
+            await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) as any })
           } catch {
             // ignore
           }
@@ -827,8 +857,41 @@ export default function DetailsPage() {
     createdSessionQuery.data?.status,
   ])
 
+  const canReview = useMemo(() => {
+    const lower = (v: any) => (typeof v === 'string' ? v.toLowerCase() : '')
+    if (parsed.kind === 'court_booking') return lower(courtBookingQuery.data?.bookingstatus ?? (courtBookingQuery.data as any)?.status).includes('complete')
+    if (parsed.kind === 'event_booking') return lower(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete')
+    if (parsed.kind === 'session_booking') return lower(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete')
+    return false
+  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data])
+
+  const reviewNavParams = useMemo(() => {
+    if (parsed.kind === 'court_booking') {
+      // Use courtCourtId directly so the button shows as soon as we know the courtid,
+      // even before courtinfo name finishes loading.
+      const courtid = courtCourtId ?? courtBookingCourt?.courtid
+      if (!Number.isFinite(courtid) || courtid == null) return null
+      return { targettype: 'court', targetid: String(courtid), title: encodeURIComponent(courtBookingCourt?.name ?? 'Court Booking') }
+    }
+    if (parsed.kind === 'event_booking') {
+      const eventid = (eventBookingQuery.data as any)?.eventid
+      if (typeof eventid !== 'number') return null
+      const ev = Array.isArray(eventsCombinedQuery.data) ? eventsCombinedQuery.data.find((x) => x.eventid === eventid) : null
+      return { targettype: 'event', targetid: String(eventid), title: encodeURIComponent(ev?.title ?? `Event #${eventid}`) }
+    }
+    if (parsed.kind === 'session_booking') {
+      const sessionid = (sessionBookingQuery.data as any)?.sessionid
+      if (typeof sessionid !== 'number') return null
+      const s = Array.isArray(sessionsCombinedQuery.data) ? sessionsCombinedQuery.data.find((x) => x.sessionid === sessionid) : null
+      return { targettype: 'trainingsession', targetid: String(sessionid), title: encodeURIComponent((s as any)?.title ?? `Session #${sessionid}`) }
+    }
+    return null
+  }, [parsed.kind, courtBookingCourt, eventBookingQuery.data, eventsCombinedQuery.data, sessionBookingQuery.data, sessionsCombinedQuery.data])
+
   const isLoading =
     courtBookingQuery.isLoading ||
+    singleAvailQuery.isLoading ||
+    singleCourtInfoQuery.isLoading ||
     eventBookingQuery.isLoading ||
     sessionBookingQuery.isLoading ||
     createdEventQuery.isLoading ||
@@ -855,22 +918,17 @@ export default function DetailsPage() {
 
   const courtBookingCourt = useMemo(() => {
     if (parsed.kind !== 'court_booking') return null
-    const b = courtBookingQuery.data
-    if (!b) return null
-    const availabilityid = b.availabilityid
-    const availabilityList = courtAvailabilityQuery.data
-    const courtInfoList = courtInfoQuery.data
-    if (!Array.isArray(availabilityList) || !Array.isArray(courtInfoList)) return null
-    const availability = availabilityList.find((a: any) => a?.availabilityid === availabilityid)
-    const courtid = availability?.courtid
-    if (typeof courtid !== 'number') return null
-    const ci = courtInfoList.find((x) => x?.courtid === courtid)
+    if (!courtBookingQuery.data) return null
+    const ci = singleCourtInfoQuery.data
+    const courtBase = singleCourtQuery.data
+    // courtCourtId is available as soon as singleAvailQuery resolves (one step earlier)
+    if (courtCourtId == null && !ci && !courtBase) return null
     return {
-      courtid,
-      name: (ci as any)?.name ?? null,
+      courtid: courtCourtId,
+      name: (ci as any)?.name ?? (courtBase as any)?.courtinfo ?? null,
       address: (ci as any)?.address ?? null,
     }
-  }, [parsed.kind, courtBookingQuery.data, courtAvailabilityQuery.data, courtInfoQuery.data])
+  }, [parsed.kind, courtBookingQuery.data, singleCourtInfoQuery.data, singleCourtQuery.data, courtCourtId])
 
   const openCancelModal = () => setShowCancelModal(true)
   const closeCancelModal = () => setShowCancelModal(false)
@@ -1014,7 +1072,12 @@ export default function DetailsPage() {
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Section title="Summary">
-            <Row label="Record ID" value={typeof id === 'string' ? id : 'Unknown'} />
+            <Row
+              label={parsed.kind === 'court_booking' ? 'Venue Name' : 'Record'}
+              value={parsed.kind === 'court_booking'
+                ? (courtBookingCourt?.name || 'Unknown')
+                : (typeof id === 'string' ? id : 'Unknown')}
+            />
             <Row label="Type" value={headerTitle} />
           </Section>
 
@@ -1026,7 +1089,7 @@ export default function DetailsPage() {
               <>
                 <Section title="Booking">
                   <Row label="Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
-                  <Row label="Court" value={courtBookingCourt?.name || 'Unknown'} />
+                  <Row label="Venue Name" value={courtBookingCourt?.name || 'Unknown'} />
                   <Row label="Address" value={courtBookingCourt?.address || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
@@ -1048,7 +1111,7 @@ export default function DetailsPage() {
                   <Row label="Title" value={ev?.title || `Event #${eventid}`} />
                   <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
-                  <Row label="Court" value={eventCourtName || ev?.court_name || 'Unknown'} />
+                  <Row label="Venue" value={eventCourtName || ev?.court_name || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label="Description" value={ev?.description || '—'} />
@@ -1069,7 +1132,7 @@ export default function DetailsPage() {
                   <Row label="Title" value={s?.title || `Session #${sessionid}`} />
                   <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
-                  <Row label="Court" value={sessionCourtName || s?.court_name || 'Unknown'} />
+                  <Row label="Venue" value={sessionCourtName || s?.court_name || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label="Description" value={s?.description || '—'} />
@@ -1139,6 +1202,14 @@ export default function DetailsPage() {
           </Pressable>
           {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
             <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>
+          )}
+          {canReview && reviewNavParams && (
+            <Pressable
+              style={({ pressed }) => [styles.reviewBtn, pressed && { opacity: 0.85 }]}
+              onPress={() => router.push({ pathname: '/event/reviewForm', params: reviewNavParams } as any)}
+            >
+              <Text style={styles.reviewBtnText}>Write a Review</Text>
+            </Pressable>
           )}
         </ScrollView>
       )}
@@ -1266,6 +1337,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontSize: 12,
     fontWeight: '600',
+  },
+  reviewBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  reviewBtnText: {
+    color: '#FFF',
+    fontWeight: '900',
+    fontSize: 15,
   },
 
   // Modal (synced with Settings sign-out modal)

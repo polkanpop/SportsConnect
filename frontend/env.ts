@@ -6,6 +6,10 @@ export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
 export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
 // Backend FastAPI base URL (set EXPO_PUBLIC_API_BASE_URL in .env or eas.json env)
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api'
+// Goong key used by the custom native-map branch for Goong-hosted map styles/tiles.
+export const GOONG_MAPTILES_KEY = process.env.EXPO_PUBLIC_GOONG_MAPTILES_KEY ?? ''
+// Optional public token for the Mapbox SDK runtime used by @rnmapbox/maps.
+export const MAPBOX_PUBLIC_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN ?? ''
 // Auto email verification + deep link auto-login flag
 export const AUTO_EMAIL_LOGIN = (process.env.EXPO_PUBLIC_AUTO_EMAIL_LOGIN || '').toLowerCase() === 'true'
 

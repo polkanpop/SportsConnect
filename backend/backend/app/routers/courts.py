@@ -5,9 +5,12 @@ from typing import Any, Optional
 from datetime import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+import httpx
 from pydantic import BaseModel, Field
+from fastapi_cache.decorator import cache
 
 from ..auth import get_current_user
+from ..cache_utils import make_key_builder
 from ..db import get_http_client, rest_delete, rest_insert, rest_select, rest_update, rest_upsert
 
 router = APIRouter(prefix="/courts", tags=["courts"])
@@ -197,28 +200,31 @@ def _get_goong_distance_key() -> Optional[str]:
     return _get_env("GOONG_DISTANCE_API_KEY")
 
 
-def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixResponse:
+async def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixResponse:
     key_raw = _get_goong_distance_key()
     if not key_raw:
         raise HTTPException(status_code=500, detail="Missing env var: GOONG_DISTANCE_API_KEY")
     key = key_raw.strip().strip('"').strip("'")
 
-    client = get_http_client()
-
-    def _call(url: str):
-        return client.get(
-            url,
-            params={
-                "origins": origin,
-                "destinations": destination,
-                "api_key": key,
-            },
+    params = {
+        "origins": origin,
+        "destinations": destination,
+        "api_key": key,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Goong docs/examples commonly use /DistanceMatrix; some deployments are case-sensitive.
+            r = await client.get("https://rsapi.goong.io/DistanceMatrix", params=params)
+            if r.status_code == 404:
+                r = await client.get("https://rsapi.goong.io/distancematrix", params=params)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "[distance_matrix] transport_error provider=goong origin=%r destination=%r error=%s",
+            origin,
+            destination,
+            str(exc),
         )
-
-    # Goong docs/examples commonly use /DistanceMatrix; some deployments are case-sensitive.
-    r = _call("https://rsapi.goong.io/DistanceMatrix")
-    if r.status_code == 404:
-        r = _call("https://rsapi.goong.io/distancematrix")
+        raise HTTPException(status_code=502, detail="Goong provider transport error") from exc
 
     if r.status_code >= 400:
         logger.warning(
@@ -275,29 +281,32 @@ def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixRe
     )
 
 
-def _goong_distance_matrix_batch(*, origin: str, destinations: list[str]) -> list[DistanceMatrixResponse]:
+async def _goong_distance_matrix_batch(*, origin: str, destinations: list[str]) -> list[DistanceMatrixResponse]:
     # Goong supports multiple destinations with "lat,lng|lat,lng".
     key_raw = _get_goong_distance_key()
     if not key_raw:
         raise HTTPException(status_code=500, detail="Missing env var: GOONG_DISTANCE_API_KEY")
     key = key_raw.strip().strip('"').strip("'")
-
-    client = get_http_client()
     destination = "|".join(destinations)
 
-    def _call(url: str):
-        return client.get(
-            url,
-            params={
-                "origins": origin,
-                "destinations": destination,
-                "api_key": key,
-            },
+    params = {
+        "origins": origin,
+        "destinations": destination,
+        "api_key": key,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.get("https://rsapi.goong.io/DistanceMatrix", params=params)
+            if r.status_code == 404:
+                r = await client.get("https://rsapi.goong.io/distancematrix", params=params)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "[distance_matrix_batch] transport_error provider=goong origin=%r destinations_count=%s error=%s",
+            origin,
+            len(destinations),
+            str(exc),
         )
-
-    r = _call("https://rsapi.goong.io/DistanceMatrix")
-    if r.status_code == 404:
-        r = _call("https://rsapi.goong.io/distancematrix")
+        raise HTTPException(status_code=502, detail="Goong provider transport error") from exc
 
     if r.status_code >= 400:
         logger.warning(
@@ -856,7 +865,7 @@ async def distance_matrix(
     try:
         origin = f"{origin_lat},{origin_lng}"
         destination = f"{dest_lat},{dest_lng}"
-        return _goong_distance_matrix(origin=origin, destination=destination)
+        return await _goong_distance_matrix(origin=origin, destination=destination)
     except HTTPException:
         raise
     except Exception as e:
@@ -872,7 +881,7 @@ async def distance_matrix_batch(req: DistanceMatrixBatchRequest, _: str = Depend
             raise HTTPException(status_code=400, detail="Too many destinations; max 25")
         origin = f"{req.origin_lat},{req.origin_lng}"
         destinations = [f"{d.dest_lat},{d.dest_lng}" for d in req.destinations]
-        results = _goong_distance_matrix_batch(origin=origin, destinations=destinations)
+        results = await _goong_distance_matrix_batch(origin=origin, destinations=destinations)
         return DistanceMatrixBatchResponse(results=results)
     except HTTPException:
         raise
@@ -880,6 +889,7 @@ async def distance_matrix_batch(req: DistanceMatrixBatchRequest, _: str = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("", response_model=list[dict])
+@cache(expire=300, key_builder=make_key_builder("courts"))
 async def list_courts():
     try:
         data = rest_select("courts", SELECT_COLUMNS, order={"column": "courtid"})
@@ -888,6 +898,7 @@ async def list_courts():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtid}", response_model=dict)
+@cache(expire=300, key_builder=make_key_builder("courts"))
 async def get_court(courtid: int):
     try:
         row = rest_select("courts", SELECT_COLUMNS, filters={"courtid": courtid}, single=True)

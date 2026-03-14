@@ -1,25 +1,17 @@
 import {
-  getCourtBookingsByUserId,
-  getEventBookingsByUserId,
-  getTrainingSessionBookingsByUserId,
-  invalidateEventsCombinedCache,
-  invalidateTrainingSessionsCombinedCache,
-  listCourtAvailabilityAll,
-  listCourtInfoCached,
-  listEventsCombinedCached,
-  listEventsCombinedByOrganizerId,
-  listTrainingSessionsCombinedCached,
-  listTrainingSessionsCombinedByCoachId,
+  cancelCourtBooking,
+  cancelEventBooking,
+  cancelTsBooking,
 } from "@/lib/backendApi";
-import { useUserId } from "@/hooks/use-user-id";
+import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import { queryKeys } from "@/hooks/query-keys";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -37,6 +29,8 @@ type UnifiedBooking = {
   dateTime: Date;
   startTimestamp?: string | null;
   endTimestamp?: string | null;
+  /** Entity ID used for review submissions (courtid | eventid | sessionid) */
+  targetId?: number;
 };
 
 // Function to get the day of the week from a date string
@@ -107,7 +101,6 @@ const mergeBookings = (params: {
   trainingSessionBookings: any[]
   eventsById: Map<number, any>
   sessionsById: Map<number, any>
-  courtNameByAvailabilityId: Map<number, string>
 }): UnifiedBooking[] => {
   const courtBookings = Array.isArray(params.courtBookings) ? params.courtBookings : [];
   const eventBookings = Array.isArray(params.eventBookings) ? params.eventBookings : [];
@@ -150,13 +143,14 @@ const mergeBookings = (params: {
       const startTs = item.start_timestamp as string | undefined;
       const endTs = item.end_timestamp as string | undefined;
       const dateTime = parseTimestampLoose(startTs ?? null);
-      const availabilityId = typeof item.availabilityid === 'number' ? item.availabilityid : NaN;
-      const courtName = Number.isFinite(availabilityId)
-        ? params.courtNameByAvailabilityId.get(availabilityId)
-        : undefined;
+      const selectedBaseName = typeof (item as any)?.selected_base_name === 'string' ? (item as any).selected_base_name : undefined;
+      const selectedCourtName = typeof (item as any)?.selected_court_name === 'string' ? (item as any).selected_court_name : undefined;
+      const courtName = typeof (item as any)?.court_name === 'string' ? (item as any).court_name : undefined;
+      const displayCourtName = courtName || selectedBaseName || selectedCourtName;
+      const courtId = typeof (item as any)?.courtid === 'number' ? (item as any).courtid : undefined;
       return {
         id: `court_${item.courtbookingid}`,
-        title: courtName || `Court Booking #${item.courtbookingid}`,
+        title: displayCourtName || `Court Booking #${item.courtbookingid}`,
         status: normalizeStatus(item.bookingstatus, item.status, dateTime),
         mode: 'Booking',
         activity: 'court',
@@ -167,6 +161,7 @@ const mergeBookings = (params: {
         dateTime: dateTime,
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
+        targetId: courtId,
       } satisfies UnifiedBooking;
     }),
     ...eventBookings.map((item) => {
@@ -189,6 +184,7 @@ const mergeBookings = (params: {
         dateTime: dateTime,
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
+        targetId: typeof item.eventid === 'number' ? item.eventid : undefined,
       } satisfies UnifiedBooking;
     }),
     ...trainingSessionBookings.map((item) => {
@@ -211,6 +207,7 @@ const mergeBookings = (params: {
         dateTime: dateTime,
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
+        targetId: typeof item.sessionid === 'number' ? item.sessionid : undefined,
       } satisfies UnifiedBooking;
     }),
   ];
@@ -332,88 +329,67 @@ export default function ActivityPage() {
   
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: userId, isLoading: userIdLoading, error: userIdError } = useUserId();
+  const { userId, dashboard, eventsCombined, trainingSessionsCombined } = useAppBootstrap()
+  const userIdLoading = dashboard.isLoading && userId == null
+  const userIdError = dashboard.error
+
+  // Cancel booking state
+  const [cancelTarget, setCancelTarget] = useState<UnifiedBooking | null>(null);
+  const cancelMutation = useMutation({
+    mutationFn: async (item: UnifiedBooking) => {
+      const parts = item.id.split('_');
+      const numericId = parseInt(parts[parts.length - 1], 10);
+      if (item.activity === 'court') return cancelCourtBooking(numericId);
+      if (item.activity === 'event') return cancelEventBooking(numericId);
+      return cancelTsBooking(numericId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: q => {
+        const k = q.queryKey;
+        return Array.isArray(k) && (
+          k[0] === 'courtbookings' || k[0] === 'dashboard' ||
+          k[0] === queryKeys.eventsCombined[0] || k[0] === queryKeys.trainingSessionsCombined[0]
+        );
+      }});
+      setCancelTarget(null);
+    },
+    onError: (err: any) => {
+      setCancelTarget(null);
+      alert(err?.message ?? 'Failed to cancel booking.');
+    },
+  });
 
   const onPullToRefresh = useCallback(async () => {
     if (typeof userId !== 'number') return;
     setRefreshing(true);
     try {
-      // Bust combined-list caches so refetch returns fresh.
-      await Promise.all([
-        invalidateEventsCombinedCache(),
-        invalidateTrainingSessionsCombinedCache(),
-      ]);
-
-      // Refetch booking + enrichment queries.
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['courtBookings', userId] }),
-        queryClient.refetchQueries({ queryKey: ['eventBookings', userId] }),
-        queryClient.refetchQueries({ queryKey: ['trainingSessionBookings', userId] }),
-        queryClient.refetchQueries({ queryKey: queryKeys.eventsCombined }),
-        queryClient.refetchQueries({ queryKey: queryKeys.trainingSessionsCombined }),
-        queryClient.refetchQueries({ queryKey: ['courtAvailabilityAll'] }),
-        queryClient.refetchQueries({ queryKey: ['courtInfoAll'] }),
-        // Hosting-mode queries (safe to call; refetches only if query exists)
-        queryClient.refetchQueries({ queryKey: ['createdEventsCombined', userId] }),
-        queryClient.refetchQueries({ queryKey: ['createdTrainingSessionsCombined', userId] }),
-      ]);
+      await queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId) });
     } finally {
       setRefreshing(false);
     }
   }, [queryClient, userId]);
 
+  // Throttle focus-triggered invalidation to at most once per 60 s to prevent
+  // spamming the backend every time the user switches tabs.
+  const lastFocusInvalidateRef = useRef<number>(0)
+
   // Ensure bookings refresh when returning to this tab after creating a booking.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId !== 'number') return;
-      queryClient.invalidateQueries({ queryKey: ['courtBookings', userId] });
-      queryClient.invalidateQueries({ queryKey: ['eventBookings', userId] });
-      queryClient.invalidateQueries({ queryKey: ['trainingSessionBookings', userId] });
-
-      // Make Activity feel "sensitive": bust combined-list AsyncStorage caches and refetch
-      // so status/participant changes show up immediately when coming back.
-      void invalidateEventsCombinedCache();
-      void invalidateTrainingSessionsCombinedCache();
-      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined });
-      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined });
-
-      // Refresh Hosting mode data as well.
-	  queryClient.invalidateQueries({ queryKey: ['createdEventsCombined', userId] });
-	  queryClient.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] });
+      const now = Date.now()
+      if (now - lastFocusInvalidateRef.current < 60_000) return
+      lastFocusInvalidateRef.current = now
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) });
     }, [queryClient, userId])
   );
 
-  const { data: courtBookingsRaw, isLoading: courtLoading, error: courtError } = useQuery({
-    queryKey: ["courtBookings", userId],
-    queryFn: () => getCourtBookingsByUserId(userId as number),
-    enabled: typeof userId === 'number',
-  });
-
-  const { data: eventBookingsRaw, isLoading: eventLoading, error: eventError } = useQuery({
-    queryKey: ["eventBookings", userId],
-    queryFn: () => getEventBookingsByUserId(userId as number),
-    enabled: typeof userId === 'number',
-  });
-
-  const { data: trainingSessionBookingsRaw, isLoading: trainingLoading, error: trainingError } = useQuery({
-    queryKey: ["trainingSessionBookings", userId],
-    queryFn: () => getTrainingSessionBookingsByUserId(userId as number),
-    enabled: typeof userId === 'number',
-  });
-
-  const { data: createdEventsCombinedRaw, isLoading: createdEventsLoading, error: createdEventsError } = useQuery({
-    queryKey: ["createdEventsCombined", userId],
-    queryFn: () => listEventsCombinedByOrganizerId(userId as number),
-    enabled: calendarMode === 'Hosting' && typeof userId === 'number',
-    staleTime: 0,
-  });
-
-  const { data: createdTrainingSessionsCombinedRaw, isLoading: createdSessionsLoading, error: createdSessionsError } = useQuery({
-    queryKey: ["createdTrainingSessionsCombined", userId],
-    queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
-    enabled: calendarMode === 'Hosting' && typeof userId === 'number',
-    staleTime: 0,
-  });
+  const dashboardRaw = dashboard.data
+  const dashboardLoading = dashboard.isLoading
+  const dashboardError = dashboard.error
+  const courtBookingsRaw = dashboardRaw?.court_bookings ?? []
+  const eventBookingsRaw = dashboardRaw?.event_bookings ?? []
+  const trainingSessionBookingsRaw = dashboardRaw?.training_bookings ?? []
 
   const courtBookingsData = useMemo(() => (Array.isArray(courtBookingsRaw) ? courtBookingsRaw : []), [courtBookingsRaw]);
   const eventBookingsData = useMemo(() => (Array.isArray(eventBookingsRaw) ? eventBookingsRaw : []), [eventBookingsRaw]);
@@ -422,78 +398,25 @@ export default function ActivityPage() {
     [trainingSessionBookingsRaw]
   );
 
-  const { data: eventsCombinedRaw } = useQuery({
-    queryKey: queryKeys.eventsCombined,
-    queryFn: () => listEventsCombinedCached(),
-    enabled: eventBookingsData.length > 0,
-    staleTime: 0,
-  });
-
-  const { data: sessionsCombinedRaw } = useQuery({
-    queryKey: queryKeys.trainingSessionsCombined,
-    queryFn: () => listTrainingSessionsCombinedCached(),
-    enabled: trainingSessionBookingsData.length > 0,
-    staleTime: 0,
-  });
-
-  const { data: courtAvailabilityRaw } = useQuery({
-    queryKey: ["courtAvailabilityAll"],
-    queryFn: () => listCourtAvailabilityAll(),
-    enabled: courtBookingsData.length > 0,
-    staleTime: 5 * 60_000,
-  });
-
-  const { data: courtInfoRaw } = useQuery({
-    queryKey: ["courtInfoAll"],
-    queryFn: () => listCourtInfoCached(),
-    enabled: courtBookingsData.length > 0,
-    staleTime: 5 * 60_000,
-  });
-
   const eventsById = useMemo(() => {
     const m = new Map<number, any>();
-    if (Array.isArray(eventsCombinedRaw)) {
-      for (const e of eventsCombinedRaw) {
+    if (Array.isArray(eventsCombined)) {
+      for (const e of eventsCombined) {
         if (typeof e?.eventid === 'number') m.set(e.eventid, e);
       }
     }
     return m;
-  }, [eventsCombinedRaw]);
+  }, [eventsCombined]);
 
   const sessionsById = useMemo(() => {
     const m = new Map<number, any>();
-    if (Array.isArray(sessionsCombinedRaw)) {
-      for (const s of sessionsCombinedRaw) {
+    if (Array.isArray(trainingSessionsCombined)) {
+      for (const s of trainingSessionsCombined) {
         if (typeof s?.sessionid === 'number') m.set(s.sessionid, s);
       }
     }
     return m;
-  }, [sessionsCombinedRaw]);
-
-  const courtNameByAvailabilityId = useMemo(() => {
-    const availabilityById = new Map<number, any>();
-    if (Array.isArray(courtAvailabilityRaw)) {
-      for (const a of courtAvailabilityRaw) {
-        if (typeof a?.availabilityid === 'number') availabilityById.set(a.availabilityid, a);
-      }
-    }
-    const courtInfoByCourtId = new Map<number, any>();
-    if (Array.isArray(courtInfoRaw)) {
-      for (const ci of courtInfoRaw) {
-        if (typeof ci?.courtid === 'number') courtInfoByCourtId.set(ci.courtid, ci);
-      }
-    }
-    const out = new Map<number, string>();
-    for (const booking of courtBookingsData) {
-      const availabilityId = booking?.availabilityid;
-      if (typeof availabilityId !== 'number') continue;
-      const av = availabilityById.get(availabilityId);
-      const courtid = av?.courtid;
-      const name = typeof courtid === 'number' ? (courtInfoByCourtId.get(courtid)?.name as string | undefined) : undefined;
-      if (name) out.set(availabilityId, name);
-    }
-    return out;
-  }, [courtAvailabilityRaw, courtInfoRaw, courtBookingsData]);
+  }, [trainingSessionsCombined]);
 
   const data = useMemo(
     () =>
@@ -503,10 +426,23 @@ export default function ActivityPage() {
         trainingSessionBookings: trainingSessionBookingsData,
         eventsById,
         sessionsById,
-        courtNameByAvailabilityId,
       }),
-    [courtBookingsData, eventBookingsData, trainingSessionBookingsData, eventsById, sessionsById, courtNameByAvailabilityId]
+    [courtBookingsData, eventBookingsData, trainingSessionBookingsData, eventsById, sessionsById]
   );
+
+  const createdEventsCombinedRaw = useMemo(
+    () => (Array.isArray(eventsCombined) && typeof userId === 'number'
+      ? eventsCombined.filter((e: any) => Number(e?.organizerid) === userId)
+      : []),
+    [eventsCombined, userId]
+  )
+
+  const createdTrainingSessionsCombinedRaw = useMemo(
+    () => (Array.isArray(trainingSessionsCombined) && typeof userId === 'number'
+      ? trainingSessionsCombined.filter((s: any) => Number(s?.coachid) === userId)
+      : []),
+    [trainingSessionsCombined, userId]
+  )
 
   const hostingData = useMemo(
     () =>
@@ -544,8 +480,8 @@ export default function ActivityPage() {
   const isLoading =
     userIdLoading ||
     (calendarMode === 'Hosting'
-      ? (createdEventsLoading || createdSessionsLoading)
-      : (courtLoading || eventLoading || trainingLoading));
+      ? dashboardLoading
+      : dashboardLoading);
 
   const getStatusStyle = (status: "Completed" | "Upcoming" | "Cancelled") => {
     switch (status) {
@@ -559,12 +495,13 @@ export default function ActivityPage() {
   const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed';
 
   const recordTitlePrefix = (activity: UnifiedBooking['activity']): string => {
-    if (activity === 'court') return 'Court';
+    if (activity === 'court') return 'Venue';
     if (activity === 'event') return 'Event';
     return 'Training';
   };
 
-  const renderRecord = (item: UnifiedBooking) => (
+  const renderRecord = (item: UnifiedBooking) => {
+    return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() =>
@@ -613,12 +550,26 @@ export default function ActivityPage() {
 
         {item.activity !== 'court' && (
           <Text style={styles.eventMetaLine}>
-            <Text style={styles.eventMetaLabel}>Court:</Text> {item.courtName || 'Unknown'}
+            <Text style={styles.eventMetaLabel}>Venue:</Text> {item.courtName || 'Unknown'}
           </Text>
         )}
+
+        {/* Action buttons — only shown in Booking mode */}
+        {item.mode === 'Booking' && item.status === 'Upcoming' && (
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={(e) => { e.stopPropagation(); setCancelTarget(item); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+          </TouchableOpacity>
+        )}
+
+
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const filteredData = activeData.filter((item) => {
     if (statusFilter !== 'All' && item.status !== statusFilter) return false;
@@ -634,7 +585,7 @@ export default function ActivityPage() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral75 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
           <SkeletonPulse>
             <SkeletonBox width={140} height={24} radius={8} style={{ marginBottom: 16 }} />
@@ -659,7 +610,7 @@ export default function ActivityPage() {
 
   if (!userIdLoading && typeof userId !== 'number') {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral75, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={styles.headerTitle}>Activity</Text>
         <Text style={{ marginTop: 10, color: COLORS.neutral850, textAlign: 'center' }}>
           Please log in to view your activity.
@@ -669,12 +620,10 @@ export default function ActivityPage() {
   }
 
   const loadError = userIdError ||
-    (calendarMode === 'Hosting'
-      ? (createdEventsError || createdSessionsError)
-      : (courtError || eventError || trainingError));
+    dashboardError;
   if (loadError) {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral75 }}>
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0 }}>
         <Text style={styles.headerTitle}>Activity</Text>
         <Text style={{ marginTop: 10, color: COLORS.danger }}>
           Failed to load activity records. Check Metro logs for request details.
@@ -684,15 +633,11 @@ export default function ActivityPage() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral75 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
       <View style={styles.header}>
+        <View style={styles.headerSideSpacer} />
         <Text style={styles.headerTitle}>Activity</Text>
-        <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/event/history")}>
-          <View style={styles.historyButtonContainer}>
-            <Image source={ICONS.clock} style={styles.historyIcon} />
-            <Text style={styles.historyText}>History</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.headerSideSpacer} />
       </View>
 
       <View style={styles.divider} />
@@ -914,6 +859,43 @@ export default function ActivityPage() {
           )}
         </View>
       </ScrollView>
+
+      {/* Cancel Booking Confirmation Modal */}
+      <Modal
+        visible={!!cancelTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelTarget(null)}
+      >
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalBox}>
+            <Text style={styles.cancelModalTitle}>Cancel Booking?</Text>
+            <Text style={styles.cancelModalBody}>
+              Are you sure you want to cancel{'\n'}
+              <Text style={{ fontWeight: '800' }}>{cancelTarget?.title ?? 'this booking'}</Text>?
+            </Text>
+            <View style={styles.cancelModalBtns}>
+              <TouchableOpacity
+                style={[styles.cancelModalBtn, styles.cancelModalKeepBtn]}
+                onPress={() => setCancelTarget(null)}
+                disabled={cancelMutation.isPending}
+              >
+                <Text style={styles.cancelModalKeepText}>Keep</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.cancelModalBtn, styles.cancelModalConfirmBtn]}
+                onPress={() => cancelTarget && cancelMutation.mutate(cancelTarget)}
+                disabled={cancelMutation.isPending}
+              >
+                {cancelMutation.isPending
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Text style={styles.cancelModalConfirmText}>Yes, Cancel</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -923,40 +905,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    backgroundColor: COLORS.neutral200,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+    backgroundColor: COLORS.neutral0,
+  },
+  headerSideSpacer: {
+    width: 78,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
-  },
-  historyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
-  },
-  historyButtonContainer: {
-    backgroundColor: COLORS.darkGray,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 30,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  historyIcon: {
-    width: 18,
-    height: 18,
-    marginRight: 5,
-    tintColor: COLORS.white,
-  },
-  historyText: {
-    fontSize: 16,
-    color: COLORS.white,
+    color: COLORS.neutral975,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.neutral425,
-    marginVertical: 10,
+    backgroundColor: COLORS.neutral300,
+    marginBottom: 10,
   },
   calendarContainer: {
     padding: 20,
@@ -1354,6 +1319,84 @@ const styles = StyleSheet.create({
     color: COLORS.neutral925,
   },
   optionChipTextActive: {
+    color: COLORS.white,
+  },
+  cancelBtn: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: COLORS.danger,
+    alignSelf: 'flex-start',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  reviewBtn: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: COLORS.bootstrapBlue,
+    alignSelf: 'flex-start',
+  },
+  reviewBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  cancelModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  cancelModalBox: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+  },
+  cancelModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.neutral975,
+    marginBottom: 8,
+  },
+  cancelModalBody: {
+    fontSize: 14,
+    color: COLORS.neutral700,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  cancelModalBtns: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  cancelModalKeepBtn: {
+    backgroundColor: COLORS.neutral250,
+  },
+  cancelModalKeepText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
+  cancelModalConfirmBtn: {
+    backgroundColor: COLORS.danger,
+  },
+  cancelModalConfirmText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.white,
   },
 });

@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List, Any
-from ..db import rest_select
+from datetime import datetime, timezone
+from ..db import rest_select, rest_update
+from ..auth import get_current_user
 from ..models import Notification
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -8,64 +10,170 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 # We start with '*' to avoid column name mismatches. We'll trim/transform after fetch.
 RAW_SELECT = "*"
 
-EXPECTED_FIELDS = {"id", "status", "user_id", "message", "time", "notificationtype", "notificationtypeid"}
+EXPECTED_FIELDS = {
+    "notificationid",
+    "status",
+    "userid",
+    "title",
+    "message",
+    "time",
+    "notificationtype",
+    "notificationtypeid",
+    "category",
+    "kind",
+    "data",
+    "read_at",
+}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 
 def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Map alternative primary key names to 'id' and ensure expected keys exist.
-    Supports common patterns: notification_id, notificationid.
+    """Normalize Supabase rows into stable response shape.
+
+    This router intentionally matches the DB column names because the mobile app
+    already uses them (notificationid/userid).
     """
-    if "id" not in row:
-        for alt in ["notification_id", "notificationid"]:
+    if "notificationid" not in row:
+        for alt in ["id", "notification_id"]:
             if alt in row:
-                row["id"] = row[alt]
+                row["notificationid"] = row[alt]
+                break
+    if "userid" not in row:
+        for alt in ["user_id", "userId"]:
+            if alt in row:
+                row["userid"] = row[alt]
                 break
     return {k: row.get(k) for k in EXPECTED_FIELDS}
 
+
+def _coerce_numeric_userid(sub: str | None) -> int | None:
+    if sub is None:
+        return None
+    try:
+        return int(str(sub))
+    except Exception:
+        return None
+
 @router.get("", response_model=List[Notification])
 async def list_notifications(
-    user_id: Optional[int] = Query(None, description="Filter by user id"),
+    category: Optional[str] = Query(None, description="Filter by category: court | event | training"),
+    status: Optional[str] = Query(None, description="Filter by status: unread | read"),
     notificationtype: Optional[str] = Query(None, description="Filter by notification type"),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    userid: Optional[int] = Query(None, description="Debug only: override userid (must match token)"),
     debug: bool = Query(False, description="Show upstream error detail"),
+    sub: str = Depends(get_current_user),
 ):
-    filters = {}
-    if user_id is not None:
-        filters["user_id"] = user_id
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
+
+    final_userid = userid if userid is not None else token_userid
+    if final_userid != token_userid:
+        raise HTTPException(status_code=403, detail="Cannot access another user's notifications")
+
+    filters: dict[str, Any] = {"userid": final_userid}
+    if category is not None:
+        filters["category"] = category
+    if status is not None:
+        filters["status"] = status
     if notificationtype is not None:
         filters["notificationtype"] = notificationtype
-    if not filters:
-        filters = None
+
     try:
         data = rest_select(
             "notifications",
             RAW_SELECT,
             filters=filters,
+            order={"column": "time", "desc": True},
         )
         if not isinstance(data, list):
             return []
-        # Normalize rows & sort if 'id' present.
         normalized = [normalize_row(r) for r in data]
-        if all("id" in r and r["id"] is not None for r in normalized):
-            normalized.sort(key=lambda r: r["id"])  # ascending like courtinfo
-        return normalized
+        sliced = normalized[offset: offset + limit]
+        return sliced
     except RuntimeError as e:
         if debug:
             raise HTTPException(status_code=500, detail=str(e))
         raise HTTPException(status_code=500, detail="Failed to fetch notifications. Add ?debug=true for details")
 
-@router.get("/{notification_id}", response_model=Notification)
-async def get_notification(notification_id: int, debug: bool = Query(False)):
+@router.get("/{notificationid}", response_model=Notification)
+async def get_notification(notificationid: int, debug: bool = Query(False), sub: str = Depends(get_current_user)):
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
     try:
-        data = rest_select(
+        row = rest_select(
             "notifications",
             RAW_SELECT,
-            filters={"id": notification_id},
+            filters={"notificationid": notificationid},
             single=True,
         )
-        if not data or ("id" not in data and "notification_id" not in data and "notificationid" not in data):
+        if not row:
             raise HTTPException(status_code=404, detail="Notification not found")
-        data = normalize_row(data)
-        return data
+        row = normalize_row(row)
+        if row.get("userid") is not None and int(row.get("userid")) != token_userid:
+            raise HTTPException(status_code=403, detail="Not allowed")
+        return row
+    except HTTPException:
+        raise
     except RuntimeError as e:
         if debug:
             raise HTTPException(status_code=500, detail=str(e))
         raise HTTPException(status_code=404, detail="Notification not found or fetch error. Add ?debug=true for details")
+
+
+@router.patch("/{notificationid}/read", response_model=Notification)
+async def mark_notification_read(notificationid: int, sub: str = Depends(get_current_user)):
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
+    try:
+        row = rest_select(
+            "notifications",
+            RAW_SELECT,
+            filters={"notificationid": notificationid},
+            single=True,
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        if row.get("userid") is not None and int(row.get("userid")) != token_userid:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        updated = rest_update(
+            "notifications",
+            {"notificationid": notificationid},
+            {"status": "read", "read_at": _now_iso()},
+        )
+        if isinstance(updated, list) and updated:
+            return normalize_row(updated[0])
+        # Fallback
+        row["status"] = "read"
+        row["read_at"] = _now_iso()
+        return normalize_row(row)
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/mark_all_read", response_model=dict)
+async def mark_all_read(
+    category: Optional[str] = Query(None, description="Optional category filter: court|event|training"),
+    sub: str = Depends(get_current_user),
+):
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
+    try:
+        filters: dict[str, Any] = {"userid": token_userid, "status": "unread"}
+        if category is not None:
+            filters["category"] = category
+        rest_update("notifications", filters, {"status": "read", "read_at": _now_iso()})
+        return {"ok": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))

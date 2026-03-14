@@ -2,28 +2,25 @@
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Image as ExpoImage } from 'expo-image'
 import * as Location from 'expo-location'
 import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "@/lib/supabase"; // legacy only; backend login may not populate supabase session
 import {
-  listFavouriteCourts,
   FavouriteCourt,
   listCourtInfoCached,
   CourtInfoRow,
-  listEventsCombinedCached,
   type CombinedEvent,
 } from "@/lib/backendApi";
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { favouritesEvents } from "@/lib/favouritesEvents";
-import { useAuthContext } from "@/hooks/use-auth-context";
-import { useUserInfo } from "@/hooks/use-user-info";
+import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQuery } from '@tanstack/react-query'
 import EventPanel from "@/app/event/eventPanel";
 import CourtPanel from "@/app/event/courtPanel";
+import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
@@ -32,6 +29,7 @@ export default function Home() {
   const [activeView, setActiveView] = useState<ManagementPanelKey>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
   const [courtPanelMounted, setCourtPanelMounted] = useState(false);
+  const [reviewsPanelMounted, setReviewsPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
   const [uiLanguage, setUiLanguage] = useState<'en' | 'vi'>('en');
@@ -111,14 +109,16 @@ export default function Home() {
     availability: string; // used only for color, no labels/sorting
     imageUri?: string | null;
   };
-  const [favoriteLocations, setFavoriteLocations] = useState<FavoriteLocation[]>([]);
-  const [loadingFavs, setLoadingFavs] = useState(false);
   const [pullRefreshingFavs, setPullRefreshingFavs] = useState(false);
-  const [favError, setFavError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  const lastLoadAbortRef = React.useRef<AbortController | null>(null);
 
-  const { data: userInfo } = useUserInfo(currentUserId);
+  const { userId: bootstrapUserId, dashboard, userInfo: bootstrapUserInfo, favouriteCourts } = useAppBootstrap()
+  const dashboardRaw = dashboard.data
+  const refetchDashboard = dashboard.refetch
+  const userInfo = bootstrapUserInfo.data ?? null
+  const userId = typeof bootstrapUserId === 'number' ? bootstrapUserId : null
+  const eventsCombined = Array.isArray(dashboardRaw?.events_combined)
+    ? (dashboardRaw.events_combined as CombinedEvent[])
+    : []
 
   const isPlaceholderImageUri = (uri: string): boolean => {
     const u = uri.trim().toLowerCase();
@@ -147,33 +147,6 @@ export default function Home() {
     return null;
   };
 
-  // Unified numeric user id resolver (matches Map.tsx logic):
-  // 1. Backend profile from AuthContext (login via /auth/login)
-  // 2. AsyncStorage persisted @backendProfile
-  // 3. Supabase session id if numeric (anonymous or social sign-in rarely numeric)
-  const { profile } = useAuthContext();
-  const getCurrentNumericUserId = async (): Promise<number | null> => {
-    if (profile && typeof (profile as any).userid === 'number') return (profile as any).userid;
-    try {
-      const raw = await AsyncStorage.getItem('@backendProfile');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed.userid === 'number') return parsed.userid;
-      }
-    } catch {}
-    try {
-      const { data } = await supabase.auth.getSession();
-      const uid = data.session?.user?.id;
-      if (uid && /^\d+$/.test(uid)) {
-        const asInt = parseInt(uid, 10);
-        if (!Number.isNaN(asInt)) return asInt;
-      }
-    } catch {}
-    return null;
-  };
-
-  const lastUserIdRef = React.useRef<number | null>(null);
-
   const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const toRad = (deg: number) => (deg * Math.PI) / 180
     const R = 6371 // km
@@ -185,11 +158,6 @@ export default function Home() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     return R * c
   }
-
-  const [nearbyEvents, setNearbyEvents] = useState<CombinedEvent[]>([])
-  const [nearbyEventsLoading, setNearbyEventsLoading] = useState(false)
-  const [nearbyEventsError, setNearbyEventsError] = useState<string | null>(null)
-  const [nearbyEventsOrigin, setNearbyEventsOrigin] = useState<{ latitude: number; longitude: number } | null>(null)
 
   function parseMaybeTimestamp(raw: unknown): Date | null {
     if (typeof raw !== 'string') return null
@@ -209,69 +177,6 @@ export default function Home() {
 
     return null
   }
-
-  const loadNearbyEvents = useCallback(async () => {
-    setNearbyEventsLoading(true)
-    setNearbyEventsError(null)
-    try {
-      const perm = await Location.requestForegroundPermissionsAsync()
-      if (!perm.granted) {
-        setNearbyEvents([])
-        return
-      }
-
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const userLat = pos?.coords?.latitude
-      const userLon = pos?.coords?.longitude
-      if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
-        setNearbyEvents([])
-        return
-      }
-
-      setNearbyEventsOrigin({ latitude: userLat as number, longitude: userLon as number })
-
-      const all = await listEventsCombinedCached()
-      const normalized = Array.isArray(all) ? all : []
-
-      const filtered = normalized
-        .filter((ev) => {
-          const st = String(ev?.status ?? '').toLowerCase()
-          if (st.includes('cancel') || st.includes('complete')) return false
-
-          // Hide past events (prefer end time when available).
-          const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
-          const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
-          const start = parseMaybeTimestamp(startRaw)
-          const end = parseMaybeTimestamp(endRaw)
-          const nowTs = Date.now()
-
-          if (end && !Number.isNaN(end.getTime())) {
-            if (end.getTime() < nowTs) return false
-          } else if (start && !Number.isNaN(start.getTime())) {
-            if (start.getTime() < nowTs) return false
-          }
-          return true
-        })
-        .filter((ev) => {
-          const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
-          const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
-          const d = haversineKm(userLat as number, userLon as number, lat, lon)
-          return d <= 20
-        })
-
-      setNearbyEvents(filtered)
-    } catch (e: any) {
-      setNearbyEvents([])
-      setNearbyEventsError(e?.message || String(e))
-    } finally {
-      setNearbyEventsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadNearbyEvents()
-  }, [loadNearbyEvents])
 
   const asStringArrayLoose = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
@@ -327,6 +232,64 @@ export default function Home() {
     return `${timeRange} · ${dateLabel}`
   }
 
+  const nearbyEventsQuery = useQuery({
+    queryKey: ['home-nearby-events', userId, eventsCombined.length],
+    enabled: !!userId && eventsCombined.length > 0,
+    queryFn: async () => {
+      const perm = await Location.requestForegroundPermissionsAsync()
+      if (!perm.granted) {
+        return { events: [] as CombinedEvent[], origin: null as { latitude: number; longitude: number } | null }
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const userLat = pos?.coords?.latitude
+      const userLon = pos?.coords?.longitude
+      if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
+        return { events: [] as CombinedEvent[], origin: null as { latitude: number; longitude: number } | null }
+      }
+
+      const filtered = eventsCombined
+        .filter((ev) => {
+          const st = String(ev?.status ?? '').toLowerCase()
+          if (st.includes('cancel') || st.includes('complete')) return false
+
+          const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+          const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+          const start = parseMaybeTimestamp(startRaw)
+          const end = parseMaybeTimestamp(endRaw)
+          const nowTs = Date.now()
+
+          if (end && !Number.isNaN(end.getTime())) {
+            if (end.getTime() < nowTs) return false
+          } else if (start && !Number.isNaN(start.getTime())) {
+            if (start.getTime() < nowTs) return false
+          }
+          return true
+        })
+        .filter((ev) => {
+          const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
+          const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
+          return haversineKm(userLat as number, userLon as number, lat, lon) <= 20
+        })
+
+      return {
+        events: filtered,
+        origin: { latitude: userLat as number, longitude: userLon as number },
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const nearbyEvents = nearbyEventsQuery.data?.events ?? []
+  const nearbyEventsOrigin = nearbyEventsQuery.data?.origin ?? null
+  const nearbyEventsLoading = nearbyEventsQuery.isLoading || nearbyEventsQuery.isFetching
+  const nearbyEventsError = nearbyEventsQuery.error instanceof Error
+    ? nearbyEventsQuery.error.message
+    : nearbyEventsQuery.error
+      ? String(nearbyEventsQuery.error)
+      : null
+
   const visibleNearbyEvents = React.useMemo(() => {
     const nowTs = now.getTime()
     return (Array.isArray(nearbyEvents) ? nearbyEvents : []).filter((ev) => {
@@ -344,90 +307,76 @@ export default function Home() {
     })
   }, [nearbyEvents, now])
 
-  const loadFavorites = async (force: boolean = false) => {
-    // Abort any in-flight load to avoid race conditions when user switches rapidly
-    if (lastLoadAbortRef.current) {
-      lastLoadAbortRef.current.abort();
-    }
-    const abortController = new AbortController();
-    lastLoadAbortRef.current = abortController;
-    setLoadingFavs(true);
-    setFavError(null);
-    try {
-      const userId = await getCurrentNumericUserId();
-      setCurrentUserId(userId);
-      if (abortController.signal.aborted) return; // early exit if aborted mid lookup
-      if (userId == null) {
-        setFavoriteLocations([]);
-        return;
-      }
-      // Skip duplicate fetches for same user unless forced (e.g. after a favourite change)
-      if (!force && lastUserIdRef.current === userId) {
-        return;
-      }
-      lastUserIdRef.current = userId;
-      // Use non-cached fetch for immediate reflection of changes
-      const rows = await listFavouriteCourts({ userid: userId });
-      if (abortController.signal.aborted) return;
-      const favRows: FavouriteCourt[] = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) : [];
-      if (favRows.length === 0) { setFavoriteLocations([]); return; }
-      const courtInfoRows: CourtInfoRow[] = await listCourtInfoCached();
-      if (abortController.signal.aborted) return;
-      const infoMap = new Map<number, CourtInfoRow>();
-      courtInfoRows.forEach(ci => { if (typeof ci.courtid === 'number') infoMap.set(ci.courtid, ci); });
-      // De-duplicate in case of any accidental duplicates from backend (defensive)
-      const seenCourtIds = new Set<number>();
+  const favoriteLocationsQuery = useQuery({
+    queryKey: ['home-favorite-locations', userId, favouriteCourts.length],
+    enabled: !!userId,
+    queryFn: async () => {
+      const favRows: FavouriteCourt[] = Array.isArray(favouriteCourts)
+        ? favouriteCourts
+        : []
+      if (favRows.length === 0) return [] as FavoriteLocation[]
+
+      const courtInfoRows: CourtInfoRow[] = await listCourtInfoCached()
+      const infoMap = new Map<number, CourtInfoRow>()
+      courtInfoRows.forEach((ci) => {
+        if (typeof ci.courtid === 'number') infoMap.set(ci.courtid, ci)
+      })
+
+      const seenCourtIds = new Set<number>()
       const favs: FavoriteLocation[] = favRows.reduce<FavoriteLocation[]>((acc, fr) => {
-        if (seenCourtIds.has(fr.courtid)) return acc;
-        seenCourtIds.add(fr.courtid);
-        const info = infoMap.get(fr.courtid);
-        const images = asStringArrayLoose((info as any)?.images);
-        const firstImage = pickFirstRealImageUri(images);
+        if (seenCourtIds.has(fr.courtid)) return acc
+        seenCourtIds.add(fr.courtid)
+
+        const info = infoMap.get(fr.courtid)
+        const images = asStringArrayLoose((info as any)?.images)
+        const firstImage = pickFirstRealImageUri(images)
+
         acc.push({
           favouriteid: fr.favouriteid,
           courtid: fr.courtid,
           name: info?.name || `Court ${fr.courtid}`,
           availability: info?.availability || 'Available',
           imageUri: firstImage,
-        });
-        return acc;
-      }, []);
-      // Sort favourites so "Available" courts appear first while preserving original relative order within groups.
-      const favsAvailable: FavoriteLocation[] = [];
-      const favsUnavailable: FavoriteLocation[] = [];
-      favs.forEach(f => {
-        const isAvail = String(f.availability).toLowerCase() === 'available';
-        (isAvail ? favsAvailable : favsUnavailable).push(f);
-      });
-      setFavoriteLocations([...favsAvailable, ...favsUnavailable]);
-    } catch (e: any) {
-      if (e?.name === 'AbortError') return; // silent abort
-      setFavError(e.message || String(e));
-    } finally {
-      if (!abortController.signal.aborted) setLoadingFavs(false);
-    }
-  };
+        })
+        return acc
+      }, [])
 
-  // Initial load (forced to ensure we fetch once on mount)
-  useEffect(() => { loadFavorites(true); }, []);
-  // Load again only if profile user id changes from null to a different number
-  useEffect(() => { loadFavorites(false); }, [profile]);
-  // Subscribe to favourites change events emitted by Map or other screens
+      const favsAvailable: FavoriteLocation[] = []
+      const favsUnavailable: FavoriteLocation[] = []
+      favs.forEach((f) => {
+        const isAvail = String(f.availability).toLowerCase() === 'available'
+        ;(isAvail ? favsAvailable : favsUnavailable).push(f)
+      })
+
+      return [...favsAvailable, ...favsUnavailable]
+    },
+    staleTime: 60 * 1000,
+  })
+
+  const favoriteLocations = favoriteLocationsQuery.data ?? []
+  const loadingFavs = favoriteLocationsQuery.isLoading || (favoriteLocationsQuery.isFetching && !pullRefreshingFavs)
+  const favError = favoriteLocationsQuery.error instanceof Error
+    ? favoriteLocationsQuery.error.message
+    : favoriteLocationsQuery.error
+      ? String(favoriteLocationsQuery.error)
+      : null
+  const refetchFavoriteLocations = favoriteLocationsQuery.refetch
+
   useEffect(() => {
     const unsubscribe = favouritesEvents.subscribe(async ({ userid }) => {
-      // Only reload if event matches currently resolved user id
-      const activeId = await getCurrentNumericUserId();
-      if (activeId != null && activeId === userid) {
-        loadFavorites(true); // force reload after a favourites mutation
+      if (userId != null && userId === userid) {
+        await refetchDashboard()
+        await refetchFavoriteLocations()
       }
-    });
-    return unsubscribe;
-  }, []);
+    })
+    return unsubscribe
+  }, [userId, refetchDashboard, refetchFavoriteLocations])
 
   // Avoid remounting EventPanel on every hop into "Event" view (prevents constant refetch/refresh UX)
   useEffect(() => {
     if (activeView === 'event') setEventPanelMounted(true);
     if (activeView === 'court') setCourtPanelMounted(true);
+    if (activeView === 'reviews') setReviewsPanelMounted(true);
   }, [activeView]);
 
 
@@ -441,9 +390,9 @@ export default function Home() {
             alignItems: "center",
             justifyContent: "space-between",
             backgroundColor: "#ffffff",
-            paddingBottom: 12,
-            paddingHorizontal: 20,
-            paddingTop: 10,
+            paddingBottom: 14,
+            paddingHorizontal: 16,
+            paddingTop: 8,
           }}
         >
           {/* Menu Icon (Left) */}
@@ -502,7 +451,8 @@ export default function Home() {
                 onRefresh={async () => {
                   setPullRefreshingFavs(true);
                   try {
-                    await loadFavorites(true);
+                    await refetchDashboard();
+                    await Promise.all([refetchFavoriteLocations(), nearbyEventsQuery.refetch()]);
                   } finally {
                     setPullRefreshingFavs(false);
                   }
@@ -928,7 +878,7 @@ export default function Home() {
 
         <View style={{ flex: 1, display: activeView === 'event' ? 'flex' : 'none' }}>
           {eventPanelMounted ? (
-            <EventPanel organizerId={currentUserId} />
+            <EventPanel organizerId={userId} />
           ) : (
             <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
@@ -968,7 +918,7 @@ export default function Home() {
 
         <View style={{ flex: 1, display: activeView === 'court' ? 'flex' : 'none' }}>
           {courtPanelMounted ? (
-            <CourtPanel ownerId={currentUserId} />
+            <CourtPanel ownerId={userId} />
           ) : (
             <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
@@ -999,6 +949,23 @@ export default function Home() {
                       radius={12}
                       style={{ marginBottom: 10 }}
                     />
+                  ))}
+                </SkeletonPulse>
+              </View>
+            </View>
+          )}
+        </View>
+
+        <View style={{ flex: 1, display: activeView === 'reviews' ? 'flex' : 'none' }}>
+          {reviewsPanelMounted ? (
+            <ReviewsPanel />
+          ) : (
+            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+              <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 20 }}>
+                <SkeletonPulse>
+                  <SkeletonBox width={160} height={24} radius={8} style={{ marginBottom: 16 }} />
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <SkeletonBox key={idx} width={'100%'} height={80} radius={12} style={{ marginBottom: 12 }} />
                   ))}
                 </SkeletonPulse>
               </View>

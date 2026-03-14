@@ -2,9 +2,11 @@ from typing import Any
 import hashlib
 from datetime import time, timedelta, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi_cache.decorator import cache
 
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
 from ..db import rest_insert, rest_select, rest_update, rest_upsert
 
 router = APIRouter(prefix="/playingcourts", tags=["courts"])
@@ -94,6 +96,7 @@ def _enforce_owner_by_playingcourtid(*, playingcourtid: int, current_user: str) 
 
 @router.post("/seed-missing", response_model=dict)
 def seed_missing_playingcourts(
+    background_tasks: BackgroundTasks,
     courtid: int | None = Query(None),
     max_san: int = Query(3, ge=1, le=10),
     current_user: str = Depends(get_current_user),
@@ -196,6 +199,7 @@ def seed_missing_playingcourts(
                     )
                     created_availability += 1
 
+    background_tasks.add_task(invalidate_namespace, "playingcourts", "courtavailability")
     return {
         "processedCourts": processed_courts,
         "createdPlayingcourts": created_playingcourts,
@@ -207,6 +211,7 @@ def seed_missing_playingcourts(
 
 
 @router.get("", response_model=list[dict])
+@cache(expire=300, key_builder=make_key_builder("playingcourts"))
 def list_playingcourts(
     courtid: int | None = Query(None),
     part: str | None = Query(None),
@@ -218,13 +223,29 @@ def list_playingcourts(
         filters["courtid"] = courtid
     if part is not None:
         filters["part"] = part
-    data = rest_select("playingcourt", "*", filters=filters or None, order={"column": PRIMARY_KEY})
+    data = rest_select("playingcourt", "playingcourtid,courtid,part,name,base_name,price,allow_half_booking,surface", filters=filters or None, order={"column": PRIMARY_KEY})
     if isinstance(data, list):
         data = data[offset : offset + limit]
     return data if isinstance(data, list) else []
 
 
+@router.get("/info", response_model=list[dict])
+@cache(expire=300, key_builder=make_key_builder("playingcourts"))
+def list_playingcourtinfo_by_courtid(courtid: int = Query(...)):
+    """Return playingcourtinfo rows for all playing courts of a venue in one call."""
+    pc_rows = rest_select("playingcourt", "playingcourtid", filters={"courtid": courtid})
+    if not isinstance(pc_rows, list) or not pc_rows:
+        return []
+    pc_ids = [int(r["playingcourtid"]) for r in pc_rows if r.get("playingcourtid") is not None]
+    if not pc_ids:
+        return []
+    info_rows = rest_select("playingcourtinfo", "*", filters={"playingcourtid": pc_ids})
+    info_by_pcid = {int(r["playingcourtid"]): r for r in (info_rows if isinstance(info_rows, list) else [])}
+    return [info_by_pcid.get(pid) or {"playingcourtid": pid, "images": []} for pid in pc_ids]
+
+
 @router.get("/{playingcourtid}", response_model=dict)
+@cache(expire=300, key_builder=make_key_builder("playingcourts"))
 def get_playingcourt(playingcourtid: int):
     row = rest_select("playingcourt", "*", filters={PRIMARY_KEY: playingcourtid}, single=True)
     if not row:
@@ -233,7 +254,7 @@ def get_playingcourt(playingcourtid: int):
 
 
 @router.patch("/{playingcourtid}", response_model=dict)
-def patch_playingcourt(playingcourtid: int, body: dict, current_user: str = Depends(get_current_user)):
+def patch_playingcourt(playingcourtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_playingcourtid(playingcourtid=playingcourtid, current_user=current_user)
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -246,12 +267,14 @@ def patch_playingcourt(playingcourtid: int, body: dict, current_user: str = Depe
         raise HTTPException(status_code=422, detail="No fields to update")
 
     updated = rest_update("playingcourt", {PRIMARY_KEY: playingcourtid}, payload)
+    background_tasks.add_task(invalidate_namespace, "playingcourts", "courtavailability")
     if isinstance(updated, list) and updated:
         return updated[0]
     return payload
 
 
 @router.get("/{playingcourtid}/info", response_model=dict)
+@cache(expire=300, key_builder=make_key_builder("playingcourts"))
 def get_playingcourtinfo(playingcourtid: int):
     row = rest_select("playingcourtinfo", "*", filters={"playingcourtid": playingcourtid}, single=True)
     if not row:
@@ -261,7 +284,7 @@ def get_playingcourtinfo(playingcourtid: int):
 
 
 @router.patch("/{playingcourtid}/info", response_model=dict)
-def patch_playingcourtinfo(playingcourtid: int, body: dict, current_user: str = Depends(get_current_user)):
+def patch_playingcourtinfo(playingcourtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_playingcourtid(playingcourtid=playingcourtid, current_user=current_user)
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -273,6 +296,7 @@ def patch_playingcourtinfo(playingcourtid: int, body: dict, current_user: str = 
     payload.pop("description", None)
 
     updated = rest_upsert("playingcourtinfo", payload, on_conflict="playingcourtid")
+    background_tasks.add_task(invalidate_namespace, "playingcourts")
     if isinstance(updated, list) and updated:
         return updated[0]
     return payload

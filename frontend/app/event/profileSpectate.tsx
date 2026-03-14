@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { getUserInfoByUserIdCached, type UserInfoRow } from '@/lib/backendApi'
 
@@ -70,7 +71,7 @@ export default function ProfileSpectate() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             {userInfo?.pfp ? (
-              <Image source={{ uri: userInfo.pfp as string }} style={styles.avatar} />
+              <ExpoImage source={{ uri: userInfo.pfp as string }} style={styles.avatar} contentFit="cover" />
             ) : (
               <Image source={ICONS.accountCircle} style={styles.avatar} />
             )}

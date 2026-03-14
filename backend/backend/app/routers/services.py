@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi_cache.decorator import cache
 from typing import Any
 
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
 from ..db import rest_delete, rest_insert, rest_select, rest_update
 
 router = APIRouter(prefix="/services", tags=["services"])
@@ -44,6 +46,7 @@ def _enforce_owner_by_serviceid(*, serviceid: int, current_user: str) -> dict:
 
 
 @router.get("", response_model=list[dict])
+@cache(expire=180, key_builder=make_key_builder("services"))
 def list_services(
     courtid: int | None = Query(None),
     status: str | None = Query(None),
@@ -64,7 +67,7 @@ def list_services(
 
 
 @router.post("", response_model=dict)
-def create_service(body: dict, current_user: str = Depends(get_current_user)):
+def create_service(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
 
@@ -123,11 +126,12 @@ def create_service(body: dict, current_user: str = Depends(get_current_user)):
             raise
 
     row = created[0] if isinstance(created, list) and created else created
+    background_tasks.add_task(invalidate_namespace, "services")
     return row or payload
 
 
 @router.patch("/{serviceid}", response_model=dict)
-def patch_service(serviceid: int, body: dict, current_user: str = Depends(get_current_user)):
+def patch_service(serviceid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_serviceid(serviceid=serviceid, current_user=current_user)
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -139,15 +143,17 @@ def patch_service(serviceid: int, body: dict, current_user: str = Depends(get_cu
         raise HTTPException(status_code=422, detail="No fields to update")
 
     updated = rest_update("services", {"serviceid": serviceid}, payload)
+    background_tasks.add_task(invalidate_namespace, "services")
     if isinstance(updated, list) and updated:
         return updated[0]
     return payload
 
 
 @router.delete("/{serviceid}", response_model=dict)
-def delete_service(serviceid: int, current_user: str = Depends(get_current_user)):
+def delete_service(serviceid: int, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_serviceid(serviceid=serviceid, current_user=current_user)
     deleted = rest_delete("services", {"serviceid": serviceid})
+    background_tasks.add_task(invalidate_namespace, "services")
     if isinstance(deleted, list) and deleted:
         return {"deleted": True, "row": deleted[0]}
     return {"deleted": True}

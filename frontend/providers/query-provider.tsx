@@ -10,12 +10,12 @@ import { AppState } from 'react-native'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000, // 1 min fresh
+      staleTime: 2 * 60 * 1000, // 2 min fresh by default to avoid remount stampedes
       gcTime: 30 * 60 * 1000, // 30 min cache retention
       retry: 1,
-      refetchOnReconnect: true,
-      refetchOnMount: true,
-      refetchOnWindowFocus: true,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     },
     mutations: {
       retry: 0,
