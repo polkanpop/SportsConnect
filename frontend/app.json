@@ -7,7 +7,7 @@
       "SUPABASE_URL": "https://pfhgiyujvxeartkomrpv.supabase.co",
       "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1Ni...",
       "eas": {
-        "projectId": "72bf906e-3a54-4c90-a272-bc5def1b8642"
+        "projectId": "e3ce638e-c49f-42f8-9ee1-c67a544d0791"
       }
     },
     "version": "1.0.0",
@@ -58,6 +58,6 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "le_tri"
+    "owner": "polkan"
   }
 }
