@@ -44,14 +44,20 @@ async function resolveUserId(profile: any): Promise<number | null> {
 }
 
 export function useUserId() {
-  const { profile } = useAuthContext()
-  // Include profile.userid in key so switching accounts triggers immediate fresh resolution
-  const profileIdKeyPart = typeof profile?.userid === 'number' ? profile.userid : null
+  const { profile, isLoggedIn, session } = useAuthContext()
+  // Include auth-derived identity in key so login/logout transitions always trigger re-resolution.
+  const profileIdKeyPart =
+    typeof profile?.userid === 'number'
+      ? profile.userid
+      : (typeof profile?.userid === 'string' && profile.userid.trim() ? profile.userid.trim() : null)
+  const authIdentityKeyPart = isLoggedIn
+    ? (profileIdKeyPart ?? session?.user?.id ?? 'backend-auth')
+    : 'logged-out'
   return useQuery({
-    queryKey: [...queryKeys.userId, profileIdKeyPart],
+    queryKey: [...queryKeys.userId, authIdentityKeyPart],
     queryFn: () => resolveUserId(profile),
-    // Query key includes profileIdKeyPart — a different account inherits a fresh key,
-    // so Infinity staleTime is safe and avoids constant background refetches.
+    // Query key includes authIdentityKeyPart, so login/logout/account switches refetch immediately
+    // while still avoiding continuous background traffic.
     staleTime: Infinity,
   })
 }
