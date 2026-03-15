@@ -8,7 +8,6 @@ import { COLORS } from '@/constants/colors'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
-import { useFocusEffect } from 'expo-router'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
@@ -91,10 +90,11 @@ const TrainingSessionListScreen = () => {
     queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombinedCached(),
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
   useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
   useEffect(() => { if (queryError && !sessionsData) setError('Failed to load sessions') }, [queryError, sessionsData])
-  useFocusEffect(useCallback(()=>{ refetch() },[refetch]))
 
   useEffect(() => {
     return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))

@@ -1,6 +1,6 @@
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
-import { markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
+import { deleteNotifications, listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -16,6 +16,8 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [refreshing, setRefreshing] = useState(false);
 
   const categoryParam: NotificationCategory | undefined = useMemo(() => {
     if (selectedCategory === 'Court') return 'court'
@@ -55,16 +57,22 @@ export default function NotificationsPage() {
     setRows(sourceRows)
   }, [sourceRows])
 
-  const loading = dashboard.isLoading || actionLoading
+  const loading = (dashboard.isLoading && rows.length === 0) || actionLoading || refreshing
+  const selectionMode = selectedIds.size > 0
 
   const handleRefresh = useCallback(async () => {
     setError(null)
+    setRefreshing(true)
     try {
-      await dashboard.refetch?.()
+      const fresh = await listNotifications({ category: categoryParam })
+      const sorted = [...fresh].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      setRows(sorted)
     } catch (e: any) {
       setError(e?.message || String(e))
+    } finally {
+      setRefreshing(false)
     }
-  }, [dashboard])
+  }, [categoryParam])
 
   const getIconFor = (row: NotificationRow) => {
     const cat = getRowCategory(row)
@@ -80,18 +88,25 @@ export default function NotificationsPage() {
 
   const getSectionTitle = (iso: string) => {
     const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return 'Earlier'
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000
     const t = d.getTime()
     if (t >= startOfToday) return 'Today'
     if (t >= startOfYesterday) return 'Yesterday'
-    return 'Earlier'
+    return d.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   const formatRowTime = (iso: string) => {
     const d = new Date(iso)
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    if (Number.isNaN(d.getTime())) return ''
+    const delta = Date.now() - d.getTime()
+    if (delta < 60_000) return 'now'
+    if (delta < 60 * 60_000) return `${Math.floor(delta / 60_000)}m ago`
+    if (delta < 24 * 60 * 60_000) return `${Math.floor(delta / (60 * 60_000))}h ago`
+    if (delta < 7 * 24 * 60 * 60_000) return `${Math.floor(delta / (24 * 60 * 60_000))}d ago`
+    return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
   }
 
   const sections = useMemo(() => {
@@ -102,14 +117,40 @@ export default function NotificationsPage() {
       arr.push(r)
       buckets.set(title, arr)
     }
-    const orderedTitles = ['Today', 'Yesterday', 'Earlier']
-    return orderedTitles
-      .filter(t => (buckets.get(t)?.length || 0) > 0)
-      .map(t => ({ title: t, data: buckets.get(t) || [] }))
+
+    const todayRows = buckets.get('Today') || []
+    const yesterdayRows = buckets.get('Yesterday') || []
+    buckets.delete('Today')
+    buckets.delete('Yesterday')
+
+    const dated = [...buckets.entries()].sort((a, b) => {
+      const at = new Date(a[1][0]?.time || 0).getTime()
+      const bt = new Date(b[1][0]?.time || 0).getTime()
+      return bt - at
+    })
+
+    const out: { title: string; data: NotificationRow[] }[] = [{ title: 'Today', data: todayRows }]
+    if (yesterdayRows.length) out.push({ title: 'Yesterday', data: yesterdayRows })
+    for (const [title, data] of dated) out.push({ title, data })
+    return out
   }, [rows])
+
+  const toggleSelection = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const handleNotificationClick = async (row: NotificationRow) => {
     const id = row.notificationid
+
+    if (selectionMode) {
+      toggleSelection(id)
+      return
+    }
 
     setExpanded(prev => {
       const next = new Set(prev)
@@ -146,7 +187,13 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleNotificationLongPress = (row: NotificationRow) => {
+    toggleSelection(row.notificationid)
+  }
+
   const handleMarkAllRead = async () => {
+    const unreadCount = rows.reduce((acc, r) => acc + ((r.status || '').toLowerCase() === 'unread' ? 1 : 0), 0)
+    if (unreadCount === 0) return
     setActionLoading(true)
     setError(null)
     try {
@@ -159,14 +206,35 @@ export default function NotificationsPage() {
     }
   }
 
+  const handleDeleteSelected = async () => {
+    if (!selectedIds.size) return
+    setActionLoading(true)
+    setError(null)
+    const ids = Array.from(selectedIds)
+    const keep = new Set(ids)
+    const prevRows = rows
+    setRows(prev => prev.filter(r => !keep.has(r.notificationid)))
+    try {
+      await deleteNotifications(ids)
+      setSelectedIds(new Set())
+    } catch (e: any) {
+      setRows(prevRows)
+      setError(e?.message || String(e))
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const renderItem = ({ item }: { item: NotificationRow }) => (
     <TouchableOpacity
       style={[
         styles.notificationRow,
         (item.status || '').toLowerCase() !== "unread" && styles.viewedNotification,
         updating === item.notificationid && styles.updatingRow,
+        selectedIds.has(item.notificationid) && styles.selectedNotification,
       ]}
       onPress={() => handleNotificationClick(item)}
+      onLongPress={() => handleNotificationLongPress(item)}
       activeOpacity={0.85}
     >
       <Image source={getIconFor(item)} style={styles.notificationIcon} />
@@ -244,16 +312,35 @@ export default function NotificationsPage() {
         keyExtractor={(item) => item.notificationid.toString()}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
-          <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : null]}>
+          <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : styles.sectionHeaderWrapAfterToday]}>
             <Text style={styles.sectionHeaderText}>{section.title}</Text>
             {section.title === 'Today' ? (
-              <TouchableOpacity style={styles.markAllBtn} onPress={handleMarkAllRead} activeOpacity={0.85}>
-                <Text style={styles.markAllText}>Mark all as read</Text>
-              </TouchableOpacity>
+              <View style={styles.todayActionsRow}>
+                {selectionMode ? (
+                  <TouchableOpacity
+                    style={styles.deleteWrap}
+                    onPress={handleDeleteSelected}
+                    activeOpacity={0.85}
+                    disabled={actionLoading}
+                  >
+                    <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
+                  <Text style={styles.markAllText}>Mark all as read</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={styles.sectionHeaderActionSpacer} />
             )}
           </View>
+        )}
+        renderSectionFooter={({ section }) => (
+          section.title === 'Today' && section.data.length === 0 ? (
+            <View style={styles.emptyTodayWrap}>
+              <Text style={styles.emptyTodayText}>You have no notifications today.</Text>
+            </View>
+          ) : null
         )}
         refreshing={loading}
         onRefresh={handleRefresh}
@@ -373,7 +460,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   markAllBtn: {
-    paddingVertical: 2,
+    paddingVertical: 4,
     paddingHorizontal: 0,
   },
   markAllText: {
@@ -397,8 +484,41 @@ const styles = StyleSheet.create({
   sectionHeaderWrapFirst: {
     paddingTop: 24,
   },
+  sectionHeaderWrapAfterToday: {
+    paddingTop: 26,
+  },
   sectionHeaderActionSpacer: {
-    width: 100,
+    width: 10,
+  },
+  todayActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  deleteWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 34,
+    height: 30,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 8,
+    backgroundColor: COLORS.neutral0,
+  },
+  markAllWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 30,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 8,
+    backgroundColor: COLORS.neutral0,
+  },
+  deleteIcon: {
+    width: 18,
+    height: 18,
   },
   sectionHeaderText: {
     fontSize: 19,
@@ -416,6 +536,9 @@ const styles = StyleSheet.create({
   },
   viewedNotification: {
     backgroundColor: COLORS.neutral100,
+  },
+  selectedNotification: {
+    backgroundColor: COLORS.orange100,
   },
   updatingRow: {
     opacity: 0.6,
@@ -462,5 +585,13 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: COLORS.danger
+  },
+  emptyTodayWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  emptyTodayText: {
+    color: COLORS.neutral700,
+    fontSize: 13,
   }
 });

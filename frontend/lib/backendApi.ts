@@ -215,6 +215,21 @@ export async function markAllNotificationsRead(category?: NotificationCategory):
 	}) as { ok: boolean }
 }
 
+export async function deleteNotification(notificationid: number): Promise<{ ok: boolean; count: number }> {
+	return await request(`/notifications/${notificationid}`, {
+		method: 'DELETE',
+		debugLabel: 'deleteNotification'
+	}) as { ok: boolean; count: number }
+}
+
+export async function deleteNotifications(notificationids: number[]): Promise<{ ok: boolean; count: number }> {
+	return await request('/notifications/delete_many', {
+		method: 'POST',
+		body: JSON.stringify({ notificationids }),
+		debugLabel: 'deleteNotifications'
+	}) as { ok: boolean; count: number }
+}
+
 // ---- Auto status completion (upcoming -> completed) ----
 // Some UIs rely on status enums rather than timestamps.
 // This performs best-effort background updates so passed items are not shown.
@@ -977,7 +992,8 @@ export type CourtInfoRow = {
 	courtinfoid: number
 	courtid: number
 	name?: string | null
-	address: string
+	thumbnail?: string | null
+	address?: string | null
 	latitude?: number | null
 	longitude?: number | null
 	venue?: string[] | string | null
@@ -987,9 +1003,29 @@ export type CourtInfoRow = {
 	auto_approve?: boolean | null
 }
 
-export async function listCourtInfo(): Promise<CourtInfoRow[]> {
-	const data = await request('/courtinfo', { debugLabel: 'listCourtInfo' })
+export async function listCourtInfo(opts?: { compact?: boolean; limit?: number; courtids?: number[] }): Promise<CourtInfoRow[]> {
+	const qs = new URLSearchParams()
+	if (opts?.compact) qs.set('compact', 'true')
+	if (typeof opts?.limit === 'number') qs.set('limit', String(opts.limit))
+	if (Array.isArray(opts?.courtids) && opts.courtids.length > 0) {
+		const ids = Array.from(new Set(opts.courtids.map((v) => Number(v)).filter((v) => Number.isFinite(v))))
+		if (ids.length > 0) qs.set('courtids', ids.join(','))
+	}
+	const suffix = qs.toString() ? `?${qs.toString()}` : ''
+	const data = await request(`/courtinfo${suffix}`, { debugLabel: opts?.compact ? 'listCourtInfo.compact' : 'listCourtInfo' })
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
+}
+
+export async function listCourtInfoByCourtIdsCached(courtids: number[]): Promise<CourtInfoRow[]> {
+	const ids = Array.from(new Set((courtids || []).map((v) => Number(v)).filter((v) => Number.isFinite(v)))).sort((a, b) => a - b)
+	if (ids.length === 0) return []
+	const key = `cache:courtinfo:ids:${ids.join(',')}:v1`
+	return fetchWithCache<CourtInfoRow[]>({
+		key,
+		ttlMs: 60 * 1000,
+		swrMs: 60 * 1000,
+		fetcher: () => listCourtInfo({ courtids: ids }),
+	})
 }
 
 export async function getCourtInfoByCourtId(courtid: number): Promise<CourtInfoRow | null> {
@@ -1048,6 +1084,15 @@ export async function listCourtInfoCached(): Promise<CourtInfoRow[]> {
 		ttlMs: 60 * 1000,
 		swrMs: 60 * 1000,
 		fetcher: () => listCourtInfo()
+	})
+}
+
+export async function listCourtInfoCompactCached(): Promise<CourtInfoRow[]> {
+	return fetchWithCache<CourtInfoRow[]>({
+		key: 'cache:courtinfo:compact:v1',
+		ttlMs: 60 * 1000,
+		swrMs: 60 * 1000,
+		fetcher: () => listCourtInfo({ compact: true, limit: 15 })
 	})
 }
 
@@ -1760,12 +1805,11 @@ function normalizeStringArrayLoose(v: unknown): string[] {
 // Aggregate events with related meta, court info and organizer name.
 export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
-	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
 		request('/events', { debugLabel: 'listEvents' }),
 		request('/eventinfo', { debugLabel: 'listEventInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
-		safeGet('/userinfo', 'listUserInfoAll'),
 	])
 
 	if (!Array.isArray(eventsData)) return []
@@ -1795,10 +1839,6 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	// Map userinfo by userid
-	const nameByUserId = new Map<number, string | null>()
-	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
-
 	const combined = events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -1811,7 +1851,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			status: e.status,
 			courtbookingid: e.courtbookingid,
 			organizerid: e.organizerid,
-			organizerName: nameByUserId.get(e.organizerid) || null,
+			organizerName: null,
 			title: meta?.title,
 			description: meta?.description,
 			images: normalizeStringArrayLoose(meta?.images),
@@ -1864,10 +1904,6 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	const allUserInfo = await safeGet('/userinfo', 'listUserInfoAll')
-	const nameByUserId = new Map<number, string | null>()
-	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
-
 	return events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -1880,7 +1916,7 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			status: e.status,
 			courtbookingid: e.courtbookingid,
 			organizerid: e.organizerid,
-			organizerName: nameByUserId.get(e.organizerid) || null,
+			organizerName: null,
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,
@@ -1968,12 +2004,11 @@ export async function createTrainingSessionWithInfo(payload: CreateTrainingSessi
 // Aggregate training sessions similarly.
 export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSession[]> {
 	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
-	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
 		request('/trainingsessions', { debugLabel: 'listTrainingSessions' }),
 		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
-		safeGet('/userinfo', 'listUserInfoAll'),
 	])
 
 	if (!Array.isArray(tsData)) return []
@@ -1999,9 +2034,6 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	const nameByUserId = new Map<number, string | null>()
-	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
-
 	const combined = sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2014,7 +2046,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			status: s.status,
 			courtbookingid: s.courtbookingid,
 			coachid: s.coachid,
-			coachName: nameByUserId.get(s.coachid) || null,
+			coachName: null,
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,
@@ -2039,12 +2071,11 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 // Aggregate training sessions created by a specific coach.
 export async function listTrainingSessionsCombinedByCoachId(coachid: number): Promise<CombinedTrainingSession[]> {
 	// Fetch coach's sessions and all independent lookup tables in parallel.
-	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allUserInfo] = await Promise.all([
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
 		request(`/trainingsessions?coachid=${encodeURIComponent(coachid)}`, { debugLabel: 'listTrainingSessionsByCoachId' }),
 		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
-		safeGet('/userinfo', 'listUserInfoAll'),
 	])
 
 	if (!Array.isArray(tsData)) return []
@@ -2070,9 +2101,6 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
-	const nameByUserId = new Map<number, string | null>()
-	if (Array.isArray(allUserInfo)) for (const row of allUserInfo) if (typeof row.userid === 'number') nameByUserId.set(row.userid, (row.name as string) || null)
-
 	return sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2085,7 +2113,7 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			status: s.status,
 			courtbookingid: s.courtbookingid,
 			coachid: s.coachid,
-			coachName: nameByUserId.get(s.coachid) || null,
+			coachName: null,
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,
@@ -2141,7 +2169,7 @@ export async function getDashboard(): Promise<DashboardResponse> {
 export async function prefetchDashboardAndCourtInfo(): Promise<void> {
 	await Promise.allSettled([
 		getDashboard(),
-		listCourtInfoCached(),
+		listCourtInfoCompactCached(),
 	])
 }
 

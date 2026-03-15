@@ -5,6 +5,7 @@ class CourtInfo(BaseModel):
     id: int = Field(alias="courtinfoid")
     courtid: Optional[Union[int, str]] = None
     name: Optional[str] = None
+    thumbnail: Optional[str] = None
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

@@ -85,7 +85,7 @@ def _fetch_court_bookings_relational(userid: int) -> List[Dict[str, Any]]:
 
 
 def _fetch_event_bookings_relational(userid: int) -> List[Dict[str, Any]]:
-    """Fetch only the user's event bookings with nested event + eventinfo."""
+    """Fetch only the user's event bookings with nested event + eventinfo + court context."""
     try:
         rows = rest_select(
             "eventbooking",
@@ -93,6 +93,16 @@ def _fetch_event_bookings_relational(userid: int) -> List[Dict[str, Any]]:
                 "*,"
                 "events!eventbooking_eventid_fkey("
                 "eventid,time,status,organizerid,courtbookingid,"
+                "courtbooking!events_courtbookingid_fkey("
+                "courtbookingid,selected_court_name,selected_base_name,availabilityid,"
+                "courtavailability!courtbooking_availabilityid_fkey("
+                "availabilityid,courtid,"
+                "courts!courtavailability_courtid_fkey("
+                "courtid,courtinfo,"
+                "courtinfo!courtinfo_courtid_fkey(courtid,name,address,venue,images)"
+                ")"
+                ")"
+                "),"
                 "eventinfo!eventinfo_eventid_fkey("
                 "eventinfoid,eventid,title,description,numberofpeople,entry_fee,"
                 "support_payment_method,participants_cap,join_status,auto_approve,images"
@@ -108,7 +118,7 @@ def _fetch_event_bookings_relational(userid: int) -> List[Dict[str, Any]]:
 
 
 def _fetch_ts_bookings_relational(userid: int) -> List[Dict[str, Any]]:
-    """Fetch only the user's training bookings with nested session + sessioninfo."""
+    """Fetch only the user's training bookings with nested session + sessioninfo + court context."""
     try:
         rows = rest_select(
             "tsbookings",
@@ -116,6 +126,16 @@ def _fetch_ts_bookings_relational(userid: int) -> List[Dict[str, Any]]:
                 "*,"
                 "trainingsessions!tsbookings_sessionid_fkey("
                 "sessionid,courtbookingid,time,status,coachid,"
+                "courtbooking!trainingsessions_courtbookingid_fkey("
+                "courtbookingid,selected_court_name,selected_base_name,availabilityid,"
+                "courtavailability!courtbooking_availabilityid_fkey("
+                "availabilityid,courtid,"
+                "courts!courtavailability_courtid_fkey("
+                "courtid,courtinfo,"
+                "courtinfo!courtinfo_courtid_fkey(courtid,name,address,venue,images)"
+                ")"
+                ")"
+                "),"
                 "trainingsessioninfo!trainingsessioninfo_sessionid_fkey("
                 "sessioninfoid,sessionid,title,description,numberofpeople,entry_fee,"
                 "support_payment_method,participants_cap,join_status,images"
@@ -197,16 +217,39 @@ def _collect_combined(rows: List[Dict[str, Any]], rel_key: str) -> List[Dict[str
     for row in rows:
         if not isinstance(row, dict):
             continue
+        parent_courtid = row.get("courtid")
+        parent_court_name = row.get("court_name")
+        parent_start = row.get("start_timestamp")
+        parent_end = row.get("end_timestamp")
         rel = row.get(rel_key)
         if isinstance(rel, list):
-            combined.extend([x for x in rel if isinstance(x, dict)])
+            for child in rel:
+                if not isinstance(child, dict):
+                    continue
+                combined.append(
+                    {
+                        **child,
+                        "courtid": child.get("courtid") if child.get("courtid") is not None else parent_courtid,
+                        "court_name": child.get("court_name") if child.get("court_name") else parent_court_name,
+                        "start_timestamp": child.get("start_timestamp") if child.get("start_timestamp") else parent_start,
+                        "end_timestamp": child.get("end_timestamp") if child.get("end_timestamp") else parent_end,
+                    }
+                )
         elif isinstance(rel, dict):
-            combined.append(rel)
+            combined.append(
+                {
+                    **rel,
+                    "courtid": rel.get("courtid") if rel.get("courtid") is not None else parent_courtid,
+                    "court_name": rel.get("court_name") if rel.get("court_name") else parent_court_name,
+                    "start_timestamp": rel.get("start_timestamp") if rel.get("start_timestamp") else parent_start,
+                    "end_timestamp": rel.get("end_timestamp") if rel.get("end_timestamp") else parent_end,
+                }
+            )
     return combined
 
 
 def _dashboard_cache_key(userid: int) -> str:
-    return f"sportsconnect:me:dashboard:userid={userid}"
+    return f"sportsconnect:me:dashboard:v2:userid={userid}"
 
 
 def _dashboard_refresh_lock_key(cache_key: str) -> str:

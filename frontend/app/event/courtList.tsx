@@ -597,7 +597,7 @@ const CourtListScreen = () => {
                   <Image source={ICONS.sillball} style={styles.cardSilhouette} />
                   <View style={styles.cardLeft}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
-                    <Text style={styles.cardAddress} numberOfLines={1}>{(c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
+                    <Text style={styles.cardAddress} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
                     <View style={styles.tagRow}>
                       {venueDisplay.map(v => (
                         <View key={v} style={[styles.tag, styles.venueTag]}>

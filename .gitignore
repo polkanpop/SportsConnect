@@ -71,3 +71,9 @@ backend/sql/*.png
 # Local scratch notes
 run.txt
 
+# Context/generated artifacts not required in git history
+backend/sql/*.sql
+backend/sql/*.csv
+sql/*.sql
+frontend/data/*.csv
+

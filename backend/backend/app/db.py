@@ -197,8 +197,8 @@ async def fetch_venue_booking_bundle_pg(courtid: int, start_date: str, end_date:
         ) as availability
         from public.courtavailability ca
         where ca.courtid = $1
-          and ca.booking_date >= to_jsonb($2::text)
-          and ca.booking_date <= to_jsonb($3::text)
+          and (ca.booking_date #>> '{}') >= $2::text
+          and (ca.booking_date #>> '{}') <= $3::text
     ),
     svc as (
         select coalesce(

@@ -19,6 +19,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request
 import orjson
 
+from ..cloudinary_urls import apply_cloudinary_transform_list
 from ..db import fetch_venue_booking_bundle_pg, has_pg_pool, rest_select, probe_pg_connection
 
 router = APIRouter(prefix="/venues", tags=["venues"])
@@ -36,6 +37,7 @@ _SWR_REFRESH_LOCK_SECONDS = int(os.getenv("VENUES_SWR_REFRESH_LOCK_SECONDS", "45
 _PREWARM_TOP_VENUES = int(os.getenv("VENUES_PREWARM_TOP_VENUES", "10"))
 _PREWARM_CHUNK_SIZE = int(os.getenv("VENUES_PREWARM_CHUNK_SIZE", "10"))
 _PREWARM_SEMAPHORE_LIMIT = int(os.getenv("VENUES_PREWARM_SEMAPHORE", "3"))
+_VENUE_DETAIL_IMAGE_WIDTH = 1000
 
 
 def mark_venues_startup_warmup(warmup_ms: float) -> None:
@@ -308,6 +310,26 @@ async def _load_venue_booking_data(courtid: int, *, profile_cold: bool) -> dict[
             "availability": availability,
             "services": services,
         }
+
+    courtinfo_payload = response_payload.get("courtinfo")
+    if isinstance(courtinfo_payload, dict) and isinstance(courtinfo_payload.get("images"), list):
+        courtinfo_payload["images"] = apply_cloudinary_transform_list(
+            courtinfo_payload.get("images"),
+            width=_VENUE_DETAIL_IMAGE_WIDTH,
+        )
+
+    playing_rows = response_payload.get("playing_courts")
+    if isinstance(playing_rows, list):
+        for row in playing_rows:
+            if isinstance(row, dict) and isinstance(row.get("images"), list):
+                row["images"] = apply_cloudinary_transform_list(row.get("images"), width=_VENUE_DETAIL_IMAGE_WIDTH)
+
+    service_rows = response_payload.get("services")
+    if isinstance(service_rows, list):
+        for row in service_rows:
+            if isinstance(row, dict) and isinstance(row.get("images"), list):
+                row["images"] = apply_cloudinary_transform_list(row.get("images"), width=_VENUE_DETAIL_IMAGE_WIDTH)
+
     query_execution_ms = (time.perf_counter() - t_query0) * 1000.0
 
     if cold_profile:

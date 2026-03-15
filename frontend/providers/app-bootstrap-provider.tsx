@@ -4,8 +4,6 @@ import { prefetchDashboardAndCourtInfo } from '@/lib/backendApi'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
-import { useUserIdentity } from '@/hooks/use-user-identity'
-import { useFavouriteCourts } from '@/hooks/use-favourite-courts'
 import { AppState } from 'react-native'
 import { queryClient } from '@/providers/query-provider'
 
@@ -15,11 +13,17 @@ type BootstrapUserInfoState = {
   error: unknown
 }
 
+type BootstrapQueryLike<T> = {
+  data: T
+  isLoading: boolean
+  error: unknown
+}
+
 export type AppBootstrapValue = {
   userId: number | null
-  userIdentity: ReturnType<typeof useUserIdentity>
+  userIdentity: BootstrapQueryLike<UserInfoRow | null>
   favouriteCourts: FavouriteCourt[]
-  favouriteCourtsQuery: ReturnType<typeof useFavouriteCourts>
+  favouriteCourtsQuery: BootstrapQueryLike<FavouriteCourt[]>
   dashboard: ReturnType<typeof useDashboard>
   userInfo: BootstrapUserInfoState
   notifications: NotificationRow[]
@@ -58,21 +62,29 @@ const AppBootstrapContext = createContext<AppBootstrapValue>({
 export function AppBootstrapProvider({ children }: { children: React.ReactNode }) {
   const { data: userIdRaw } = useUserId()
   const userId = typeof userIdRaw === 'number' ? userIdRaw : null
-  // Highest-priority startup fetches.
-  const userIdentity = useUserIdentity(userId)
-  const favouriteCourtsQuery = useFavouriteCourts(userId)
+  // Keep startup top-down: one dashboard bootstrap request first.
+  const dashboard = useDashboard(userId)
 
-  // Dashboard starts only after identity has at least attempted to resolve.
-  const dashboard = useDashboard(userId, {
-    enabled: userIdentity.isFetched,
-  })
+  const userIdentity: BootstrapQueryLike<UserInfoRow | null> = {
+    data: (dashboard.data?.userinfo as UserInfoRow | null) ?? null,
+    isLoading: dashboard.isLoading,
+    error: dashboard.error,
+  }
+
+  const favouriteCourtsQuery: BootstrapQueryLike<FavouriteCourt[]> = {
+    data: Array.isArray(dashboard.data?.favourite_courts) ? (dashboard.data!.favourite_courts as FavouriteCourt[]) : [],
+    isLoading: dashboard.isLoading,
+    error: dashboard.error,
+  }
 
   const userInfo: BootstrapUserInfoState = {
-    data: userIdentity.data ?? null,
-    isLoading: userIdentity.isLoading,
-    error: userIdentity.error,
+    data: (dashboard.data?.userinfo as UserInfoRow | null) ?? null,
+    isLoading: dashboard.isLoading,
+    error: dashboard.error,
   }
-  const favouriteCourts = Array.isArray(favouriteCourtsQuery.data) ? favouriteCourtsQuery.data : []
+  const favouriteCourts = Array.isArray(dashboard.data?.favourite_courts)
+    ? (dashboard.data!.favourite_courts as FavouriteCourt[])
+    : []
   const notifications = Array.isArray(dashboard.data?.notifications) ? dashboard.data!.notifications! : []
   const eventsCombined = Array.isArray(dashboard.data?.events_combined) ? dashboard.data!.events_combined! : []
   const trainingSessionsCombined = Array.isArray(dashboard.data?.training_sessions_combined)

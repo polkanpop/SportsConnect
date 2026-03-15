@@ -60,6 +60,30 @@ const parseTimestampLoose = (ts?: string | null) => {
   return new Date(normalized);
 };
 
+const firstRelatedRow = (rel: any): any | null => {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  if (rel && typeof rel === 'object') return rel;
+  return null;
+};
+
+const pickVenueLabel = (row: any): string | null => {
+  if (!row || typeof row !== 'object') return null;
+  const booking = firstRelatedRow((row as any)?.courtbooking);
+  const availability = firstRelatedRow((booking as any)?.courtavailability);
+  const courtsRel = firstRelatedRow((availability as any)?.courts);
+  const courtInfoRel = firstRelatedRow((courtsRel as any)?.courtinfo) || firstRelatedRow((availability as any)?.courtinfo);
+  return (
+    (courtInfoRel as any)?.name ||
+    (courtsRel as any)?.courtinfo ||
+    row.court_name ||
+    row.venue ||
+    row.address ||
+    (booking as any)?.selected_base_name ||
+    (booking as any)?.selected_court_name ||
+    null
+  );
+};
+
 const formatDateWeekdayDDMMYYYY = (dt: Date) => {
   if (Number.isNaN(dt.getTime())) return '';
   const wd = dt.toLocaleDateString(undefined, { weekday: 'short' });
@@ -165,19 +189,30 @@ const mergeBookings = (params: {
       } satisfies UnifiedBooking;
     }),
     ...eventBookings.map((item) => {
-      const eventId = typeof item.eventid === 'number' ? item.eventid : NaN;
-      const ev = Number.isFinite(eventId) ? params.eventsById.get(eventId) : undefined;
-      const startTs = (ev?.start_timestamp as string | undefined) ?? (ev?.time as string | undefined) ?? undefined;
-      const endTs = (ev?.end_timestamp as string | undefined) ?? undefined;
+      const eventIdRaw = Number(item?.eventid);
+      const eventId = Number.isFinite(eventIdRaw) ? eventIdRaw : NaN;
+      const byId = Number.isFinite(eventId) ? params.eventsById.get(eventId) : undefined;
+      const relatedEvent = firstRelatedRow((item as any)?.events);
+      const relatedInfo = firstRelatedRow((relatedEvent as any)?.eventinfo);
+      const ev = { ...(relatedEvent || {}), ...(byId || {}) } as any;
+      const startTs =
+        (ev?.start_timestamp as string | undefined) ??
+        (ev?.time as string | undefined) ??
+        ((item as any)?.start_timestamp as string | undefined) ??
+        undefined;
+      const endTs =
+        (ev?.end_timestamp as string | undefined) ??
+        ((item as any)?.end_timestamp as string | undefined) ??
+        undefined;
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `event_${item.eventbookingid}`,
-        title: (ev?.title as string | undefined) || `Event #${item.eventid}`,
+        title: (ev?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Event #${item.eventid}`,
         status: normalizeStatus(item.bookingstatus, item.status, dateTime),
         mode: 'Booking',
         activity: 'event',
         type: 'starCal' as keyof typeof ICONS,
-        courtName: (ev as any)?.court_name ?? null,
+        courtName: pickVenueLabel(ev) || (relatedInfo as any)?.venue || (relatedInfo as any)?.address || null,
         date: safeIsoDate(startTs),
         time: safeTime(startTs),
         day: startTs ? getDayOfWeek(startTs) : '',
@@ -188,19 +223,30 @@ const mergeBookings = (params: {
       } satisfies UnifiedBooking;
     }),
     ...trainingSessionBookings.map((item) => {
-      const sessionId = typeof item.sessionid === 'number' ? item.sessionid : NaN;
-      const sess = Number.isFinite(sessionId) ? params.sessionsById.get(sessionId) : undefined;
-      const startTs = (sess?.start_timestamp as string | undefined) ?? (sess?.time as string | undefined) ?? undefined;
-      const endTs = (sess?.end_timestamp as string | undefined) ?? undefined;
+      const sessionIdRaw = Number(item?.sessionid);
+      const sessionId = Number.isFinite(sessionIdRaw) ? sessionIdRaw : NaN;
+      const byId = Number.isFinite(sessionId) ? params.sessionsById.get(sessionId) : undefined;
+      const relatedSession = firstRelatedRow((item as any)?.trainingsessions);
+      const relatedInfo = firstRelatedRow((relatedSession as any)?.trainingsessioninfo);
+      const sess = { ...(relatedSession || {}), ...(byId || {}) } as any;
+      const startTs =
+        (sess?.start_timestamp as string | undefined) ??
+        (sess?.time as string | undefined) ??
+        ((item as any)?.start_timestamp as string | undefined) ??
+        undefined;
+      const endTs =
+        (sess?.end_timestamp as string | undefined) ??
+        ((item as any)?.end_timestamp as string | undefined) ??
+        undefined;
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `session_${item.tsbookingid}`,
-        title: (sess?.title as string | undefined) || `Training Session #${item.sessionid}`,
+        title: (sess?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Training Session #${item.sessionid}`,
         status: normalizeStatus(item.bookingstatus, item.status, dateTime),
         mode: 'Booking',
         activity: 'session',
         type: 'coachCal' as keyof typeof ICONS,
-        courtName: (sess as any)?.court_name ?? null,
+        courtName: pickVenueLabel(sess) || (relatedInfo as any)?.venue || (relatedInfo as any)?.address || null,
         date: safeIsoDate(startTs),
         time: safeTime(startTs),
         day: startTs ? getDayOfWeek(startTs) : '',
@@ -244,7 +290,7 @@ const mergeHosting = (params: {
         mode: 'Hosting',
         activity: 'event',
         type: 'starCal' as keyof typeof ICONS,
-        courtName: (ev as any)?.court_name ?? null,
+        courtName: pickVenueLabel(ev),
         date: safeIsoDate(startTs),
         time: safeTime(startTs),
         day: startTs ? getDayOfWeek(startTs) : '',
@@ -264,7 +310,7 @@ const mergeHosting = (params: {
         mode: 'Hosting',
         activity: 'session',
         type: 'coachCal' as keyof typeof ICONS,
-        courtName: (s as any)?.court_name ?? null,
+        courtName: pickVenueLabel(s),
         date: safeIsoDate(startTs),
         time: safeTime(startTs),
         day: startTs ? getDayOfWeek(startTs) : '',
@@ -363,7 +409,7 @@ export default function ActivityPage() {
     if (typeof userId !== 'number') return;
     setRefreshing(true);
     try {
-      await queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' });
     } finally {
       setRefreshing(false);
     }

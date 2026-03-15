@@ -9,7 +9,7 @@ import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollVi
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   FavouriteCourt,
-  listCourtInfoCached,
+  listCourtInfoByCourtIdsCached,
   CourtInfoRow,
   type CombinedEvent,
 } from "@/lib/backendApi";
@@ -316,7 +316,8 @@ export default function Home() {
         : []
       if (favRows.length === 0) return [] as FavoriteLocation[]
 
-      const courtInfoRows: CourtInfoRow[] = await listCourtInfoCached()
+      const targetCourtIds = favRows.map((fr) => fr.courtid)
+      const courtInfoRows: CourtInfoRow[] = await listCourtInfoByCourtIdsCached(targetCourtIds)
       const infoMap = new Map<number, CourtInfoRow>()
       courtInfoRows.forEach((ci) => {
         if (typeof ci.courtid === 'number') infoMap.set(ci.courtid, ci)

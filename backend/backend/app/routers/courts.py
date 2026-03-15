@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 import logging
 import re
@@ -179,6 +180,8 @@ class DistanceMatrixBatchResponse(BaseModel):
 
 
 _DISTANCE_CACHE_TTL_SECONDS = int(os.getenv("DISTANCE_MATRIX_CACHE_TTL_SECONDS", "300"))
+_DISTANCE_BATCH_REQUEST_CACHE_TTL_SECONDS = int(os.getenv("DISTANCE_MATRIX_BATCH_REQUEST_CACHE_TTL_SECONDS", "86400"))
+_DISTANCE_COORD_DECIMALS = int(os.getenv("DISTANCE_MATRIX_COORD_DECIMALS", "6"))
 _DISTANCE_BATCH_CHUNK_SIZE = int(os.getenv("DISTANCE_BATCH_CHUNK_SIZE", "10"))
 _DISTANCE_BATCH_SEMAPHORE_LIMIT = int(os.getenv("DISTANCE_BATCH_SEMAPHORE", "3"))
 _distance_batch_semaphore = asyncio.Semaphore(_DISTANCE_BATCH_SEMAPHORE_LIMIT)
@@ -186,6 +189,17 @@ _distance_batch_semaphore = asyncio.Semaphore(_DISTANCE_BATCH_SEMAPHORE_LIMIT)
 
 def _distance_cache_key(origin: str, destination: str) -> str:
     return f"sportsconnect:distance-matrix:{origin}:{destination}"
+
+
+def _distance_batch_request_cache_key(origin: str, destinations: list[str]) -> str:
+    # Keep order-sensitive hash because response order matches request order.
+    payload = {"origin": origin, "destinations": destinations}
+    digest = hashlib.sha1(orjson.dumps(payload)).hexdigest()
+    return f"sportsconnect:distance-matrix:batch:{digest}"
+
+
+def _normalize_coord(value: float) -> str:
+    return f"{round(float(value), _DISTANCE_COORD_DECIMALS):.{_DISTANCE_COORD_DECIMALS}f}"
 
 
 def _serialize_distance_result(result: DistanceMatrixResponse) -> bytes:
@@ -903,13 +917,22 @@ async def distance_matrix_batch(req: DistanceMatrixBatchRequest, request: Reques
         if len(req.destinations) > 25:
             raise HTTPException(status_code=400, detail="Too many destinations; max 25")
 
-        origin = f"{req.origin_lat},{req.origin_lng}"
-        destinations = [f"{d.dest_lat},{d.dest_lng}" for d in req.destinations]
+        origin = f"{_normalize_coord(req.origin_lat)},{_normalize_coord(req.origin_lng)}"
+        destinations = [f"{_normalize_coord(d.dest_lat)},{_normalize_coord(d.dest_lng)}" for d in req.destinations]
         cache_keys = [_distance_cache_key(origin, destination) for destination in destinations]
+        batch_cache_key = _distance_batch_request_cache_key(origin, destinations)
 
         redis = getattr(request.app.state, "redis", None)
         cached_raw: list[Any] = []
         if redis is not None:
+            try:
+                batch_raw = await redis.get(batch_cache_key)
+                if batch_raw is not None:
+                    parsed = orjson.loads(batch_raw)
+                    if isinstance(parsed, list):
+                        return DistanceMatrixBatchResponse(results=[DistanceMatrixResponse(**item) for item in parsed if isinstance(item, dict)])
+            except Exception as exc:
+                logger.warning("distance_matrix_batch request-cache read failed err=%s", exc)
             try:
                 cached_raw = await redis.mget(cache_keys)
             except Exception as exc:
@@ -965,6 +988,15 @@ async def distance_matrix_batch(req: DistanceMatrixBatchRequest, request: Reques
                     logger.warning("distance_matrix_batch cache write failed err=%s", exc)
 
         final_results = [item if item is not None else DistanceMatrixResponse(warnings=["Missing result"]) for item in merged_results]
+        if redis is not None:
+            try:
+                await redis.set(
+                    batch_cache_key,
+                    orjson.dumps([item.model_dump() for item in final_results]),
+                    ex=_DISTANCE_BATCH_REQUEST_CACHE_TTL_SECONDS,
+                )
+            except Exception as exc:
+                logger.warning("distance_matrix_batch request-cache write failed err=%s", exc)
         return DistanceMatrixBatchResponse(results=final_results)
     except HTTPException:
         raise

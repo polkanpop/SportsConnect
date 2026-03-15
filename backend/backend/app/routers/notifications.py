@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List, Any
 from datetime import datetime, timezone
+from pydantic import BaseModel
 from ..db import rest_select, rest_update
 from ..auth import get_current_user
 from ..models import Notification
@@ -24,6 +25,10 @@ EXPECTED_FIELDS = {
     "data",
     "read_at",
 }
+
+
+class DeleteManyPayload(BaseModel):
+    notificationids: List[int]
 
 
 def _now_iso() -> str:
@@ -175,5 +180,75 @@ async def mark_all_read(
             filters["category"] = category
         rest_update("notifications", filters, {"status": "read", "read_at": _now_iso()})
         return {"ok": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{notificationid}", response_model=dict)
+async def delete_notification(notificationid: int, sub: str = Depends(get_current_user)):
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
+    try:
+        row = rest_select(
+            "notifications",
+            RAW_SELECT,
+            filters={"notificationid": notificationid},
+            single=True,
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        if row.get("userid") is not None and int(row.get("userid")) != token_userid:
+            raise HTTPException(status_code=403, detail="Not allowed")
+        # Soft-delete style not available in current schema; hard delete the row.
+        from ..db import rest_delete
+        deleted = rest_delete("notifications", {"notificationid": notificationid})
+        return {"ok": True, "count": len(deleted) if isinstance(deleted, list) else 0}
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/delete_many", response_model=dict)
+async def delete_many_notifications(payload: DeleteManyPayload, sub: str = Depends(get_current_user)):
+    token_userid = _coerce_numeric_userid(sub)
+    if token_userid is None:
+        raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
+
+    notificationids = [int(x) for x in payload.notificationids if isinstance(x, int)]
+    if not notificationids:
+        return {"ok": True, "count": 0}
+
+    try:
+        rows = rest_select(
+            "notifications",
+            RAW_SELECT,
+            filters={"notificationid": notificationids},
+        )
+        if not isinstance(rows, list):
+            rows = []
+
+        owned_ids: List[int] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_userid = row.get("userid")
+            row_id = row.get("notificationid")
+            if row_userid is None or row_id is None:
+                continue
+            if int(row_userid) == token_userid:
+                owned_ids.append(int(row_id))
+
+        if not owned_ids:
+            return {"ok": True, "count": 0}
+
+        from ..db import rest_delete
+        deleted_count = 0
+        for nid in owned_ids:
+            out = rest_delete("notifications", {"notificationid": nid})
+            if isinstance(out, list):
+                deleted_count += len(out)
+        return {"ok": True, "count": deleted_count}
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

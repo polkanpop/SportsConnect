@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from .db import close_pg_pool, get_settings, has_pg_pool_config, init_pg_pool, probe_pg_connection
 from .rate_limit import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -151,6 +152,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=500,
 )
 
 app.include_router(courtinfo.router, prefix="/api")
