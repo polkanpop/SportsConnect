@@ -31,9 +31,9 @@ never sees stale data when they come back to the same form.
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
+import orjson
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -117,7 +117,7 @@ async def get_draft(
 
     ttl = await redis.ttl(key)
     try:
-        payload = json.loads(raw)
+        payload = orjson.loads(raw)
     except Exception:
         payload = {}
 
@@ -151,7 +151,7 @@ async def save_draft(
     redis = _require_redis(request)
     key = _draft_key(user_id, target_type.lower(), target_id)
 
-    await redis.set(key, json.dumps(body.data), ex=_DRAFT_TTL_SECONDS)
+    await redis.set(key, orjson.dumps(body.data), ex=_DRAFT_TTL_SECONDS)
 
     return {"ok": True, "ttl_seconds": _DRAFT_TTL_SECONDS}
 

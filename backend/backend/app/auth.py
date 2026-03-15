@@ -1,16 +1,19 @@
 import os
 import time
+import hashlib
 from functools import lru_cache
 from typing import Optional, Dict, Any
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Request
 import logging
 import httpx
 from jose import jwt, JWTError
 from datetime import datetime  # for expiry diagnostics
+import orjson
 
 HS_ALGORITHM = "HS256"
 RS_ALGORITHMS = ["RS256", "RS384", "RS512"]
 JWKS_CACHE_SECONDS = 600
+AUTH_CACHE_TTL_SECONDS = 15 * 60
 
 @lru_cache
 def get_supabase_url() -> Optional[str]:
@@ -67,11 +70,26 @@ if not logger.handlers:
 logger.setLevel(logging.DEBUG)
 
 def decode_token(token: str) -> dict:
-    # Attempt RS decode first
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception:
+        header = {}
+    alg = str(header.get("alg") or "").upper()
+
+    # Fast-path HS tokens to avoid remote JWKS round-trip.
+    if alg == HS_ALGORITHM:
+        return _decode_hs_token(token)
+
+    # Attempt RS decode first for RS* tokens.
     payload = decode_with_jwks(token)
     if payload:
         return payload
+
     # Fallback HS256
+    return _decode_hs_token(token)
+
+
+def _decode_hs_token(token: str) -> dict:
     secret = get_jwt_secret()
     if not secret:
         raise HTTPException(status_code=500, detail="JWT secret not configured; set SUPABASE_JWT_SECRET or SUPABASE_ANON_KEY")
@@ -92,24 +110,89 @@ def decode_token(token: str) -> dict:
         )
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
-def get_current_user(authorization: str | None = Header(None, alias="Authorization")) -> str:
+
+def _auth_cache_key(token: str) -> str:
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"auth_user:{token_hash}"
+
+
+async def _read_cached_subject(request: Request, token: str) -> Optional[str]:
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        return None
+    try:
+        raw = await redis.get(_auth_cache_key(token))
+        if raw is None:
+            return None
+        data = orjson.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        sub = data.get("sub")
+        return str(sub) if sub else None
+    except Exception:
+        return None
+
+
+async def _write_cached_subject(request: Request, token: str, payload: dict) -> None:
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        return
+    sub = payload.get("sub") or payload.get("user_id")
+    if not sub:
+        return
+
+    now_ts = int(datetime.utcnow().timestamp())
+    exp_raw = payload.get("exp")
+    exp_ts = int(exp_raw) if isinstance(exp_raw, (int, float)) else None
+    ttl = AUTH_CACHE_TTL_SECONDS
+    if exp_ts is not None:
+        ttl = min(ttl, max(0, exp_ts - now_ts))
+    if ttl <= 0:
+        return
+
+    cached_payload = {
+        "sub": str(sub),
+        "exp": exp_ts,
+        "iat": payload.get("iat"),
+        "cached_at": now_ts,
+    }
+    try:
+        await redis.set(_auth_cache_key(token), orjson.dumps(cached_payload), ex=ttl)
+    except Exception:
+        pass
+
+async def get_current_user(request: Request, authorization: str | None = Header(None, alias="Authorization")) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
     token = authorization.removeprefix("Bearer ").strip()
     logger.debug(f"auth header received len={len(token)} alg_hint={jwt.get_unverified_header(token).get('alg', 'na') if '.' in token else 'na'}")
+
+    cached_sub = await _read_cached_subject(request, token)
+    if cached_sub:
+        return cached_sub
+
     payload = decode_token(token)
     sub = payload.get("sub") or payload.get("user_id")
     if not sub:
         raise HTTPException(status_code=401, detail="Token missing subject")
+    await _write_cached_subject(request, token, payload)
     return str(sub)
 
-def get_optional_user(authorization: str | None = Header(None, alias="Authorization")) -> Optional[str]:
+async def get_optional_user(request: Request, authorization: str | None = Header(None, alias="Authorization")) -> Optional[str]:
     if not authorization or not authorization.startswith("Bearer "):
         return None
     token = authorization.removeprefix("Bearer ").strip()
+
+    cached_sub = await _read_cached_subject(request, token)
+    if cached_sub:
+        return cached_sub
+
     try:
         payload = decode_token(token)
     except HTTPException:
         return None
     sub = payload.get("sub") or payload.get("user_id")
-    return str(sub) if sub else None
+    if sub:
+        await _write_cached_subject(request, token, payload)
+        return str(sub)
+    return None

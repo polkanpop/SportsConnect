@@ -240,6 +240,15 @@ async def _init_cache():
                 exc,
             )
 
+    try:
+        await courtinfo.prewarm_default_courtinfo_and_venues_cache(app)
+    except Exception as exc:
+        logger.warning(
+            "Default courtinfo+venues Redis prewarm failed during startup: %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
 
 @app.on_event("shutdown")
 async def _shutdown_resources():

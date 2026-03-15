@@ -22,16 +22,26 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+import logging
+import os
+import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi_cache.decorator import cache
+import orjson
 
 from ..auth import get_current_user
 from ..cache_utils import make_key_builder
 from ..db import rest_select
 
 router = APIRouter(prefix="/me", tags=["me"])
+logger = logging.getLogger("me")
+
+_DASHBOARD_CACHE_FRESH_SECONDS = int(os.getenv("ME_DASHBOARD_CACHE_FRESH_SECONDS", "120"))
+_DASHBOARD_CACHE_STALE_SECONDS = int(os.getenv("ME_DASHBOARD_CACHE_STALE_SECONDS", "300"))
+_DASHBOARD_CACHE_HARD_SECONDS = _DASHBOARD_CACHE_FRESH_SECONDS + _DASHBOARD_CACHE_STALE_SECONDS
+_DASHBOARD_REFRESH_LOCK_SECONDS = int(os.getenv("ME_DASHBOARD_REFRESH_LOCK_SECONDS", "45"))
 
 # Shared thread pool; 10 workers is enough for concurrent REST fetches without
 # flooding the Supabase connection pool.
@@ -195,6 +205,103 @@ def _collect_combined(rows: List[Dict[str, Any]], rel_key: str) -> List[Dict[str
     return combined
 
 
+def _dashboard_cache_key(userid: int) -> str:
+    return f"sportsconnect:me:dashboard:userid={userid}"
+
+
+def _dashboard_refresh_lock_key(cache_key: str) -> str:
+    return f"{cache_key}:refresh-lock"
+
+
+def _pack_cached_payload(payload: dict[str, Any]) -> bytes:
+    return orjson.dumps({"cached_at": time.time(), "data": payload})
+
+
+def _unpack_cached_payload(raw: bytes | str) -> tuple[dict[str, Any] | None, float | None]:
+    parsed = orjson.loads(raw)
+    if not isinstance(parsed, dict):
+        return None, None
+    data = parsed.get("data")
+    cached_at = parsed.get("cached_at")
+    if not isinstance(data, dict):
+        return None, None
+    try:
+        age_seconds = max(0.0, time.time() - float(cached_at))
+    except Exception:
+        age_seconds = None
+    return data, age_seconds
+
+
+async def _load_dashboard(userid: int) -> dict[str, Any]:
+    loop = asyncio.get_running_loop()
+
+    (
+        userinfo_rows,
+        favs,
+        court_bookings,
+        event_bookings,
+        ts_bookings,
+        notifications,
+    ) = await asyncio.gather(
+        loop.run_in_executor(_pool, partial(_fetch, "userinfo", {"userid": userid})),
+        loop.run_in_executor(_pool, partial(_fetch, "favouritecourts", {"userid": userid})),
+        loop.run_in_executor(_pool, partial(_fetch_court_bookings_relational, userid)),
+        loop.run_in_executor(_pool, partial(_fetch_event_bookings_relational, userid)),
+        loop.run_in_executor(_pool, partial(_fetch_ts_bookings_relational, userid)),
+        loop.run_in_executor(_pool, partial(_fetch, "notifications", {"userid": userid})),
+    )
+
+    enriched_court_bookings = _attach_linked_details(court_bookings)
+    events_combined = _collect_combined(court_bookings, "events")
+    training_sessions_combined = _collect_combined(court_bookings, "trainingsessions")
+
+    return {
+        "userinfo": userinfo_rows[0] if userinfo_rows else None,
+        "favourite_courts": favs,
+        "court_bookings": enriched_court_bookings,
+        "event_bookings": event_bookings,
+        "training_bookings": ts_bookings,
+        "notifications": notifications,
+        "events_combined": events_combined,
+        "training_sessions_combined": training_sessions_combined,
+    }
+
+
+async def _refresh_dashboard_cache(*, app: Any, cache_key: str, userid: int) -> None:
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+
+    lock_key = _dashboard_refresh_lock_key(cache_key)
+    acquired = False
+    try:
+        acquired = bool(await redis.set(lock_key, "1", ex=_DASHBOARD_REFRESH_LOCK_SECONDS, nx=True))
+        if not acquired:
+            return
+        fresh_payload = await _load_dashboard(userid)
+        await redis.set(cache_key, _pack_cached_payload(fresh_payload), ex=_DASHBOARD_CACHE_HARD_SECONDS)
+    except Exception as exc:
+        logger.warning("dashboard_swr_refresh_failed userid=%s err=%s", userid, exc)
+    finally:
+        if acquired:
+            try:
+                await redis.delete(lock_key)
+            except Exception:
+                pass
+
+
+def _schedule_background_refresh(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+
+    def _on_done(done: asyncio.Task) -> None:
+        try:
+            done.result()
+        except Exception as exc:
+            logger.warning("me_background_task_failed err=%s", exc)
+
+    task.add_done_callback(_on_done)
+
+
 @router.get("/identity")
 @cache(expire=120, key_builder=make_key_builder("me_identity"))
 async def get_identity(user_sub: str = Depends(get_current_user)):
@@ -217,8 +324,7 @@ async def get_identity(user_sub: str = Depends(get_current_user)):
 
 
 @router.get("/dashboard")
-@cache(expire=120, key_builder=make_key_builder("dashboard"))
-async def get_dashboard(user_sub: str = Depends(get_current_user)):
+async def get_dashboard(request: Request, user_sub: str = Depends(get_current_user)):
     """Return all startup data for the authenticated user in a single call.
 
     The numeric ``userid`` is resolved from the JWT ``sub`` claim.  If the
@@ -234,37 +340,23 @@ async def get_dashboard(user_sub: str = Depends(get_current_user)):
             detail="Dashboard requires a numeric user-id in the JWT subject.",
         )
 
-    loop = asyncio.get_running_loop()
+    cache_key = _dashboard_cache_key(userid)
+    redis = getattr(request.app.state, "redis", None)
 
-    # Fire all reads at the same time.
-    (
-        userinfo_rows,
-        favs,
-        court_bookings,
-        event_bookings,
-        ts_bookings,
-        notifications,
-    ) = await asyncio.gather(
-        loop.run_in_executor(_pool, partial(_fetch, "userinfo",        {"userid": userid})),
-        loop.run_in_executor(_pool, partial(_fetch, "favouritecourts", {"userid": userid})),
-        loop.run_in_executor(_pool, partial(_fetch_court_bookings_relational, userid)),
-        loop.run_in_executor(_pool, partial(_fetch_event_bookings_relational, userid)),
-        loop.run_in_executor(_pool, partial(_fetch_ts_bookings_relational, userid)),
-        loop.run_in_executor(_pool, partial(_fetch, "notifications",   {"userid": userid})),
-    )
+    if redis is not None:
+        raw = await redis.get(cache_key)
+        if raw is not None:
+            cached_payload, age_seconds = _unpack_cached_payload(raw)
+            if cached_payload is not None and age_seconds is not None:
+                if age_seconds <= _DASHBOARD_CACHE_FRESH_SECONDS:
+                    return cached_payload
+                if age_seconds <= _DASHBOARD_CACHE_HARD_SECONDS:
+                    _schedule_background_refresh(
+                        _refresh_dashboard_cache(app=request.app, cache_key=cache_key, userid=userid)
+                    )
+                    return cached_payload
 
-    enriched_court_bookings = _attach_linked_details(court_bookings)
-
-    events_combined = _collect_combined(court_bookings, "events")
-    training_sessions_combined = _collect_combined(court_bookings, "trainingsessions")
-
-    return {
-        "userinfo":          userinfo_rows[0] if userinfo_rows else None,
-        "favourite_courts":  favs,
-        "court_bookings":    enriched_court_bookings,
-        "event_bookings":    event_bookings,
-        "training_bookings": ts_bookings,
-        "notifications":     notifications,
-        "events_combined":   events_combined,
-        "training_sessions_combined": training_sessions_combined,
-    }
+    fresh_payload = await _load_dashboard(userid)
+    if redis is not None:
+        await redis.set(cache_key, _pack_cached_payload(fresh_payload), ex=_DASHBOARD_CACHE_HARD_SECONDS)
+    return fresh_payload

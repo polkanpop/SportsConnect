@@ -380,7 +380,17 @@ export default function ActivityPage() {
       const now = Date.now()
       if (now - lastFocusInvalidateRef.current < 60_000) return
       lastFocusInvalidateRef.current = now
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) });
+
+      const key = queryKeys.dashboard(userId)
+      const st = queryClient.getQueryState(key)
+      const isFetching = st?.fetchStatus === 'fetching'
+      const hasData = !!st?.data
+      const staleForMs = now - (st?.dataUpdatedAt || 0)
+      const shouldRefresh = !hasData || staleForMs > 2 * 60_000
+
+      if (!isFetching && shouldRefresh) {
+        void queryClient.refetchQueries({ queryKey: key, type: 'active' })
+      }
     }, [queryClient, userId])
   );
 

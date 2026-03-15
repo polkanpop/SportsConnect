@@ -7,6 +7,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 type Json = Record<string, any>
 
 let refreshTokenPromise: Promise<boolean> | null = null
+const inflightGetRequestMap = new Map<string, Promise<any>>()
+
+function shouldDedupeGetPath(path: string): boolean {
+	return /^\/(?:me\/dashboard|courtinfo(?:\?|$)|favouritecourts(?:\?|$))/.test(path)
+}
 
 async function refreshAccessTokenRequest(): Promise<boolean> {
 	try {
@@ -96,6 +101,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`
 	const t0 = Date.now()
 	const debugLabel = options.debugLabel || path
+	const method = (options.method || 'GET').toUpperCase()
 	const protectedEndpoint = isProtectedEndpoint(path)
 	if (protectedEndpoint && !isRefreshEndpoint(path)) {
 		const bt = await getLocalBackendToken()
@@ -105,8 +111,18 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		}
 	}
 	const authHeader = await buildAuthHeader()
+	const dedupeEligible = method === 'GET' && !options.signal && shouldDedupeGetPath(path)
+	const dedupeKey = dedupeEligible
+		? `${method}:${url}:auth=${String((authHeader as any)?.Authorization || '')}`
+		: null
+	if (dedupeKey) {
+		const inflight = inflightGetRequestMap.get(dedupeKey)
+		if (inflight) return inflight
+	}
+
+	const doFetch = async () => {
 	const res = await fetch(url, {
-		method: options.method || 'GET',
+		method,
 		signal: options.signal,
 		headers: {
 			'Content-Type': 'application/json; charset=utf-8',
@@ -135,6 +151,17 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		throw new Error(detail)
 	}
 	return data
+	}
+
+	if (dedupeKey) {
+		const p = doFetch().finally(() => {
+			inflightGetRequestMap.delete(dedupeKey)
+		})
+		inflightGetRequestMap.set(dedupeKey, p)
+		return p
+	}
+
+	return doFetch()
 }
 
 // ---- Notifications ----
@@ -2109,6 +2136,13 @@ export type DashboardResponse = {
 export async function getDashboard(): Promise<DashboardResponse> {
 	const data = await request('/me/dashboard', { debugLabel: 'getDashboard' })
 	return data as DashboardResponse
+}
+
+export async function prefetchDashboardAndCourtInfo(): Promise<void> {
+	await Promise.allSettled([
+		getDashboard(),
+		listCourtInfoCached(),
+	])
 }
 
 // ---- Cancel Bookings ----

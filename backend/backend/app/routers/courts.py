@@ -1,11 +1,13 @@
+import asyncio
 import os
 import logging
 import re
 from typing import Any, Optional
 from datetime import time
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 import httpx
+import orjson
 from pydantic import BaseModel, Field
 from fastapi_cache.decorator import cache
 
@@ -174,6 +176,27 @@ class DistanceMatrixBatchRequest(BaseModel):
 
 class DistanceMatrixBatchResponse(BaseModel):
     results: list[DistanceMatrixResponse] = Field(default_factory=list)
+
+
+_DISTANCE_CACHE_TTL_SECONDS = int(os.getenv("DISTANCE_MATRIX_CACHE_TTL_SECONDS", "300"))
+_DISTANCE_BATCH_CHUNK_SIZE = int(os.getenv("DISTANCE_BATCH_CHUNK_SIZE", "10"))
+_DISTANCE_BATCH_SEMAPHORE_LIMIT = int(os.getenv("DISTANCE_BATCH_SEMAPHORE", "3"))
+_distance_batch_semaphore = asyncio.Semaphore(_DISTANCE_BATCH_SEMAPHORE_LIMIT)
+
+
+def _distance_cache_key(origin: str, destination: str) -> str:
+    return f"sportsconnect:distance-matrix:{origin}:{destination}"
+
+
+def _serialize_distance_result(result: DistanceMatrixResponse) -> bytes:
+    return orjson.dumps(result.model_dump())
+
+
+def _deserialize_distance_result(raw: bytes | str) -> DistanceMatrixResponse | None:
+    parsed = orjson.loads(raw)
+    if not isinstance(parsed, dict):
+        return None
+    return DistanceMatrixResponse(**parsed)
 
 
 def _require_env(name: str) -> str:
@@ -873,16 +896,76 @@ async def distance_matrix(
 
 
 @router.post("/distance-matrix/batch", response_model=DistanceMatrixBatchResponse)
-async def distance_matrix_batch(req: DistanceMatrixBatchRequest, _: str = Depends(get_current_user)):
+async def distance_matrix_batch(req: DistanceMatrixBatchRequest, request: Request, _: str = Depends(get_current_user)):
     try:
         if not req.destinations:
             return DistanceMatrixBatchResponse(results=[])
         if len(req.destinations) > 25:
             raise HTTPException(status_code=400, detail="Too many destinations; max 25")
+
         origin = f"{req.origin_lat},{req.origin_lng}"
         destinations = [f"{d.dest_lat},{d.dest_lng}" for d in req.destinations]
-        results = await _goong_distance_matrix_batch(origin=origin, destinations=destinations)
-        return DistanceMatrixBatchResponse(results=results)
+        cache_keys = [_distance_cache_key(origin, destination) for destination in destinations]
+
+        redis = getattr(request.app.state, "redis", None)
+        cached_raw: list[Any] = []
+        if redis is not None:
+            try:
+                cached_raw = await redis.mget(cache_keys)
+            except Exception as exc:
+                logger.warning("distance_matrix_batch mget failed err=%s", exc)
+                cached_raw = []
+
+        if len(cached_raw) != len(destinations):
+            cached_raw = [None] * len(destinations)
+
+        merged_results: list[DistanceMatrixResponse | None] = [None] * len(destinations)
+        missing_indices: list[int] = []
+        for idx, raw in enumerate(cached_raw):
+            if raw is None:
+                missing_indices.append(idx)
+                continue
+            try:
+                cached_item = _deserialize_distance_result(raw)
+            except Exception:
+                cached_item = None
+            if cached_item is None:
+                missing_indices.append(idx)
+            else:
+                merged_results[idx] = cached_item
+
+        async def _fetch_chunk(chunk_indices: list[int]) -> tuple[list[int], list[DistanceMatrixResponse]]:
+            chunk_destinations = [destinations[i] for i in chunk_indices]
+            async with _distance_batch_semaphore:
+                chunk_results = await _goong_distance_matrix_batch(origin=origin, destinations=chunk_destinations)
+            return chunk_indices, chunk_results
+
+        if missing_indices:
+            chunk_size = max(1, _DISTANCE_BATCH_CHUNK_SIZE)
+            chunk_tasks = [
+                _fetch_chunk(missing_indices[i : i + chunk_size])
+                for i in range(0, len(missing_indices), chunk_size)
+            ]
+            fetched_chunks = await asyncio.gather(*chunk_tasks)
+
+            for chunk_indices, chunk_results in fetched_chunks:
+                for offset, idx in enumerate(chunk_indices):
+                    if offset < len(chunk_results):
+                        merged_results[idx] = chunk_results[offset]
+
+            if redis is not None:
+                try:
+                    pipe = redis.pipeline(transaction=False)
+                    for idx in missing_indices:
+                        result = merged_results[idx]
+                        if result is not None:
+                            pipe.set(cache_keys[idx], _serialize_distance_result(result), ex=_DISTANCE_CACHE_TTL_SECONDS)
+                    await pipe.execute()
+                except Exception as exc:
+                    logger.warning("distance_matrix_batch cache write failed err=%s", exc)
+
+        final_results = [item if item is not None else DistanceMatrixResponse(warnings=["Missing result"]) for item in merged_results]
+        return DistanceMatrixBatchResponse(results=final_results)
     except HTTPException:
         raise
     except Exception as e:
