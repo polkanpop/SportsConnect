@@ -56,8 +56,8 @@ async function getLocalBackendToken(): Promise<{ token?: string; exp?: number } 
 		const raw = await AsyncStorage.getItem('@backendAuth')
 		if (!raw) return null
 		const parsed = JSON.parse(raw)
-		const token: string | undefined = parsed?.accessToken
-		const expIso: string | undefined = parsed?.accessTokenExpiresAt
+		const token: string | undefined = parsed?.accessToken || parsed?.access_token || parsed?.token
+		const expIso: string | undefined = parsed?.accessTokenExpiresAt || parsed?.access_token_expires_at
 		let expTs: number | undefined
 		if (expIso) {
 			try { expTs = Date.parse(expIso) } catch {}
@@ -689,30 +689,40 @@ export async function registerCourt(payload: CourtRegisterRequest): Promise<Cour
 // Accepts any object containing userid/profile fields and token fields.
 // Optionally sets remember flag.
 export async function persistAuthSession(data: any, opts?: { rememberMe?: boolean }) {
+	const accessToken = data?.accessToken || data?.access_token || data?.token
+	const refreshToken = data?.refreshToken || data?.refresh_token
+	const accessTokenExpiresAt = data?.accessTokenExpiresAt || data?.access_token_expires_at
+	const refreshTokenExpiresAt = data?.refreshTokenExpiresAt || data?.refresh_token_expires_at
+	const resolvedUserId = data?.userid ?? data?.user_id ?? data?.userId ?? null
+
 	try {
-		if (data?.userid != null) {
+		if (resolvedUserId != null) {
 			await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-				userid: data.userid,
+				userid: resolvedUserId,
 				username: data.username ?? null,
 				name: data.name ?? null,
 				email: data.email ?? null,
 			}))
 		}
 	} catch {}
-	// Prefer access/refresh token bundle; fallback to legacy single token
+	// Persist access token even when refresh token is unavailable (legacy backend payloads).
 	try {
-		if (data?.accessToken && data?.refreshToken) {
+		if (accessToken && refreshToken) {
 			await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-				accessToken: data.accessToken,
-				accessTokenExpiresAt: data.accessTokenExpiresAt,
-				refreshToken: data.refreshToken,
-				refreshTokenExpiresAt: data.refreshTokenExpiresAt,
-				userid: data.userid,
+				accessToken,
+				accessTokenExpiresAt,
+				refreshToken,
+				refreshTokenExpiresAt,
+				userid: resolvedUserId,
 			}))
-			// Legacy bearer fallback for request()
-			await AsyncStorage.setItem('@localAuthToken', data.accessToken)
-		} else if (data?.token) {
-			await AsyncStorage.setItem('@localAuthToken', data.token)
+			await AsyncStorage.setItem('@localAuthToken', accessToken)
+		} else if (accessToken) {
+			await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+				accessToken,
+				accessTokenExpiresAt,
+				userid: resolvedUserId,
+			}))
+			await AsyncStorage.setItem('@localAuthToken', accessToken)
 		}
 	} catch {}
 	try {

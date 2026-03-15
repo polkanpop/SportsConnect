@@ -19,10 +19,12 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     rememberAuth: string | null
     backendProfile: string | null
     backendAuth: string | null
+    localAuthToken: string | null
   }>({
     rememberAuth: null,
     backendProfile: null,
     backendAuth: null,
+    localAuthToken: null,
   })
 
   const didBootstrapRememberRef = useRef<boolean>(false)
@@ -31,9 +33,10 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     rememberAuth: string | null
     backendProfile: string | null
     backendAuth: string | null
+    localAuthToken: string | null
   }) => {
     backendSnapshotRef.current = snap
-    const nextBackendAuthPresent = !!snap.backendAuth
+    const nextBackendAuthPresent = !!snap.backendAuth || !!snap.localAuthToken
     setBackendAuthPresent(nextBackendAuthPresent)
 
     const nextRememberFlag = snap.rememberAuth === 'true'
@@ -54,11 +57,12 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     const setLoading = !!opts?.setLoading
     if (setLoading) setIsLoadingRemember(true)
     try {
-      const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth'])
+      const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth', '@localAuthToken'])
       const nextSnap = {
         rememberAuth: pairs[0]?.[1] ?? null,
         backendProfile: pairs[1]?.[1] ?? null,
         backendAuth: pairs[2]?.[1] ?? null,
+        localAuthToken: pairs[3]?.[1] ?? null,
       }
       applyBackendRememberSnapshot(nextSnap)
     } catch (e) {
@@ -111,17 +115,19 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     let cancelled = false
     const tick = async () => {
       try {
-        const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth'])
+        const pairs = await AsyncStorage.multiGet(['@rememberAuth', '@backendProfile', '@backendAuth', '@localAuthToken'])
         const nextSnap = {
           rememberAuth: pairs[0]?.[1] ?? null,
           backendProfile: pairs[1]?.[1] ?? null,
           backendAuth: pairs[2]?.[1] ?? null,
+          localAuthToken: pairs[3]?.[1] ?? null,
         }
         const prev = backendSnapshotRef.current
         const changed =
           prev.rememberAuth !== nextSnap.rememberAuth ||
           prev.backendProfile !== nextSnap.backendProfile ||
-          prev.backendAuth !== nextSnap.backendAuth
+          prev.backendAuth !== nextSnap.backendAuth ||
+          prev.localAuthToken !== nextSnap.localAuthToken
         if (!cancelled && changed) {
           applyBackendRememberSnapshot(nextSnap)
         }
