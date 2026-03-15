@@ -12,8 +12,6 @@
     FavouriteCourt,
     CourtInfoRow,
     listCourtInfo,
-    listPlayingCourtsByCourtId,
-    getPlayingCourtInfo,
     type PlayingCourtRow,
     getDistanceMatrixCached,
     peekDistanceMatrixCached,
@@ -46,7 +44,9 @@
     useWindowDimensions,
   } from "react-native";
   
-  import { useCourtAvailability } from '@/hooks/use-court-data';
+  import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
+  import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
+  import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
   import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -315,8 +315,7 @@
     const [reviewsExpanded, setReviewsExpanded] = useState(false);
 
     const [selectedSchedulePlayingCourtId, setSelectedSchedulePlayingCourtId] = useState<number | null>(null);
-    const [playingCourtsForSelected, setPlayingCourtsForSelected] = useState<PlayingCourtRow[]>([]);
-    const [playingCourtImagesById, setPlayingCourtImagesById] = useState<Record<number, string[]>>({});
+
 
     type DistanceMatrixStatus = 'loading' | 'loaded' | 'error';
     const [distanceMatrixStatusByCourtInfoId, setDistanceMatrixStatusByCourtInfoId] = useState<Record<number, DistanceMatrixStatus>>({});
@@ -328,6 +327,7 @@
     const [distanceMetersByCourtInfoId, setDistanceMetersByCourtInfoId] = useState<Record<number, number | null>>({});
     const [durationSecondsByCourtInfoId, setDurationSecondsByCourtInfoId] = useState<Record<number, number | null>>({});
     const inFlightDistanceIdsRef = useRef<Set<number>>(new Set());
+    const [distanceMatrixDeferredReady, setDistanceMatrixDeferredReady] = useState(false);
 
     const handleRegionChangeComplete = useCallback((region: Region) => {
       if (!mapRef.current) return;
@@ -374,7 +374,33 @@
     // Fetch availability for selected marker
     const { data: availabilityRows, isLoading: availabilityLoading } = useCourtAvailability(selectedMarker?.courtid || null);
 
-    const [playingCourtsLoading, setPlayingCourtsLoading] = useState(false);
+    // Lazy-load playing courts and their info images using TanStack Query (only fires when a court pin is tapped)
+    const { data: rawPlayingCourts, isLoading: playingCourtsLoading } = usePlayingCourts(selectedMarker?.courtid ?? null);
+    const playingCourtsForSelected = useMemo(
+      () => (Array.isArray(rawPlayingCourts) ? rawPlayingCourts : []) as PlayingCourtRow[],
+      [rawPlayingCourts]
+    );
+    const pcIds = useMemo(
+      () => playingCourtsForSelected
+        .map((pc: any) => (typeof pc?.playingcourtid === 'number' ? pc.playingcourtid : Number(pc?.playingcourtid)))
+        .filter((n): n is number => typeof n === 'number' && Number.isFinite(n)),
+      [playingCourtsForSelected]
+    );
+    const { data: rawPlayingCourtImages } = usePlayingCourtImages(selectedMarker?.courtid ?? null, pcIds);
+    const playingCourtImagesById = useMemo<Record<number, string[]>>(
+      () => rawPlayingCourtImages ?? {},
+      [rawPlayingCourtImages]
+    );
+
+    const venueDataReady = !!selectedMarker && !availabilityLoading && !playingCourtsLoading;
+
+    // Defer distance matrix fetch so venue details paint first, then distance fades in later.
+    useEffect(() => {
+      setDistanceMatrixDeferredReady(false);
+      if (!venueDataReady) return;
+      const timer = setTimeout(() => setDistanceMatrixDeferredReady(true), 500);
+      return () => clearTimeout(timer);
+    }, [selectedMarker?.id, venueDataReady]);
 
     // Choose which playingcourt's schedule to display (defaults to first availability row)
     useEffect(() => {
@@ -414,52 +440,6 @@
 
       return normalized[0];
     }, [availabilityRows, selectedSchedulePlayingCourtId]);
-
-    // Load playingcourts + their info images (for schedule switch labels + aggregated gallery)
-    useEffect(() => {
-      let cancelled = false;
-      setPlayingCourtsForSelected([]);
-      setPlayingCourtImagesById({});
-
-      const courtid = selectedMarker?.courtid;
-      if (typeof courtid !== 'number' || !Number.isFinite(courtid)) return;
-
-      (async () => {
-        setPlayingCourtsLoading(true);
-        try {
-          const pcs = await listPlayingCourtsByCourtId(courtid);
-          if (cancelled) return;
-          const rows = Array.isArray(pcs) ? pcs : [];
-          setPlayingCourtsForSelected(rows);
-
-          const ids = rows
-            .map((pc: any) => (typeof pc?.playingcourtid === 'number' ? pc.playingcourtid : Number(pc?.playingcourtid)))
-            .filter((n: any): n is number => typeof n === 'number' && Number.isFinite(n));
-
-          if (!ids.length) return;
-          const results = await Promise.allSettled(ids.map((pid) => getPlayingCourtInfo(pid)));
-          if (cancelled) return;
-
-          const next: Record<number, string[]> = {};
-          results.forEach((r, idx) => {
-            const pid = ids[idx];
-            if (!pid) return;
-            if (r.status === 'fulfilled') {
-              next[pid] = dedupeStrings(Array.isArray((r.value as any)?.images) ? (r.value as any).images : []);
-            }
-          });
-          setPlayingCourtImagesById(next);
-        } catch (e) {
-          console.warn('[Map] failed to load playingcourts/images', e);
-        } finally {
-          if (!cancelled) setPlayingCourtsLoading(false);
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-      };
-    }, [selectedMarker?.courtid]);
 
     const scheduleSwitchOptions = useMemo(() => {
       if (!Array.isArray(availabilityRows) || availabilityRows.length < 2) return [] as Array<{ id: number; label: string }>;
@@ -933,6 +913,7 @@
     // Ensure we have distance + duration for the selected marker (for BottomSheet Transport section)
     useEffect(() => {
       if (!transportExpanded) return;
+      if (!distanceMatrixDeferredReady) return;
       if (!selectedMarker) return;
       if (!userLocation) return;
       const id = selectedMarker.id;
@@ -995,7 +976,7 @@
         cancelled = true;
         inFlightDistanceIdsRef.current.delete(id);
       };
-    }, [transportExpanded, selectedMarker, userLocation, distanceMetersByCourtInfoId, durationSecondsByCourtInfoId]);
+    }, [transportExpanded, distanceMatrixDeferredReady, selectedMarker, userLocation, distanceMetersByCourtInfoId, durationSecondsByCourtInfoId]);
 
     // Sorted list data for search dropdown: closest first (when user location is available)
     const sortedFilteredMarkersForList = useMemo(() => {
@@ -1014,8 +995,41 @@
       return withDistance;
     }, [filteredMarkers, userLocation, getDistanceMetersForMarker]);
 
+    const { distanceStateById: listDistanceStateByCourtInfoId } = useDistanceMatrixPrefetch({
+      enabled: !!userLocation && sortedFilteredMarkersForList.length > 0,
+      userLocation: userLocation
+        ? {
+            latitude: userLocation.coords.latitude,
+            longitude: userLocation.coords.longitude,
+          }
+        : null,
+      markers: sortedFilteredMarkersForList.map((marker) => ({
+        id: marker.id,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+      })),
+      maxPrefetch: 12,
+      deferMs: 250,
+    });
+
+    const getListDistanceDisplay = useCallback((marker: MarkerType) => {
+      const exact = listDistanceStateByCourtInfoId[marker.id];
+      if (typeof exact?.distanceMeters === 'number' && Number.isFinite(exact.distanceMeters)) {
+        const label = formatKmFromMeters(exact.distanceMeters);
+        return label ? { label, exact: true, loading: false } : null;
+      }
+      const fallback = getDistanceMetersForMarker(marker);
+      const fallbackLabel = formatKmFromMeters(fallback);
+      if (!fallbackLabel) return null;
+      return {
+        label: `~${fallbackLabel}`,
+        exact: false,
+        loading: exact?.status === 'idle' || exact?.status === 'loading',
+      };
+    }, [getDistanceMetersForMarker, listDistanceStateByCourtInfoId]);
+
     // Note: we intentionally do NOT prefetch distance-matrix for search results.
-    // Distance Matrix is expensive, so it only loads when Transport is expanded.
+    // Transport details still lazy-load on expand; the court list only prefetches the first visible rows.
 
     // Apply filters to marker list whenever filters change
     useEffect(() => {
@@ -1384,22 +1398,34 @@
                   <FlatList
                     data={sortedFilteredMarkersForList}
                     keyExtractor={(item, index) => index.toString()}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.listItem}
-                        onPress={() => handleFlatListItemPress(item as MarkerType)}
-                      >
-                        <View style={styles.listItemRow}>
-                          <View style={styles.listItemTextCol}>
-                            <Text style={styles.listItemTitle}>{(item as MarkerType).name}</Text>
-                            <Text style={styles.listItemSubtitle}>{(item as MarkerType).address}</Text>
+                    renderItem={({ item }) => {
+                      const marker = item as MarkerType;
+                      const listDistance = getListDistanceDisplay(marker);
+                      return (
+                        <TouchableOpacity
+                          style={styles.listItem}
+                          onPress={() => handleFlatListItemPress(marker)}
+                        >
+                          <View style={styles.listItemRow}>
+                            <View style={styles.listItemTextCol}>
+                              <Text style={styles.listItemTitle}>{marker.name}</Text>
+                              <Text style={styles.listItemSubtitle}>{marker.address}</Text>
+                            </View>
+                            {!!listDistance && (
+                              <Text
+                                style={[
+                                  styles.listItemDistanceRight,
+                                  !listDistance.exact && styles.listItemDistancePending,
+                                  listDistance.loading && styles.listItemDistanceLoading,
+                                ]}
+                              >
+                                {listDistance.label}
+                              </Text>
+                            )}
                           </View>
-                          {!!getDistanceLabelForMarker(item as MarkerType) && (
-                            <Text style={styles.listItemDistanceRight}>{getDistanceLabelForMarker(item as MarkerType)}</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    )}
+                        </TouchableOpacity>
+                      );
+                    }}
                     style={styles.searchResults}
                     keyboardShouldPersistTaps="handled"
                     refreshing={loadingMarkers}
@@ -1816,9 +1842,10 @@
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                           {aggregatedImages.map((image, idx) => (
                             <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
-                              <Image
+                              <ExpoImage
                                 source={{ uri: image }}
                                 style={styles.detailImageTile}
+                                contentFit="cover"
                               />
                             </TouchableOpacity>
                           ))}
@@ -2176,6 +2203,12 @@
       marginTop: 2,
       flexShrink: 0,
       textAlign: "right",
+    },
+    listItemDistancePending: {
+      color: COLORS.slate500,
+    },
+    listItemDistanceLoading: {
+      opacity: 0.7,
     },
     noResultsText: {
       paddingVertical: 10,

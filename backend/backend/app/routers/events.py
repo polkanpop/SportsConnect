@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_delete, rest_insert, rest_update
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
+from ..notifications_service import create_notification
 from typing import Any, Dict
 import json
 import logging
@@ -57,6 +60,7 @@ def _normalize_images(v: Any):
     return []
 
 @router.get("", response_model=list[dict])
+@cache(expire=120, key_builder=make_key_builder("events"))
 def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int | str] = {}
@@ -66,7 +70,7 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
             filters["status"] = status
         if courtbookingid is not None:
             filters["courtbookingid"] = courtbookingid
-        data = rest_select("events", "*", filters=filters or None, order={"column": PRIMARY_KEY})
+        data = rest_select("events", "eventid,organizerid,courtbookingid,status,time", filters=filters or None, order={"column": PRIMARY_KEY})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []
@@ -74,6 +78,7 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{eventid}", response_model=dict)
+@cache(expire=120, key_builder=make_key_builder("events"))
 def get_event(eventid: int):
     try:
         row = rest_select("events", "*", filters={PRIMARY_KEY: eventid}, single=True)
@@ -84,7 +89,7 @@ def get_event(eventid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_event(body: dict, current_user: str = Depends(get_current_user)):
+def create_event(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create an event with validation:
     - Inject organizerid from auth
     - Ensure courtbooking exists and belongs to organizer
@@ -134,6 +139,7 @@ def create_event(body: dict, current_user: str = Depends(get_current_user)):
         except RuntimeError as e:
             logger.warning("[create_event] insert error: %s", str(e))
             raise
+        background_tasks.add_task(invalidate_namespace, "events")
         return resp[0] if isinstance(resp, list) and resp else payload
     except HTTPException:
         raise
@@ -144,7 +150,7 @@ def create_event(body: dict, current_user: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/create_with_info", response_model=dict)
-def create_event_with_info(body: dict, current_user: str = Depends(get_current_user)):
+def create_event_with_info(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create an event plus its eventinfo metadata atomically (best-effort rollback).
 
     Expected body keys:
@@ -168,6 +174,14 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         organizerid = int(organizer_raw)
     except Exception:
         raise HTTPException(status_code=400, detail="Organizer id must be numeric; include organizerid in body")
+
+    # Prevent spoofing organizerid via body.
+    try:
+        token_userid = int(current_user)
+        if organizerid != token_userid:
+            raise HTTPException(status_code=403, detail="Organizer id must match the authenticated user")
+    except ValueError:
+        pass
     courtbookingid = body.get("courtbookingid")
     title = body.get("title")
     participants_cap = body.get("participants_cap")
@@ -289,11 +303,27 @@ def create_event_with_info(body: dict, current_user: str = Depends(get_current_u
         except Exception:
             pass
         raise HTTPException(status_code=500, detail="Eventinfo insert did not return representation")
+
+    # Best-effort notification: creation success (do not block core workflow).
+    try:
+        create_notification(
+            userid=organizerid,
+            notificationtype="event",
+            notificationtypeid=int(eventid),
+            category="event",
+            kind="created",
+            title="Event created",
+            message=f"Your event '{title}' was created successfully.",
+            data={"eventid": int(eventid), "courtbookingid": int(courtbookingid)},
+        )
+    except Exception:
+        pass
+    background_tasks.add_task(invalidate_namespace, "events", "eventinfo")
     return {"event": event_row, "eventinfo": info_resp[0]}
 
 
 @router.patch("/{eventid}", response_model=dict)
-def update_event(eventid: int, body: dict, current_user: str = Depends(get_current_user)):
+def update_event(eventid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on an event (creator/organizer).
 
     Used by the mobile app to cancel a created upcoming event by setting status.
@@ -332,6 +362,7 @@ def update_event(eventid: int, body: dict, current_user: str = Depends(get_curre
             except Exception:
                 pass
 
+        background_tasks.add_task(invalidate_namespace, "events", "eventinfo")
         return out
     except HTTPException:
         raise

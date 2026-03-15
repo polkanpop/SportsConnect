@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
 
 router = APIRouter(prefix="/trainingsessioninfo", tags=["training"])
 
 PRIMARY_KEY = "sessioninfoid"
 
 @router.get("", response_model=list[dict])
+@cache(expire=120, key_builder=make_key_builder("trainingsessioninfo"))
 def list_training_session_info(sessionid: int | None = Query(None), limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int] = {}
@@ -20,6 +23,7 @@ def list_training_session_info(sessionid: int | None = Query(None), limit: int =
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{sessioninfoid}", response_model=dict)
+@cache(expire=120, key_builder=make_key_builder("trainingsessioninfo"))
 def get_training_session_info(sessioninfoid: int):
     try:
         row = rest_select("trainingsessioninfo", "*", filters={PRIMARY_KEY: sessioninfoid}, single=True)
@@ -30,16 +34,17 @@ def get_training_session_info(sessioninfoid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_training_session_info(body: dict):
+def create_training_session_info(body: dict, background_tasks: BackgroundTasks):
     try:
         resp = rest_upsert("trainingsessioninfo", body)
+        background_tasks.add_task(invalidate_namespace, "trainingsessioninfo", "trainingsessions")
         return resp[0] if isinstance(resp, list) and resp else body
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{sessioninfoid}", response_model=dict)
-def update_training_session_info(sessioninfoid: int, body: dict, current_user: str = Depends(get_current_user)):
+def update_training_session_info(sessioninfoid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch trainingsessioninfo fields (used to update numberofpeople)."""
     try:
         payload = dict(body or {})
@@ -49,6 +54,7 @@ def update_training_session_info(sessioninfoid: int, body: dict, current_user: s
 
         resp = rest_update("trainingsessioninfo", {PRIMARY_KEY: sessioninfoid}, payload)
         if isinstance(resp, list) and resp:
+            background_tasks.add_task(invalidate_namespace, "trainingsessioninfo", "trainingsessions")
             return resp[0]
         return payload
     except HTTPException:
@@ -58,7 +64,7 @@ def update_training_session_info(sessioninfoid: int, body: dict, current_user: s
 
 
 @router.post("/adjust/{sessionid}", response_model=dict)
-def adjust_training_participants(sessionid: int, delta: int = Query(..., ge=-1000, le=1000), current_user: str = Depends(get_current_user)):
+def adjust_training_participants(sessionid: int, background_tasks: BackgroundTasks, delta: int = Query(..., ge=-1000, le=1000), current_user: str = Depends(get_current_user)):
     """Adjust trainingsessioninfo.numberofpeople by delta (clamped at >= 0)."""
     try:
         row = rest_select("trainingsessioninfo", "*", filters={"sessionid": sessionid}, single=True)

@@ -8,7 +8,7 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from jose import jwt
@@ -106,6 +106,15 @@ def _send_verification_email(to_email: str, token: str):
         logger.warning(f"Failed sending verification email to {to_email} err={e}")
         return False
 
+
+def _can_send_verification_email() -> bool:
+    cfg = _email_settings()
+    return bool(cfg["host"] and cfg["username"] and cfg["password"])
+
+
+def _deliver_verification_email_task(to_email: str, token: str) -> None:
+    _send_verification_email(to_email, token)
+
 def _create_or_update_unverified(userid: int, email: str) -> dict:
     """Insert or refresh unverified_users row with new token. Returns dict including plaintext token."""
     cfg = _email_settings()
@@ -154,7 +163,7 @@ def _create_or_update_unverified(userid: int, email: str) -> dict:
     return rec
 
 @router.post('/signup')
-def signup(payload: dict):
+def signup(payload: dict, background_tasks: BackgroundTasks):
     """
     Minimal signup: create rows in users, userinfo, userlogin.
     EXPECTS JSON: {username, email, password, accountName?, role?}
@@ -267,9 +276,14 @@ def signup(payload: dict):
     loginid = login_row.get('loginid')
     logger.debug(f"Inserted/allocated userlogin loginid={loginid}")
 
-    # 4. Create verification record + send email
+    # 4. Create verification record + queue email send
     ver_rec = _create_or_update_unverified(userid, email)
-    email_sent = _send_verification_email(email, ver_rec['plaintext_token'])
+    email_sent = False
+    if _can_send_verification_email():
+        background_tasks.add_task(_deliver_verification_email_task, email, ver_rec['plaintext_token'])
+        email_sent = True
+    else:
+        logger.warning("SMTP settings incomplete; verification email not queued")
     elapsed = _now_ms() - t0
     logger.debug(f"/signup COMPLETE userid={userid} elapsedMs={elapsed} emailSent={email_sent}")
     # Do NOT auto-login; client must verify email first
@@ -282,6 +296,7 @@ def signup(payload: dict):
         "loginid": loginid,
         "elapsedMs": elapsed,
         "verificationEmailSent": email_sent,
+        "verificationEmailQueued": email_sent,
         "emailVerified": False,
     }
 
@@ -638,7 +653,7 @@ def verification_status(email: str = Query(...)):
     return {"status": "ok", "emailVerified": bool(row.get('email_verified'))}
 
 @router.post('/resend-verification')
-def resend_verification(payload: dict):
+def resend_verification(payload: dict, background_tasks: BackgroundTasks):
     email = (payload.get('email') or '').strip()
     if not email:
         raise HTTPException(status_code=400, detail="Missing email")
@@ -656,8 +671,13 @@ def resend_verification(payload: dict):
         rest_update("unverified_users", {"unverifiedid": new_rec.get('unverifiedid')}, {"resend_count": row.get('resend_count', 0) + 1})
     except Exception:
         pass
-    sent = _send_verification_email(email, new_rec['plaintext_token'])
-    return {"status": "ok", "resent": sent}
+    queued = False
+    if _can_send_verification_email():
+        background_tasks.add_task(_deliver_verification_email_task, email, new_rec['plaintext_token'])
+        queued = True
+    else:
+        logger.warning("SMTP settings incomplete; resend verification email not queued")
+    return {"status": "ok", "resent": queued, "queued": queued}
 
 
 @router.post('/refresh')

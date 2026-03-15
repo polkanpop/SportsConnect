@@ -135,6 +135,13 @@ export const ICONS = {
   acc4: require('../assets/icons/account_placeholder4.png'),
   acc5: require('../assets/icons/account_placeholder5.png'),
   acc6: require('../assets/icons/account_placeholder6.png'),
+
+  // Notifications
+  eventNoti: require('../assets/icons/event_noti.png'),
+  tsNoti: require('../assets/icons/ts_noti.png'),
+  courtNoti: require('../assets/icons/court_noti.png'),
+  courtNotiPending: require('../assets/icons/court_noti_pending.png'),
+  deleteAll: require('../assets/icons/delete_all.png'),
 }; 
 
 

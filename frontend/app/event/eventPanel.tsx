@@ -37,6 +37,7 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
+import { Image as ExpoImage } from 'expo-image'
 
 type BlockListRow = any;
 type CombinedEvent = any;
@@ -1082,9 +1083,10 @@ export default function EventPanel({ organizerId }: Props) {
 											style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
 										>
 											{a.pfp ? (
-												<Image
+												<ExpoImage
 													source={{ uri: a.pfp }}
 													style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }}
+													contentFit="cover"
 												/>
 											) : (
 												<Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
@@ -1221,9 +1223,10 @@ export default function EventPanel({ organizerId }: Props) {
 											style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
 										>
 											{p.pfp ? (
-												<Image
+												<ExpoImage
 													source={{ uri: p.pfp }}
 													style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#E5E7EB" }}
+													contentFit="cover"
 												/>
 											) : (
 												<Image source={ICONS.accountCircle} style={{ width: 40, height: 40 }} resizeMode="contain" />
@@ -1289,7 +1292,7 @@ export default function EventPanel({ organizerId }: Props) {
 										style={{ flexDirection: "row", alignItems: "center" }}
 									>
 										{h.pfp ? (
-											<Image source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }} />
+											<ExpoImage source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }} contentFit="cover" />
 										) : (
 											<Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
 										)}
@@ -1440,7 +1443,7 @@ export default function EventPanel({ organizerId }: Props) {
 									}}
 								>
 									<View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
-										<Image source={{ uri }} style={{ width: "100%", height: "100%", resizeMode: "cover" }} />
+										<ExpoImage source={{ uri }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
 									</View>
 									<TouchableOpacity
 										activeOpacity={0.85}

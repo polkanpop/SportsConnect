@@ -1,13 +1,19 @@
+import asyncio
+import hashlib
 import os
 import logging
 import re
 from typing import Any, Optional
 from datetime import time
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import httpx
+import orjson
 from pydantic import BaseModel, Field
+from fastapi_cache.decorator import cache
 
 from ..auth import get_current_user
+from ..cache_utils import make_key_builder
 from ..db import get_http_client, rest_delete, rest_insert, rest_select, rest_update, rest_upsert
 
 router = APIRouter(prefix="/courts", tags=["courts"])
@@ -173,6 +179,40 @@ class DistanceMatrixBatchResponse(BaseModel):
     results: list[DistanceMatrixResponse] = Field(default_factory=list)
 
 
+_DISTANCE_CACHE_TTL_SECONDS = int(os.getenv("DISTANCE_MATRIX_CACHE_TTL_SECONDS", "300"))
+_DISTANCE_BATCH_REQUEST_CACHE_TTL_SECONDS = int(os.getenv("DISTANCE_MATRIX_BATCH_REQUEST_CACHE_TTL_SECONDS", "86400"))
+_DISTANCE_COORD_DECIMALS = int(os.getenv("DISTANCE_MATRIX_COORD_DECIMALS", "6"))
+_DISTANCE_BATCH_CHUNK_SIZE = int(os.getenv("DISTANCE_BATCH_CHUNK_SIZE", "10"))
+_DISTANCE_BATCH_SEMAPHORE_LIMIT = int(os.getenv("DISTANCE_BATCH_SEMAPHORE", "3"))
+_distance_batch_semaphore = asyncio.Semaphore(_DISTANCE_BATCH_SEMAPHORE_LIMIT)
+
+
+def _distance_cache_key(origin: str, destination: str) -> str:
+    return f"sportsconnect:distance-matrix:{origin}:{destination}"
+
+
+def _distance_batch_request_cache_key(origin: str, destinations: list[str]) -> str:
+    # Keep order-sensitive hash because response order matches request order.
+    payload = {"origin": origin, "destinations": destinations}
+    digest = hashlib.sha1(orjson.dumps(payload)).hexdigest()
+    return f"sportsconnect:distance-matrix:batch:{digest}"
+
+
+def _normalize_coord(value: float) -> str:
+    return f"{round(float(value), _DISTANCE_COORD_DECIMALS):.{_DISTANCE_COORD_DECIMALS}f}"
+
+
+def _serialize_distance_result(result: DistanceMatrixResponse) -> bytes:
+    return orjson.dumps(result.model_dump())
+
+
+def _deserialize_distance_result(raw: bytes | str) -> DistanceMatrixResponse | None:
+    parsed = orjson.loads(raw)
+    if not isinstance(parsed, dict):
+        return None
+    return DistanceMatrixResponse(**parsed)
+
+
 def _require_env(name: str) -> str:
     v = os.getenv(name)
     if not v:
@@ -197,28 +237,31 @@ def _get_goong_distance_key() -> Optional[str]:
     return _get_env("GOONG_DISTANCE_API_KEY")
 
 
-def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixResponse:
+async def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixResponse:
     key_raw = _get_goong_distance_key()
     if not key_raw:
         raise HTTPException(status_code=500, detail="Missing env var: GOONG_DISTANCE_API_KEY")
     key = key_raw.strip().strip('"').strip("'")
 
-    client = get_http_client()
-
-    def _call(url: str):
-        return client.get(
-            url,
-            params={
-                "origins": origin,
-                "destinations": destination,
-                "api_key": key,
-            },
+    params = {
+        "origins": origin,
+        "destinations": destination,
+        "api_key": key,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            # Goong docs/examples commonly use /DistanceMatrix; some deployments are case-sensitive.
+            r = await client.get("https://rsapi.goong.io/DistanceMatrix", params=params)
+            if r.status_code == 404:
+                r = await client.get("https://rsapi.goong.io/distancematrix", params=params)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "[distance_matrix] transport_error provider=goong origin=%r destination=%r error=%s",
+            origin,
+            destination,
+            str(exc),
         )
-
-    # Goong docs/examples commonly use /DistanceMatrix; some deployments are case-sensitive.
-    r = _call("https://rsapi.goong.io/DistanceMatrix")
-    if r.status_code == 404:
-        r = _call("https://rsapi.goong.io/distancematrix")
+        raise HTTPException(status_code=502, detail="Goong provider transport error") from exc
 
     if r.status_code >= 400:
         logger.warning(
@@ -275,29 +318,32 @@ def _goong_distance_matrix(*, origin: str, destination: str) -> DistanceMatrixRe
     )
 
 
-def _goong_distance_matrix_batch(*, origin: str, destinations: list[str]) -> list[DistanceMatrixResponse]:
+async def _goong_distance_matrix_batch(*, origin: str, destinations: list[str]) -> list[DistanceMatrixResponse]:
     # Goong supports multiple destinations with "lat,lng|lat,lng".
     key_raw = _get_goong_distance_key()
     if not key_raw:
         raise HTTPException(status_code=500, detail="Missing env var: GOONG_DISTANCE_API_KEY")
     key = key_raw.strip().strip('"').strip("'")
-
-    client = get_http_client()
     destination = "|".join(destinations)
 
-    def _call(url: str):
-        return client.get(
-            url,
-            params={
-                "origins": origin,
-                "destinations": destination,
-                "api_key": key,
-            },
+    params = {
+        "origins": origin,
+        "destinations": destination,
+        "api_key": key,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.get("https://rsapi.goong.io/DistanceMatrix", params=params)
+            if r.status_code == 404:
+                r = await client.get("https://rsapi.goong.io/distancematrix", params=params)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "[distance_matrix_batch] transport_error provider=goong origin=%r destinations_count=%s error=%s",
+            origin,
+            len(destinations),
+            str(exc),
         )
-
-    r = _call("https://rsapi.goong.io/DistanceMatrix")
-    if r.status_code == 404:
-        r = _call("https://rsapi.goong.io/distancematrix")
+        raise HTTPException(status_code=502, detail="Goong provider transport error") from exc
 
     if r.status_code >= 400:
         logger.warning(
@@ -856,7 +902,7 @@ async def distance_matrix(
     try:
         origin = f"{origin_lat},{origin_lng}"
         destination = f"{dest_lat},{dest_lng}"
-        return _goong_distance_matrix(origin=origin, destination=destination)
+        return await _goong_distance_matrix(origin=origin, destination=destination)
     except HTTPException:
         raise
     except Exception as e:
@@ -864,22 +910,101 @@ async def distance_matrix(
 
 
 @router.post("/distance-matrix/batch", response_model=DistanceMatrixBatchResponse)
-async def distance_matrix_batch(req: DistanceMatrixBatchRequest, _: str = Depends(get_current_user)):
+async def distance_matrix_batch(req: DistanceMatrixBatchRequest, request: Request, _: str = Depends(get_current_user)):
     try:
         if not req.destinations:
             return DistanceMatrixBatchResponse(results=[])
         if len(req.destinations) > 25:
             raise HTTPException(status_code=400, detail="Too many destinations; max 25")
-        origin = f"{req.origin_lat},{req.origin_lng}"
-        destinations = [f"{d.dest_lat},{d.dest_lng}" for d in req.destinations]
-        results = _goong_distance_matrix_batch(origin=origin, destinations=destinations)
-        return DistanceMatrixBatchResponse(results=results)
+
+        origin = f"{_normalize_coord(req.origin_lat)},{_normalize_coord(req.origin_lng)}"
+        destinations = [f"{_normalize_coord(d.dest_lat)},{_normalize_coord(d.dest_lng)}" for d in req.destinations]
+        cache_keys = [_distance_cache_key(origin, destination) for destination in destinations]
+        batch_cache_key = _distance_batch_request_cache_key(origin, destinations)
+
+        redis = getattr(request.app.state, "redis", None)
+        cached_raw: list[Any] = []
+        if redis is not None:
+            try:
+                batch_raw = await redis.get(batch_cache_key)
+                if batch_raw is not None:
+                    parsed = orjson.loads(batch_raw)
+                    if isinstance(parsed, list):
+                        return DistanceMatrixBatchResponse(results=[DistanceMatrixResponse(**item) for item in parsed if isinstance(item, dict)])
+            except Exception as exc:
+                logger.warning("distance_matrix_batch request-cache read failed err=%s", exc)
+            try:
+                cached_raw = await redis.mget(cache_keys)
+            except Exception as exc:
+                logger.warning("distance_matrix_batch mget failed err=%s", exc)
+                cached_raw = []
+
+        if len(cached_raw) != len(destinations):
+            cached_raw = [None] * len(destinations)
+
+        merged_results: list[DistanceMatrixResponse | None] = [None] * len(destinations)
+        missing_indices: list[int] = []
+        for idx, raw in enumerate(cached_raw):
+            if raw is None:
+                missing_indices.append(idx)
+                continue
+            try:
+                cached_item = _deserialize_distance_result(raw)
+            except Exception:
+                cached_item = None
+            if cached_item is None:
+                missing_indices.append(idx)
+            else:
+                merged_results[idx] = cached_item
+
+        async def _fetch_chunk(chunk_indices: list[int]) -> tuple[list[int], list[DistanceMatrixResponse]]:
+            chunk_destinations = [destinations[i] for i in chunk_indices]
+            async with _distance_batch_semaphore:
+                chunk_results = await _goong_distance_matrix_batch(origin=origin, destinations=chunk_destinations)
+            return chunk_indices, chunk_results
+
+        if missing_indices:
+            chunk_size = max(1, _DISTANCE_BATCH_CHUNK_SIZE)
+            chunk_tasks = [
+                _fetch_chunk(missing_indices[i : i + chunk_size])
+                for i in range(0, len(missing_indices), chunk_size)
+            ]
+            fetched_chunks = await asyncio.gather(*chunk_tasks)
+
+            for chunk_indices, chunk_results in fetched_chunks:
+                for offset, idx in enumerate(chunk_indices):
+                    if offset < len(chunk_results):
+                        merged_results[idx] = chunk_results[offset]
+
+            if redis is not None:
+                try:
+                    pipe = redis.pipeline(transaction=False)
+                    for idx in missing_indices:
+                        result = merged_results[idx]
+                        if result is not None:
+                            pipe.set(cache_keys[idx], _serialize_distance_result(result), ex=_DISTANCE_CACHE_TTL_SECONDS)
+                    await pipe.execute()
+                except Exception as exc:
+                    logger.warning("distance_matrix_batch cache write failed err=%s", exc)
+
+        final_results = [item if item is not None else DistanceMatrixResponse(warnings=["Missing result"]) for item in merged_results]
+        if redis is not None:
+            try:
+                await redis.set(
+                    batch_cache_key,
+                    orjson.dumps([item.model_dump() for item in final_results]),
+                    ex=_DISTANCE_BATCH_REQUEST_CACHE_TTL_SECONDS,
+                )
+            except Exception as exc:
+                logger.warning("distance_matrix_batch request-cache write failed err=%s", exc)
+        return DistanceMatrixBatchResponse(results=final_results)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("", response_model=list[dict])
+@cache(expire=300, key_builder=make_key_builder("courts"))
 async def list_courts():
     try:
         data = rest_select("courts", SELECT_COLUMNS, order={"column": "courtid"})
@@ -888,6 +1013,7 @@ async def list_courts():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{courtid}", response_model=dict)
+@cache(expire=300, key_builder=make_key_builder("courts"))
 async def get_court(courtid: int):
     try:
         row = rest_select("courts", SELECT_COLUMNS, filters={"courtid": courtid}, single=True)

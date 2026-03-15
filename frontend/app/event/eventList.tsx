@@ -8,7 +8,6 @@ import { COLORS } from '@/constants/colors'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listEventsCombinedCached, CombinedEvent, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
-import { useFocusEffect } from 'expo-router'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
@@ -107,12 +106,12 @@ const EventListScreen = () => {
     queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
   // Push data into local state for existing code references.
   useEffect(() => { if (Array.isArray(eventsData)) setAllEvents(eventsData) }, [eventsData])
   useEffect(() => { if (!loading && !eventsData) setError('Failed loading events') }, [loading, eventsData])
-  // Refresh on screen focus (handles coming back after edit/create/delete)
-  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
   useEffect(() => {
     return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))

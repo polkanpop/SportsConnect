@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listCourtInfoCached, listCourtAvailabilityCached, createCourtBooking, createPayment, listCourtBookings, deleteCourtBooking } from '@/lib/backendApi'
+import { listCourtInfoCached, listCourtAvailabilityCached, createCourtBooking, createPayment, listCourtBookings, deleteCourtBooking, listPlayingCourtsByCourtId, getPlayingCourtInfo, listPlayingCourtInfoByCourt, type PlayingCourtRow } from '@/lib/backendApi'
 import { queryKeys } from './query-keys'
+import { useDashboard } from './use-dashboard'
 
 // Deprecated local keys kept for backward compatibility (will remove later)
 const courtInfoKey = ['courtinfo']
@@ -80,7 +81,7 @@ export function useDeleteCourtBooking() {
       if (ctx?.prev) qc.setQueryData(['courtbookings','user', payload.userid], ctx.prev)
     },
     onSuccess: (_data, payload) => {
-      qc.invalidateQueries({ queryKey: ['courtbookings','user', payload.userid] })
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard(payload.userid) })
       // Invalidate availability to reflect freed slot
       qc.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
@@ -139,18 +140,37 @@ export function useCreateBookingWithPayment() {
       qc.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
       })
-      qc.invalidateQueries({ queryKey: ['courtbookings','user', data.booking.userid] })
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard(data.booking.userid) })
     },
   })
 }
 
 export function useUserCourtBookings(userid: number | null | undefined) {
-  return useQuery({
-    queryKey: ['courtbookings','user', userid],
-    queryFn: () => {
-      if (userid == null) return []
-      return listCourtBookings({ userid })
-    },
-    enabled: userid != null,
+  const q = useDashboard(typeof userid === 'number' ? userid : null)
+  return {
+    ...q,
+    data: Array.isArray(q.data?.court_bookings) ? q.data.court_bookings : [],
+  }
+}
+
+export function usePlayingCourts(courtid: number | null) {
+  return useQuery<PlayingCourtRow[]>({
+    queryKey: queryKeys.playingCourts(courtid),
+    queryFn: () => listPlayingCourtsByCourtId(courtid!),
+    enabled: !!courtid && Number.isFinite(courtid),
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function usePlayingCourtImages(courtId: number | null, playingCourtIds: number[]) {
+  return useQuery<Record<number, string[]>>({
+    queryKey: queryKeys.playingCourtImages(courtId, playingCourtIds),
+    queryFn: ({ signal }) => listPlayingCourtInfoByCourt(courtId!, signal),
+    enabled: !!courtId && Number.isFinite(courtId) && playingCourtIds.length > 0,
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
   })
 }

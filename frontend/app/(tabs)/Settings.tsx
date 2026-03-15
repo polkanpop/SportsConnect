@@ -1,6 +1,8 @@
 import SearchBar from "@/components/SearchBar";
 import { ICONS } from "@/constants/icons";
+import { COLORS } from "@/constants/colors";
 import { router, useFocusEffect } from "expo-router";
+import { Image as ExpoImage } from 'expo-image'
 import {
   Alert,
   Image,
@@ -17,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
 import { getUserInfoByUserIdCached, authLogout, purgeSessionCaches } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState<string>('Guest');
@@ -93,7 +96,14 @@ export default function SettingsPage() {
   useFocusEffect(useCallback(() => { refreshName({ showRefresh: false }); }, [refreshName]));
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <View style={styles.header}>
+        <View style={styles.headerSideSpacer} />
+        <Text style={styles.title}>Settings</Text>
+        <View style={styles.headerSideSpacer} />
+      </View>
+      <View style={styles.divider} />
+
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
@@ -104,9 +114,6 @@ export default function SettingsPage() {
           />
         }
       >
-        {/* Title */}
-        <Text style={styles.title}>Settings</Text>
-
         {/* Profile */}
         <TouchableOpacity
           style={styles.profileContainer}
@@ -114,7 +121,7 @@ export default function SettingsPage() {
           onPress={() => router.push("/event/profile")}
         >
           {profilePfp ? (
-            <Image source={{ uri: profilePfp }} style={styles.profilePhoto} />
+            <ExpoImage source={{ uri: profilePfp }} style={styles.profilePhoto} contentFit="cover" />
           ) : (
             <Image source={ICONS.accountCircle} style={styles.profileIcon} />
           )}
@@ -178,7 +185,7 @@ export default function SettingsPage() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -205,14 +212,30 @@ const SettingRow = ({
 );
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+  },
+  headerSideSpacer: {
+    width: 78,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.neutral300,
+    marginBottom: 10,
+  },
   title: {
     fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
-    marginTop: 25,
-    marginBottom: 10,
+    marginTop: 0,
+    marginBottom: 0,
     color: "#000000",
-    paddingTop:15
+    paddingTop: 0,
   },
 
   profileContainer: {

@@ -59,3 +59,21 @@ app-example
 # Python bytecode caches - canonical rule for all nested __pycache__ dirs
 **/__pycache__/**
 
+# Android native build outputs
+frontend/android/build/
+frontend/android/app/build/
+
+# Database context/reference exports that are useful locally but not needed in deploy branch
+backend/sql/*_context.csv
+backend/sql/supabase.txt
+backend/sql/*.png
+
+# Local scratch notes
+run.txt
+
+# Context/generated artifacts not required in git history
+backend/sql/*.sql
+backend/sql/*.csv
+sql/*.sql
+frontend/data/*.csv
+

@@ -5,12 +5,12 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { CourtBookingRow, createServiceBookings, listServicesByCourtId, listPlayingCourtsByCourtId, getPlayingCourtInfo, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, getVenueBookingData, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
-import { useCourtInfo, useCourtAvailability, useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
-import { useUserId } from '@/hooks/use-user-id'
+import { useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { appendHistory } from '@/storage/history'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
@@ -80,11 +80,17 @@ export default function CourtBooking() {
   const courtid = params.courtid ? parseInt(String(params.courtid), 10) : NaN
   useAuthContext()
 
-  const { data: courtInfoData, isLoading: courtInfoLoading, error: courtInfoError } = useCourtInfo()
-  const courtInfo = courtInfoData?.find?.((c:any)=> c.courtid === courtid)
-  const { data: availabilityRows, isLoading: availabilityLoading, error: availabilityError, refetch: refetchAvailability } = useCourtAvailability(courtid)
-  const loading = courtInfoLoading || availabilityLoading
-  const error = (courtInfoError as any)?.message || (availabilityError as any)?.message || null
+  const { data: bundle, isLoading: bundleLoading, error: bundleError } = useQuery({
+    queryKey: ['venueBookingBundle', courtid],
+    queryFn: ({ signal }) => getVenueBookingData(courtid, signal),
+    enabled: Number.isFinite(courtid),
+    staleTime: 2 * 60_000,
+    retry: 1,
+  })
+  const courtInfo = bundle?.courtinfo ?? null
+  const availabilityRows = bundle?.availability ?? []
+  const loading = bundleLoading
+  const error = (bundleError as any)?.message ?? null
   // selectedDateStr holds the absolute date string (YYYY-MM-DD) for the selected day
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null)
   const [showTimePicker, setShowTimePicker] = useState(false)
@@ -102,7 +108,6 @@ export default function CourtBooking() {
   // Playing court selector
   const [selectedPlayingCourtId, setSelectedPlayingCourtId] = useState<number | null>(null)
   const [selectedBaseName, setSelectedBaseName] = useState<string | null>(null)
-  const [pcImages, setPcImages] = useState<Record<number, string[]>>({})
   // Week navigation (0 = current week, can move forward to +2)
   const [weekOffset, setWeekOffset] = useState(0)
   // Derived duration (minutes) of selected booking window
@@ -115,7 +120,7 @@ export default function CourtBooking() {
   const durationInvalid = !!(startSlot && endSlot && (durationMinutes < 60 || durationMinutes > 180))
 
   // Resolve numeric userid similar to other screens via query
-  const { data: userId } = useUserId()
+  const { userId } = useAppBootstrap()
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
 
@@ -145,21 +150,12 @@ export default function CourtBooking() {
     })
   }, [weekOffset])
 
-  const { data: servicesData, isLoading: servicesLoading } = useQuery({
-    queryKey: ['courtServices', courtid],
-    queryFn: () => listServicesByCourtId(courtid),
-    enabled: Number.isFinite(courtid),
-    staleTime: 5 * 60 * 1000,
-  })
+  const servicesData: ServiceRow[] = Array.isArray(bundle?.services) ? bundle!.services : []
+  const servicesLoading = bundleLoading
 
-  // Playing courts for this venue
-  const { data: playingCourtsData, isLoading: playingCourtsLoading } = useQuery({
-    queryKey: ['playingCourts', courtid],
-    queryFn: () => listPlayingCourtsByCourtId(courtid),
-    enabled: Number.isFinite(courtid),
-    staleTime: 5 * 60 * 1000,
-  })
-  const playingCourts: PlayingCourtRow[] = Array.isArray(playingCourtsData) ? playingCourtsData : []
+  // Playing courts for this venue (images embedded by bundle endpoint)
+  const playingCourts: PlayingCourtRow[] = Array.isArray(bundle?.playing_courts) ? bundle!.playing_courts : []
+  const playingCourtsLoading = bundleLoading
 
   const baseNames = useMemo(() => {
     const seen = new Set<string>()
@@ -285,24 +281,46 @@ export default function CourtBooking() {
     return slots
   }, [scheduleAvailability])
 
+  // For today's date, never show past start slots.
+  const visibleTimeSlots = useMemo(() => {
+    if (!selectedDateStr) return timeSlots
+    const todayStr = toDateString(new Date())
+    if (selectedDateStr !== todayStr) return timeSlots
+
+    const now = new Date()
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+    return timeSlots.filter((slot) => {
+      const [hh, mm] = slot.split(':').map(Number)
+      const slotMinutes = hh * 60 + mm
+      return slotMinutes > nowMinutes
+    })
+  }, [selectedDateStr, timeSlots])
+
+  // If a previously selected slot becomes invalid as time moves on, clear it.
+  useEffect(() => {
+    if (!startSlot) return
+    if (!visibleTimeSlots.includes(startSlot)) {
+      setStartSlot(null)
+      setEndSlot(null)
+      return
+    }
+    if (endSlot && !visibleTimeSlots.includes(endSlot)) {
+      setEndSlot(null)
+    }
+  }, [visibleTimeSlots, startSlot, endSlot])
+
+  const isStartInPast = useMemo(() => {
+    if (!selectedDateStr || !startSlot) return false
+    const dt = new Date(`${selectedDateStr}T${startSlot}:00`)
+    if (Number.isNaN(dt.getTime())) return false
+    return dt.getTime() <= Date.now()
+  }, [selectedDateStr, startSlot])
+
   // Derived validity and button enable state
   const isDaySelectable = useCallback(
     (dayKey: string) => availableDayKeys.length === 0 || availableDayKeys.includes(dayKey),
     [availableDayKeys]
   )
-
-  // Load images for each playing court
-  useEffect(() => {
-    if (!playingCourts.length) return
-    void Promise.all(playingCourts.map(async (pc) => {
-      try {
-        const info = await getPlayingCourtInfo(pc.playingcourtid)
-        if (info.images?.length) {
-          setPcImages(prev => ({ ...prev, [pc.playingcourtid]: info.images! }))
-        }
-      } catch {}
-    }))
-  }, [playingCourts.length])
 
   // Reset schedule and part selection when base court changes
   useEffect(() => {
@@ -343,7 +361,7 @@ export default function CourtBooking() {
     } catch { return `Confirm Booking - ${totalAmount}₫` }
   }, [totalAmount])
   // Disallow duplicate booking for same availability; require part selection when playing courts exist
-  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey)) return
@@ -512,20 +530,7 @@ export default function CourtBooking() {
     if (userId != null) refetchUserBookings()
   }, [userId, refetchUserBookings]))
 
-  // Keep courtavailability data fresh when revisiting this screen.
-  useFocusEffect(useCallback(() => {
-    if (!Number.isFinite(courtid)) return
-    void refetchAvailability()
-  }, [courtid, refetchAvailability]))
 
-  // Poll for external deletions (simple immediate sync after manual DB changes)
-  useEffect(() => {
-    if (userId == null) return
-    const interval = setInterval(() => {
-      refetchUserBookings()
-    }, 4000) // 4s polling interval
-    return () => clearInterval(interval)
-  }, [userId, refetchUserBookings])
 
   return (
     <View style={styles.screen}>
@@ -571,7 +576,7 @@ export default function CourtBooking() {
             })()}
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />
-              <Text style={styles.courtAddress}>{(courtInfoData?.find?.((c:any)=>c.courtid===courtid)?.address) || ''}</Text>
+              <Text style={styles.courtAddress}>{courtInfo?.address || ''}</Text>
             </View>
             {availability && (
               <View style={styles.metaRow}>
@@ -662,23 +667,27 @@ export default function CourtBooking() {
                       <Text style={styles.subHeading}>Select Time</Text>
                       <Text style={styles.smallText}>Start</Text>
                       <View style={styles.slotRow}>
-                        {timeSlots.map((ts) => (
+                        {visibleTimeSlots.map((ts) => (
                           <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
                             <Text style={styles.slotText}>{ts}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
+                      {visibleTimeSlots.length === 0 && (
+                        <Text style={styles.durationWarning}>No future slots available for today.</Text>
+                      )}
                       {startSlot && (
                         <>
                           <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
                           <View style={styles.slotRow}>
-                            {timeSlots.filter((ts) => ts > startSlot!).map((ts) => (
+                            {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => (
                               <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
                                 <Text style={styles.slotText}>{ts}</Text>
                               </TouchableOpacity>
                             ))}
                           </View>
                           {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
+                          {isStartInPast && <Text style={styles.durationWarning}>Selected start time has already passed. Please choose another slot.</Text>}
                         </>
                       )}
                     </View>
@@ -694,7 +703,7 @@ export default function CourtBooking() {
                     {baseGroupCourts.map((pc) => {
                       const courtLabel = String(pc.name || pc.base_name || `Court ${pc.playingcourtid}`)
                       const active = selectedPlayingCourtId === pc.playingcourtid
-                      const imgs = pcImages[pc.playingcourtid] || []
+                      const imgs: string[] = (pc as any).images || []
                       const rawImg = imgs[0]
                       const imageUri = typeof rawImg === 'string' && rawImg.trim()
                         ? optimizeRemoteImageUrl(rawImg, { width: 800, height: 400, quality: 80, resize: 'cover' })

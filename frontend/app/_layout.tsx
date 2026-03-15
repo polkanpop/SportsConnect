@@ -15,6 +15,7 @@ import './global.css'
 
 import { SplashScreenController } from '@/components/splash-controller'
 import QueryProvider from '@/providers/query-provider'
+import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
 
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -144,13 +145,15 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <QueryProvider>
           <AuthProvider>
-            <SplashScreenController />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="auto" />
+            <AppBootstrapProvider>
+              <SplashScreenController />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="+not-found" />
+              </Stack>
+              <StatusBar style="auto" />
+            </AppBootstrapProvider>
           </AuthProvider>
         </QueryProvider>
       </ThemeProvider>

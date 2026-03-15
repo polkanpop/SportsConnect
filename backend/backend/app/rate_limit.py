@@ -1,3 +1,4 @@
+import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -15,6 +16,8 @@ def user_or_ip_key(request):
 	print(f"[rate_limit] key_func fallback IP {key}")
 	return key
 
-# In dev/single-process we use in-memory storage. For production switch to Redis:
-# Limiter(key_func=user_or_ip_key, storage_uri="redis://localhost:6379")
-limiter = Limiter(key_func=user_or_ip_key, storage_uri="memory://")
+# Use Redis for persistent, cross-process rate limiting when REDIS_URL is set;
+# fall back to in-memory for environments without Redis.
+_redis_url = os.getenv("REDIS_URL")
+_storage_uri = _redis_url if _redis_url else "memory://"
+limiter = Limiter(key_func=user_or_ip_key, storage_uri=_storage_uri)

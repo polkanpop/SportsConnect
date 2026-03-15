@@ -36,6 +36,8 @@ export function useUserId() {
   return useQuery({
     queryKey: [...queryKeys.userId, profileIdKeyPart],
     queryFn: () => resolveUserId(profile),
-    staleTime: 0,
+    // Query key includes profileIdKeyPart — a different account inherits a fresh key,
+    // so Infinity staleTime is safe and avoids constant background refetches.
+    staleTime: Infinity,
   })
 }

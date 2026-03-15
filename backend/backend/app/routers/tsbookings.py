@@ -1,12 +1,16 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_update, rest_insert
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
+from ..notifications_service import create_notification
 
 router = APIRouter(prefix="/tsbookings", tags=["training"])
 
 PRIMARY_KEY = "tsbookingid"
 
 @router.get("", response_model=list[dict])
+@cache(expire=30, key_builder=make_key_builder("tsbookings"))
 def list_ts_bookings(sessionid: int | None = Query(None), userid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int | str] = {}
@@ -24,6 +28,7 @@ def list_ts_bookings(sessionid: int | None = Query(None), userid: int | None = Q
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{tsbookingid}", response_model=dict)
+@cache(expire=30, key_builder=make_key_builder("tsbookings"))
 def get_ts_booking(tsbookingid: int):
     try:
         row = rest_select("tsbookings", "*", filters={PRIMARY_KEY: tsbookingid}, single=True)
@@ -34,7 +39,7 @@ def get_ts_booking(tsbookingid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_ts_booking(body: dict, current_user: str = Depends(get_current_user)):
+def create_ts_booking(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a training session booking. Inject userid from auth if not provided."""
     try:
         userid_raw = body.get("userid") or current_user
@@ -81,35 +86,120 @@ def create_ts_booking(body: dict, current_user: str = Depends(get_current_user))
             resp = rest_insert("tsbookings", payload)
         except Exception:
             resp = rest_upsert("tsbookings", payload)
+
+        # Notifications (best-effort)
+        try:
+            booking_row = resp[0] if isinstance(resp, list) and resp else None
+            booking_id = int((booking_row or {}).get(PRIMARY_KEY) or 0) or None
+            create_notification(
+                userid=userid,
+                category="training",
+                notificationtype="tsbooking",
+                kind="approved" if desired_status == "joined" else "submitted",
+                notificationtypeid=booking_id or sessionid,
+                title="Training booking confirmed" if desired_status == "joined" else "Training booking submitted",
+                message="Your training booking is confirmed." if desired_status == "joined" else "Your training booking is pending approval.",
+                data={"sessionid": sessionid, "tsbookingid": booking_id, "status": desired_status},
+            )
+
+            sess = rest_select("trainingsessions", "sessionid,coachid", filters={"sessionid": sessionid}, single=True)
+            coachid = int(sess.get("coachid")) if isinstance(sess, dict) and sess.get("coachid") is not None else None
+            if coachid is not None and coachid != userid:
+                create_notification(
+                    userid=coachid,
+                    category="training",
+                    notificationtype="tsbooking",
+                    kind="incoming_booking",
+                    notificationtypeid=booking_id or sessionid,
+                    title="New training booking",
+                    message="Someone requested to join your training session.",
+                    data={"sessionid": sessionid, "tsbookingid": booking_id, "booker_userid": userid, "status": desired_status},
+                )
+        except Exception as e:
+            print("[tsbookings] notification insert failed:", str(e))
+
+        background_tasks.add_task(invalidate_namespace, "tsbookings", "trainingsessioninfo")
         return resp[0] if isinstance(resp, list) and resp else payload
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{tsbookingid}", response_model=dict)
-def update_ts_booking(tsbookingid: int, body: dict, current_user: str = Depends(get_current_user)):
+def update_ts_booking(tsbookingid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on a training session booking.
 
     Used by the mobile app to cancel an upcoming training booking by setting bookingstatus/status.
     """
     try:
-        existing = rest_select("tsbookings", "tsbookingid, userid", filters={PRIMARY_KEY: tsbookingid}, single=True)
+        existing = rest_select("tsbookings", "tsbookingid, userid, sessionid, status", filters={PRIMARY_KEY: tsbookingid}, single=True)
         if not existing:
             raise HTTPException(status_code=404, detail="Training session booking not found")
 
+        auth_userid: int | None
         try:
             auth_userid = int(current_user)
-            if int(existing.get("userid")) != auth_userid:
-                raise HTTPException(status_code=403, detail="User does not own this training booking")
-        except ValueError:
-            pass
+        except Exception:
+            auth_userid = None
+
+        is_owner = auth_userid is not None and int(existing.get("userid")) == auth_userid
+        is_coach = False
+        if not is_owner and auth_userid is not None:
+            try:
+                sess = rest_select("trainingsessions", "sessionid,coachid", filters={"sessionid": int(existing.get("sessionid"))}, single=True)
+                if sess and int(sess.get("coachid")) == auth_userid:
+                    is_coach = True
+            except Exception:
+                is_coach = False
+
+        if not (is_owner or is_coach):
+            raise HTTPException(status_code=403, detail="Not allowed to update this training booking")
 
         payload = dict(body or {})
         payload.pop(PRIMARY_KEY, None)
         if not payload:
             raise HTTPException(status_code=422, detail="No fields to update")
 
+        prev_status = str(existing.get("status") or "")
+        # Coach moderation: limit surface area.
+        if is_coach and not is_owner:
+            payload = {k: v for k, v in payload.items() if k in {"status", "bookingstatus"}}
+            if not payload:
+                raise HTTPException(status_code=422, detail="No fields to update")
+
         resp = rest_update("tsbookings", {PRIMARY_KEY: tsbookingid}, payload)
+
+        # Coach moderation notifications (best-effort)
+        try:
+            if "status" in payload and is_coach:
+                new_status = str(payload.get("status") or "")
+                if new_status and new_status.lower() != prev_status.lower():
+                    booker_userid = int(existing.get("userid"))
+                    if new_status.lower() == "joined":
+                        create_notification(
+                            userid=booker_userid,
+                            category="training",
+                            notificationtype="tsbooking",
+                            kind="approved",
+                            notificationtypeid=int(tsbookingid),
+                            title="Training booking approved",
+                            message="Your training booking has been approved.",
+                            data={"sessionid": int(existing.get("sessionid")), "tsbookingid": int(tsbookingid), "status": new_status},
+                        )
+                    elif new_status.lower() == "rejected":
+                        create_notification(
+                            userid=booker_userid,
+                            category="training",
+                            notificationtype="tsbooking",
+                            kind="rejected",
+                            notificationtypeid=int(tsbookingid),
+                            title="Training booking rejected",
+                            message="Your training booking was rejected.",
+                            data={"sessionid": int(existing.get("sessionid")), "tsbookingid": int(tsbookingid), "status": new_status},
+                        )
+        except Exception as e:
+            print("[tsbookings] notification update failed:", str(e))
+
+        background_tasks.add_task(invalidate_namespace, "tsbookings", "trainingsessioninfo")
         if isinstance(resp, list) and resp:
             return resp[0]
         return payload

@@ -14,7 +14,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
-from .db import get_settings
+from fastapi.middleware.gzip import GZipMiddleware
+from .db import close_pg_pool, get_settings, has_pg_pool_config, init_pg_pool, probe_pg_connection
 from .rate_limit import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
@@ -46,7 +47,11 @@ from .routers import (
     cloudinary,
     blocklist,
     playingcourts,
+    bookings,   # race-safe RPC booking endpoints
+    drafts,     # Redis form-draft cache endpoints
+    me,         # /api/me/dashboard bootstrap endpoint
 )
+from .routers import venues
 from .routers import debug_identity
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
@@ -95,6 +100,26 @@ async def _validation_exception_handler(request: Request, exc: RequestValidation
 
 
 @app.middleware("http")
+async def _benchmark_middleware(request: Request, call_next):
+    """Global performance middleware: logs all requests with timing and injects X-Process-Time header."""
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - t0) * 1000.0
+    
+    # Log in standardized format
+    logger.info(
+        "BENCHMARK: %s %s - %s - %.1fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    
+    # Inject response header
+    response.headers["X-Process-Time"] = f"{duration_ms:.1f}"
+    return response
+
+@app.middleware("http")
 async def _log_servicebookings_422(request: Request, call_next):
     # Only log for the problematic endpoint to avoid noisy logs.
     is_target = request.url.path.startswith("/api/servicebookings") and request.method.upper() == "POST"
@@ -129,6 +154,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=500,
+)
+
 app.include_router(courtinfo.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
@@ -157,14 +187,81 @@ app.include_router(history.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(cloudinary.router, prefix="/api")
 app.include_router(blocklist.router, prefix="/api")
+app.include_router(bookings.router, prefix="/api")  # race-safe RPC endpoints
+app.include_router(drafts.router,   prefix="/api")  # Redis form-draft endpoints
+app.include_router(me.router,       prefix="/api")  # /api/me/dashboard bootstrap
+app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
 
 @app.on_event("startup")
 async def _init_cache():
-    """Initialize fastapi-cache with Redis backend.
+    """Initialize fastapi-cache with Redis backend and expose the redis client
+    on ``app.state.redis`` so non-cache routers (drafts, bookings) can reach it.
     Uses REDIS_URL from environment (defaults to local docker)."""
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    redis = aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+    redis = aioredis.from_url(redis_url)
+    try:
+        await redis.ping()
+        logger.info("Redis connected successfully at %s", redis_url)
+    except Exception as exc:
+        logger.warning(
+            "Redis unavailable at %s — cache will be non-functional until Redis is reachable: %s",
+            redis_url, exc,
+        )
+    # Store on app.state so request handlers can reach it via request.app.state.redis
+    app.state.redis = redis
     FastAPICache.init(RedisBackend(redis), prefix="sportsconnect-cache")
+
+    # Cold-start warmup: initialize the direct Postgres pool when configured,
+    # otherwise warm the legacy PostgREST/threadpool path.
+    if has_pg_pool_config():
+        try:
+            t0 = time.perf_counter()
+            await init_pg_pool()
+            await probe_pg_connection()
+            venues.mark_venues_startup_warmup((time.perf_counter() - t0) * 1000.0)
+            logger.info("Venues Postgres pool warmup completed successfully")
+        except Exception as exc:
+            logger.warning(
+                "Venues Postgres pool warmup failed during startup, falling back to REST path: %s: %r",
+                type(exc).__name__,
+                exc,
+            )
+            try:
+                venues.warmup_venues_cold_path()
+                logger.info("Venues cold-path REST warmup completed successfully")
+            except Exception as rest_exc:
+                logger.warning(
+                    "Venues cold-path REST warmup failed during startup: %s: %r",
+                    type(rest_exc).__name__,
+                    rest_exc,
+                )
+    else:
+        try:
+            venues.warmup_venues_cold_path()
+            logger.info("Venues cold-path REST warmup completed successfully")
+        except Exception as exc:
+            logger.warning(
+                "Venues cold-path REST warmup failed during startup: %s: %r",
+                type(exc).__name__,
+                exc,
+            )
+
+    try:
+        await courtinfo.prewarm_default_courtinfo_and_venues_cache(app)
+    except Exception as exc:
+        logger.warning(
+            "Default courtinfo+venues Redis prewarm failed during startup: %s: %r",
+            type(exc).__name__,
+            exc,
+        )
+
+
+@app.on_event("shutdown")
+async def _shutdown_resources():
+    redis = getattr(app.state, "redis", None)
+    if redis is not None:
+        await redis.close()
+    await close_pg_pool()
 
 
 @app.get("/api/health")

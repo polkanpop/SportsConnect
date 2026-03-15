@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_update
 from ..auth import get_current_user
+from ..cache_utils import invalidate_namespace, make_key_builder
+from ..notifications_service import create_notification
 
 import json
 from typing import Any
@@ -41,6 +44,7 @@ def _normalize_images(v: Any):
     return []
 
 @router.get("", response_model=list[dict])
+@cache(expire=120, key_builder=make_key_builder("trainingsessions"))
 def list_training_sessions(
     coachid: int | None = Query(None),
     status: str | None = Query(None),
@@ -64,6 +68,7 @@ def list_training_sessions(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{sessionid}", response_model=dict)
+@cache(expire=120, key_builder=make_key_builder("trainingsessions"))
 def get_training_session(sessionid: int):
     try:
         row = rest_select("trainingsessions", "*", filters={PRIMARY_KEY: sessionid}, single=True)
@@ -75,7 +80,7 @@ def get_training_session(sessionid: int):
 
 
 @router.post("/create_with_info", response_model=dict)
-def create_training_session_with_info(body: dict):
+def create_training_session_with_info(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a training session plus its trainingsessioninfo metadata.
 
     Body keys expected:
@@ -97,10 +102,28 @@ def create_training_session_with_info(body: dict):
         monetize = body.get("monetize")
         if courtbookingid is None or title is None or participants_cap is None or monetize is None:
             raise HTTPException(status_code=422, detail="Missing required fields: courtbookingid, title, participants_cap, monetize")
+        coach_raw = body.get("coachid") or current_user
+        try:
+            coachid = int(coach_raw)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Coach id must be numeric; include coachid in body")
+
+        # Prevent spoofing coachid via body.
+        try:
+            token_userid = int(current_user)
+            if coachid != token_userid:
+                raise HTTPException(status_code=403, detail="Coach id must match the authenticated user")
+        except ValueError:
+            pass
+
         # Validate booking exists
         booking = rest_select("courtbooking", "courtbookingid, userid, start_timestamp, end_timestamp", filters={"courtbookingid": courtbookingid}, single=True)
         if not booking:
             raise HTTPException(status_code=404, detail="Court booking not found")
+
+        # Enforce booking ownership (mirrors events.create_with_info)
+        if int(booking.get("userid")) != coachid:
+            raise HTTPException(status_code=403, detail="User does not own this court booking")
         # Prevent duplicate session for booking
         existing = rest_select("trainingsessions", "sessionid", filters={"courtbookingid": courtbookingid})
         if isinstance(existing, list) and existing:
@@ -140,7 +163,7 @@ def create_training_session_with_info(body: dict):
         session_payload = {
             "courtbookingid": courtbookingid,
             "status": body.get("status") or "upcoming",
-            "coachid": body.get("coachid")
+            "coachid": coachid,
         }
         if ts_time:
             session_payload["time"] = ts_time
@@ -212,6 +235,22 @@ def create_training_session_with_info(body: dict):
             except Exception:
                 pass
             raise HTTPException(status_code=500, detail="Trainingsessioninfo insert did not return representation")
+
+        # Best-effort notification: creation success (do not block core workflow).
+        try:
+            create_notification(
+                userid=coachid,
+                notificationtype="trainingsession",
+                notificationtypeid=int(sessionid),
+                category="training",
+                kind="created",
+                title="Training session created",
+                message=f"Your training session '{title}' was created successfully.",
+                data={"sessionid": int(sessionid), "courtbookingid": int(courtbookingid)},
+            )
+        except Exception:
+            pass
+        background_tasks.add_task(invalidate_namespace, "trainingsessions", "trainingsessioninfo")
         return {"session": session_row, "sessioninfo": info_resp[0]}
     except HTTPException:
         raise
@@ -220,7 +259,7 @@ def create_training_session_with_info(body: dict):
 
 
 @router.patch("/{sessionid}", response_model=dict)
-def update_training_session(sessionid: int, body: dict, current_user: str = Depends(get_current_user)):
+def update_training_session(sessionid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on a training session (creator/coach).
 
     Used by the mobile app to cancel a created upcoming session by setting status.
@@ -256,6 +295,7 @@ def update_training_session(sessionid: int, body: dict, current_user: str = Depe
             except Exception:
                 pass
 
+        background_tasks.add_task(invalidate_namespace, "trainingsessions")
         return out
     except HTTPException:
         raise

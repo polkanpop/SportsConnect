@@ -1,15 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { getUserInfoByUserId, UserInfoRow } from '@/lib/backendApi'
-import { queryKeys } from './query-keys'
+import { UserInfoRow } from '@/lib/backendApi'
+import { useUserIdentity } from './use-user-identity'
 
 export function useUserInfo(userid: number | null) {
-  return useQuery<UserInfoRow | null>({
-    queryKey: queryKeys.userInfo(userid),
-    queryFn: () => {
-      if (userid == null) return null
-      return getUserInfoByUserId(userid)
-    },
-    enabled: userid != null,
-    staleTime: 2 * 60 * 1000,
-  })
+  const q = useUserIdentity(userid)
+  return {
+    ...q,
+    data: (q.data ?? null) as UserInfoRow | null,
+  }
 }

@@ -7,7 +7,7 @@ import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery } from '@tanstack/react-query'
-import { useFocusEffect } from 'expo-router'
+import { queryKeys } from '@/hooks/query-keys'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
@@ -86,14 +86,15 @@ const TrainingSessionListScreen = () => {
   const autoPrefetchedKeysRef = React.useRef<Set<string>>(new Set())
   const [, setDistanceMatrixTick] = useState(0)
 
-  const { data: sessionsData, isLoading: loading, isFetching, refetch } = useQuery({
-    queryKey: ['trainingSessionsCombinedList'],
+  const { data: sessionsData, isLoading: loading, isFetching, refetch, error: queryError } = useQuery({
+    queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombinedCached(),
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
-  useEffect(() => { if(Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
-  useEffect(() => { if(!loading && !sessionsData) setError('Failed loading sessions') }, [loading, sessionsData])
-  useFocusEffect(useCallback(()=>{ refetch() },[refetch]))
+  useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
+  useEffect(() => { if (queryError && !sessionsData) setError('Failed to load sessions') }, [queryError, sessionsData])
 
   useEffect(() => {
     return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))
@@ -509,7 +510,7 @@ const TrainingSessionListScreen = () => {
           )}
           {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
           {!loading && !error && filteredSessions.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>Loading sessions...</Text>
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>No sessions found</Text>
           )}
           {visibleSessions.map(s => {
             const venues = asArray(s.venue)

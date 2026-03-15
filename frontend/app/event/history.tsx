@@ -3,12 +3,9 @@ import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
-import { useUserId } from '@/hooks/use-user-id'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { HistoryEntry, listHistory, setHistory } from '@/storage/history'
 import {
-  getEventBookingsByUserId,
-  getTrainingSessionBookingsByUserId,
-  listCourtBookings,
   listEventsCombined,
   listTrainingSessionsCombined,
 } from '@/lib/backendApi'
@@ -166,7 +163,8 @@ function isScheduleLikeSubtitle(s: string): boolean {
 
 export default function HistoryPage() {
   const router = useRouter()
-  const { data: userId } = useUserId()
+  const { userId, dashboard } = useAppBootstrap()
+  const dashboardRaw = dashboard.data
   const [items, setItems] = useState<HistoryEntry[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const lastReloadAtRef = useRef(0)
@@ -179,13 +177,14 @@ export default function HistoryPage() {
 
     // Best-effort reconcile: if a DB record was deleted, drop related history items.
     try {
-      const [courtBookings, eventBookings, sessionBookings, eventsCombined, sessionsCombined] = await Promise.all([
-        listCourtBookings({ userid: userId }).catch(() => [] as any[]),
-        getEventBookingsByUserId(userId).catch(() => [] as any[]),
-        getTrainingSessionBookingsByUserId(userId).catch(() => [] as any[]),
+      const [eventsCombined, sessionsCombined] = await Promise.all([
         listEventsCombined().catch(() => [] as any[]),
         listTrainingSessionsCombined().catch(() => [] as any[]),
       ])
+
+      const courtBookings = Array.isArray(dashboardRaw?.court_bookings) ? dashboardRaw.court_bookings : []
+      const eventBookings = Array.isArray(dashboardRaw?.event_bookings) ? dashboardRaw.event_bookings : []
+      const sessionBookings = Array.isArray(dashboardRaw?.training_bookings) ? dashboardRaw.training_bookings : []
 
       const courtBookingIds = new Set((Array.isArray(courtBookings) ? courtBookings : []).map((b: any) => b?.courtbookingid))
       const courtBookingById = new Map<number, any>()
@@ -331,7 +330,7 @@ export default function HistoryPage() {
     } catch {
       return rows
     }
-  }, [userId])
+  }, [userId, dashboardRaw])
 
   const loadLocal = useCallback(async (): Promise<HistoryEntry[]> => {
     if (typeof userId !== 'number') return []
