@@ -77,9 +77,18 @@ function isRefreshEndpoint(path: string): boolean {
 async function buildAuthHeader(): Promise<Record<string, string>> {
 	const backendTok = await getLocalBackendToken()
 	const now = Date.now()
-	if (backendTok?.token && backendTok.exp && backendTok.exp > now + 5_000) {
-		return { Authorization: `Bearer ${backendTok.token}` }
+	if (backendTok?.token) {
+		// If expiry metadata is missing, still prefer backend-issued token over Supabase session tokens.
+		if (!backendTok.exp || backendTok.exp > now + 5_000) {
+			return { Authorization: `Bearer ${backendTok.token}` }
+		}
 	}
+
+	// Legacy fallback for backends that only returned a single token without refresh bundle.
+	try {
+		const localToken = await AsyncStorage.getItem('@localAuthToken')
+		if (localToken) return { Authorization: `Bearer ${localToken}` }
+	} catch {}
 
 	try {
 		const { data } = await supabase.auth.getSession()
@@ -87,11 +96,6 @@ async function buildAuthHeader(): Promise<Record<string, string>> {
 		if (token) {
 			return { Authorization: `Bearer ${token}` }
 		}
-	} catch {}
-
-	try {
-		const localToken = await AsyncStorage.getItem('@localAuthToken')
-		if (localToken) return { Authorization: `Bearer ${localToken}` }
 	} catch {}
 
 	return {}

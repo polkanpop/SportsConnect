@@ -6,13 +6,27 @@ import { debugIdentity } from '@/lib/backendApi'
 
 async function resolveUserId(profile: any): Promise<number | null> {
   let local: number | null = null
-  if (profile && typeof profile.userid === 'number') local = profile.userid
+  if (profile) {
+    if (typeof profile.userid === 'number') {
+      local = profile.userid
+    } else if (typeof profile.userid === 'string' && profile.userid.trim()) {
+      const parsed = Number(profile.userid)
+      if (Number.isFinite(parsed)) local = parsed
+    }
+  }
   if (local == null) {
     try {
       const raw = await AsyncStorage.getItem('@backendProfile')
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed.userid === 'number') local = parsed.userid
+        if (parsed) {
+          if (typeof parsed.userid === 'number') {
+            local = parsed.userid
+          } else if (typeof parsed.userid === 'string' && parsed.userid.trim()) {
+            const parsedId = Number(parsed.userid)
+            if (Number.isFinite(parsedId)) local = parsedId
+          }
+        }
       }
     } catch {}
   }
