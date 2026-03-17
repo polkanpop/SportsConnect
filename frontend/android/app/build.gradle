@@ -1,7 +1,17 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply plugin: "com.google.gms.google-services"
+
+def hasGoogleServicesJson =
+        file("google-services.json").exists() ||
+        file("src/release/google-services.json").exists() ||
+        file("src/debug/google-services.json").exists()
+
+if (hasGoogleServicesJson) {
+    apply plugin: "com.google.gms.google-services"
+} else {
+    logger.lifecycle("google-services.json not found, skipping com.google.gms.google-services plugin")
+}
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
