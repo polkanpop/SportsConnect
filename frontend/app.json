@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Sportapp",
+    "name": "sportconnect",
     "slug": "sport_connect",
     "icon": "./assets/icons/placeholder_icon.png",
     "extra": {
@@ -12,13 +12,13 @@
     },
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "sportapp",
+    "scheme": "sportconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "usesAppleSignIn": true,
-      "bundleIdentifier": "com.group5.sportapp",
+      "bundleIdentifier": "com.group5.sportconnect",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
@@ -30,7 +30,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.group5.sportapp",
+      "package": "com.group5.sportconnect",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
