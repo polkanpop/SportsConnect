@@ -30,7 +30,6 @@
     FlatList,
     Image,
     Keyboard,
-    Linking,
     Modal,
     Pressable,
     RefreshControl,
@@ -46,10 +45,17 @@
   
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
+  import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
-  import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+
+  type Region = {
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  };
 
   // TypeScript type for a marker
   type MarkerType = {
@@ -64,41 +70,6 @@
     availability: string;
     isFavorite?: boolean; // client-side instantaneous favorite flag
   };
-
-  // Memoized marker component – only re-renders if favorite state, selection, or coordinates change.
-  type CourtMarkerProps = {
-    marker: MarkerType;
-    selectedId: number | null;
-    onPress: (m: MarkerType) => void;
-  };
-
-  const CourtMarker = React.memo(function CourtMarker({ marker, selectedId, onPress }: CourtMarkerProps) {
-    const isSelected = selectedId === marker.id;
-    const pinColor = isSelected
-      ? COLORS.green
-      : marker.isFavorite
-        ? COLORS.amber200
-        : COLORS.brandOrangeDeep;
-    const coordinate = useMemo(() => ({ latitude: marker.latitude, longitude: marker.longitude }), [marker.latitude, marker.longitude]);
-    const handlePress = useCallback(() => onPress(marker), [onPress, marker]);
-    // Key still includes states to preserve previous remount semantics when fav/selection toggles
-    const keyFingerprint = `${marker.id}-${marker.isFavorite ? 'fav' : 'nf'}-${isSelected ? 'sel' : 'nosel'}`;
-    return (
-      <Marker
-        key={keyFingerprint}
-        coordinate={coordinate}
-        pinColor={pinColor}
-        onPress={handlePress}
-      />
-    );
-  }, (prev, next) => {
-    return (
-      prev.selectedId === next.selectedId &&
-      prev.marker.isFavorite === next.marker.isFavorite &&
-      prev.marker.latitude === next.marker.latitude &&
-      prev.marker.longitude === next.marker.longitude
-    );
-  });
 
   // Initial map region
   const INITIAL_REGION: Region = {
@@ -117,20 +88,6 @@
 
   const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat) + 2.0;
   const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng) + 2.0;
-
-  const VN_BOUNDS_OUTLINE = [
-    { latitude: VN_BOUNDS.maxLat, longitude: VN_BOUNDS.minLng },
-    { latitude: VN_BOUNDS.maxLat, longitude: VN_BOUNDS.maxLng },
-    { latitude: VN_BOUNDS.minLat, longitude: VN_BOUNDS.maxLng },
-    { latitude: VN_BOUNDS.minLat, longitude: VN_BOUNDS.minLng },
-    { latitude: VN_BOUNDS.maxLat, longitude: VN_BOUNDS.minLng },
-  ];
-
-  // Hide default map POIs (cafes/hotels/etc.) so only app markers remain.
-  const MAP_STYLE_HIDE_POI = [
-    { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
-    { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
-  ];
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -279,7 +236,6 @@
       zoomScale.value = 1; zoomTX.value = 0; zoomTY.value = 0
       zoomBaseScale.value = 1; zoomBaseX.value = 0; zoomBaseY.value = 0
     }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomMapImageUri, zoomScale, zoomTX, zoomTY])
-    const mapRef = useRef<MapView | null>(null); // Ref to the map
     const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
 
     const [searchQuery, setSearchQuery] = useState(""); // State for search query
@@ -296,11 +252,16 @@
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
     // Zoom stages: 0 = fully out (baseline region), 1 = mid zoom, 2 = max zoom (shows ZoomOut icon)
     const [zoomStage, setZoomStage] = useState<number>(0);
+    const [mapRegion, setMapRegion] = useState<Region>(INITIAL_REGION);
     const [calendarModalVisible, setCalendarModalVisible] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
 
-    // Define zoom levels (tweak as desired)
-    const ZOOM_LEVELS = useRef<number[]>([10, 13.5, 16]); // corresponds to camera zoom values
+    // Approximate zoom stages for DynamicMap region deltas.
+    const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
+      { latitudeDelta: INITIAL_REGION.latitudeDelta, longitudeDelta: INITIAL_REGION.longitudeDelta },
+      { latitudeDelta: 0.4, longitudeDelta: 0.4 },
+      { latitudeDelta: 0.08, longitudeDelta: 0.08 },
+    ]);
 
     // Filter states
     const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | "distance" | null>(null);
@@ -320,40 +281,31 @@
     type DistanceMatrixStatus = 'loading' | 'loaded' | 'error';
     const [distanceMatrixStatusByCourtInfoId, setDistanceMatrixStatusByCourtInfoId] = useState<Record<number, DistanceMatrixStatus>>({});
 
-    const lastValidRegionRef = useRef<Region>(INITIAL_REGION);
-    const isProgrammaticRegionChangeRef = useRef(false);
-
     // Distance cache keyed by courtinfoid
     const [distanceMetersByCourtInfoId, setDistanceMetersByCourtInfoId] = useState<Record<number, number | null>>({});
     const [durationSecondsByCourtInfoId, setDurationSecondsByCourtInfoId] = useState<Record<number, number | null>>({});
     const inFlightDistanceIdsRef = useRef<Set<number>>(new Set());
     const [distanceMatrixDeferredReady, setDistanceMatrixDeferredReady] = useState(false);
 
+    const focusMapRegion = useCallback((latitude: number, longitude: number, stage: number, animated = true) => {
+      const delta = ZOOM_STAGE_DELTAS.current[Math.max(0, Math.min(stage, ZOOM_STAGE_DELTAS.current.length - 1))];
+      const nextRegion = clampRegionToVietnam({
+        latitude,
+        longitude,
+        latitudeDelta: delta.latitudeDelta,
+        longitudeDelta: delta.longitudeDelta,
+      });
+      setMapRegion(nextRegion);
+      if (animated) {
+        // Keep behavior parity with prior camera animations.
+        setTimeout(() => setMapRegion(nextRegion), 0);
+      }
+    }, []);
+
     const handleRegionChangeComplete = useCallback((region: Region) => {
-      if (!mapRef.current) return;
-
-      if (isProgrammaticRegionChangeRef.current) {
-        isProgrammaticRegionChangeRef.current = false;
-        lastValidRegionRef.current = region;
-        return;
-      }
-
       const clamped = clampRegionToVietnam(region);
-      const changed =
-        Math.abs(clamped.latitude - region.latitude) > 1e-6 ||
-        Math.abs(clamped.longitude - region.longitude) > 1e-6 ||
-        Math.abs(clamped.latitudeDelta - region.latitudeDelta) > 1e-6 ||
-        Math.abs(clamped.longitudeDelta - region.longitudeDelta) > 1e-6;
-
-      if (!changed) {
-        lastValidRegionRef.current = region;
-        return;
-      }
-
-      isProgrammaticRegionChangeRef.current = true;
-      lastValidRegionRef.current = clamped;
-      mapRef.current.animateToRegion(clamped, 180);
-    }, [mapRef]);
+      setMapRegion(clamped);
+    }, []);
 
     // Snap points for the BottomSheet
     const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);
@@ -702,23 +654,14 @@
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location);
 
-          if (mapRef.current && location) {
-            mapRef.current.animateCamera(
-              {
-                center: {
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
-                },
-                zoom: 12,
-              },
-              { duration: 1000 }
-            );
+          if (location) {
+            focusMapRegion(location.coords.latitude, location.coords.longitude, 1);
           }
         } catch (e) {
           console.log("Location error:", e);
         }
       })();
-    }, []);
+    }, [focusMapRegion]);
 
     // Center map on user’s current location when pressing the “My Location” button
     const handleMyLocationPress = async () => {
@@ -733,46 +676,11 @@
         const location = await Location.getCurrentPositionAsync({});
         setUserLocation(location);
 
-        // Animate camera to the user's current location
-        mapRef.current?.animateCamera(
-          {
-            center: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            },
-            zoom: ZOOM_LEVELS.current[2],
-          },
-          { duration: 1000 }
-        );
+        focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
         setZoomStage(2);
       } else {
-        // Animate to existing user location
-        mapRef.current?.animateCamera(
-          {
-            center: {
-              latitude: userLocation.coords.latitude,
-              longitude: userLocation.coords.longitude,
-            },
-            zoom: ZOOM_LEVELS.current[2],
-          },
-          { duration: 1000 }
-        );
+        focusMapRegion(userLocation.coords.latitude, userLocation.coords.longitude, 2);
         setZoomStage(2);
-      }
-    };
-
-    // Open Google Maps for selected marker
-    const handleGoogleMapPress = () => {
-      if (selectedMarker) {
-        const { latitude, longitude } = selectedMarker;
-        const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-        Linking.openURL(url);
-      } else if (userLocation) {
-        const { latitude, longitude } = userLocation.coords;
-        const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-        Linking.openURL(url);
-      } else {
-        console.log("No location selected or user location found");
       }
     };
 
@@ -785,13 +693,7 @@
       setSelectedMarker(marker);
     // Favorite state derived from favoriteIds
     setIsFavorite(favoriteIds.includes(marker.courtid));
-      mapRef.current?.animateCamera(
-        {
-          center: { latitude: marker.latitude, longitude: marker.longitude },
-          zoom: ZOOM_LEVELS.current[2],
-        },
-        { duration: 500 }
-      );
+      focusMapRegion(marker.latitude, marker.longitude, 2);
       setZoomStage(2); // go to max zoom when selecting a marker
       // open bottom sheet
       bottomSheetRef.current?.snapToIndex(0);
@@ -799,7 +701,6 @@
 
     // Cycle through zoom levels (0 -> 1 -> 2 -> 0) while updating icon state
     const handleZoomToggle = () => {
-      if (!mapRef.current) return;
       // Determine next stage
       const nextStage = zoomStage < 2 ? zoomStage + 1 : 0; // cycle back out after max
       setZoomStage(nextStage);
@@ -815,13 +716,7 @@
         centerLng = userLocation.coords.longitude;
       }
 
-      mapRef.current.animateCamera(
-        {
-          center: { latitude: centerLat, longitude: centerLng },
-          zoom: ZOOM_LEVELS.current[nextStage],
-        },
-        { duration: 600 }
-      );
+      focusMapRegion(centerLat, centerLng, nextStage);
     };
 
     // Handle search input change with debounce
@@ -836,10 +731,7 @@
     const handleFlatListItemPress = (marker: MarkerType) => {
       setSelectedMarker(marker); // Set the selected marker
       setFlatListVisible(false); // Hide the FlatList
-      mapRef.current?.animateCamera(
-        { center: { latitude: marker.latitude, longitude: marker.longitude }, zoom: 15 },
-        { duration: 1000 }
-      );
+      focusMapRegion(marker.latitude, marker.longitude, 2);
       bottomSheetRef.current?.snapToIndex(0); // Open BottomSheet
     };
 
@@ -1115,36 +1007,44 @@
             <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setOpenDropdown(null); }}>
               <View style={{ flex: 1 }}>
                 {/* Map View (render first so overlays appear above on Android) */}
-                <MapView
+                <DynamicMap
                   style={styles.map}
-                  provider={PROVIDER_GOOGLE} //googleAPI
-                  initialRegion={INITIAL_REGION} //vn
-                  onRegionChangeComplete={handleRegionChangeComplete}
-                  showsUserLocation={true} // our location dot
-                  showsMyLocationButton={false} // Disable default location button (we use our custom one)
+                  initialRegion={INITIAL_REGION}
+                  region={mapRegion}
+                  showsUserLocation={true}
                   showsPointsOfInterest={false}
                   showsBuildings={false}
                   showsIndoors={false}
-                  customMapStyle={MAP_STYLE_HIDE_POI}
-                  toolbarEnabled={false} //disable google map bottom right hyperlink
-                  showsCompass={false}
-                  ref={mapRef}
-                >
-                  <Polyline
-                    coordinates={VN_BOUNDS_OUTLINE}
-                    strokeColor={COLORS.red}
-                    strokeWidth={6}
-                  />
-                  {/* Render all markers via memoized CourtMarker */}
-                  {filteredMarkers.map(marker => (
-                    <CourtMarker
-                      key={marker.id}
-                      marker={marker}
-                      selectedId={selectedMarker?.id ?? null}
-                      onPress={handleMarkerPress}
-                    />
-                  ))}
-                </MapView>
+                  onRegionChangeComplete={handleRegionChangeComplete}
+                  markers={filteredMarkers.map((marker): DynamicMapMarker => ({
+                    id: marker.id,
+                    coordinate: { latitude: marker.latitude, longitude: marker.longitude },
+                    title: marker.name,
+                    description: marker.address,
+                    pinColor: selectedMarker?.id === marker.id
+                      ? COLORS.green
+                      : marker.isFavorite
+                        ? COLORS.amber200
+                        : COLORS.brandOrangeDeep,
+                  }))}
+                  onPress={(coordinate) => {
+                    const nearest = filteredMarkers.reduce<{ marker: MarkerType | null; dist: number }>(
+                      (best, marker) => {
+                        const d = haversineMeters(
+                          coordinate.latitude,
+                          coordinate.longitude,
+                          marker.latitude,
+                          marker.longitude
+                        );
+                        return d < best.dist ? { marker, dist: d } : best;
+                      },
+                      { marker: null, dist: Number.POSITIVE_INFINITY }
+                    );
+                    if (nearest.marker && nearest.dist <= 120) {
+                      void handleMarkerPress(nearest.marker);
+                    }
+                  }}
+                />
 
                 {/* Search Bar */}
                 {overlaysVisible && (
@@ -1437,13 +1337,6 @@
                   <View style={styles.searchResults}>
                     <Text style={styles.noResultsText}>No courts found</Text>
                   </View>
-                )}
-
-                {/* Google Maps Button (above My Location) */}
-                {overlaysVisible && (
-                  <TouchableOpacity style={styles.googleMapButton} onPress={handleGoogleMapPress}>
-                    <Image source={ICONS.ggmap} style={styles.googleMapIcon} />
-                  </TouchableOpacity>
                 )}
 
                 {/* Zoom Toggle Button (left side, parallel to Google Maps button) */}
@@ -2413,28 +2306,10 @@
       width: 24,
       height: 24,
     },
-    // Google Map button above it
-    googleMapButton: {
-      position: "absolute",
-      bottom: 360, // above My Location button
-      right: 20,
-      backgroundColor: COLORS.white,
-      borderRadius: 50,
-      padding: 12,
-      shadowColor: "#000",
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 5,
-      zIndex: 20,
-    },
-    googleMapIcon: {
-      width: 24,
-      height: 24,
-    },
     // Zoom toggle button
     zoomToggleButton: {
       position: 'absolute',
-      bottom: 360, // align vertically with googleMapButton
+      bottom: 360,
       left: 20,
       backgroundColor: COLORS.white,
       borderRadius: 50,
