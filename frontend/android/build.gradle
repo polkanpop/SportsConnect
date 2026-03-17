@@ -1,5 +1,7 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
+def mapboxDownloadsToken = System.getenv("RNMAPBOX_MAPS_DOWNLOAD_TOKEN") ?: (findProperty("RNMAPBOX_MAPS_DOWNLOAD_TOKEN") ?: findProperty("MAPBOX_DOWNLOADS_TOKEN"))
+
 buildscript {
   repositories {
     google()
@@ -17,6 +19,13 @@ allprojects {
   repositories {
     google()
     mavenCentral()
+    maven {
+      url = uri("https://api.mapbox.com/downloads/v2/releases/maven")
+      credentials {
+        username = "mapbox"
+        password = mapboxDownloadsToken ?: ""
+      }
+    }
     maven { url 'https://www.jitpack.io' }
   }
 }
