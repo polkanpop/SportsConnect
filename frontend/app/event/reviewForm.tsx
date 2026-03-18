@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, Modal, ScrollView,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
@@ -14,10 +14,12 @@ import { COLORS } from '@/constants/colors'
 export default function ReviewForm() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { targettype, targetid, title } = useLocalSearchParams<{
+  const { targettype, targetid, title, venueName, courtName } = useLocalSearchParams<{
     targettype: string
     targetid: string
     title: string
+    venueName?: string
+    courtName?: string
   }>()
 
   const [rating, setRating] = useState(0)
@@ -26,7 +28,12 @@ export default function ReviewForm() {
   const [successVisible, setSuccessVisible] = useState(false)
 
   const numericId = parseInt(String(targetid ?? ''), 10)
-  const displayTitle = title ? decodeURIComponent(String(title)) : 'this booking'
+  const displayTitle = useMemo(() => {
+    const rawTitle = title ? decodeURIComponent(String(title)) : ''
+    const rawVenueName = venueName ? decodeURIComponent(String(venueName)) : ''
+    const rawCourtName = courtName ? decodeURIComponent(String(courtName)) : ''
+    return rawVenueName || rawCourtName || rawTitle || 'this booking'
+  }, [title, venueName, courtName])
 
   const mutation = useMutation({
     mutationFn: () =>

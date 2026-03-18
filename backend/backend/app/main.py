@@ -73,6 +73,27 @@ app = FastAPI(title="SportsConnect API", version="0.1.0")
 logger = logging.getLogger("uvicorn.error")
 
 
+def _resolve_redis_url() -> str:
+    """Resolve a Redis URL with Upstash-aware fallbacks.
+
+    Priority:
+    1) REDIS_URL
+    2) UPSTASH_REDIS_URL
+    3) default local Redis
+    """
+    redis_url = (
+        os.getenv("REDIS_URL")
+        or os.getenv("UPSTASH_REDIS_URL")
+        or "redis://localhost:6379/0"
+    )
+
+    # Upstash Redis requires TLS. Accept redis:// input and normalize to rediss://.
+    if "upstash.io" in redis_url and redis_url.startswith("redis://"):
+        redis_url = "rediss://" + redis_url[len("redis://"):]
+
+    return redis_url
+
+
 @app.exception_handler(RequestValidationError)
 async def _validation_exception_handler(request: Request, exc: RequestValidationError):
     """Log 422 validation/parsing errors with a small request-body preview.
@@ -196,8 +217,8 @@ app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
 async def _init_cache():
     """Initialize fastapi-cache with Redis backend and expose the redis client
     on ``app.state.redis`` so non-cache routers (drafts, bookings) can reach it.
-    Uses REDIS_URL from environment (defaults to local docker)."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    Uses REDIS_URL/UPSTASH_REDIS_URL from environment (defaults to local docker)."""
+    redis_url = _resolve_redis_url()
     redis = aioredis.from_url(redis_url)
     try:
         await redis.ping()

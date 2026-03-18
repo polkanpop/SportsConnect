@@ -101,7 +101,7 @@ async function buildAuthHeader(): Promise<Record<string, string>> {
 	return {}
 }
 
-async function request(path: string, options: RequestInit & { debugLabel?: string } = {}, attempt: number = 0) {
+async function request(path: string, options: RequestInit & { debugLabel?: string } = {}, attempt: number = 0): Promise<any> {
 	const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`
 	const t0 = Date.now()
 	const debugLabel = options.debugLabel || path
@@ -124,7 +124,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 		if (inflight) return inflight
 	}
 
-	const doFetch = async () => {
+	const doFetch = async (): Promise<any> => {
 	const res = await fetch(url, {
 		method,
 		signal: options.signal,
@@ -158,7 +158,7 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	}
 
 	if (dedupeKey) {
-		const p = doFetch().finally(() => {
+		const p: Promise<any> = doFetch().finally(() => {
 			inflightGetRequestMap.delete(dedupeKey)
 		})
 		inflightGetRequestMap.set(dedupeKey, p)
@@ -1877,7 +1877,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			participants_cap: meta?.participants_cap ?? null,
 			join_status: meta?.join_status ?? null,
 			courtid,
-			address: ci?.address,
+			address: ci?.address ?? undefined,
 			latitude: (ci as any)?.latitude ?? null,
 			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
@@ -1941,7 +1941,7 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			participants_cap: meta?.participants_cap ?? null,
 			join_status: meta?.join_status ?? null,
 			courtid,
-			address: ci?.address,
+			address: ci?.address ?? undefined,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
 		}
@@ -2067,7 +2067,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			start_timestamp: booking?.start_timestamp ?? null,
 			end_timestamp: booking?.end_timestamp ?? null,
 			courtid,
-			address: ci?.address,
+			address: ci?.address ?? undefined,
 			latitude: (ci as any)?.latitude ?? null,
 			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
@@ -2134,7 +2134,7 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			start_timestamp: booking?.start_timestamp ?? null,
 			end_timestamp: booking?.end_timestamp ?? null,
 			courtid,
-			address: ci?.address,
+			address: ci?.address ?? undefined,
 			latitude: (ci as any)?.latitude ?? null,
 			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,

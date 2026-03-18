@@ -45,7 +45,7 @@
   
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
-  import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
+  import DynamicMap, { type DynamicMapMarker, type DynamicMapRef } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -256,12 +256,9 @@
     const [calendarModalVisible, setCalendarModalVisible] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
 
-    // Approximate zoom stages for DynamicMap region deltas.
-    const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
-      { latitudeDelta: INITIAL_REGION.latitudeDelta, longitudeDelta: INITIAL_REGION.longitudeDelta },
-      { latitudeDelta: 0.4, longitudeDelta: 0.4 },
-      { latitudeDelta: 0.08, longitudeDelta: 0.08 },
-    ]);
+    // Zoom levels for the three-stage cycle (country → city → street)
+    const ZOOM_STAGES = [5, 10, 15] as const;
+    const dynamicMapRef = useRef<DynamicMapRef>(null);
 
     // Filter states
     const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | "distance" | null>(null);
@@ -287,24 +284,8 @@
     const inFlightDistanceIdsRef = useRef<Set<number>>(new Set());
     const [distanceMatrixDeferredReady, setDistanceMatrixDeferredReady] = useState(false);
 
-    const focusMapRegion = useCallback((latitude: number, longitude: number, stage: number, animated = true) => {
-      const delta = ZOOM_STAGE_DELTAS.current[Math.max(0, Math.min(stage, ZOOM_STAGE_DELTAS.current.length - 1))];
-      const nextRegion = clampRegionToVietnam({
-        latitude,
-        longitude,
-        latitudeDelta: delta.latitudeDelta,
-        longitudeDelta: delta.longitudeDelta,
-      });
-      setMapRegion(nextRegion);
-      if (animated) {
-        // Keep behavior parity with prior camera animations.
-        setTimeout(() => setMapRegion(nextRegion), 0);
-      }
-    }, []);
-
     const handleRegionChangeComplete = useCallback((region: Region) => {
-      const clamped = clampRegionToVietnam(region);
-      setMapRegion(clamped);
+      setMapRegion(region);
     }, []);
 
     // Snap points for the BottomSheet
@@ -653,35 +634,30 @@
 
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location);
-
-          if (location) {
-            focusMapRegion(location.coords.latitude, location.coords.longitude, 1);
-          }
+          // DynamicMap will auto-swoop to userLocation when prop changes
         } catch (e) {
           console.log("Location error:", e);
         }
       })();
-    }, [focusMapRegion]);
+    }, []);
 
     // Center map on user’s current location when pressing the “My Location” button
     const handleMyLocationPress = async () => {
-      if (!userLocation) {
+      let loc = userLocation;
+      if (!loc) {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           console.log("Permission denied");
           return;
         }
-
-        // Fetch location if not already available
-        const location = await Location.getCurrentPositionAsync({});
-        setUserLocation(location);
-
-        focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
-        setZoomStage(2);
-      } else {
-        focusMapRegion(userLocation.coords.latitude, userLocation.coords.longitude, 2);
-        setZoomStage(2);
+        loc = await Location.getCurrentPositionAsync({});
+        setUserLocation(loc);
       }
+      dynamicMapRef.current?.flyTo(
+        { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+        ZOOM_STAGES[2],
+      );
+      setZoomStage(2);
     };
 
     // Handle marker when pressed
@@ -690,22 +666,17 @@
         bottomSheetRef.current?.snapToIndex(0);
         return;
       }
-      setSelectedMarker(marker);
-    // Favorite state derived from favoriteIds
-    setIsFavorite(favoriteIds.includes(marker.courtid));
-      focusMapRegion(marker.latitude, marker.longitude, 2);
-      setZoomStage(2); // go to max zoom when selecting a marker
-      // open bottom sheet
+      setSelectedMarker(marker); // DynamicMap auto-flies via selectedCourtId effect
+      setIsFavorite(favoriteIds.includes(marker.courtid));
+      setZoomStage(2);
       bottomSheetRef.current?.snapToIndex(0);
     };
 
     // Cycle through zoom levels (0 -> 1 -> 2 -> 0) while updating icon state
     const handleZoomToggle = () => {
-      // Determine next stage
-      const nextStage = zoomStage < 2 ? zoomStage + 1 : 0; // cycle back out after max
+      const nextStage = zoomStage < 2 ? zoomStage + 1 : 0;
       setZoomStage(nextStage);
 
-      // Determine center focus priority: selected marker > user location > current camera center (fallback INITIAL_REGION)
       let centerLat = INITIAL_REGION.latitude;
       let centerLng = INITIAL_REGION.longitude;
       if (selectedMarker) {
@@ -716,7 +687,10 @@
         centerLng = userLocation.coords.longitude;
       }
 
-      focusMapRegion(centerLat, centerLng, nextStage);
+      dynamicMapRef.current?.flyTo(
+        { latitude: centerLat, longitude: centerLng },
+        ZOOM_STAGES[nextStage],
+      );
     };
 
     // Handle search input change with debounce
@@ -729,10 +703,9 @@
 
     // Handle tapping a search result item
     const handleFlatListItemPress = (marker: MarkerType) => {
-      setSelectedMarker(marker); // Set the selected marker
-      setFlatListVisible(false); // Hide the FlatList
-      focusMapRegion(marker.latitude, marker.longitude, 2);
-      bottomSheetRef.current?.snapToIndex(0); // Open BottomSheet
+      setSelectedMarker(marker); // DynamicMap auto-flies via selectedCourtId effect
+      setFlatListVisible(false);
+      bottomSheetRef.current?.snapToIndex(0);
     };
 
     // Update bottom sheet index on change
@@ -1008,25 +981,27 @@
               <View style={{ flex: 1 }}>
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
+                  ref={dynamicMapRef}
                   style={styles.map}
-                  initialRegion={INITIAL_REGION}
-                  region={mapRegion}
-                  showsUserLocation={true}
-                  showsPointsOfInterest={false}
-                  showsBuildings={false}
-                  showsIndoors={false}
-                  onRegionChangeComplete={handleRegionChangeComplete}
                   markers={filteredMarkers.map((marker): DynamicMapMarker => ({
                     id: marker.id,
                     coordinate: { latitude: marker.latitude, longitude: marker.longitude },
                     title: marker.name,
                     description: marker.address,
-                    pinColor: selectedMarker?.id === marker.id
-                      ? COLORS.green
-                      : marker.isFavorite
-                        ? COLORS.amber200
-                        : COLORS.brandOrangeDeep,
+                    courtId: marker.courtid,
                   }))}
+                  selectedCourtId={selectedMarker?.id ?? null}
+                  favoriteCourtIds={favoriteIds}
+                  userLocation={userLocation
+                    ? { latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude }
+                    : null
+                  }
+                  showUserLocation
+                  onRegionChangeComplete={handleRegionChangeComplete}
+                  onMarkerPress={(markerId) => {
+                    const marker = filteredMarkers.find(m => m.id === markerId);
+                    if (marker) handleMarkerPress(marker);
+                  }}
                   onPress={(coordinate) => {
                     const nearest = filteredMarkers.reduce<{ marker: MarkerType | null; dist: number }>(
                       (best, marker) => {

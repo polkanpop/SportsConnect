@@ -34,6 +34,7 @@ SUPABASE_SERVICE_ROLE_KEY="<service--key>"   # keep secret
 SUPABASE_ANON_KEY="<anon-key>"                   # optional if validating anon tokens
 ALLOWED_ORIGINS="http://localhost:8081,http://localhost:19006"
 REDIS_URL="redis://localhost:6379/0"             # Redis cache (host, port, db). Add password if needed.
+UPSTASH_REDIS_URL="rediss://default:<token>@<host>.upstash.io:6379" # optional alias used if REDIS_URL is absent
 PASSWORD_PEPPER="<random-long-base64>"           # Server-side secret appended to user password before bcrypt
 REFRESH_TOKEN_PEPPER="<random-long-base64>"      # Server-side secret mixed into refresh token hash
 
@@ -62,6 +63,7 @@ The backend uses `fastapi-cache2` with a Redis backend (see `main.py`).
 
 Configuration:
 * `REDIS_URL` format: `redis://[:password@]host:port/db` (e.g. `redis://:mypw@redis:6379/2`).
+* Upstash Redis should use TLS: `rediss://default:<token>@<host>.upstash.io:6379`.
 * Default if unset: `redis://localhost:6379/0`.
 * Keys are prefixed with `sportsconnect-cache` so multiple services can share the same Redis instance safely.
 

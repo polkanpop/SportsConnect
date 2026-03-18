@@ -7,7 +7,8 @@ import {
 } from '@expo-google-fonts/montserrat'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import React from 'react'
+import * as Updates from 'expo-updates'
+import React, { useEffect } from 'react'
 import { StyleSheet, Text, TextInput } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
@@ -121,6 +122,22 @@ function patchGlobalFont() {
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   useAuthContext()
+
+  // Check for OTA updates on every cold start
+  useEffect(() => {
+    if (__DEV__) return
+    ;(async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync()
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync()
+          await Updates.reloadAsync()
+        }
+      } catch (e) {
+        console.warn('[OTA] Update check failed:', e)
+      }
+    })()
+  }, [])
 
   const [loaded] = useFonts({
     SpaceMono: require('../assets/icons/import_icons/SpaceMono-Regular.ttf'),

@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { CourtBookingRow, createServiceBookings, getVenueBookingData, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -31,6 +31,38 @@ const IMAGE_TILE_HEIGHT = 120
 // Format helpers
 function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
+function toUtcDateString(d: Date) { return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}` }
+function isStrictYmd(v: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v)
+}
+
+function toStrictYmd(v: unknown): string | null {
+  const raw = String(v ?? '').trim()
+  if (!raw) return null
+  if (isStrictYmd(raw)) return raw
+
+  // Preserve original date token to avoid timezone shifts (for ISO/UTC timestamps).
+  const ymdPrefix = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/)
+  if (ymdPrefix) {
+    return `${ymdPrefix[1]}-${ymdPrefix[2]}-${ymdPrefix[3]}`
+  }
+
+  const dateOnly = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (dateOnly) {
+    const y = Number(dateOnly[1])
+    const m = Number(dateOnly[2])
+    const d = Number(dateOnly[3])
+    if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
+      return `${y}-${pad(m)}-${pad(d)}`
+    }
+  }
+
+  const dt = new Date(raw)
+  if (Number.isNaN(dt.getTime())) return null
+  return toUtcDateString(dt)
+}
+
+const DAY_KEYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
 function formatHm(v: unknown) {
   const s = String(v ?? '').trim()
   const m = s.match(/^(\d{1,2}):(\d{2})/)
@@ -87,10 +119,47 @@ export default function CourtBooking() {
     staleTime: 2 * 60_000,
     retry: 1,
   })
+
+  const { data: directAvailabilityRowsRaw, isLoading: directAvailabilityLoading, error: directAvailabilityError } = useQuery({
+    queryKey: ['courtavailabilityDirect', courtid],
+    queryFn: () => listCourtAvailabilityCached(courtid),
+    enabled: Number.isFinite(courtid),
+    staleTime: 60_000,
+    retry: 1,
+  })
+
   const courtInfo = bundle?.courtinfo ?? null
-  const availabilityRows = bundle?.availability ?? []
-  const loading = bundleLoading
-  const error = (bundleError as any)?.message ?? null
+  const bundleAvailabilityRows = Array.isArray(bundle?.availability) ? bundle.availability : []
+  const directAvailabilityRows = Array.isArray(directAvailabilityRowsRaw) ? directAvailabilityRowsRaw : []
+  const availabilityRows = directAvailabilityRows.length > 0 ? directAvailabilityRows : bundleAvailabilityRows
+  const loading = bundleLoading || (directAvailabilityLoading && bundleAvailabilityRows.length === 0)
+  const error = ((bundleError as any)?.message ?? null) || ((availabilityRows.length === 0 ? (directAvailabilityError as any)?.message : null) ?? null)
+
+  useEffect(() => {
+    if (!bundle) return
+    const sampleAvailability = Array.isArray(bundle.availability) ? bundle.availability[0] : null
+    console.log('[courtBooking] booking-data payload', {
+      courtid,
+      hasCourtInfo: !!bundle.courtinfo,
+      playingCourts: Array.isArray(bundle.playing_courts) ? bundle.playing_courts.length : 0,
+      availabilityCount: Array.isArray(bundle.availability) ? bundle.availability.length : 0,
+      servicesCount: Array.isArray(bundle.services) ? bundle.services.length : 0,
+      sampleBookingDate: sampleAvailability ? (sampleAvailability as any).booking_date : null,
+    })
+  }, [bundle, courtid])
+
+  useEffect(() => {
+    if (!Number.isFinite(courtid)) return
+    const sampleDirectAvailability = directAvailabilityRows[0] ?? null
+    console.log('[courtBooking] direct courtavailability payload', {
+      courtid,
+      count: directAvailabilityRows.length,
+      sampleBookingDate: sampleDirectAvailability ? (sampleDirectAvailability as any).booking_date : null,
+      sourceSelected: directAvailabilityRows.length > 0 ? 'direct' : 'bundle',
+      bundleAvailabilityCount: bundleAvailabilityRows.length,
+    })
+  }, [courtid, directAvailabilityRows, bundleAvailabilityRows.length])
+
   // selectedDateStr holds the absolute date string (YYYY-MM-DD) for the selected day
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null)
   const [showTimePicker, setShowTimePicker] = useState(false)
@@ -209,12 +278,23 @@ export default function CourtBooking() {
         if (Array.isArray((bd as any).days)) bd = (bd as any).days
         else bd = Object.entries(bd).filter(([, v]) => !!v).map(([k]) => k)
       }
+
+      const normalizedBookingDate = Array.isArray(bd)
+        ? bd
+          .map((entry) => String(entry ?? '').trim())
+          .map((entry) => {
+            if (DAY_KEYS.has(entry)) return entry
+            return toStrictYmd(entry) ?? entry
+          })
+          .filter(Boolean)
+        : []
+
       const playingcourtidRaw = (r as any)?.playingcourtid
       const playingcourtid = playingcourtidRaw == null ? null : (Number.isFinite(Number(playingcourtidRaw)) ? Number(playingcourtidRaw) : null)
       return {
         ...r,
         playingcourtid,
-        booking_date: Array.isArray(bd) ? bd.map(String) : [],
+        booking_date: normalizedBookingDate,
       } as AvailabilityRow
     })
   }, [availabilityRows])
@@ -262,13 +342,35 @@ export default function CourtBooking() {
     availability && bookings.some(b => b.availabilityid === availability.availabilityid && isActiveCourtBooking(b))
   )
 
-  const availableDayKeys = scheduleAvailability?.booking_date || []
+  const scheduleDisplayAvailability = useMemo(
+    () => scheduleAvailability ?? availability ?? normalizedAvailRows[0] ?? null,
+    [scheduleAvailability, availability, normalizedAvailRows]
+  )
+
+  const availableDayKeys = scheduleDisplayAvailability?.booking_date || []
+  const availableDateSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const token of availableDayKeys) {
+      const date = toStrictYmd(token)
+      if (date) set.add(date)
+    }
+    return set
+  }, [availableDayKeys])
+
+  const availableWeekdaySet = useMemo(() => {
+    const set = new Set<string>()
+    for (const token of availableDayKeys) {
+      const key = String(token).trim()
+      if (DAY_KEYS.has(key)) set.add(key)
+    }
+    return set
+  }, [availableDayKeys])
 
   // Slots: generate 30-min increments between start_time & end_time
   const timeSlots = useMemo(() => {
-    if (!scheduleAvailability) return []
-    const start = scheduleAvailability.start_time // '08:00'
-    const end = scheduleAvailability.end_time
+    if (!scheduleDisplayAvailability) return []
+    const start = scheduleDisplayAvailability.start_time // '08:00'
+    const end = scheduleDisplayAvailability.end_time
     const [sh, sm] = String(start).split(':').map(Number)
     const [eh, em] = String(end).split(':').map(Number)
     const startMinutes = sh * 60 + sm
@@ -279,7 +381,7 @@ export default function CourtBooking() {
       slots.push(`${hh}:${mm}`)
     }
     return slots
-  }, [scheduleAvailability])
+  }, [scheduleDisplayAvailability])
 
   // For today's date, never show past start slots.
   const visibleTimeSlots = useMemo(() => {
@@ -318,8 +420,12 @@ export default function CourtBooking() {
 
   // Derived validity and button enable state
   const isDaySelectable = useCallback(
-    (dayKey: string) => availableDayKeys.length === 0 || availableDayKeys.includes(dayKey),
-    [availableDayKeys]
+    (dayKey: string, dateStr: string) => {
+      if (availableDateSet.size > 0) return availableDateSet.has(dateStr)
+      if (availableWeekdaySet.size > 0) return availableWeekdaySet.has(dayKey)
+      return true
+    },
+    [availableDateSet, availableWeekdaySet]
   )
 
   // Reset schedule and part selection when base court changes
@@ -364,7 +470,7 @@ export default function CourtBooking() {
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
-    if (!isDaySelectable(dayKey)) return
+    if (!isDaySelectable(dayKey, dateStr)) return
     if (selectedDateStr === dateStr) {
       setSelectedDateStr(null)
       setShowTimePicker(false)
@@ -642,12 +748,17 @@ export default function CourtBooking() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  {scheduleDisplayAvailability && (
+                    <Text style={styles.availabilityMeta}>
+                      Opening Time: {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+                    </Text>
+                  )}
                   <View style={styles.weekRow}>
                     {weekDaysDetailed.map((d) => {
                       const today = new Date()
                       const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
                       const isPast = weekOffset === 0 && d.date < todayOnly
-                      const isAvailable = isDaySelectable(d.key)
+                      const isAvailable = isDaySelectable(d.key, d.dateStr)
                       const selected = selectedDateStr === d.dateStr
                       return (
                         <TouchableOpacity
@@ -662,7 +773,10 @@ export default function CourtBooking() {
                       )
                     })}
                   </View>
-                  {showTimePicker && scheduleAvailability && (
+                  {!loading && !error && !scheduleDisplayAvailability && (
+                    <Text style={styles.statusText}>No availability schedule found for this court yet.</Text>
+                  )}
+                  {showTimePicker && scheduleDisplayAvailability && (
                     <View style={{ marginTop: 16 }}>
                       <Text style={styles.subHeading}>Select Time</Text>
                       <Text style={styles.smallText}>Start</Text>
@@ -757,12 +871,17 @@ export default function CourtBooking() {
               </TouchableOpacity>
             </View>
           </View>
+          {scheduleDisplayAvailability && (
+            <Text style={styles.availabilityMeta}>
+              Opening Time: {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+            </Text>
+          )}
           <View style={styles.weekRow}>
             {weekDaysDetailed.map((d) => {
               const today = new Date()
               const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
               const isPast = weekOffset === 0 && d.date < todayOnly
-              const isAvailable = isDaySelectable(d.key)
+              const isAvailable = isDaySelectable(d.key, d.dateStr)
               const selected = selectedDateStr === d.dateStr
               return (
                 <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#FED7AA' }, (!isAvailable || isPast) && styles.dayCellDisabled]}>
@@ -772,7 +891,10 @@ export default function CourtBooking() {
               )
             })}
           </View>
-          {showTimePicker && availability && (
+          {!loading && !error && !availability && (
+            <Text style={styles.statusText}>No availability schedule found for this court yet.</Text>
+          )}
+          {showTimePicker && scheduleDisplayAvailability && (
             <View style={{ marginTop: 16 }}>
               <Text style={styles.subHeading}>Select Time</Text>
               <Text style={styles.smallText}>Start</Text>

@@ -19,9 +19,13 @@
       "supportsTablet": true,
       "usesAppleSignIn": true,
       "bundleIdentifier": "com.group5.sportconnect",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "android": {
@@ -31,9 +35,16 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.group5.sportconnect",
+      "googleServicesFile": "./android/app/google-services.json",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "output": "static"
@@ -58,6 +69,9 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "le_tri"
+    "owner": "le_tri",
+    "updates": {
+      "url": "https://u.expo.dev/72bf906e-3a54-4c90-a272-bc5def1b8642"
+    }
   }
 }

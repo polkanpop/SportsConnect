@@ -1986,7 +1986,6 @@ export default function CourtPanel(props: { ownerId: number | null }) {
               <Text style={styles.label}>Venue Name</Text>
               <TextInput value={editName} onChangeText={setEditName} placeholder="Venue name" style={styles.input} />
 
-              <Text style={styles.label}>Court List</Text>
               {playingCourtsLoading ? (
                 <SkeletonPulse>
                   <View style={styles.subCourtRow}>

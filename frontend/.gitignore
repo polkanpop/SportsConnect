@@ -28,6 +28,10 @@ expo-env.d.ts
 *.p8
 *.p12
 *.key
+.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
 *.mobileprovision
 
 # Metro

@@ -1,0 +1,42 @@
+# EAS upload ignore rules
+# Keep build uploads small and avoid local lock/cache file issues.
+
+# Dependencies
+node_modules/
+
+# Environment and local-only config
+.env
+.env.*
+!.env.example
+
+# Expo / web outputs
+.expo/
+dist/
+web-build/
+
+# Native build caches and outputs
+android/.gradle/
+android/.jdks/
+android/.jdk/
+android/build/
+android/app/build/
+android/app/.cxx/
+
+# IDE/system files
+.idea/
+.kotlin/
+.jdks/
+.jdk/
+.DS_Store
+
+# Logs/debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# Local secrets
+sportconnect-c34b9-firebase-adminsdk-fbsvc-dd20b22440.json
+*firebase-adminsdk*.json
+*firebase-admin*.json
+*serviceAccount*.json

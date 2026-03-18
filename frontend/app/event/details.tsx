@@ -42,12 +42,12 @@ import {
 } from '@/lib/backendApi'
 
 type ParsedId =
-  | { kind: 'court_booking'; id: number }
-  | { kind: 'event_booking'; id: number }
-  | { kind: 'session_booking'; id: number }
-  | { kind: 'created_event'; id: number }
-  | { kind: 'created_session'; id: number }
-  | { kind: 'unknown'; raw: string }
+  | { kind: 'court_booking'; id: number; raw: string }
+  | { kind: 'event_booking'; id: number; raw: string }
+  | { kind: 'session_booking'; id: number; raw: string }
+  | { kind: 'created_event'; id: number; raw: string }
+  | { kind: 'created_session'; id: number; raw: string }
+  | { kind: 'unknown'; id: null; raw: string }
 
 const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`)
 
@@ -138,25 +138,25 @@ function parseUnifiedId(rawId: string | undefined | null): ParsedId {
   }
   if (raw.startsWith('court_')) {
     const id = asNum(raw.slice('court_'.length))
-    return Number.isFinite(id) ? { kind: 'court_booking', id } : { kind: 'unknown', raw }
+    return Number.isFinite(id) ? { kind: 'court_booking', id, raw } : { kind: 'unknown', id: null, raw }
   }
   if (raw.startsWith('event_')) {
     const id = asNum(raw.slice('event_'.length))
-    return Number.isFinite(id) ? { kind: 'event_booking', id } : { kind: 'unknown', raw }
+    return Number.isFinite(id) ? { kind: 'event_booking', id, raw } : { kind: 'unknown', id: null, raw }
   }
   if (raw.startsWith('session_')) {
     const id = asNum(raw.slice('session_'.length))
-    return Number.isFinite(id) ? { kind: 'session_booking', id } : { kind: 'unknown', raw }
+    return Number.isFinite(id) ? { kind: 'session_booking', id, raw } : { kind: 'unknown', id: null, raw }
   }
   if (raw.startsWith('created_event_')) {
     const id = asNum(raw.slice('created_event_'.length))
-    return Number.isFinite(id) ? { kind: 'created_event', id } : { kind: 'unknown', raw }
+    return Number.isFinite(id) ? { kind: 'created_event', id, raw } : { kind: 'unknown', id: null, raw }
   }
   if (raw.startsWith('created_session_')) {
     const id = asNum(raw.slice('created_session_'.length))
-    return Number.isFinite(id) ? { kind: 'created_session', id } : { kind: 'unknown', raw }
+    return Number.isFinite(id) ? { kind: 'created_session', id, raw } : { kind: 'unknown', id: null, raw }
   }
-  return { kind: 'unknown', raw }
+  return { kind: 'unknown', id: null, raw }
 }
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -1020,20 +1020,35 @@ export default function DetailsPage() {
   ])
 
   const canReview = useMemo(() => {
-    const lower = (v: any) => (typeof v === 'string' ? v.toLowerCase() : '')
-    if (parsed.kind === 'court_booking') return lower(courtBookingQuery.data?.bookingstatus ?? (courtBookingQuery.data as any)?.status).includes('complete')
-    if (parsed.kind === 'event_booking') return lower(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete')
-    if (parsed.kind === 'session_booking') return lower(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete')
+    const normalize = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '')
+    const isCompleted = (v: any) => {
+      const s = normalize(v)
+      return s === 'completed' || s === 'complete'
+    }
+    if (parsed.kind === 'court_booking') {
+      const bookingStatus = (courtBookingQuery.data as any)?.bookingstatus ?? (courtBookingQuery.data as any)?.status
+      const owneridRaw = Number((singleCourtQuery.data as any)?.ownerid)
+      const isOwner = Number.isFinite(owneridRaw) && Number.isFinite(userId) && owneridRaw === Number(userId)
+      return isCompleted(bookingStatus) && !isOwner
+    }
+    if (parsed.kind === 'event_booking') return normalize(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete')
+    if (parsed.kind === 'session_booking') return normalize(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete')
     return false
-  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data])
+  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data, singleCourtQuery.data, userId])
 
   const reviewNavParams = useMemo(() => {
     if (parsed.kind === 'court_booking') {
-      // Use courtCourtId directly so the button shows as soon as we know the courtid,
-      // even before courtinfo name finishes loading.
-      const courtid = courtCourtId ?? courtBookingCourt?.courtid ?? (courtBookingQuery.data as any)?.courtid
+      const courtid = courtCourtId ?? (courtBookingQuery.data as any)?.courtid
       if (!Number.isFinite(courtid) || courtid == null) return null
-      return { targettype: 'court', targetid: String(courtid), title: encodeURIComponent(courtBookingCourt?.name ?? 'Court Booking') }
+      const avail = singleAvailQuery.data as any
+      const courtsRel = Array.isArray(avail?.courts) ? avail.courts[0] : (avail?.courts ?? null)
+      const courtInfoRel = Array.isArray(courtsRel?.courtinfo) ? courtsRel.courtinfo[0] : (courtsRel?.courtinfo ?? null)
+      const reviewTitle =
+        (courtInfoRel as any)?.name ||
+        (courtBookingQuery.data as any)?.selected_base_name ||
+        (courtBookingQuery.data as any)?.selected_court_name ||
+        `Court #${courtid}`
+      return { targettype: 'court', targetid: String(courtid), title: encodeURIComponent(String(reviewTitle)) }
     }
     if (parsed.kind === 'event_booking') {
       const eventid = (eventBookingQuery.data as any)?.eventid
@@ -1048,7 +1063,7 @@ export default function DetailsPage() {
       return { targettype: 'trainingsession', targetid: String(sessionid), title: encodeURIComponent((s as any)?.title ?? `Session #${sessionid}`) }
     }
     return null
-  }, [parsed.kind, courtBookingCourt, eventBookingQuery.data, eventsCombinedList, sessionBookingQuery.data, sessionsCombinedList])
+  }, [parsed.kind, courtCourtId, courtBookingQuery.data, singleAvailQuery.data, eventBookingQuery.data, eventsCombinedList, sessionBookingQuery.data, sessionsCombinedList])
 
   const isLoading =
     courtBookingQuery.isLoading ||
@@ -1306,7 +1321,7 @@ export default function DetailsPage() {
             const b = eventBookingQuery.data
             const eventid = b.eventid
             const evCombined = eventsCombinedList.find((x) => x.eventid === eventid)
-            const ev = evCombined || eventBookingEventQuery.data
+            const ev: any = evCombined || eventBookingEventQuery.data
             const evMeta = eventBookingInfoQuery.data
             const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null)
             const end = parseTimestampLoose(ev?.end_timestamp ?? null)
@@ -1329,7 +1344,7 @@ export default function DetailsPage() {
             const b = sessionBookingQuery.data
             const sessionid = b.sessionid
             const sCombined = sessionsCombinedList.find((x) => x.sessionid === sessionid)
-            const s = sCombined || sessionBookingSessionQuery.data
+            const s: any = sCombined || sessionBookingSessionQuery.data
             const sMeta = sessionBookingInfoQuery.data
             const start = parseTimestampLoose(s?.start_timestamp ?? s?.time ?? null)
             const end = parseTimestampLoose(s?.end_timestamp ?? null)

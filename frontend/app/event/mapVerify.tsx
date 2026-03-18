@@ -5,19 +5,19 @@ import { setCache } from '@/lib/cache'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { type Region } from 'react-native-maps'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+
+type Region = {
+  latitude: number
+  longitude: number
+  latitudeDelta: number
+  longitudeDelta: number
+}
 
 const COURT_REGISTER_VERIFY_STORAGE_KEY = '@courtRegisterVerifiedLocation'
 const COURT_REGISTER_VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 type Coord = { latitude: number; longitude: number }
-
-// Hide default map POIs (cafes/hotels/etc.) so only app marker remains.
-const MAP_STYLE_HIDE_POI = [
-  { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
-]
 
 export default function MapVerifyPage() {
   const router = useRouter()
@@ -46,7 +46,6 @@ export default function MapVerifyPage() {
   const [selectedCoord, setSelectedCoord] = useState<Coord | null>(initial)
   const [editMode, setEditMode] = useState(false)
   const [bottomBarHeight, setBottomBarHeight] = useState(0)
-  const [mapRegion, setMapRegion] = useState<Region | null>(null)
 
   const DEFAULT_DELTA = 0.005
 
@@ -78,7 +77,6 @@ export default function MapVerifyPage() {
       longitudeDelta: DEFAULT_DELTA,
     }
     lastValidRegionRef.current = region
-    setMapRegion(region)
   }, [initial])
 
   const selectedMarkers = useMemo<DynamicMapMarker[]>(() => {
@@ -88,7 +86,6 @@ export default function MapVerifyPage() {
         id: 'selected-location',
         coordinate: selectedCoord,
         title: 'Temporary Court',
-        pinColor: COLORS.brandOrangeDeep,
       },
     ]
   }, [selectedCoord])
@@ -138,29 +135,16 @@ export default function MapVerifyPage() {
       <View style={styles.mapWrap}>
         <DynamicMap
           style={styles.map}
-          initialRegion={mapRegion ?? {
-            latitude: initial.latitude,
-            longitude: initial.longitude,
-            latitudeDelta: DEFAULT_DELTA,
-            longitudeDelta: DEFAULT_DELTA,
-          }}
-          region={mapRegion ?? undefined}
+          initialCenter={initial}
+          initialZoom={17}
+          animateOnLoad={false}
           markers={selectedMarkers}
-          showsPointsOfInterest={false}
-          showsBuildings={false}
-          showsIndoors={false}
-          customMapStyle={MAP_STYLE_HIDE_POI}
+          showUserLocation={false}
           onRegionChangeComplete={(r) => {
-            // Keep center point inside Vietnam
             const center: Coord = { latitude: r.latitude, longitude: r.longitude }
             if (isInVietnam(center)) {
               lastValidRegionRef.current = r
-              setMapRegion(r)
-              return
             }
-            const fallback = lastValidRegionRef.current
-            if (!fallback) return
-            setMapRegion(fallback)
           }}
           onPress={(c) => {
             if (!editMode) return

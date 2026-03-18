@@ -2,6 +2,19 @@ import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+
+def _resolve_redis_storage_uri() -> str:
+	"""Return storage URI for slowapi with Upstash-aware fallbacks."""
+	redis_url = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")
+	if not redis_url:
+		return "memory://"
+
+	# Upstash Redis requires TLS. Accept redis:// input and normalize to rediss://.
+	if "upstash.io" in redis_url and redis_url.startswith("redis://"):
+		return "rediss://" + redis_url[len("redis://"):]
+
+	return redis_url
+
 def user_or_ip_key(request):
 	"""Prefer authenticated user id (if middleware/dependency set it on request.state), fallback to remote IP.
 
@@ -18,6 +31,5 @@ def user_or_ip_key(request):
 
 # Use Redis for persistent, cross-process rate limiting when REDIS_URL is set;
 # fall back to in-memory for environments without Redis.
-_redis_url = os.getenv("REDIS_URL")
-_storage_uri = _redis_url if _redis_url else "memory://"
+_storage_uri = _resolve_redis_storage_uri()
 limiter = Limiter(key_func=user_or_ip_key, storage_uri=_storage_uri)

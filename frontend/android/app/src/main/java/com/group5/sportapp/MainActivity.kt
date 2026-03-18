@@ -1,4 +1,4 @@
-package com.group5.sportapp
+package com.group5.sportconnect
 
 import android.os.Build
 import android.os.Bundle
