@@ -24,9 +24,7 @@
         "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
       },
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -42,9 +40,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "output": "static"
