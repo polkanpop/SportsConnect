@@ -1,5 +1,5 @@
 import Constants from 'expo-constants'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleProp, View, ViewStyle } from 'react-native'
 import Mapbox from '@rnmapbox/maps'
 
@@ -28,6 +28,26 @@ export type DynamicMapMarker = {
   pinColor?: string
 }
 
+type GeoFeature = {
+  type: 'Feature'
+  id: string
+  geometry: {
+    type: 'Point'
+    coordinates: [number, number]
+  }
+  properties: {
+    markerId: string | number
+    title?: string
+    description?: string
+    pinColor?: string
+  }
+}
+
+type GeoFeatureCollection = {
+  type: 'FeatureCollection'
+  features: GeoFeature[]
+}
+
 export type DynamicMapProps = {
   style: StyleProp<ViewStyle>
   initialRegion?: Region
@@ -35,6 +55,7 @@ export type DynamicMapProps = {
   initialZoom?: number
   animateOnLoad?: boolean
   region?: Region
+  cameraCommandId?: number
   markers?: DynamicMapMarker[]
   showUserLocation?: boolean
   showsUserLocation?: boolean
@@ -66,6 +87,7 @@ export function DynamicMap({
   initialZoom,
   animateOnLoad,
   region,
+  cameraCommandId,
   markers = [],
   showUserLocation,
   showsUserLocation = false,
@@ -75,8 +97,8 @@ export function DynamicMap({
   customMapStyle,
   scrollEnabled = true,
   zoomEnabled = true,
-  rotateEnabled = true,
-  pitchEnabled = true,
+  rotateEnabled = false,
+  pitchEnabled = false,
   onMarkerPress,
   onPress,
   onRegionChangeComplete,
@@ -88,6 +110,9 @@ export function DynamicMap({
   void customMapStyle
 
   const [mapReady, setMapReady] = useState(false)
+  const cameraRef = useRef<Mapbox.Camera>(null)
+  const lastAppliedCameraCommandRef = useRef<number | undefined>(undefined)
+  const commandedRegionRef = useRef<Region | undefined>(undefined)
   const executionEnvironment = readExecutionEnvironment()
   const isExpoGo = executionEnvironment === 'storeClient'
   const goongStyleUrl = buildGoongStyleUrl(GOONG_MAPTILES_KEY)
@@ -99,18 +124,60 @@ export function DynamicMap({
   }, [initialCenter, initialZoom])
   const resolvedInitialRegion = initialRegion ?? initialRegionFromCenter
   const currentRegion = region ?? resolvedInitialRegion
+  const initialCameraRegionRef = useRef<Region | undefined>(currentRegion)
   const shouldShowUserLocation = showUserLocation ?? showsUserLocation
   const validMarkers = useMemo(
     () => markers.filter((m) => Number.isFinite(m.coordinate.latitude) && Number.isFinite(m.coordinate.longitude)),
     [markers],
   )
+  const markerFeatures = useMemo<GeoFeatureCollection>(() => ({
+    type: 'FeatureCollection',
+    features: validMarkers.map((marker) => ({
+      type: 'Feature',
+      id: String(marker.id),
+      geometry: {
+        type: 'Point',
+        coordinates: toMapboxCoordinate(marker.coordinate),
+      },
+      properties: {
+        markerId: marker.id,
+        title: marker.title,
+        description: marker.description,
+        pinColor: marker.pinColor,
+      },
+    })),
+  }), [validMarkers])
 
   useEffect(() => {
     if (!canRenderMapbox) return
     Mapbox.setAccessToken(MAPBOX_PUBLIC_TOKEN)
   }, [canRenderMapbox])
 
-  if (!canRenderMapbox || !currentRegion) {
+  useEffect(() => {
+    if (!region) return
+    commandedRegionRef.current = region
+  }, [region])
+
+  useEffect(() => {
+    if (!mapReady) return
+    if (cameraCommandId == null) return
+    if (lastAppliedCameraCommandRef.current === cameraCommandId) return
+
+    const target = commandedRegionRef.current
+    if (!target) return
+
+    lastAppliedCameraCommandRef.current = cameraCommandId
+    cameraRef.current?.setCamera({
+      centerCoordinate: toMapboxCoordinate({
+        latitude: target.latitude,
+        longitude: target.longitude,
+      }),
+      zoomLevel: regionToZoom(target),
+      animationDuration: 1300,
+    })
+  }, [cameraCommandId, mapReady])
+
+  if (!canRenderMapbox || !initialCameraRegionRef.current) {
     return <View style={style} />
   }
 
@@ -140,33 +207,44 @@ export function DynamicMap({
       } : undefined}
     >
       <Mapbox.Camera
-        centerCoordinate={toMapboxCoordinate({
-          latitude: currentRegion.latitude,
-          longitude: currentRegion.longitude,
-        })}
-        zoomLevel={regionToZoom(currentRegion)}
+        ref={cameraRef}
+        defaultSettings={{
+          centerCoordinate: toMapboxCoordinate({
+            latitude: initialCameraRegionRef.current.latitude,
+            longitude: initialCameraRegionRef.current.longitude,
+          }),
+          zoomLevel: regionToZoom(initialCameraRegionRef.current),
+        }}
       />
       {shouldShowUserLocation ? <Mapbox.UserLocation visible /> : null}
-      {mapReady && validMarkers.map((marker) => (
-        <Mapbox.PointAnnotation
-          key={String(marker.id)}
-          id={String(marker.id)}
-          coordinate={toMapboxCoordinate(marker.coordinate)}
-          title={marker.title}
-          onSelected={() => onMarkerPress?.(marker.id)}
+      {mapReady ? (
+        <Mapbox.ShapeSource
+          id="court-markers-source"
+          shape={markerFeatures as any}
+          onPress={onMarkerPress ? (event: any) => {
+            const feature = Array.isArray(event?.features) ? event.features[0] : null
+            const markerId = feature?.properties?.markerId
+            if (markerId != null) onMarkerPress(markerId)
+          } : undefined}
         >
-          <View
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: 8,
-              backgroundColor: marker.pinColor ?? '#FF6B00',
-              borderWidth: 2,
-              borderColor: '#FFFFFF',
+          <Mapbox.Images
+            images={{
+              courtMarker: require('../../assets/icons/map_markers.png'),
             }}
           />
-        </Mapbox.PointAnnotation>
-      ))}
+          <Mapbox.SymbolLayer
+            id="court-markers-symbol"
+            style={{
+              iconImage: 'courtMarker',
+              iconAllowOverlap: true,
+              iconIgnorePlacement: true,
+              iconSize: 0.05,
+              iconAnchor: 'bottom',
+              iconOpacity: 1,
+            }}
+          />
+        </Mapbox.ShapeSource>
+      ) : null}
     </Mapbox.MapView>
   )
 }

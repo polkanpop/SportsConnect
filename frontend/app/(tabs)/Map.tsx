@@ -12,6 +12,7 @@
     FavouriteCourt,
     CourtInfoRow,
     listCourtInfo,
+    listCourtInfoSpatial,
     type PlayingCourtRow,
     getDistanceMatrixCached,
     peekDistanceMatrixCached,
@@ -136,6 +137,36 @@
     };
   }
 
+  function regionToBounds(region: Region) {
+    const halfLat = Math.max(0, region.latitudeDelta / 2)
+    const halfLng = Math.max(0, region.longitudeDelta / 2)
+    return {
+      minLat: region.latitude - halfLat,
+      maxLat: region.latitude + halfLat,
+      minLng: region.longitude - halfLng,
+      maxLng: region.longitude + halfLng,
+    }
+  }
+
+  function sameMarkerList(a: MarkerType[], b: MarkerType[]) {
+    if (a === b) return true
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i += 1) {
+      const x = a[i]
+      const y = b[i]
+      if (
+        x.id !== y.id ||
+        x.courtid !== y.courtid ||
+        x.latitude !== y.latitude ||
+        x.longitude !== y.longitude ||
+        x.isFavorite !== y.isFavorite
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+
   // Format helpers
   function pad(n: number) { return n < 10 ? `0${n}` : `${n}` }
   function toDateString(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
@@ -250,11 +281,12 @@
     const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts (courtinfoid assumed)
     const [favouriteRecords, setFavouriteRecords] = useState<FavouriteCourt[]>([]); // full favourite rows
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
-    // Zoom stages: 0 = fully out (baseline region), 1 = mid zoom, 2 = max zoom (shows ZoomOut icon)
-    const [zoomStage, setZoomStage] = useState<number>(0);
     const [mapRegion, setMapRegion] = useState<Region>(INITIAL_REGION);
+    const [cameraCommandId, setCameraCommandId] = useState(0);
     const [calendarModalVisible, setCalendarModalVisible] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
+    const mapRegionRef = useRef<Region>(INITIAL_REGION);
+    const favoriteIdsRef = useRef<number[]>([]);
 
     // Approximate zoom stages for DynamicMap region deltas.
     const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
@@ -295,16 +327,28 @@
         latitudeDelta: delta.latitudeDelta,
         longitudeDelta: delta.longitudeDelta,
       });
+      mapRegionRef.current = nextRegion;
       setMapRegion(nextRegion);
-      if (animated) {
-        // Keep behavior parity with prior camera animations.
-        setTimeout(() => setMapRegion(nextRegion), 0);
-      }
+      if (animated) setCameraCommandId((prev) => prev + 1);
     }, []);
 
     const handleRegionChangeComplete = useCallback((region: Region) => {
       const clamped = clampRegionToVietnam(region);
+      mapRegionRef.current = clamped;
       setMapRegion(clamped);
+    }, []);
+
+    useEffect(() => {
+      mapRegionRef.current = mapRegion;
+    }, [mapRegion]);
+
+    useEffect(() => {
+      favoriteIdsRef.current = favoriteIds;
+    }, [favoriteIds]);
+
+    const setMarkerStatesIfChanged = useCallback((nextMarkers: MarkerType[]) => {
+      setMarkers((prev) => (sameMarkerList(prev, nextMarkers) ? prev : nextMarkers));
+      setFilteredMarkers((prev) => (sameMarkerList(prev, nextMarkers) ? prev : nextMarkers));
     }, []);
 
     // Snap points for the BottomSheet
@@ -542,9 +586,26 @@
           .map(r => Number((r as any)?.courtid))
           .filter((n): n is number => Number.isFinite(n));
         const favIdSet = new Set(favIds);
+        favoriteIdsRef.current = favIds;
         setFavoriteIds(favIds);
-        setMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) })));
-        setFilteredMarkers(prev => prev.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) })));
+        setMarkers(prev => {
+          let changed = false;
+          const next = prev.map((m) => {
+            const nextFav = favIdSet.has(Number((m as any).courtid));
+            if (m.isFavorite !== nextFav) changed = true;
+            return changed ? { ...m, isFavorite: nextFav } : m;
+          });
+          return changed ? next : prev;
+        });
+        setFilteredMarkers(prev => {
+          let changed = false;
+          const next = prev.map((m) => {
+            const nextFav = favIdSet.has(Number((m as any).courtid));
+            if (m.isFavorite !== nextFav) changed = true;
+            return changed ? { ...m, isFavorite: nextFav } : m;
+          });
+          return changed ? next : prev;
+        });
       } catch (e) {
         console.warn('[Map] failed to load favouritecourts', e);
       }
@@ -571,18 +632,57 @@
       try {
         const cached = await getCache<CourtInfoRow[]>('cache:courtinfo:v1');
         let rows: CourtInfoRow[] = Array.isArray(cached) ? cached : [];
+        let normalized: MarkerType[] = [];
 
-        // Only hit network if cache missing OR explicitly forced.
+        // Phase 1: load visible courts first using spatial bounds.
         if (forceFresh || !rows.length) {
-          const fresh = await listCourtInfo();
-          rows = fresh;
-          // Longer TTL prevents refetch when simply hopping between tabs.
-          await setCache('cache:courtinfo:v1', fresh, 60 * 1000);
+          const bounds = regionToBounds(mapRegionRef.current)
+          const phaseOneRows = await listCourtInfoSpatial({
+            minLat: bounds.minLat,
+            maxLat: bounds.maxLat,
+            minLng: bounds.minLng,
+            maxLng: bounds.maxLng,
+            limit: 350,
+          })
+          rows = Array.isArray(phaseOneRows) ? phaseOneRows : []
+          normalized = normalizeCourtInfoRows(rows)
+          setMarkerStatesIfChanged(normalized)
+
+          // Phase 2: silently fetch and merge the full dataset.
+          void (async () => {
+            try {
+              const fullRows = await listCourtInfo()
+              if (!Array.isArray(fullRows)) return
+              await setCache('cache:courtinfo:v1', fullRows, 60 * 1000)
+              const mergedMap = new Map<number, CourtInfoRow>()
+              for (const row of rows) {
+                const key = Number((row as any)?.courtinfoid)
+                if (Number.isFinite(key)) mergedMap.set(key, row)
+              }
+              for (const row of fullRows) {
+                const key = Number((row as any)?.courtinfoid)
+                if (Number.isFinite(key)) mergedMap.set(key, row)
+              }
+              const mergedRows = Array.from(mergedMap.values())
+              const favSet = new Set(favoriteIdsRef.current)
+              const mergedNormalized = normalizeCourtInfoRows(mergedRows).map((m) => ({
+                ...m,
+                isFavorite: favSet.has(Number((m as any).courtid)),
+              }))
+              setMarkerStatesIfChanged(mergedNormalized)
+            } catch (phaseTwoError) {
+              console.warn('[Map] background phase-2 load failed', phaseTwoError)
+            }
+          })()
+        } else {
+          normalized = normalizeCourtInfoRows(rows)
         }
 
-        let normalized: MarkerType[] = normalizeCourtInfoRows(rows);
-        setMarkers(normalized);
-        setFilteredMarkers(normalized);
+        if (!normalized.length && rows.length) {
+          normalized = normalizeCourtInfoRows(rows)
+        }
+
+        setMarkerStatesIfChanged(normalized);
 
         // Apply favourites (cheap + cached)
         const numericUserId = await getCurrentNumericUserId();
@@ -597,6 +697,7 @@
             favIds = favRows
               .map(r => Number((r as any)?.courtid))
               .filter((n): n is number => Number.isFinite(n));
+            favoriteIdsRef.current = favIds;
             setFavoriteIds(favIds);
           } catch (e) {
             console.warn('[Map] failed to load favouritecourts', e);
@@ -605,8 +706,7 @@
         if (favIds.length) {
           const favIdSet = new Set(favIds);
           normalized = normalized.map(m => ({ ...m, isFavorite: favIdSet.has(Number((m as any).courtid)) }));
-          setMarkers(normalized);
-          setFilteredMarkers(normalized);
+          setMarkerStatesIfChanged(normalized);
         }
       } catch (e: any) {
         setErrorMarkers(e.message || String(e));
@@ -615,7 +715,7 @@
       } finally {
         if (showLoading) setLoadingMarkers(false);
       }
-    }, [getCurrentNumericUserId, normalizeCourtInfoRows]);
+    }, [getCurrentNumericUserId, normalizeCourtInfoRows, setMarkerStatesIfChanged]);
 
     const venueOptions = useMemo(() => {
       const set = new Set<string>();
@@ -690,10 +790,8 @@
         }
 
         focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
-        setZoomStage(2);
       } else {
         focusMapRegion(userLocation.coords.latitude, userLocation.coords.longitude, 2);
-        setZoomStage(2);
       }
     };
 
@@ -707,29 +805,8 @@
     // Favorite state derived from favoriteIds
     setIsFavorite(favoriteIds.includes(marker.courtid));
       focusMapRegion(marker.latitude, marker.longitude, 2);
-      setZoomStage(2); // go to max zoom when selecting a marker
       // open bottom sheet
       bottomSheetRef.current?.snapToIndex(0);
-    };
-
-    // Cycle through zoom levels (0 -> 1 -> 2 -> 0) while updating icon state
-    const handleZoomToggle = () => {
-      // Determine next stage
-      const nextStage = zoomStage < 2 ? zoomStage + 1 : 0; // cycle back out after max
-      setZoomStage(nextStage);
-
-      // Determine center focus priority: selected marker > user location > current camera center (fallback INITIAL_REGION)
-      let centerLat = INITIAL_REGION.latitude;
-      let centerLng = INITIAL_REGION.longitude;
-      if (selectedMarker) {
-        centerLat = selectedMarker.latitude;
-        centerLng = selectedMarker.longitude;
-      } else if (userLocation) {
-        centerLat = userLocation.coords.latitude;
-        centerLng = userLocation.coords.longitude;
-      }
-
-      focusMapRegion(centerLat, centerLng, nextStage);
     };
 
     // Handle search input change with debounce
@@ -1020,7 +1097,7 @@
             <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setOpenDropdown(null); }}>
               <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - CLOUD SYNC v6</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - FINAL POLISH v10</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1028,10 +1105,15 @@
                   style={styles.map}
                   initialRegion={INITIAL_REGION}
                   region={mapRegion}
+                  cameraCommandId={cameraCommandId}
+                  scrollEnabled={true}
+                  zoomEnabled={true}
                   showsUserLocation={true}
                   showsPointsOfInterest={false}
                   showsBuildings={false}
                   showsIndoors={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
                   onRegionChangeComplete={handleRegionChangeComplete}
                   markers={filteredMarkers.map((marker): DynamicMapMarker => ({
                     id: marker.id,
@@ -1360,20 +1442,6 @@
                   <View style={styles.searchResults}>
                     <Text style={styles.noResultsText}>No courts found</Text>
                   </View>
-                )}
-
-                {/* Zoom Toggle Button (left side, parallel to Google Maps button) */}
-                {overlaysVisible && (
-                  <TouchableOpacity
-                    style={styles.zoomToggleButton}
-                    onPress={handleZoomToggle}
-                    accessibilityLabel={zoomStage === 2 ? 'Zoom out' : 'Zoom in'}
-                  >
-                    <Image
-                      source={zoomStage === 2 ? ICONS.ZoomOut : ICONS.zoomIn}
-                      style={styles.zoomIcon}
-                    />
-                  </TouchableOpacity>
                 )}
 
                 {/* My Location Button */}
@@ -2356,25 +2424,6 @@
     myLocationIcon: {
       width: 24,
       height: 24,
-    },
-    // Zoom toggle button
-    zoomToggleButton: {
-      position: 'absolute',
-      bottom: 360,
-      left: 20,
-      backgroundColor: COLORS.white,
-      borderRadius: 50,
-      padding: 12,
-      shadowColor: '#000',
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 5,
-      zIndex: 20,
-    },
-    zoomIcon: {
-      width: 24,
-      height: 24,
-      resizeMode: 'contain',
     },
     // Search row containing search bar + favorite toggle
     searchOverlayWrapper: {
