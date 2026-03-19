@@ -1116,9 +1116,7 @@
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <SafeAreaView style={styles.container}>
-            {/* Dismiss keyboard on tapping outside */}
-            <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setOpenDropdown(null); }}>
-              <View style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
                   <Text style={styles.otaProofText}>OTA WORKING - FINAL POLISH v10</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
@@ -1904,7 +1902,6 @@
                   )}
                 </BottomSheet>
               </View>
-            </TouchableWithoutFeedback>
           </SafeAreaView>
           <Modal
             visible={calendarModalVisible}

@@ -1019,6 +1019,31 @@ export default function DetailsPage() {
     createdSessionQuery.data?.status,
   ])
 
+  const isRecordCancelled = useMemo(() => {
+    const normalize = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '')
+    const isCancelled = (v: any) => normalize(v).includes('cancel')
+
+    if (parsed.kind === 'court_booking') {
+      return isCancelled((courtBookingQuery.data as any)?.bookingstatus ?? (courtBookingQuery.data as any)?.status)
+    }
+    if (parsed.kind === 'event_booking') {
+      return isCancelled((eventBookingQuery.data as any)?.bookingstatus ?? (eventBookingQuery.data as any)?.status)
+    }
+    if (parsed.kind === 'session_booking') {
+      return isCancelled((sessionBookingQuery.data as any)?.bookingstatus ?? (sessionBookingQuery.data as any)?.status)
+    }
+    if (parsed.kind === 'created_event') return isCancelled((createdEventQuery.data as any)?.status)
+    if (parsed.kind === 'created_session') return isCancelled((createdSessionQuery.data as any)?.status)
+    return false
+  }, [
+    parsed.kind,
+    courtBookingQuery.data,
+    eventBookingQuery.data,
+    sessionBookingQuery.data,
+    createdEventQuery.data,
+    createdSessionQuery.data,
+  ])
+
   const canReview = useMemo(() => {
     const normalize = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '')
     const isCompleted = (v: any) => {
@@ -1029,12 +1054,16 @@ export default function DetailsPage() {
       const bookingStatus = (courtBookingQuery.data as any)?.bookingstatus ?? (courtBookingQuery.data as any)?.status
       const owneridRaw = Number((singleCourtQuery.data as any)?.ownerid)
       const isOwner = Number.isFinite(owneridRaw) && Number.isFinite(userId) && owneridRaw === Number(userId)
-      return isCompleted(bookingStatus) && !isOwner
+      return isCompleted(bookingStatus) && !isOwner && !isRecordCancelled
     }
-    if (parsed.kind === 'event_booking') return normalize(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete')
-    if (parsed.kind === 'session_booking') return normalize(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete')
+    if (parsed.kind === 'event_booking') {
+      return normalize(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete') && !isRecordCancelled
+    }
+    if (parsed.kind === 'session_booking') {
+      return normalize(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete') && !isRecordCancelled
+    }
     return false
-  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data, singleCourtQuery.data, userId])
+  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data, singleCourtQuery.data, userId, isRecordCancelled])
 
   const reviewNavParams = useMemo(() => {
     if (parsed.kind === 'court_booking') {
@@ -1420,7 +1449,7 @@ export default function DetailsPage() {
               pressed && canCancel && !busy && !cancelMutation.isPending && styles.cancelBtnPressed,
             ]}
           >
-            <Text style={styles.cancelBtnText}>Cancel</Text>
+            <Text style={styles.cancelBtnText}>{isRecordCancelled ? 'Cancelled' : 'Cancel'}</Text>
           </Pressable>
           {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
             <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>

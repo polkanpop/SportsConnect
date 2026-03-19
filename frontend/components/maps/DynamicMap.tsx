@@ -173,7 +173,7 @@ export function DynamicMap({
         longitude: target.longitude,
       }),
       zoomLevel: regionToZoom(target),
-      animationDuration: 350,
+      animationDuration: 900,
     })
   }, [cameraCommandId, mapReady])
 
@@ -241,8 +241,7 @@ export function DynamicMap({
               iconImage: 'courtMarker',
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
-              // 225px source marker scaled to exactly 40px visual size.
-              iconSize: 0.178,
+              iconSize: 0.07,
               iconColor: ['coalesce', ['get', 'pinColor'], '#FF5733'],
               iconAnchor: 'bottom',
               iconOpacity: 1,

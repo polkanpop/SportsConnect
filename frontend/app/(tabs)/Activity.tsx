@@ -642,7 +642,7 @@ export default function ActivityPage() {
           </TouchableOpacity>
         )}
 
-        {item.mode === 'Booking' && item.isDbCompleted && typeof item.targetId === 'number' && (
+        {item.mode === 'Booking' && item.status !== 'Cancelled' && item.isDbCompleted && typeof item.targetId === 'number' && (
           <TouchableOpacity
             style={styles.reviewBtn}
             onPress={(e) => {
