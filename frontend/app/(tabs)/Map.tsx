@@ -29,7 +29,6 @@
     Dimensions,
     FlatList,
     Image,
-    Keyboard,
     Modal,
     Pressable,
     RefreshControl,
@@ -38,14 +37,13 @@
     Text,
     TextInput,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     View,
     useWindowDimensions,
   } from "react-native";
   
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
-  import DynamicMap, { type DynamicMapMarker, type DynamicMapRef } from '@/components/maps/DynamicMap';
+  import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -256,9 +254,12 @@
     const [calendarModalVisible, setCalendarModalVisible] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
 
-    // Zoom levels for the three-stage cycle (country → city → street)
-    const ZOOM_STAGES = [5, 10, 15] as const;
-    const dynamicMapRef = useRef<DynamicMapRef>(null);
+    // Approximate zoom stages for DynamicMap region deltas.
+    const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
+      { latitudeDelta: INITIAL_REGION.latitudeDelta, longitudeDelta: INITIAL_REGION.longitudeDelta },
+      { latitudeDelta: 0.4, longitudeDelta: 0.4 },
+      { latitudeDelta: 0.08, longitudeDelta: 0.08 },
+    ]);
 
     // Filter states
     const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | "distance" | null>(null);
@@ -284,8 +285,24 @@
     const inFlightDistanceIdsRef = useRef<Set<number>>(new Set());
     const [distanceMatrixDeferredReady, setDistanceMatrixDeferredReady] = useState(false);
 
+    const focusMapRegion = useCallback((latitude: number, longitude: number, stage: number, animated = true) => {
+      const delta = ZOOM_STAGE_DELTAS.current[Math.max(0, Math.min(stage, ZOOM_STAGE_DELTAS.current.length - 1))];
+      const nextRegion = clampRegionToVietnam({
+        latitude,
+        longitude,
+        latitudeDelta: delta.latitudeDelta,
+        longitudeDelta: delta.longitudeDelta,
+      });
+      setMapRegion(nextRegion);
+      if (animated) {
+        // Keep behavior parity with prior camera animations.
+        setTimeout(() => setMapRegion(nextRegion), 0);
+      }
+    }, []);
+
     const handleRegionChangeComplete = useCallback((region: Region) => {
-      setMapRegion(region);
+      const clamped = clampRegionToVietnam(region);
+      setMapRegion(clamped);
     }, []);
 
     // Snap points for the BottomSheet
@@ -634,30 +651,35 @@
 
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location);
-          // DynamicMap will auto-swoop to userLocation when prop changes
+
+          if (location) {
+            focusMapRegion(location.coords.latitude, location.coords.longitude, 1);
+          }
         } catch (e) {
           console.log("Location error:", e);
         }
       })();
-    }, []);
+    }, [focusMapRegion]);
 
     // Center map on user’s current location when pressing the “My Location” button
     const handleMyLocationPress = async () => {
-      let loc = userLocation;
-      if (!loc) {
+      if (!userLocation) {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           console.log("Permission denied");
           return;
         }
-        loc = await Location.getCurrentPositionAsync({});
-        setUserLocation(loc);
+
+        // Fetch location if not already available
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location);
+
+        focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
+        setZoomStage(2);
+      } else {
+        focusMapRegion(userLocation.coords.latitude, userLocation.coords.longitude, 2);
+        setZoomStage(2);
       }
-      dynamicMapRef.current?.flyTo(
-        { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
-        ZOOM_STAGES[2],
-      );
-      setZoomStage(2);
     };
 
     // Handle marker when pressed
@@ -666,17 +688,22 @@
         bottomSheetRef.current?.snapToIndex(0);
         return;
       }
-      setSelectedMarker(marker); // DynamicMap auto-flies via selectedCourtId effect
-      setIsFavorite(favoriteIds.includes(marker.courtid));
-      setZoomStage(2);
+      setSelectedMarker(marker);
+    // Favorite state derived from favoriteIds
+    setIsFavorite(favoriteIds.includes(marker.courtid));
+      focusMapRegion(marker.latitude, marker.longitude, 2);
+      setZoomStage(2); // go to max zoom when selecting a marker
+      // open bottom sheet
       bottomSheetRef.current?.snapToIndex(0);
     };
 
     // Cycle through zoom levels (0 -> 1 -> 2 -> 0) while updating icon state
     const handleZoomToggle = () => {
-      const nextStage = zoomStage < 2 ? zoomStage + 1 : 0;
+      // Determine next stage
+      const nextStage = zoomStage < 2 ? zoomStage + 1 : 0; // cycle back out after max
       setZoomStage(nextStage);
 
+      // Determine center focus priority: selected marker > user location > current camera center (fallback INITIAL_REGION)
       let centerLat = INITIAL_REGION.latitude;
       let centerLng = INITIAL_REGION.longitude;
       if (selectedMarker) {
@@ -687,10 +714,7 @@
         centerLng = userLocation.coords.longitude;
       }
 
-      dynamicMapRef.current?.flyTo(
-        { latitude: centerLat, longitude: centerLng },
-        ZOOM_STAGES[nextStage],
-      );
+      focusMapRegion(centerLat, centerLng, nextStage);
     };
 
     // Handle search input change with debounce
@@ -703,9 +727,10 @@
 
     // Handle tapping a search result item
     const handleFlatListItemPress = (marker: MarkerType) => {
-      setSelectedMarker(marker); // DynamicMap auto-flies via selectedCourtId effect
-      setFlatListVisible(false);
-      bottomSheetRef.current?.snapToIndex(0);
+      setSelectedMarker(marker); // Set the selected marker
+      setFlatListVisible(false); // Hide the FlatList
+      focusMapRegion(marker.latitude, marker.longitude, 2);
+      bottomSheetRef.current?.snapToIndex(0); // Open BottomSheet
     };
 
     // Update bottom sheet index on change
@@ -976,31 +1001,32 @@
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <SafeAreaView style={styles.container}>
-            {/* Dismiss keyboard on tapping outside */}
-            <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setOpenDropdown(null); }}>
               <View style={{ flex: 1 }}>
+                <View style={styles.otaProofBanner}>
+                  <Text style={styles.otaProofText}>OTA WORKING - MAPBOX FIXED v3</Text>
+                </View>
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
-                  ref={dynamicMapRef}
                   style={styles.map}
+                  initialRegion={INITIAL_REGION}
+                  region={mapRegion}
+                  showsUserLocation={true}
+                  showsPointsOfInterest={false}
+                  showsBuildings={false}
+                  showsIndoors={false}
+                  selectedCourtId={selectedMarker?.id ?? null}
+                  favoriteCourtIds={favoriteIds}
+                  onRegionChangeComplete={handleRegionChangeComplete}
                   markers={filteredMarkers.map((marker): DynamicMapMarker => ({
                     id: marker.id,
+                    courtId: marker.courtid,
                     coordinate: { latitude: marker.latitude, longitude: marker.longitude },
                     title: marker.name,
                     description: marker.address,
-                    courtId: marker.courtid,
                   }))}
-                  selectedCourtId={selectedMarker?.id ?? null}
-                  favoriteCourtIds={favoriteIds}
-                  userLocation={userLocation
-                    ? { latitude: userLocation.coords.latitude, longitude: userLocation.coords.longitude }
-                    : null
-                  }
-                  showUserLocation
-                  onRegionChangeComplete={handleRegionChangeComplete}
                   onMarkerPress={(markerId) => {
-                    const marker = filteredMarkers.find(m => m.id === markerId);
-                    if (marker) handleMarkerPress(marker);
+                    const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
+                    if (marker) void handleMarkerPress(marker);
                   }}
                   onPress={(coordinate) => {
                     const nearest = filteredMarkers.reduce<{ marker: MarkerType | null; dist: number }>(
@@ -1754,7 +1780,6 @@
                   )}
                 </BottomSheet>
               </View>
-            </TouchableWithoutFeedback>
           </SafeAreaView>
           <Modal
             visible={calendarModalVisible}
@@ -1858,6 +1883,27 @@
   const styles = StyleSheet.create({
     container: {
       flex: 1,
+    },
+    otaProofBanner: {
+      position: 'absolute',
+      top: 8,
+      left: 10,
+      right: 10,
+      zIndex: 999,
+      elevation: 12,
+      backgroundColor: '#ff0000',
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    otaProofText: {
+      color: '#ffffff',
+      fontSize: 18,
+      fontWeight: '900',
+      letterSpacing: 0.6,
+      textAlign: 'center',
     },
     map: {
       flex: 1,
