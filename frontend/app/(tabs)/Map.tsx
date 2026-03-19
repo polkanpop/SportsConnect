@@ -29,6 +29,7 @@
     Dimensions,
     FlatList,
     Image,
+    Keyboard,
     Modal,
     Pressable,
     RefreshControl,
@@ -37,6 +38,7 @@
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
     useWindowDimensions,
   } from "react-native";
@@ -636,6 +638,7 @@
 
     // Request location permissions and fetch user location
     const hasCenteredRef = useRef(false);
+    const firstUserCoordinate = useRef<{ latitude: number; longitude: number } | null>(null);
 
     useEffect(() => {
       (async () => {
@@ -651,6 +654,12 @@
 
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location);
+          if (!firstUserCoordinate.current) {
+            firstUserCoordinate.current = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            };
+          }
 
           if (location) {
             focusMapRegion(location.coords.latitude, location.coords.longitude, 1);
@@ -673,6 +682,12 @@
         // Fetch location if not already available
         const location = await Location.getCurrentPositionAsync({});
         setUserLocation(location);
+        if (!firstUserCoordinate.current) {
+          firstUserCoordinate.current = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          };
+        }
 
         focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
         setZoomStage(2);
@@ -1001,9 +1016,12 @@
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <SafeAreaView style={styles.container}>
+            {/* Dismiss keyboard on tapping outside */}
+            <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setOpenDropdown(null); }}>
               <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - MAPBOX FIXED v3</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - CLOUD SYNC v6</Text>
+                  <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
@@ -1014,19 +1032,23 @@
                   showsPointsOfInterest={false}
                   showsBuildings={false}
                   showsIndoors={false}
-                  selectedCourtId={selectedMarker?.id ?? null}
-                  favoriteCourtIds={favoriteIds}
                   onRegionChangeComplete={handleRegionChangeComplete}
                   markers={filteredMarkers.map((marker): DynamicMapMarker => ({
                     id: marker.id,
-                    courtId: marker.courtid,
                     coordinate: { latitude: marker.latitude, longitude: marker.longitude },
                     title: marker.name,
                     description: marker.address,
+                    pinColor: selectedMarker?.id === marker.id
+                      ? COLORS.green
+                      : marker.isFavorite
+                        ? COLORS.amber200
+                        : COLORS.brandOrangeDeep,
                   }))}
                   onMarkerPress={(markerId) => {
                     const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
-                    if (marker) void handleMarkerPress(marker);
+                    if (marker) {
+                      void handleMarkerPress(marker);
+                    }
                   }}
                   onPress={(coordinate) => {
                     const nearest = filteredMarkers.reduce<{ marker: MarkerType | null; dist: number }>(
@@ -1780,6 +1802,7 @@
                   )}
                 </BottomSheet>
               </View>
+            </TouchableWithoutFeedback>
           </SafeAreaView>
           <Modal
             visible={calendarModalVisible}
@@ -1893,7 +1916,7 @@
       elevation: 12,
       backgroundColor: '#ff0000',
       borderRadius: 12,
-      paddingVertical: 14,
+      paddingVertical: 10,
       paddingHorizontal: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1903,6 +1926,13 @@
       fontSize: 18,
       fontWeight: '900',
       letterSpacing: 0.6,
+      textAlign: 'center',
+    },
+    otaProofSubText: {
+      marginTop: 2,
+      color: '#ffecec',
+      fontSize: 12,
+      fontWeight: '700',
       textAlign: 'center',
     },
     map: {

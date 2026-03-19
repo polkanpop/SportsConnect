@@ -1,6 +1,6 @@
 import Constants from 'expo-constants'
-import React, { useEffect, useMemo, useRef } from 'react'
-import { Image, StyleProp, ViewStyle } from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
+import { StyleProp, View, ViewStyle } from 'react-native'
 import Mapbox from '@rnmapbox/maps'
 
 import { GOONG_MAPTILES_KEY, MAPBOX_PUBLIC_TOKEN } from '@/env'
@@ -18,7 +18,7 @@ type Region = {
   longitudeDelta: number
 }
 
-type MapStyleElement = unknown
+type MapStyleElement = Record<string, unknown>
 
 export type DynamicMapMarker = {
   id: string | number
@@ -26,12 +26,14 @@ export type DynamicMapMarker = {
   title?: string
   description?: string
   pinColor?: string
-  courtId?: number
 }
 
 export type DynamicMapProps = {
-  style?: StyleProp<ViewStyle>
+  style: StyleProp<ViewStyle>
   initialRegion?: Region
+  initialCenter?: Coordinate
+  initialZoom?: number
+  animateOnLoad?: boolean
   region?: Region
   markers?: DynamicMapMarker[]
   showUserLocation?: boolean
@@ -44,12 +46,6 @@ export type DynamicMapProps = {
   zoomEnabled?: boolean
   rotateEnabled?: boolean
   pitchEnabled?: boolean
-  initialCenter?: Coordinate
-  initialZoom?: number
-  animateOnLoad?: boolean
-  selectedCourtId?: string | number | null
-  favoriteCourtIds?: number[]
-  userLocation?: Coordinate | null
   onMarkerPress?: (markerId: string | number) => void
   onPress?: (coordinate: Coordinate) => void
   onRegionChangeComplete?: (region: Region) => void
@@ -66,6 +62,9 @@ function toMapboxCoordinate(coordinate: Coordinate) {
 export function DynamicMap({
   style,
   initialRegion,
+  initialCenter,
+  initialZoom,
+  animateOnLoad,
   region,
   markers = [],
   showUserLocation,
@@ -78,44 +77,41 @@ export function DynamicMap({
   zoomEnabled = true,
   rotateEnabled = true,
   pitchEnabled = true,
-  initialCenter,
-  initialZoom = 15,
-  animateOnLoad = true,
-  selectedCourtId,
-  favoriteCourtIds = [],
-  userLocation,
   onMarkerPress,
   onPress,
   onRegionChangeComplete,
 }: DynamicMapProps) {
-  const cameraRef = useRef<any>(null)
+  void animateOnLoad
+  void showsPointsOfInterest
+  void showsBuildings
+  void showsIndoors
+  void customMapStyle
+
+  const [mapReady, setMapReady] = useState(false)
   const executionEnvironment = readExecutionEnvironment()
   const isExpoGo = executionEnvironment === 'storeClient'
   const goongStyleUrl = buildGoongStyleUrl(GOONG_MAPTILES_KEY)
-  const styleUrl = goongStyleUrl ?? 'mapbox://styles/mapbox/streets-v12'
-  const favoriteIdSet = useMemo(() => new Set(favoriteCourtIds), [favoriteCourtIds])
+  const styleUrl = goongStyleUrl || 'mapbox://styles/mapbox/streets-v12'
+  const canRenderMapbox = !isExpoGo && !!MAPBOX_PUBLIC_TOKEN
+  const initialRegionFromCenter = useMemo(() => {
+    if (!initialCenter) return undefined
+    return zoomToRegion(initialCenter, initialZoom ?? 14)
+  }, [initialCenter, initialZoom])
+  const resolvedInitialRegion = initialRegion ?? initialRegionFromCenter
+  const currentRegion = region ?? resolvedInitialRegion
+  const shouldShowUserLocation = showUserLocation ?? showsUserLocation
+  const validMarkers = useMemo(
+    () => markers.filter((m) => Number.isFinite(m.coordinate.latitude) && Number.isFinite(m.coordinate.longitude)),
+    [markers],
+  )
 
   useEffect(() => {
-    if (isExpoGo) return
-    if (!MAPBOX_PUBLIC_TOKEN) return
+    if (!canRenderMapbox) return
     Mapbox.setAccessToken(MAPBOX_PUBLIC_TOKEN)
-  }, [isExpoGo])
+  }, [canRenderMapbox])
 
-  const fallbackRegion: Region = {
-    latitude: initialCenter?.latitude ?? userLocation?.latitude ?? 10.762622,
-    longitude: initialCenter?.longitude ?? userLocation?.longitude ?? 106.660172,
-    latitudeDelta: animateOnLoad ? 10 : 0.08,
-    longitudeDelta: animateOnLoad ? 10 : 0.08,
-  }
-  const currentRegion = region ?? initialRegion ?? fallbackRegion
-
-  const flyToMarker = (coordinate: Coordinate) => {
-    cameraRef.current?.setCamera({
-      centerCoordinate: toMapboxCoordinate(coordinate),
-      zoomLevel: 16,
-      animationMode: 'flyTo',
-      animationDuration: 500,
-    })
+  if (!canRenderMapbox || !currentRegion) {
+    return <View style={style} />
   }
 
   return (
@@ -126,10 +122,11 @@ export function DynamicMap({
       attributionEnabled={false}
       compassEnabled={false}
       scaleBarEnabled={false}
-      zoomEnabled={true}
-      scrollEnabled={true}
-      rotateEnabled={false}
-      pitchEnabled={false}
+      onDidFinishLoadingMap={() => setMapReady(true)}
+      zoomEnabled={zoomEnabled}
+      scrollEnabled={scrollEnabled}
+      rotateEnabled={rotateEnabled}
+      pitchEnabled={pitchEnabled}
       onPress={onPress ? (feature: any) => {
         const coordinates = feature?.geometry?.coordinates
         if (!Array.isArray(coordinates) || coordinates.length < 2) return
@@ -143,37 +140,32 @@ export function DynamicMap({
       } : undefined}
     >
       <Mapbox.Camera
-        ref={cameraRef}
         centerCoordinate={toMapboxCoordinate({
           latitude: currentRegion.latitude,
           longitude: currentRegion.longitude,
         })}
-        zoomLevel={initialRegion || region ? regionToZoom(currentRegion) : initialZoom}
+        zoomLevel={regionToZoom(currentRegion)}
       />
-      {markers.map((marker) => (
-        (() => {
-          const isSelected = selectedCourtId != null && String(selectedCourtId) === String(marker.id)
-          const isFavorite = marker.courtId != null && favoriteIdSet.has(marker.courtId)
-          const tintColor = isSelected ? '#00FF00' : isFavorite ? '#FFD700' : '#FF6B00'
-
-          return (
-            <Mapbox.PointAnnotation
-              key={String(marker.id)}
-              id={String(marker.id)}
-              coordinate={toMapboxCoordinate(marker.coordinate)}
-              title={marker.title}
-              onSelected={() => {
-                flyToMarker(marker.coordinate)
-                onMarkerPress?.(marker.id)
-              }}
-            >
-              <Image
-                source={require('../../assets/icons/map_markers.png')}
-                style={{ width: 36, height: 36, resizeMode: 'contain', tintColor }}
-              />
-            </Mapbox.PointAnnotation>
-          )
-        })()
+      {shouldShowUserLocation ? <Mapbox.UserLocation visible /> : null}
+      {mapReady && validMarkers.map((marker) => (
+        <Mapbox.PointAnnotation
+          key={String(marker.id)}
+          id={String(marker.id)}
+          coordinate={toMapboxCoordinate(marker.coordinate)}
+          title={marker.title}
+          onSelected={() => onMarkerPress?.(marker.id)}
+        >
+          <View
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 8,
+              backgroundColor: marker.pinColor ?? '#FF6B00',
+              borderWidth: 2,
+              borderColor: '#FFFFFF',
+            }}
+          />
+        </Mapbox.PointAnnotation>
       ))}
     </Mapbox.MapView>
   )
