@@ -284,6 +284,7 @@ async function autoCompletePastStatusesInBackground(payload: {
 		const eventIdsToComplete: number[] = []
 		const sessionIdsToComplete: number[] = []
 		const bookingIdsToComplete: number[] = []
+		const bookingIdsToCancel: number[] = []
 
 		for (const ev of payload.events || []) {
 			if (!shouldAutoCompleteStatus((ev as any).status)) continue
@@ -299,13 +300,16 @@ async function autoCompletePastStatusesInBackground(payload: {
 		}
 		for (const b of payload.bookings || []) {
 			const st = String((b as any).bookingstatus ?? '').trim().toLowerCase()
-			if (st !== 'upcoming') continue
+			if (st !== 'upcoming' && st !== 'pending') continue
 			if (isPastEnd((b as any).end_timestamp, (b as any).start_timestamp)) {
-				if (typeof (b as any).courtbookingid === 'number') bookingIdsToComplete.push((b as any).courtbookingid)
+				if (typeof (b as any).courtbookingid === 'number') {
+					if (st === 'pending') bookingIdsToCancel.push((b as any).courtbookingid)
+					else bookingIdsToComplete.push((b as any).courtbookingid)
+				}
 			}
 		}
 
-		if (!eventIdsToComplete.length && !sessionIdsToComplete.length && !bookingIdsToComplete.length) return
+		if (!eventIdsToComplete.length && !sessionIdsToComplete.length && !bookingIdsToComplete.length && !bookingIdsToCancel.length) return
 
 		const ops: Promise<any>[] = []
 		for (const id of eventIdsToComplete) {
@@ -332,6 +336,15 @@ async function autoCompletePastStatusesInBackground(payload: {
 					method: 'PATCH',
 					body: JSON.stringify({ bookingstatus: 'completed' }),
 					debugLabel: 'autoCompleteCourtBooking',
+				})
+			)
+		}
+		for (const id of bookingIdsToCancel) {
+			ops.push(
+				request(`/courtbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'cancelled', status: 'cancelled' }),
+					debugLabel: 'autoCancelPendingCourtBooking',
 				})
 			)
 		}
@@ -1028,6 +1041,22 @@ export async function listCourtInfo(opts?: { compact?: boolean; limit?: number; 
 	const suffix = qs.toString() ? `?${qs.toString()}` : ''
 	const data = await request(`/courtinfo${suffix}`, { debugLabel: opts?.compact ? 'listCourtInfo.compact' : 'listCourtInfo' })
 	return Array.isArray(data) ? data as CourtInfoRow[] : []
+}
+
+// Backward-compatible helper retained for Map tab callers.
+// The backend currently exposes listCourtInfo; spatial params are accepted but not server-filtered here.
+export async function listCourtInfoSpatial(opts?: {
+	minLat?: number
+	maxLat?: number
+	minLng?: number
+	maxLng?: number
+	limit?: number
+}): Promise<CourtInfoRow[]> {
+	void opts?.minLat
+	void opts?.maxLat
+	void opts?.minLng
+	void opts?.maxLng
+	return listCourtInfo({ limit: opts?.limit })
 }
 
 export async function listCourtInfoByCourtIdsCached(courtids: number[]): Promise<CourtInfoRow[]> {

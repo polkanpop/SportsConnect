@@ -166,6 +166,8 @@ const TabLayout = () => {
   return (
     <Tabs
       screenOptions={{
+        lazy: true,
+        freezeOnBlur: true,
         tabBarShowLabel: false,
         tabBarBackground: () => (width > 0 ? <TabBarBackground width={width} height={tabBgHeight} /> : null),
         tabBarStyle: {

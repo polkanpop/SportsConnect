@@ -31,7 +31,9 @@
     FlatList,
     Image,
     Keyboard,
+    Linking,
     Modal,
+    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -809,6 +811,27 @@
       bottomSheetRef.current?.snapToIndex(0);
     };
 
+    const handleOpenGoogleMaps = useCallback(async () => {
+      if (!selectedMarker) return;
+      const latitude = Number(selectedMarker.latitude);
+      const longitude = Number(selectedMarker.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+      const encodedLabel = encodeURIComponent(selectedMarker.name || 'Destination');
+      const webUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      const nativeUrl = Platform.OS === 'ios'
+        ? `comgooglemaps://?q=${latitude},${longitude}`
+        : `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodedLabel})`;
+
+      try {
+        const canOpenNative = await Linking.canOpenURL(nativeUrl);
+        await Linking.openURL(canOpenNative ? nativeUrl : webUrl);
+      } catch (error) {
+        console.warn('[Map] failed to open native maps URL, fallback to web', error);
+        await Linking.openURL(webUrl);
+      }
+    }, [selectedMarker]);
+
     // Handle search input change with debounce
     // Called whenever search text changes
     // Update immediately so filtering + dropdown always responds.
@@ -1548,6 +1571,17 @@
                         <Text style={styles.markerAddressLabel}>Address: </Text>
                         {selectedMarker.address}
                       </Text>
+
+                      <TouchableOpacity
+                        style={styles.googleMapsButton}
+                        onPress={() => {
+                          void handleOpenGoogleMaps();
+                        }}
+                        activeOpacity={0.85}
+                        accessibilityLabel="Open in Google Maps"
+                      >
+                        <Text style={styles.googleMapsButtonText}>Open in Google Maps</Text>
+                      </TouchableOpacity>
 
                       {/* Venue Tags (moved under address) */}
                       <View style={styles.sheetTagRow}>
@@ -2317,6 +2351,19 @@
       textAlign: "left",
       marginTop: 10,
       marginBottom: 16,
+    },
+    googleMapsButton: {
+      backgroundColor: COLORS.bootstrapBlue,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 10,
+      marginBottom: 14,
+      alignSelf: 'flex-start',
+    },
+    googleMapsButtonText: {
+      color: COLORS.white,
+      fontSize: 14,
+      fontWeight: '700',
     },
     markerAddressLabel: {
       fontWeight: 'bold',

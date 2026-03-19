@@ -173,7 +173,7 @@ export function DynamicMap({
         longitude: target.longitude,
       }),
       zoomLevel: regionToZoom(target),
-      animationDuration: 1300,
+      animationDuration: 350,
     })
   }, [cameraCommandId, mapReady])
 
@@ -229,7 +229,10 @@ export function DynamicMap({
         >
           <Mapbox.Images
             images={{
-              courtMarker: require('../../assets/icons/map_markers.png'),
+              courtMarker: {
+                image: require('../../assets/icons/map_markers.png'),
+                sdf: true,
+              },
             }}
           />
           <Mapbox.SymbolLayer
@@ -238,7 +241,9 @@ export function DynamicMap({
               iconImage: 'courtMarker',
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
-              iconSize: 0.05,
+              // 225px source marker scaled to exactly 40px visual size.
+              iconSize: 0.178,
+              iconColor: ['coalesce', ['get', 'pinColor'], '#FF5733'],
               iconAnchor: 'bottom',
               iconOpacity: 1,
             }}

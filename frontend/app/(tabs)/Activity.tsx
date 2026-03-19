@@ -31,6 +31,8 @@ type UnifiedBooking = {
   endTimestamp?: string | null;
   /** Entity ID used for review submissions (courtid | eventid | sessionid) */
   targetId?: number;
+  /** True only when DB status field explicitly says completed. */
+  isDbCompleted?: boolean;
 };
 
 // Function to get the day of the week from a date string
@@ -109,10 +111,17 @@ const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking["
   };
 
   const picked = pick(statusRaw);
+  const isPending = typeof statusRaw === 'string' && statusRaw.toLowerCase().includes('pending');
   const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
 
-  // Authoritative rule: past => Completed (unless Cancelled)
-  if (isPast) return picked === 'Cancelled' ? 'Cancelled' : 'Completed';
+  // Authoritative rules:
+  // - Past + pending => Cancelled
+  // - Past + not cancelled => Completed
+  if (isPast) {
+    if (picked === 'Cancelled') return 'Cancelled';
+    if (isPending) return 'Cancelled';
+    return 'Completed';
+  }
 
   if (picked) return picked;
   return 'Upcoming';
@@ -142,11 +151,20 @@ const mergeBookings = (params: {
 
     const fromBookingStatus = pick(bookingStatusRaw);
     const fromStatus = pick(statusRaw);
+    const isPending =
+      (typeof bookingStatusRaw === 'string' && bookingStatusRaw.toLowerCase().includes('pending')) ||
+      (typeof statusRaw === 'string' && statusRaw.toLowerCase().includes('pending'));
     const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
     const isCancelled = fromBookingStatus === 'Cancelled' || fromStatus === 'Cancelled';
 
-    // Authoritative rule: past => Completed (unless Cancelled)
-    if (isPast) return isCancelled ? 'Cancelled' : 'Completed';
+    // Authoritative rules:
+    // - Past + pending => Cancelled
+    // - Past + not cancelled => Completed
+    if (isPast) {
+      if (isCancelled) return 'Cancelled';
+      if (isPending) return 'Cancelled';
+      return 'Completed';
+    }
 
     if (isCancelled) return 'Cancelled';
 
@@ -186,6 +204,7 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: courtId,
+        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
       } satisfies UnifiedBooking;
     }),
     ...eventBookings.map((item) => {
@@ -220,6 +239,7 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: typeof item.eventid === 'number' ? item.eventid : undefined,
+        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
       } satisfies UnifiedBooking;
     }),
     ...trainingSessionBookings.map((item) => {
@@ -254,6 +274,7 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: typeof item.sessionid === 'number' ? item.sessionid : undefined,
+        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
       } satisfies UnifiedBooking;
     }),
   ];
@@ -618,6 +639,27 @@ export default function ActivityPage() {
             activeOpacity={0.8}
           >
             <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+          </TouchableOpacity>
+        )}
+
+        {item.mode === 'Booking' && item.isDbCompleted && typeof item.targetId === 'number' && (
+          <TouchableOpacity
+            style={styles.reviewBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              const targettype = item.activity === 'session' ? 'trainingsession' : item.activity;
+              router.push({
+                pathname: '/event/reviewForm',
+                params: {
+                  targettype,
+                  targetid: String(item.targetId),
+                  title: encodeURIComponent(item.title),
+                },
+              });
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.reviewBtnText}>Write a Review</Text>
           </TouchableOpacity>
         )}
 
