@@ -132,12 +132,8 @@ export default function Home() {
     ? dashboardEventsCombined
     : (Array.isArray(fallbackEventsQuery.data) ? (fallbackEventsQuery.data as CombinedEvent[]) : [])
 
-  const eventsCombinedKey = React.useMemo(() => {
-    return eventsCombined
-      .slice(0, 50)
-      .map((ev: any) => `${String(ev?.eventid ?? '')}:${String(ev?.updated_at ?? ev?.start_timestamp ?? '')}`)
-      .join('|')
-  }, [eventsCombined])
+  const [nearbyEventsOrigin, setNearbyEventsOrigin] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [locationResolved, setLocationResolved] = useState(false)
 
   const isPlaceholderImageUri = (uri: string): boolean => {
     const u = uri.trim().toLowerCase();
@@ -290,52 +286,96 @@ export default function Home() {
     return `${timeRange} · ${dateLabel}`
   }
 
-  const nearbyEventsQuery = useQuery({
-    queryKey: ['home-nearby-events', userId, eventsCombined.length, eventsCombinedKey],
-    enabled: eventsCombined.length > 0,
-    queryFn: async () => {
-      const upcoming = eventsCombined.filter(isUpcomingEvent)
+  const normalizeText = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null
+    const s = value.trim()
+    if (!s) return null
+    const low = s.toLowerCase()
+    if (low === 'null' || low === 'undefined' || low === 'n/a') return null
+    return s
+  }
 
-      const perm = await Location.requestForegroundPermissionsAsync()
-      if (!perm.granted) {
-        return { events: upcoming, origin: null as { latitude: number; longitude: number } | null }
+  const getEventTitle = (ev: CombinedEvent): string | null => {
+    const candidates: unknown[] = [
+      (ev as any)?.title,
+      (ev as any)?.event_title,
+      (ev as any)?.eventname,
+      (ev as any)?.event_name,
+      (ev as any)?.name,
+      (ev as any)?.eventinfo?.title,
+      (ev as any)?.event_info?.title,
+      (ev as any)?.eventInfo?.title,
+      (ev as any)?.meta?.title,
+      (ev as any)?.info?.title,
+      (ev as any)?.court_name,
+    ]
+    for (const c of candidates) {
+      const t = normalizeText(c)
+      if (t) return t
+    }
+    return null
+  }
+
+  const upcomingEvents = React.useMemo(
+    () => (Array.isArray(eventsCombined) ? eventsCombined : []).filter(isUpcomingEvent),
+    [eventsCombined]
+  )
+
+  useEffect(() => {
+    let active = true
+    const resolveOrigin = async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync()
+        if (!active) return
+        if (!perm.granted) return
+
+        const lastKnown = await Location.getLastKnownPositionAsync()
+        if (!active) return
+        const lkLat = lastKnown?.coords?.latitude
+        const lkLon = lastKnown?.coords?.longitude
+        if (Number.isFinite(lkLat) && Number.isFinite(lkLon)) {
+          setNearbyEventsOrigin({ latitude: lkLat as number, longitude: lkLon as number })
+        }
+
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        if (!active) return
+        const userLat = pos?.coords?.latitude
+        const userLon = pos?.coords?.longitude
+        if (Number.isFinite(userLat) && Number.isFinite(userLon)) {
+          setNearbyEventsOrigin({ latitude: userLat as number, longitude: userLon as number })
+        }
+      } catch {
+        // Keep list render non-blocking even if location is slow/fails.
+      } finally {
+        if (active) setLocationResolved(true)
       }
+    }
 
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const userLat = pos?.coords?.latitude
-      const userLon = pos?.coords?.longitude
-      if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
-        return { events: upcoming, origin: null as { latitude: number; longitude: number } | null }
-      }
-
-      const filtered = upcoming
-        .filter((ev) => {
-          const coords = getEventCoords(ev)
-          if (!coords) return false
-          return haversineKm(userLat as number, userLon as number, coords.lat, coords.lon) <= 50
-        })
-
-      return {
-        // If coordinate coverage is sparse, show upcoming events instead of empty state.
-        events: filtered.length > 0 ? filtered : upcoming,
-        origin: { latitude: userLat as number, longitude: userLon as number },
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const nearbyEvents = nearbyEventsQuery.data?.events ?? []
-  const nearbyEventsOrigin = nearbyEventsQuery.data?.origin ?? null
-  const nearbyEventsLoading = nearbyEventsQuery.isLoading || nearbyEventsQuery.isFetching
-  const nearbyEventsError = nearbyEventsQuery.error instanceof Error
-    ? nearbyEventsQuery.error.message
-    : nearbyEventsQuery.error
-      ? String(nearbyEventsQuery.error)
-      : null
+    setLocationResolved(false)
+    void resolveOrigin()
+    return () => {
+      active = false
+    }
+  }, [userId])
 
   const visibleNearbyEvents = React.useMemo(() => {
-    return (Array.isArray(nearbyEvents) ? nearbyEvents : []).filter(isUpcomingEvent)
-  }, [nearbyEvents])
+    if (!nearbyEventsOrigin) return upcomingEvents
+    const filtered = upcomingEvents.filter((ev) => {
+      const coords = getEventCoords(ev)
+      if (!coords) return false
+      return haversineKm(nearbyEventsOrigin.latitude, nearbyEventsOrigin.longitude, coords.lat, coords.lon) <= 50
+    })
+    return filtered.length > 0 ? filtered : upcomingEvents
+  }, [upcomingEvents, nearbyEventsOrigin])
+
+  const nearbyEventsLoading = dashboard.isLoading || (dashboardEventsCombined.length === 0 && fallbackEventsQuery.isLoading)
+  const nearbyEventsError = dashboardEventsCombined.length === 0
+    ? (fallbackEventsQuery.error instanceof Error
+      ? fallbackEventsQuery.error.message
+      : fallbackEventsQuery.error
+        ? String(fallbackEventsQuery.error)
+        : null)
+    : null
 
   const favoriteLocationsQuery = useQuery({
     queryKey: ['home-favorite-locations', userId, favouriteCourts.length],
@@ -424,6 +464,8 @@ export default function Home() {
             paddingBottom: 14,
             paddingHorizontal: 16,
             paddingTop: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: '#E5E7EB',
           }}
         >
           {/* Menu Icon (Left) */}
@@ -470,14 +512,6 @@ export default function Home() {
           </TouchableOpacity>
         </View>
 
-        <View
-          style={{
-            height: 1,
-            backgroundColor: '#E5E7EB',
-            marginHorizontal: 16,
-          }}
-        />
-
         {/* Body */}
         {activeView === 'user' && (
           <ScrollView
@@ -491,7 +525,10 @@ export default function Home() {
                   setPullRefreshingFavs(true);
                   try {
                     await refetchDashboard();
-                    await Promise.all([refetchFavoriteLocations(), nearbyEventsQuery.refetch()]);
+                    await Promise.all([
+                      refetchFavoriteLocations(),
+                      dashboardEventsCombined.length === 0 ? fallbackEventsQuery.refetch() : Promise.resolve(),
+                    ]);
                   } finally {
                     setPullRefreshingFavs(false);
                   }
@@ -796,9 +833,7 @@ export default function Home() {
                 {visibleNearbyEvents.slice(0, 10).map((ev) => {
                   const CARD_W = 320
                   const CARD_H = 190
-                  const title =
-                    String((ev as any)?.title ?? (ev as any)?.event_title ?? (ev as any)?.name ?? (ev as any)?.court_name ?? '').trim() ||
-                    `Event ${ev.eventid}`
+                  const title = getEventTitle(ev) ?? `Event ${ev.eventid}`
                   const dateTimeLine = formatEventDateTimeLine(ev)
                   const origin = nearbyEventsOrigin
                   const coords = getEventCoords(ev)
@@ -908,6 +943,12 @@ export default function Home() {
             {!!nearbyEventsError && (
               <Text style={{ paddingHorizontal: 10, marginTop: 8, color: COLORS.danger500, fontWeight: '700' }}>
                 {nearbyEventsError}
+              </Text>
+            )}
+
+            {!locationResolved && visibleNearbyEvents.length > 0 && (
+              <Text style={{ paddingHorizontal: 10, marginTop: 8, color: '#6B7280', fontWeight: '600' }}>
+                Refining nearby distance...
               </Text>
             )}
           </View>

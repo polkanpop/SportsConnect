@@ -96,7 +96,8 @@
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
-  const MAP_BOTTOM_VIEWPORT_OFFSET_RATIO = 0.22;
+  // Matches the collapsed bottom-sheet coverage (30%) + a small nav overlap buffer.
+  const MAP_BOTTOM_VIEWPORT_OFFSET_RATIO = 0.34;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
