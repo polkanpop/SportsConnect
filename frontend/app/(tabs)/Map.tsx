@@ -1126,7 +1126,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v13</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v14</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1525,12 +1525,12 @@
                         );
                       })()}
 
-                      {/* Title + action buttons are the only elements overlapping the image edge. */}
-                      <View style={styles.titleRow}> 
-                        <Text style={styles.sheetCoverTitle} numberOfLines={2} ellipsizeMode="tail">
-                          {selectedMarker.name}
-                        </Text>
-                        <View style={styles.actionRow}> 
+                      <View style={styles.sheetHeaderCard}>
+                        <View style={styles.titleRow}> 
+                          <Text style={styles.sheetCoverTitle} numberOfLines={2} ellipsizeMode="tail">
+                            {selectedMarker.name}
+                          </Text>
+                          <View style={styles.actionRow}> 
                         <TouchableOpacity
                           style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
                           onPress={async () => {
@@ -1598,12 +1598,13 @@
                           <Image source={ICONS.booking} style={[styles.bookingIcon, selectedMarker.availability === "Unavailable" && { tintColor: '#bbb' }]} />
                           <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>Book</Text>
                         </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
 
-                      <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
-                        Address: {selectedMarker.address}
-                      </Text>
+                        <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
+                          Address: {selectedMarker.address}
+                        </Text>
+                      </View>
 
 
                       {/* Venue Tags (moved under address) */}
@@ -2266,6 +2267,22 @@
       backgroundColor: COLORS.neutral150,
       position: 'relative',
     },
+    sheetHeaderCard: {
+      width: '100%',
+      marginTop: -56,
+      backgroundColor: COLORS.white,
+      borderRadius: 16,
+      paddingTop: 10,
+      paddingBottom: 10,
+      paddingHorizontal: 10,
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 2,
+      marginBottom: 8,
+      zIndex: 6,
+    },
     sheetCoverImage: {
       width: '100%',
       height: '100%',
@@ -2286,8 +2303,6 @@
     },
     sheetCoverAddress: {
       marginTop: 8,
-      marginBottom: 8,
-      paddingHorizontal: 10,
       fontSize: 14,
       fontWeight: '600',
       color: COLORS.neutral850,
@@ -2350,9 +2365,9 @@
       flexDirection: 'row',
       alignItems: 'center',
       width: '100%',
-      marginTop: -18,
+      marginTop: 0,
       marginBottom: 2,
-      paddingHorizontal: 10,
+      paddingHorizontal: 0,
       justifyContent: 'space-between',
       zIndex: 5,
     },

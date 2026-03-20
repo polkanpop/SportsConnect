@@ -307,6 +307,17 @@ function isScheduleLikeSubtitle(s: string): boolean {
   return false
 }
 
+function stripNullTail(s: string): string {
+  const v = String(s || '').trim()
+  if (!v) return ''
+  return v
+    .replace(/\s+at\s+null\s*$/i, '')
+    .replace(/\s+\|\s*null\s*$/i, '')
+    .replace(/\bnull\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 export default function HistoryPage() {
   const router = useRouter()
   const { userId, dashboard } = useAppBootstrap()
@@ -577,6 +588,37 @@ export default function HistoryPage() {
     return { byEventBooking, bySessionBooking, byCourtBooking }
   }, [data])
 
+  const linkedRows = useMemo(() => {
+    const courtBookingById = new Map<number, any>()
+    const eventBookingById = new Map<number, any>()
+    const sessionBookingById = new Map<number, any>()
+    const eventById = new Map<number, any>()
+    const sessionById = new Map<number, any>()
+
+    for (const row of Array.isArray(dashboardRaw?.court_bookings) ? dashboardRaw.court_bookings : []) {
+      const id = Number(row?.courtbookingid)
+      if (Number.isFinite(id)) courtBookingById.set(id, row)
+    }
+    for (const row of Array.isArray(dashboardRaw?.event_bookings) ? dashboardRaw.event_bookings : []) {
+      const id = Number(row?.eventbookingid)
+      if (Number.isFinite(id)) eventBookingById.set(id, row)
+    }
+    for (const row of Array.isArray(dashboardRaw?.training_bookings) ? dashboardRaw.training_bookings : []) {
+      const id = Number(row?.tsbookingid)
+      if (Number.isFinite(id)) sessionBookingById.set(id, row)
+    }
+    for (const row of Array.isArray(dashboardRaw?.events_combined) ? dashboardRaw.events_combined : []) {
+      const id = Number(row?.eventid)
+      if (Number.isFinite(id)) eventById.set(id, row)
+    }
+    for (const row of Array.isArray(dashboardRaw?.training_sessions_combined) ? dashboardRaw.training_sessions_combined : []) {
+      const id = Number(row?.sessionid)
+      if (Number.isFinite(id)) sessionById.set(id, row)
+    }
+
+    return { courtBookingById, eventBookingById, sessionBookingById, eventById, sessionById }
+  }, [dashboardRaw])
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -610,12 +652,58 @@ export default function HistoryPage() {
           const statusLabel = isJoin ? 'Joined' : formatStatusLabel(statusRaw)
           const statusColors = isJoin ? statusColor('approved') : statusColor(statusRaw)
           const schedule = formatScheduleParts(item)
-          const subtitleRaw = !isNoisySubtitle(item.subtitle ?? null) ? stripAddMe(String(item.subtitle)) : ''
-          const subtitleText = subtitleRaw && !(schedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
           const badges = kindBadges(item.kind)
           const statusIsDuplicate = !!statusLabel && badges.some((b) => b.toLowerCase() === statusLabel.toLowerCase())
 
           const meta: any = item.meta || {}
+          const titleAndVenue = (() => {
+            const cleanTitle = stripNullTail(item.title || '')
+            let title = cleanTitle
+            let venue = ''
+
+            if (item.kind === 'event_booking') {
+              const eb = typeof meta.eventbookingid === 'number' ? linkedRows.eventBookingById.get(meta.eventbookingid) : null
+              const eventId = Number(meta.eventid ?? eb?.eventid)
+              const ev = Number.isFinite(eventId) ? linkedRows.eventById.get(eventId) : null
+              const eventName = firstNonEmptyText(eb?.event_title, eb?.title, eb?.name, ev?.title, ev?.event_title)
+              const venueName = firstNonEmptyText(eb?.court_name, eb?.courtName, ev?.court_name, ev?.courtName, ev?.address)
+              title = eventName ? `Booked event: ${eventName}` : (cleanTitle || 'Booked event')
+              venue = venueName
+            } else if (item.kind === 'session_booking') {
+              const sb = typeof meta.tsbookingid === 'number' ? linkedRows.sessionBookingById.get(meta.tsbookingid) : null
+              const sessionId = Number(meta.sessionid ?? sb?.sessionid)
+              const sess = Number.isFinite(sessionId) ? linkedRows.sessionById.get(sessionId) : null
+              const sessionName = firstNonEmptyText(sb?.session_title, sb?.title, sb?.name, sess?.title, sess?.session_title)
+              const venueName = firstNonEmptyText(sb?.court_name, sb?.courtName, sess?.court_name, sess?.courtName, sess?.address)
+              title = sessionName ? `Booked session: ${sessionName}` : (cleanTitle || 'Booked session')
+              venue = venueName
+            } else if (item.kind === 'court_booking') {
+              const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
+              const courtName = firstNonEmptyText(cb?.court_name, cb?.courtName, meta?.court_name, meta?.courtName)
+              title = courtName ? `Booked court: ${courtName}` : (cleanTitle || 'Booked court')
+              venue = firstNonEmptyText(cb?.address)
+            } else if (item.kind === 'created_event') {
+              const eventId = Number(meta.eventid)
+              const ev = Number.isFinite(eventId) ? linkedRows.eventById.get(eventId) : null
+              const eventName = firstNonEmptyText(ev?.title, ev?.event_title)
+              title = eventName ? `Event created: ${eventName}` : (cleanTitle || 'Event created')
+              venue = firstNonEmptyText(ev?.court_name, ev?.courtName, ev?.address)
+            } else if (item.kind === 'created_session') {
+              const sessionId = Number(meta.sessionid)
+              const sess = Number.isFinite(sessionId) ? linkedRows.sessionById.get(sessionId) : null
+              const sessionName = firstNonEmptyText(sess?.title, sess?.session_title)
+              title = sessionName ? `Session created: ${sessionName}` : (cleanTitle || 'Session created')
+              venue = firstNonEmptyText(sess?.court_name, sess?.courtName, sess?.address)
+            }
+
+            return { title: title || 'Activity', venue }
+          })()
+
+          const subtitleRaw = !isNoisySubtitle(item.subtitle ?? null) ? stripAddMe(String(item.subtitle)) : ''
+          const subtitleText = subtitleRaw && !(schedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
+          const venueSubtitle = titleAndVenue.venue ? `Venue: ${titleAndVenue.venue}` : null
+          const displaySubtitle = subtitleText || venueSubtitle
+
           const paymentMethod = (() => {
             if (item.kind === 'event_booking' && typeof meta.eventbookingid === 'number') {
               return paymentIndex.byEventBooking.get(meta.eventbookingid) || ''
@@ -706,7 +794,7 @@ export default function HistoryPage() {
                     <Text style={styles.timeText}>{formatLogTime(item.ts)}</Text>
                   </View>
 
-                  <Text style={styles.title}>{item.title}</Text>
+                  <Text style={styles.title}>{titleAndVenue.title}</Text>
                   {!!schedule && (
                     <View style={styles.scheduleWrap}>
                       <Text style={styles.scheduleText}>Time: {schedule.time}</Text>
@@ -718,7 +806,7 @@ export default function HistoryPage() {
                       )}
                     </View>
                   )}
-                  {!!subtitleText && <Text style={styles.subtitle}>{subtitleText}</Text>}
+                  {!!displaySubtitle && <Text style={styles.subtitle}>{displaySubtitle}</Text>}
 
                   {(item.kind === 'event_booking' || item.kind === 'session_booking' || item.kind === 'court_booking') && !!paymentMethod && (
                     <Text style={styles.metaText}>Payment: {paymentMethod}</Text>
