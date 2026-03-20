@@ -641,7 +641,12 @@ export default function HistoryPage() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.8}
+        >
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
         <Text pointerEvents="none" style={styles.headerTitle}>History</Text>

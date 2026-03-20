@@ -467,7 +467,7 @@ export default function Home() {
         {/* Body */}
         {activeView === 'user' && (
           <ScrollView
-            style={{ flex: 1, backgroundColor: "#F0F0F0", paddingHorizontal: 8 }}
+            style={{ flex: 1, backgroundColor: "#ffffff", paddingHorizontal: 8 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 10 }}
             refreshControl={
@@ -904,7 +904,7 @@ export default function Home() {
           {eventPanelMounted ? (
             <EventPanel organizerId={userId} />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={'100%'} height={54} radius={14} />
@@ -944,7 +944,7 @@ export default function Home() {
           {courtPanelMounted ? (
             <CourtPanel ownerId={userId} />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={'100%'} height={54} radius={14} />
@@ -984,7 +984,7 @@ export default function Home() {
           {reviewsPanelMounted ? (
             <ReviewsPanel />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#F0F0F0' }}>
+            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
               <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 20 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={160} height={24} radius={8} style={{ marginBottom: 16 }} />

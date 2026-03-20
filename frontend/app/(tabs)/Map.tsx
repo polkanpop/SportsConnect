@@ -89,8 +89,11 @@
     maxLng: 110.6,
   } as const;
 
-  const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat) + 2.0;
-  const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng) + 2.0;
+  const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat);
+  const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng);
+  const VN_MIN_LAT_DELTA = 0.01;
+  const VN_MIN_LNG_DELTA = 0.01;
+  const MAP_BOTTOM_VIEWPORT_OFFSET_RATIO = 0.22;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -109,13 +112,14 @@
   }
 
   function clampRegionToVietnam(region: Region): Region {
-    const latitudeDelta = Math.min(region.latitudeDelta, VN_MAX_LAT_DELTA);
-    const longitudeDelta = Math.min(region.longitudeDelta, VN_MAX_LNG_DELTA);
+    const latitudeDelta = Math.max(VN_MIN_LAT_DELTA, Math.min(region.latitudeDelta, VN_MAX_LAT_DELTA));
+    const longitudeDelta = Math.max(VN_MIN_LNG_DELTA, Math.min(region.longitudeDelta, VN_MAX_LNG_DELTA));
 
     const halfLat = latitudeDelta / 2;
     const halfLng = longitudeDelta / 2;
+    const southPadding = latitudeDelta * MAP_BOTTOM_VIEWPORT_OFFSET_RATIO;
 
-    const centerLatMin = VN_BOUNDS.minLat + halfLat;
+    const centerLatMin = VN_BOUNDS.minLat + halfLat + southPadding;
     const centerLatMax = VN_BOUNDS.maxLat - halfLat;
     const centerLngMin = VN_BOUNDS.minLng + halfLng;
     const centerLngMax = VN_BOUNDS.maxLng - halfLng;
@@ -320,6 +324,7 @@
       { latitudeDelta: 0.4, longitudeDelta: 0.4 },
       { latitudeDelta: 0.08, longitudeDelta: 0.08 },
     ]);
+    const MARKER_FOCUS_STAGE = 2;
 
     // Filter states
     const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | "distance" | null>(null);
@@ -345,7 +350,7 @@
     const focusMapRegion = useCallback((latitude: number, longitude: number, stage: number, animated = true) => {
       const delta = ZOOM_STAGE_DELTAS.current[Math.max(0, Math.min(stage, ZOOM_STAGE_DELTAS.current.length - 1))];
       const nextRegion = clampRegionToVietnam({
-        latitude,
+        latitude: latitude + (delta.latitudeDelta * MAP_BOTTOM_VIEWPORT_OFFSET_RATIO),
         longitude,
         latitudeDelta: delta.latitudeDelta,
         longitudeDelta: delta.longitudeDelta,
@@ -360,6 +365,7 @@
       if (isSameRegion(mapRegionRef.current, clamped)) return
       mapRegionRef.current = clamped;
       setMapRegion(clamped);
+      setCameraCommandId((prev) => prev + 1);
     }, []);
 
     useEffect(() => {
@@ -818,14 +824,10 @@
 
     // Handle marker when pressed
     const handleMarkerPress = async (marker: MarkerType) => {
-      if (selectedMarker?.name === marker.name) {
-        bottomSheetRef.current?.snapToIndex(0);
-        return;
-      }
       setSelectedMarker(marker);
     // Favorite state derived from favoriteIds
     setIsFavorite(favoriteIds.includes(marker.courtid));
-      focusMapRegion(marker.latitude, marker.longitude, 2);
+      focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
       // open bottom sheet
       bottomSheetRef.current?.snapToIndex(0);
     };
@@ -863,7 +865,7 @@
     const handleFlatListItemPress = (marker: MarkerType) => {
       setSelectedMarker(marker); // Set the selected marker
       setFlatListVisible(false); // Hide the FlatList
-      focusMapRegion(marker.latitude, marker.longitude, 2);
+      focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
       bottomSheetRef.current?.snapToIndex(0); // Open BottomSheet
     };
 
@@ -1136,10 +1138,6 @@
         <SafeAreaProvider>
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
-                <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v26</Text>
-                  <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
-                </View>
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
                   style={styles.map}
