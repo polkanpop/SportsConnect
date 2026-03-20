@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persistAuthSession } from '@/lib/backendApi';
+import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding';
 
 // This screen is reached via deep link after email verification redirect.
 // It receives query params with tokens if auto-login was enabled.
@@ -43,6 +44,7 @@ export default function EmailVerifiedAutoLoginScreen() {
           refreshTokenExpiresAt: params.refreshTokenExpiresAt,
         }
         await persistAuthSession(authData, { rememberMe: true })
+        await requestLocationPermissionOnceAfterSignup()
         // Clear pending signup profile (if any)
         await AsyncStorage.removeItem('@backendProfilePending');
         setDone(true);

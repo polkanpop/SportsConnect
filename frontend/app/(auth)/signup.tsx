@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authSignup } from '@/lib/backendApi';
 import { AUTO_EMAIL_LOGIN } from '@/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding';
 
   // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
   // For production, add hashing again (bcrypt/argon2) and stronger validation.
@@ -56,6 +57,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
                 accountName: accountName.trim(),
               })
               console.log('[signup] success', res)
+              await requestLocationPermissionOnceAfterSignup()
               setSuccessMessage('Account created. Please verify your email to continue.')
               setPassword('')
               setConfirmPassword('')
