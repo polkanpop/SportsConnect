@@ -304,10 +304,7 @@
     const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null); // radius filter (km)
     const [distanceKmInput, setDistanceKmInput] = useState<string>('');
     const [distanceKmError, setDistanceKmError] = useState<string | null>(null);
-    const [scheduleExpanded, setScheduleExpanded] = useState(true);
-    const [imagesExpanded, setImagesExpanded] = useState(true);
-    const [transportExpanded, setTransportExpanded] = useState(true);
-    const [reviewsExpanded, setReviewsExpanded] = useState(false);
+    const [activeSheetTab, setActiveSheetTab] = useState<'Schedule' | 'Transport' | 'Images' | 'Reviews'>('Schedule');
 
     const [selectedSchedulePlayingCourtId, setSelectedSchedulePlayingCourtId] = useState<number | null>(null);
 
@@ -356,13 +353,10 @@
     // Snap points for the BottomSheet
     const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);
 
-    // Reset section expansion state when selecting a new marker
+    // Reset tab state when selecting a new marker
     useEffect(() => {
       if (!selectedMarker) return;
-      setScheduleExpanded(true);
-      setImagesExpanded(true);
-      setTransportExpanded(true);
-      setReviewsExpanded(false);
+      setActiveSheetTab('Schedule');
       setWeekOffset(0);
     }, [selectedMarker?.id]);
 
@@ -917,7 +911,7 @@
 
     // Ensure we have distance + duration for the selected marker (for BottomSheet Transport section)
     useEffect(() => {
-      if (!transportExpanded) return;
+      if (activeSheetTab !== 'Transport') return;
       if (!distanceMatrixDeferredReady) return;
       if (!selectedMarker) return;
       if (!userLocation) return;
@@ -981,7 +975,7 @@
         cancelled = true;
         inFlightDistanceIdsRef.current.delete(id);
       };
-    }, [transportExpanded, distanceMatrixDeferredReady, selectedMarker, userLocation, distanceMetersByCourtInfoId, durationSecondsByCourtInfoId]);
+    }, [activeSheetTab, distanceMatrixDeferredReady, selectedMarker, userLocation, distanceMetersByCourtInfoId, durationSecondsByCourtInfoId]);
 
     // Sorted list data for search dropdown: closest first (when user location is available)
     const sortedFilteredMarkersForList = useMemo(() => {
@@ -1118,7 +1112,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - FINAL POLISH v10</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v11</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1465,6 +1459,18 @@
                   </View>
                 )}
 
+                {/* Google Maps Redirect Button */}
+                {overlaysVisible && selectedMarker && (
+                  <TouchableOpacity
+                    style={styles.googleMapsFloatingButton}
+                    onPress={() => { void handleOpenGoogleMaps(); }}
+                    activeOpacity={0.85}
+                    accessibilityLabel="Open in Google Maps"
+                  >
+                    <Image source={ICONS.ggmap} style={styles.googleMapsFloatingIcon} />
+                  </TouchableOpacity>
+                )}
+
                 {/* My Location Button */}
                 {overlaysVisible && (
                   <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocationPress}>
@@ -1486,6 +1492,25 @@
                       contentContainerStyle={styles.bottomSheetContent}
                       refreshControl={<RefreshControl refreshing={loadingMarkers} onRefresh={fetchMarkers} />}
                     >
+                      {(() => {
+                        const coverImageUri = aggregatedImages[0] || null;
+                        return (
+                          <View style={styles.sheetCoverFrame}>
+                            {coverImageUri ? (
+                              <ExpoImage
+                                source={{ uri: coverImageUri }}
+                                style={styles.sheetCoverImage}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <View style={styles.sheetCoverPlaceholder}>
+                                <Text style={styles.placeholderText}>No cover image available</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })()}
+
                       {/* ...existing code... */}
                       {/* Title & actions row (layout adjusted for single-line names) */}
                       <View style={styles.titleRow}> 
@@ -1570,16 +1595,7 @@
                         {selectedMarker.address}
                       </Text>
 
-                      <TouchableOpacity
-                        style={styles.googleMapsButton}
-                        onPress={() => {
-                          void handleOpenGoogleMaps();
-                        }}
-                        activeOpacity={0.85}
-                        accessibilityLabel="Open in Google Maps"
-                      >
-                        <Text style={styles.googleMapsButtonText}>Open in Google Maps</Text>
-                      </TouchableOpacity>
+
 
                       {/* Venue Tags (moved under address) */}
                       <View style={styles.sheetTagRow}>
@@ -1599,22 +1615,27 @@
                         })()}
                       </View>
 
-                      {/* Price */}
-
-                      {/* Schedule Section (expandable, expanded by default) */}
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => setScheduleExpanded((p) => !p)}
-                        style={styles.transportHeader}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.sheetTabsRow}
                       >
-                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Schedule</Text>
-                        <Image
-                          source={ICONS.arrowdown}
-                          style={[styles.transportHeaderArrow, scheduleExpanded ? styles.transportArrowOpen : null]}
-                        />
-                      </TouchableOpacity>
+                        {(['Schedule', 'Transport', 'Images', 'Reviews'] as const).map((tab) => {
+                          const active = activeSheetTab === tab;
+                          return (
+                            <TouchableOpacity
+                              key={tab}
+                              style={[styles.sheetTabBtn, active && styles.sheetTabBtnActive]}
+                              onPress={() => setActiveSheetTab(tab)}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={[styles.sheetTabBtnText, active && styles.sheetTabBtnTextActive]}>{tab}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
 
-                      {scheduleExpanded && (
+                      {activeSheetTab === 'Schedule' && (
                         availabilityLoading ? (
                           <View style={styles.placeholderSection}>
                             <Text style={styles.placeholderText}>Loading schedule...</Text>
@@ -1705,20 +1726,7 @@
                         )
                       )}
 
-                      {/* Transport Section (expandable) */}
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => setTransportExpanded((p) => !p)}
-                        style={styles.transportHeader}
-                      >
-                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Transport</Text>
-                        <Image
-                          source={ICONS.arrowdown}
-                          style={[styles.transportHeaderArrow, transportExpanded ? styles.transportArrowOpen : null]}
-                        />
-                      </TouchableOpacity>
-
-                      {transportExpanded && (() => {
+                      {activeSheetTab === 'Transport' && (() => {
                         if (!selectedMarker) return null;
                         const id = selectedMarker.id;
                         const status = distanceMatrixStatusByCourtInfoId[id];
@@ -1841,20 +1849,7 @@
                         );
                       })()}
 
-                      {/* Images Section (expandable) */}
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => setImagesExpanded((p) => !p)}
-                        style={styles.transportHeader}
-                      >
-                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Images</Text>
-                        <Image
-                          source={ICONS.arrowdown}
-                          style={[styles.transportHeaderArrow, imagesExpanded ? styles.transportArrowOpen : null]}
-                        />
-                      </TouchableOpacity>
-
-                      {imagesExpanded && (aggregatedImages.length > 0 ? (
+                      {activeSheetTab === 'Images' && (aggregatedImages.length > 0 ? (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                           {aggregatedImages.map((image, idx) => (
                             <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
@@ -1876,20 +1871,7 @@
                         </View>
                       ))}
 
-                      {/* Reviews Section */}
-                      <TouchableOpacity
-                        activeOpacity={0.85}
-                        onPress={() => setReviewsExpanded((p) => !p)}
-                        style={styles.transportHeader}
-                      >
-                        <Text style={[styles.sectionHeader, styles.transportHeaderTitle]}>Reviews</Text>
-                        <Image
-                          source={ICONS.arrowdown}
-                          style={[styles.transportHeaderArrow, reviewsExpanded ? styles.transportArrowOpen : null]}
-                        />
-                      </TouchableOpacity>
-
-                      {reviewsExpanded && (
+                      {activeSheetTab === 'Reviews' && (
                         <View style={styles.placeholderSection}>
                           <Text style={styles.placeholderText}>Placeholder for user review :D</Text>
                         </View>
@@ -2269,6 +2251,25 @@
       position: "relative",
       paddingBottom: 96,
     },
+    sheetCoverFrame: {
+      width: '100%',
+      height: 180,
+      borderRadius: 16,
+      overflow: 'hidden',
+      marginBottom: 14,
+      backgroundColor: COLORS.neutral150,
+    },
+    sheetCoverImage: {
+      width: '100%',
+      height: '100%',
+    },
+    sheetCoverPlaceholder: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.neutral150,
+    },
     topRightActions: {
       position: "absolute",
       top: 8,
@@ -2349,18 +2350,23 @@
       marginTop: 10,
       marginBottom: 16,
     },
-    googleMapsButton: {
-      backgroundColor: COLORS.bootstrapBlue,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 10,
-      marginBottom: 14,
-      alignSelf: 'flex-start',
+    googleMapsFloatingButton: {
+      position: 'absolute',
+      bottom: 360,
+      right: 20,
+      backgroundColor: COLORS.white,
+      borderRadius: 50,
+      padding: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 5,
+      zIndex: 20,
     },
-    googleMapsButtonText: {
-      color: COLORS.white,
-      fontSize: 14,
-      fontWeight: '700',
+    googleMapsFloatingIcon: {
+      width: 28,
+      height: 28,
+      resizeMode: 'contain',
     },
     markerAddressLabel: {
       fontWeight: 'bold',
@@ -2506,6 +2512,32 @@
     sheetTagFallback: { backgroundColor: '#444' },
     sheetVenueTag: { backgroundColor: '#6a5acd' },
     sheetTagText: { color: '#ddd', fontSize: 14, fontWeight: '700' },
+    sheetTabsRow: {
+      paddingTop: 4,
+      paddingBottom: 12,
+      paddingRight: 8,
+      gap: 8,
+    },
+    sheetTabBtn: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: COLORS.neutral375,
+      backgroundColor: COLORS.white,
+    },
+    sheetTabBtnActive: {
+      backgroundColor: COLORS.brandOrangeDeep,
+      borderColor: COLORS.brandOrangeDeep,
+    },
+    sheetTabBtnText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: COLORS.slate600,
+    },
+    sheetTabBtnTextActive: {
+      color: COLORS.white,
+    },
     transportHeader: {
       width: '100%',
       flexDirection: 'row',

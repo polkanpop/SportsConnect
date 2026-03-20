@@ -18,7 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 type UnifiedBooking = {
   id: string; // Unique identifier for each booking
   title: string;
-  status: "Completed" | "Upcoming" | "Cancelled"; // Status of the booking
+  /** Display status derived from session_status (bookingstatus column). */
+  status: "Completed" | "Upcoming" | "Cancelled" | "Missed";
   mode: "Booking" | "Hosting";
   activity: "court" | "event" | "session";
   type: keyof typeof ICONS; // The icon type from ICONS object
@@ -31,8 +32,10 @@ type UnifiedBooking = {
   endTimestamp?: string | null;
   /** Entity ID used for review submissions (courtid | eventid | sessionid) */
   targetId?: number;
-  /** True only when DB status field explicitly says completed. */
-  isDbCompleted?: boolean;
+  /** Raw booking_status from the entity status column (pending/approved/rejected/missed etc.) */
+  bookingStatus: string;
+  /** Raw session_status from the bookingstatus column (upcoming/completed/cancelled/missed) */
+  sessionStatus: string;
 };
 
 // Function to get the day of the week from a date string
@@ -100,30 +103,88 @@ const formatTimeHHMM = (dt: Date) => {
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 };
 
-const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking["status"] => {
-  const pick = (raw: any): UnifiedBooking["status"] | null => {
-    if (typeof raw !== 'string') return null;
-    const s = raw.toLowerCase();
-    if (s.includes('cancel')) return 'Cancelled';
-    if (s.includes('complete')) return 'Completed';
-    if (s.includes('upcoming')) return 'Upcoming';
-    return null;
-  };
-
-  const picked = pick(statusRaw);
-  const isPending = typeof statusRaw === 'string' && statusRaw.toLowerCase().includes('pending');
+/**
+ * Derive display status from session_status (bookingstatus column) with
+ * Situation-D override: past + host-never-approved → Missed.
+ */
+const deriveDisplayStatus = (
+  bookingStatusRaw: string,
+  sessionStatusRaw: string,
+  dateTime?: Date,
+): UnifiedBooking['status'] => {
+  const bs = (bookingStatusRaw || '').toLowerCase();
+  const ss = (sessionStatusRaw || '').toLowerCase();
   const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
 
-  // Authoritative rules:
-  // - Past + pending => Cancelled
-  // - Past + not cancelled => Completed
-  if (isPast) {
-    if (picked === 'Cancelled') return 'Cancelled';
-    if (isPending) return 'Cancelled';
-    return 'Completed';
+  // Situation D: time passed, host never approved
+  if (isPast && bs === 'pending' && (ss === 'upcoming' || ss === 'missed' || !ss)) {
+    return 'Missed';
   }
 
-  if (picked) return picked;
+  // Direct mapping from session_status
+  if (ss === 'completed') return 'Completed';
+  if (ss.includes('cancel')) return 'Cancelled';
+  if (ss === 'missed') return 'Missed';
+  return 'Upcoming';
+};
+
+/**
+ * Derive Review / Cancel button enabled states from the business logic matrix.
+ *
+ * A (Future+Pending):   Review=off  Cancel=on
+ * B (Future+Approved):  Review=off  Cancel=on
+ * C (Rejected/Cancel):  Review=off  Cancel=off
+ * D (Past+Ignored):     Review=off  Cancel=off
+ * E (Past+Played):      Review=on   Cancel=off
+ * F (Past+No-Show):     Review=off  Cancel=off
+ */
+const deriveButtonState = (
+  bookingStatusRaw: string,
+  sessionStatusRaw: string,
+  dateTime?: Date,
+): { reviewEnabled: boolean; cancelEnabled: boolean } => {
+  const bs = (bookingStatusRaw || '').toLowerCase();
+  const ss = (sessionStatusRaw || '').toLowerCase();
+  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
+
+  // C: Rejected or Cancelled
+  if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
+    return { reviewEnabled: false, cancelEnabled: false };
+  }
+
+  // Missed (D or F)
+  if (ss === 'missed') {
+    return { reviewEnabled: false, cancelEnabled: false };
+  }
+
+  // D: Past + host ignored (still pending)
+  if (isPast && bs === 'pending') {
+    return { reviewEnabled: false, cancelEnabled: false };
+  }
+
+  // E: Completed
+  if (ss === 'completed') {
+    return { reviewEnabled: true, cancelEnabled: false };
+  }
+
+  // A, B: Future with upcoming session
+  if (!isPast) {
+    return { reviewEnabled: false, cancelEnabled: true };
+  }
+
+  return { reviewEnabled: false, cancelEnabled: false };
+};
+
+/** Legacy loose normalizer for Hosting mode (events/sessions the user created). */
+const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking['status'] => {
+  const s = typeof statusRaw === 'string' ? statusRaw.toLowerCase() : '';
+  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
+  if (s.includes('cancel')) return 'Cancelled';
+  if (s.includes('complete')) return 'Completed';
+  if (s === 'missed') return 'Missed';
+  if (isPast && s.includes('pending')) return 'Missed';
+  if (isPast) return 'Completed';
+  if (s.includes('upcoming')) return 'Upcoming';
   return 'Upcoming';
 };
 
@@ -139,43 +200,7 @@ const mergeBookings = (params: {
   const eventBookings = Array.isArray(params.eventBookings) ? params.eventBookings : [];
   const trainingSessionBookings = Array.isArray(params.trainingSessionBookings) ? params.trainingSessionBookings : [];
 
-  const normalizeStatus = (bookingStatusRaw: any, statusRaw?: any, dateTime?: Date): UnifiedBooking["status"] => {
-    const pick = (raw: any): UnifiedBooking["status"] | null => {
-      if (typeof raw !== 'string') return null;
-      const s = raw.toLowerCase();
-      if (s.includes('cancel')) return 'Cancelled';
-      if (s.includes('complete')) return 'Completed';
-      if (s.includes('upcoming')) return 'Upcoming';
-      return null;
-    };
-
-    const fromBookingStatus = pick(bookingStatusRaw);
-    const fromStatus = pick(statusRaw);
-    const isPending =
-      (typeof bookingStatusRaw === 'string' && bookingStatusRaw.toLowerCase().includes('pending')) ||
-      (typeof statusRaw === 'string' && statusRaw.toLowerCase().includes('pending'));
-    const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
-    const isCancelled = fromBookingStatus === 'Cancelled' || fromStatus === 'Cancelled';
-
-    // Authoritative rules:
-    // - Past + pending => Cancelled
-    // - Past + not cancelled => Completed
-    if (isPast) {
-      if (isCancelled) return 'Cancelled';
-      if (isPending) return 'Cancelled';
-      return 'Completed';
-    }
-
-    if (isCancelled) return 'Cancelled';
-
-    // Source of truth: bookingstatus column (upcoming/completed/cancelled)
-    if (fromBookingStatus) return fromBookingStatus;
-
-    // Backward-compatible fallback
-    if (fromStatus) return fromStatus;
-
-    return 'Upcoming';
-  };
+  const safeStr = (v: any): string => (typeof v === 'string' ? v : '');
 
   const safeIsoDate = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 10 ? ts.slice(0, 10) : '');
   const safeTime = (ts?: string | null) => (typeof ts === 'string' && ts.length >= 16 ? ts.slice(11, 16) : '');
@@ -190,10 +215,12 @@ const mergeBookings = (params: {
       const courtName = typeof (item as any)?.court_name === 'string' ? (item as any).court_name : undefined;
       const displayCourtName = courtName || selectedBaseName || selectedCourtName;
       const courtId = typeof (item as any)?.courtid === 'number' ? (item as any).courtid : undefined;
+      const rawBookingStatus = safeStr(item.status);       // entity status column (pending/approved/rejected/missed)
+      const rawSessionStatus = safeStr(item.bookingstatus); // sessionstatus column (upcoming/completed/cancelled/missed)
       return {
         id: `court_${item.courtbookingid}`,
         title: displayCourtName || `Court Booking #${item.courtbookingid}`,
-        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
         mode: 'Booking',
         activity: 'court',
         type: 'stadiumCal' as keyof typeof ICONS,
@@ -204,7 +231,8 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: courtId,
-        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
+        bookingStatus: rawBookingStatus,
+        sessionStatus: rawSessionStatus,
       } satisfies UnifiedBooking;
     }),
     ...eventBookings.map((item) => {
@@ -224,10 +252,12 @@ const mergeBookings = (params: {
         ((item as any)?.end_timestamp as string | undefined) ??
         undefined;
       const dateTime = parseTimestampLoose(startTs ?? null);
+      const rawBookingStatus = safeStr(item.status);
+      const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `event_${item.eventbookingid}`,
         title: (ev?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Event #${item.eventid}`,
-        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
         mode: 'Booking',
         activity: 'event',
         type: 'starCal' as keyof typeof ICONS,
@@ -239,7 +269,8 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: typeof item.eventid === 'number' ? item.eventid : undefined,
-        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
+        bookingStatus: rawBookingStatus,
+        sessionStatus: rawSessionStatus,
       } satisfies UnifiedBooking;
     }),
     ...trainingSessionBookings.map((item) => {
@@ -259,10 +290,12 @@ const mergeBookings = (params: {
         ((item as any)?.end_timestamp as string | undefined) ??
         undefined;
       const dateTime = parseTimestampLoose(startTs ?? null);
+      const rawBookingStatus = safeStr(item.status);
+      const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `session_${item.tsbookingid}`,
         title: (sess?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Training Session #${item.sessionid}`,
-        status: normalizeStatus(item.bookingstatus, item.status, dateTime),
+        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
         mode: 'Booking',
         activity: 'session',
         type: 'coachCal' as keyof typeof ICONS,
@@ -274,7 +307,8 @@ const mergeBookings = (params: {
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
         targetId: typeof item.sessionid === 'number' ? item.sessionid : undefined,
-        isDbCompleted: String(item.bookingstatus ?? '').toLowerCase().includes('complete'),
+        bookingStatus: rawBookingStatus,
+        sessionStatus: rawSessionStatus,
       } satisfies UnifiedBooking;
     }),
   ];
@@ -318,6 +352,8 @@ const mergeHosting = (params: {
         dateTime,
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
+        bookingStatus: '',
+        sessionStatus: '',
       } satisfies UnifiedBooking;
     }),
     ...createdSessions.map((s) => {
@@ -338,6 +374,8 @@ const mergeHosting = (params: {
         dateTime,
         startTimestamp: startTs ?? null,
         endTimestamp: endTs ?? null,
+        bookingStatus: '',
+        sessionStatus: '',
       } satisfies UnifiedBooking;
     }),
   ];
@@ -385,7 +423,7 @@ export default function ActivityPage() {
   const [calendarMode, setCalendarMode] = useState<"Booking" | "Hosting">("Booking");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedActivity, setSelectedActivity] = useState<UnifiedBooking | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"All" | "Upcoming" | "Completed" | "Cancelled">("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Upcoming" | "Completed" | "Cancelled" | "Missed">("All");
   const [activityKindFilter, setActivityKindFilter] = useState<"All" | "Court" | "Event" | "TS">("All");
   const [openFilter, setOpenFilter] = useState<null | 'status' | 'activity' | 'type'>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -560,16 +598,17 @@ export default function ActivityPage() {
       ? dashboardLoading
       : dashboardLoading);
 
-  const getStatusStyle = (status: "Completed" | "Upcoming" | "Cancelled") => {
+  const getStatusStyle = (status: UnifiedBooking['status']) => {
     switch (status) {
       case "Completed": return styles.completed;
       case "Upcoming": return styles.upcoming;
       case "Cancelled": return styles.cancelled;
+      case "Missed": return styles.missed;
       default: return {};
     }
   };
 
-  const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed';
+  const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed' || status === 'Missed';
 
   const recordTitlePrefix = (activity: UnifiedBooking['activity']): string => {
     if (activity === 'court') return 'Venue';
@@ -578,6 +617,10 @@ export default function ActivityPage() {
   };
 
   const renderRecord = (item: UnifiedBooking) => {
+    const btnState = item.mode === 'Booking'
+      ? deriveButtonState(item.bookingStatus, item.sessionStatus, item.dateTime)
+      : { reviewEnabled: false, cancelEnabled: false };
+    const hasTargetId = typeof item.targetId === 'number';
     return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -631,36 +674,38 @@ export default function ActivityPage() {
           </Text>
         )}
 
-        {/* Action buttons — only shown in Booking mode */}
-        {item.mode === 'Booking' && item.status === 'Upcoming' && (
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={(e) => { e.stopPropagation(); setCancelTarget(item); }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
-          </TouchableOpacity>
-        )}
+        {/* Action buttons — always rendered in Booking mode, disabled when not applicable */}
+        {item.mode === 'Booking' && (
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={[styles.cancelBtn, !btnState.cancelEnabled && styles.btnDisabled]}
+              disabled={!btnState.cancelEnabled}
+              onPress={(e) => { e.stopPropagation(); setCancelTarget(item); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.cancelBtnText, !btnState.cancelEnabled && styles.btnTextDisabled]}>Cancel Booking</Text>
+            </TouchableOpacity>
 
-        {item.mode === 'Booking' && item.status !== 'Cancelled' && item.isDbCompleted && typeof item.targetId === 'number' && (
-          <TouchableOpacity
-            style={styles.reviewBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              const targettype = item.activity === 'session' ? 'trainingsession' : item.activity;
-              router.push({
-                pathname: '/event/reviewForm',
-                params: {
-                  targettype,
-                  targetid: String(item.targetId),
-                  title: encodeURIComponent(item.title),
-                },
-              });
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.reviewBtnText}>Write a Review</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.reviewBtn, (!btnState.reviewEnabled || !hasTargetId) && styles.btnDisabled]}
+              disabled={!btnState.reviewEnabled || !hasTargetId}
+              onPress={(e) => {
+                e.stopPropagation();
+                const targettype = item.activity === 'session' ? 'trainingsession' : item.activity;
+                router.push({
+                  pathname: '/event/reviewForm',
+                  params: {
+                    targettype,
+                    targetid: String(item.targetId),
+                    title: encodeURIComponent(item.title),
+                  },
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.reviewBtnText, (!btnState.reviewEnabled || !hasTargetId) && styles.btnTextDisabled]}>Write a Review</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
 
@@ -894,7 +939,7 @@ export default function ActivityPage() {
               {openFilter !== null && (
                 <View style={styles.dropdownMenu}>
                   {(openFilter === 'status'
-                    ? (['All', 'Upcoming', 'Completed', 'Cancelled'] as const).map((opt) => ({
+                    ? (['All', 'Upcoming', 'Completed', 'Cancelled', 'Missed'] as const).map((opt) => ({
                         key: opt,
                         label: opt,
                         selected: statusFilter === opt,
@@ -1172,6 +1217,9 @@ const styles = StyleSheet.create({
   cancelled: {
     backgroundColor: COLORS.danger,
   },
+  missed: {
+    backgroundColor: COLORS.neutral700,
+  },
   calendarControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1419,13 +1467,17 @@ const styles = StyleSheet.create({
   optionChipTextActive: {
     color: COLORS.white,
   },
-  cancelBtn: {
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginTop: 10,
+    flexWrap: 'wrap',
+  },
+  cancelBtn: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
     backgroundColor: COLORS.danger,
-    alignSelf: 'flex-start',
   },
   cancelBtnText: {
     fontSize: 13,
@@ -1433,16 +1485,20 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   reviewBtn: {
-    marginTop: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
     backgroundColor: COLORS.bootstrapBlue,
-    alignSelf: 'flex-start',
   },
   reviewBtnText: {
     fontSize: 13,
     fontWeight: '700',
+    color: COLORS.white,
+  },
+  btnDisabled: {
+    opacity: 0.35,
+  },
+  btnTextDisabled: {
     color: COLORS.white,
   },
   cancelModalOverlay: {
