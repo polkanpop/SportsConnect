@@ -88,6 +88,25 @@ const formatEntryFee = (fee: any) => {
   return String(n)
 }
 
+const firstText = (...values: any[]): string | null => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const s = value.trim()
+      if (s) return s
+      continue
+    }
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (typeof v === 'string') {
+          const s = v.trim()
+          if (s) return s
+        }
+      }
+    }
+  }
+  return null
+}
+
 const deriveBookingActionState = (
   bookingStatusRaw: any,
   sessionStatusRaw: any,
@@ -133,7 +152,17 @@ const deriveBookingActionState = (
 
 const resolveVenueLabel = (row: any): string | null => {
   if (!row || typeof row !== 'object') return null
-  return row.court_name || row.venue || row.address || null
+  return firstText(
+    row.court?.name,
+    row.court_name,
+    row.courtName,
+    row.selected_court_name,
+    row.selected_base_name,
+    row.venue?.name,
+    row.venue_name,
+    row.venue,
+    row.address,
+  )
 }
 
 const resolveVenueNameOnly = (row: any): string | null => {
@@ -146,12 +175,18 @@ const resolveVenueNameOnly = (row: any): string | null => {
   const firstCourt = Array.isArray(courtsRel) ? courtsRel[0] : courtsRel
   const courtinfoRel = (firstCourt as any)?.courtinfo
   const firstCourtInfo = Array.isArray(courtinfoRel) ? courtinfoRel[0] : courtinfoRel
-  return (
-    (row as any)?.venue ||
-    (firstCourtInfo as any)?.name ||
-    (firstAvailability as any)?.venue ||
-    (firstBooking as any)?.venue ||
-    null
+  return firstText(
+    (row as any)?.venue?.name,
+    (row as any)?.venue_name,
+    (row as any)?.venue,
+    (row as any)?.court?.venue?.name,
+    (firstCourtInfo as any)?.name,
+    (firstAvailability as any)?.venue?.name,
+    (firstAvailability as any)?.venue,
+    (firstBooking as any)?.venue?.name,
+    (firstBooking as any)?.venue,
+    (row as any)?.court_name,
+    (row as any)?.courtName,
   )
 }
 
@@ -1137,12 +1172,17 @@ export default function DetailsPage() {
       const avail = singleAvailQuery.data as any
       const courtsRel = Array.isArray(avail?.courts) ? avail.courts[0] : (avail?.courts ?? null)
       const courtInfoRel = Array.isArray(courtsRel?.courtinfo) ? courtsRel.courtinfo[0] : (courtsRel?.courtinfo ?? null)
-      const reviewTitle =
-        (courtInfoRel as any)?.name ||
-        (courtBookingQuery.data as any)?.selected_base_name ||
-        (courtBookingQuery.data as any)?.selected_court_name ||
-        `Court #${courtid}`
-      return { targettype: 'court', targetid: String(courtid), title: encodeURIComponent(String(reviewTitle)) }
+      const reviewVenueName =
+        resolveVenueNameOnly(courtInfoRel) ||
+        resolveVenueNameOnly(singleAvailQuery.data) ||
+        resolveVenueNameOnly(courtBookingQuery.data) ||
+        `Venue #${courtid}`
+      return {
+        targettype: 'court',
+        targetid: String(courtid),
+        title: encodeURIComponent(String(reviewVenueName)),
+        venueName: encodeURIComponent(String(reviewVenueName)),
+      }
     }
     if (parsed.kind === 'event_booking') {
       const eventid = (eventBookingQuery.data as any)?.eventid
@@ -1272,11 +1312,13 @@ export default function DetailsPage() {
     }
 
     if (parsed.kind === 'created_event') {
-      return resolveVenueNameOnly(createdEventInfoQuery.data) || resolveVenueNameOnly(createdEventQuery.data) || null
+      const combined = eventsCombinedList.find((x) => x.eventid === parsed.id)
+      return resolveVenueNameOnly(createdEventInfoQuery.data) || resolveVenueNameOnly(createdEventQuery.data) || resolveVenueNameOnly(combined) || null
     }
 
     if (parsed.kind === 'created_session') {
-      return resolveVenueNameOnly(createdSessionInfoQuery.data) || resolveVenueNameOnly(createdSessionQuery.data) || null
+      const combined = sessionsCombinedList.find((x) => x.sessionid === parsed.id)
+      return resolveVenueNameOnly(createdSessionInfoQuery.data) || resolveVenueNameOnly(createdSessionQuery.data) || resolveVenueNameOnly(combined) || null
     }
 
     return null

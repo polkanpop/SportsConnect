@@ -249,6 +249,7 @@ export default function EventPanel({ organizerId }: Props) {
 	const [pendingCloudinaryDeletes, setPendingCloudinaryDeletes] = useState<string[]>([]);
 	const [savingEvent, setSavingEvent] = useState(false);
 	const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+	const [editBaselineSnapshot, setEditBaselineSnapshot] = useState<string>("");
 	const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, "approve" | "reject">>({});
 	const [expandedNoteEventIds, setExpandedNoteEventIds] = useState<Set<number>>(new Set());
 
@@ -273,9 +274,9 @@ export default function EventPanel({ organizerId }: Props) {
 	}, [editCap, editDescription, editImages, editTitle, makeEditSnapshot]);
 
 	const isDirty = useMemo(() => {
-		if (!initialEditSnapshotRef.current) return false;
-		return currentEditSnapshot !== initialEditSnapshotRef.current;
-	}, [currentEditSnapshot]);
+		if (!editBaselineSnapshot) return false;
+		return currentEditSnapshot !== editBaselineSnapshot;
+	}, [currentEditSnapshot, editBaselineSnapshot]);
 
 	useEffect(() => {
 		isDirtyRef.current = isDirty;
@@ -555,6 +556,7 @@ export default function EventPanel({ organizerId }: Props) {
 					images: imgs,
 				});
 				initialEditSnapshotRef.current = snapshot;
+				setEditBaselineSnapshot(snapshot);
 			} catch {
 				if (cancelled) return;
 				setEditImages([]);
@@ -565,6 +567,7 @@ export default function EventPanel({ organizerId }: Props) {
 					images: [],
 				});
 				initialEditSnapshotRef.current = snapshot;
+				setEditBaselineSnapshot(snapshot);
 			}
 		})();
 		return () => {
@@ -760,8 +763,9 @@ export default function EventPanel({ organizerId }: Props) {
 			}
 			await loadHostEvents();
 			initialEditSnapshotRef.current = currentEditSnapshot;
+			setEditBaselineSnapshot(currentEditSnapshot);
 			setPendingCloudinaryDeletes([]);
-			setSaveSuccessMessage("Court updated successfully.");
+			setSaveSuccessMessage("Event updated successfully.");
 		} catch (e: any) {
 			setHostEventsError(e?.message || String(e));
 		} finally {
