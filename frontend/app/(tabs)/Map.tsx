@@ -1112,7 +1112,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v11</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v12</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1507,16 +1507,22 @@
                                 <Text style={styles.placeholderText}>No cover image available</Text>
                               </View>
                             )}
+                            <View style={styles.sheetCoverOverlay}>
+                              <Text style={styles.sheetCoverTitle} numberOfLines={2} ellipsizeMode="tail">
+                                {selectedMarker.name}
+                              </Text>
+                              <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
+                                {selectedMarker.address}
+                              </Text>
+                            </View>
                           </View>
                         );
                       })()}
 
                       {/* ...existing code... */}
-                      {/* Title & actions row (layout adjusted for single-line names) */}
+                      {/* Action row */}
                       <View style={styles.titleRow}> 
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.markerTitle} numberOfLines={2} ellipsizeMode="tail">{selectedMarker.name}</Text>
-                        </View>
+                        <View style={{ flex: 1 }} />
                         <View style={styles.actionRow}> 
                         <TouchableOpacity
                           style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
@@ -1589,14 +1595,6 @@
                       </View>
 
 
-                      {/* Location Address */}
-                      <Text style={styles.markerAddress}>
-                        <Text style={styles.markerAddressLabel}>Address: </Text>
-                        {selectedMarker.address}
-                      </Text>
-
-
-
                       {/* Venue Tags (moved under address) */}
                       <View style={styles.sheetTagRow}>
                         {/* Venue */}
@@ -1615,17 +1613,14 @@
                         })()}
                       </View>
 
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.sheetTabsRow}
-                      >
+                      <View style={styles.sheetTabsRow}>
                         {(['Schedule', 'Transport', 'Images', 'Reviews'] as const).map((tab) => {
                           const active = activeSheetTab === tab;
+                          const isLast = tab === 'Reviews';
                           return (
                             <TouchableOpacity
                               key={tab}
-                              style={[styles.sheetTabBtn, active && styles.sheetTabBtnActive]}
+                              style={[styles.sheetTabBtn, !isLast && styles.sheetTabBtnDivider, active && styles.sheetTabBtnActive]}
                               onPress={() => setActiveSheetTab(tab)}
                               activeOpacity={0.85}
                             >
@@ -1633,7 +1628,7 @@
                             </TouchableOpacity>
                           );
                         })}
-                      </ScrollView>
+                      </View>
 
                       {activeSheetTab === 'Schedule' && (
                         availabilityLoading ? (
@@ -2253,11 +2248,12 @@
     },
     sheetCoverFrame: {
       width: '100%',
-      height: 180,
+      height: 170,
       borderRadius: 16,
       overflow: 'hidden',
       marginBottom: 14,
       backgroundColor: COLORS.neutral150,
+      position: 'relative',
     },
     sheetCoverImage: {
       width: '100%',
@@ -2269,6 +2265,29 @@
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: COLORS.neutral150,
+    },
+    sheetCoverOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      minHeight: '30%',
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 12,
+      justifyContent: 'flex-end',
+    },
+    sheetCoverTitle: {
+      fontSize: 24,
+      fontWeight: '800',
+      color: COLORS.white,
+      marginBottom: 4,
+    },
+    sheetCoverAddress: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#E5E7EB',
     },
     topRightActions: {
       position: "absolute",
@@ -2498,7 +2517,7 @@
     sheetTagRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginTop: 8,
+      marginTop: 4,
       marginBottom: 14,
     },
     sheetTag: {
@@ -2513,22 +2532,29 @@
     sheetVenueTag: { backgroundColor: '#6a5acd' },
     sheetTagText: { color: '#ddd', fontSize: 14, fontWeight: '700' },
     sheetTabsRow: {
-      paddingTop: 4,
-      paddingBottom: 12,
-      paddingRight: 8,
-      gap: 8,
-    },
-    sheetTabBtn: {
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 999,
+      width: '100%',
+      flexDirection: 'row',
       borderWidth: 1,
       borderColor: COLORS.neutral375,
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginTop: 2,
+      marginBottom: 12,
       backgroundColor: COLORS.white,
+    },
+    sheetTabBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.white,
+    },
+    sheetTabBtnDivider: {
+      borderRightWidth: 1,
+      borderRightColor: COLORS.neutral375,
     },
     sheetTabBtnActive: {
       backgroundColor: COLORS.brandOrangeDeep,
-      borderColor: COLORS.brandOrangeDeep,
     },
     sheetTabBtnText: {
       fontSize: 14,

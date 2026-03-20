@@ -1,17 +1,12 @@
-import {
-  cancelCourtBooking,
-  cancelEventBooking,
-  cancelTsBooking,
-} from "@/lib/backendApi";
 import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import { queryKeys } from "@/hooks/query-keys";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
-import { Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Type definition for Unified Booking
@@ -126,53 +121,6 @@ const deriveDisplayStatus = (
   if (ss.includes('cancel')) return 'Cancelled';
   if (ss === 'missed') return 'Missed';
   return 'Upcoming';
-};
-
-/**
- * Derive Review / Cancel button enabled states from the business logic matrix.
- *
- * A (Future+Pending):   Review=off  Cancel=on
- * B (Future+Approved):  Review=off  Cancel=on
- * C (Rejected/Cancel):  Review=off  Cancel=off
- * D (Past+Ignored):     Review=off  Cancel=off
- * E (Past+Played):      Review=on   Cancel=off
- * F (Past+No-Show):     Review=off  Cancel=off
- */
-const deriveButtonState = (
-  bookingStatusRaw: string,
-  sessionStatusRaw: string,
-  dateTime?: Date,
-): { reviewEnabled: boolean; cancelEnabled: boolean } => {
-  const bs = (bookingStatusRaw || '').toLowerCase();
-  const ss = (sessionStatusRaw || '').toLowerCase();
-  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
-
-  // C: Rejected or Cancelled
-  if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
-    return { reviewEnabled: false, cancelEnabled: false };
-  }
-
-  // Missed (D or F)
-  if (ss === 'missed') {
-    return { reviewEnabled: false, cancelEnabled: false };
-  }
-
-  // D: Past + host ignored (still pending)
-  if (isPast && bs === 'pending') {
-    return { reviewEnabled: false, cancelEnabled: false };
-  }
-
-  // E: Completed
-  if (ss === 'completed') {
-    return { reviewEnabled: true, cancelEnabled: false };
-  }
-
-  // A, B: Future with upcoming session
-  if (!isPast) {
-    return { reviewEnabled: false, cancelEnabled: true };
-  }
-
-  return { reviewEnabled: false, cancelEnabled: false };
 };
 
 /** Legacy loose normalizer for Hosting mode (events/sessions the user created). */
@@ -438,32 +386,6 @@ export default function ActivityPage() {
   const userIdLoading = dashboard.isLoading && userId == null
   const userIdError = dashboard.error
 
-  // Cancel booking state
-  const [cancelTarget, setCancelTarget] = useState<UnifiedBooking | null>(null);
-  const cancelMutation = useMutation({
-    mutationFn: async (item: UnifiedBooking) => {
-      const parts = item.id.split('_');
-      const numericId = parseInt(parts[parts.length - 1], 10);
-      if (item.activity === 'court') return cancelCourtBooking(numericId);
-      if (item.activity === 'event') return cancelEventBooking(numericId);
-      return cancelTsBooking(numericId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: q => {
-        const k = q.queryKey;
-        return Array.isArray(k) && (
-          k[0] === 'courtbookings' || k[0] === 'dashboard' ||
-          k[0] === queryKeys.eventsCombined[0] || k[0] === queryKeys.trainingSessionsCombined[0]
-        );
-      }});
-      setCancelTarget(null);
-    },
-    onError: (err: any) => {
-      setCancelTarget(null);
-      alert(err?.message ?? 'Failed to cancel booking.');
-    },
-  });
-
   const onPullToRefresh = useCallback(async () => {
     if (typeof userId !== 'number') return;
     setRefreshing(true);
@@ -617,10 +539,6 @@ export default function ActivityPage() {
   };
 
   const renderRecord = (item: UnifiedBooking) => {
-    const btnState = item.mode === 'Booking'
-      ? deriveButtonState(item.bookingStatus, item.sessionStatus, item.dateTime)
-      : { reviewEnabled: false, cancelEnabled: false };
-    const hasTargetId = typeof item.targetId === 'number';
     return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -673,42 +591,6 @@ export default function ActivityPage() {
             <Text style={styles.eventMetaLabel}>Venue:</Text> {item.courtName || 'Unknown'}
           </Text>
         )}
-
-        {/* Action buttons — always rendered in Booking mode, disabled when not applicable */}
-        {item.mode === 'Booking' && (
-          <View style={styles.actionButtonsRow}>
-            <TouchableOpacity
-              style={[styles.cancelBtn, !btnState.cancelEnabled && styles.btnDisabled]}
-              disabled={!btnState.cancelEnabled}
-              onPress={(e) => { e.stopPropagation(); setCancelTarget(item); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.cancelBtnText, !btnState.cancelEnabled && styles.btnTextDisabled]}>Cancel Booking</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.reviewBtn, (!btnState.reviewEnabled || !hasTargetId) && styles.btnDisabled]}
-              disabled={!btnState.reviewEnabled || !hasTargetId}
-              onPress={(e) => {
-                e.stopPropagation();
-                const targettype = item.activity === 'session' ? 'trainingsession' : item.activity;
-                router.push({
-                  pathname: '/event/reviewForm',
-                  params: {
-                    targettype,
-                    targetid: String(item.targetId),
-                    title: encodeURIComponent(item.title),
-                  },
-                });
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.reviewBtnText, (!btnState.reviewEnabled || !hasTargetId) && styles.btnTextDisabled]}>Write a Review</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-
       </View>
     </TouchableOpacity>
     );
@@ -1002,43 +884,6 @@ export default function ActivityPage() {
           )}
         </View>
       </ScrollView>
-
-      {/* Cancel Booking Confirmation Modal */}
-      <Modal
-        visible={!!cancelTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCancelTarget(null)}
-      >
-        <View style={styles.cancelModalOverlay}>
-          <View style={styles.cancelModalBox}>
-            <Text style={styles.cancelModalTitle}>Cancel Booking?</Text>
-            <Text style={styles.cancelModalBody}>
-              Are you sure you want to cancel{'\n'}
-              <Text style={{ fontWeight: '800' }}>{cancelTarget?.title ?? 'this booking'}</Text>?
-            </Text>
-            <View style={styles.cancelModalBtns}>
-              <TouchableOpacity
-                style={[styles.cancelModalBtn, styles.cancelModalKeepBtn]}
-                onPress={() => setCancelTarget(null)}
-                disabled={cancelMutation.isPending}
-              >
-                <Text style={styles.cancelModalKeepText}>Keep</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.cancelModalBtn, styles.cancelModalConfirmBtn]}
-                onPress={() => cancelTarget && cancelMutation.mutate(cancelTarget)}
-                disabled={cancelMutation.isPending}
-              >
-                {cancelMutation.isPending
-                  ? <ActivityIndicator size="small" color={COLORS.white} />
-                  : <Text style={styles.cancelModalConfirmText}>Yes, Cancel</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
