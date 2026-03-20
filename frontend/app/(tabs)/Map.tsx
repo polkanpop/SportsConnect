@@ -24,7 +24,7 @@
   import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
   import * as Location from "expo-location";
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-  import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+  import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
   import { useFocusEffect, useRouter } from 'expo-router';
   import {
     Dimensions,
@@ -234,8 +234,8 @@
     { key: 'Sun', label: 'Sun' },
   ]
 
-  const DETAIL_IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
-  const DETAIL_IMAGE_TILE_HEIGHT = 120
+  const DETAIL_IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.82)
+  const DETAIL_IMAGE_TILE_HEIGHT = 160
 
   export default function App() {
     const router = useRouter();
@@ -258,10 +258,24 @@
     const zoomGesture = useMemo(() => {
       const pinch = Gesture.Pinch()
         .onUpdate((e) => { zoomScale.value = Math.max(1, Math.min(zoomBaseScale.value * e.scale, 4)) })
-        .onEnd(() => { zoomBaseScale.value = zoomScale.value })
+        .onEnd(() => {
+          zoomScale.value = withTiming(1, { duration: 160 })
+          zoomTX.value = withTiming(0, { duration: 160 })
+          zoomTY.value = withTiming(0, { duration: 160 })
+          zoomBaseScale.value = 1
+          zoomBaseX.value = 0
+          zoomBaseY.value = 0
+        })
       const pan = Gesture.Pan()
         .onUpdate((e) => { if (zoomScale.value <= 1) return; zoomTX.value = zoomBaseX.value + e.translationX; zoomTY.value = zoomBaseY.value + e.translationY })
-        .onEnd(() => { zoomBaseX.value = zoomTX.value; zoomBaseY.value = zoomTY.value })
+        .onEnd(() => {
+          zoomScale.value = withTiming(1, { duration: 160 })
+          zoomTX.value = withTiming(0, { duration: 160 })
+          zoomTY.value = withTiming(0, { duration: 160 })
+          zoomBaseScale.value = 1
+          zoomBaseX.value = 0
+          zoomBaseY.value = 0
+        })
       return Gesture.Simultaneous(pinch, pan)
     }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomScale, zoomTX, zoomTY])
     useEffect(() => {
@@ -1112,7 +1126,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v12</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v13</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1512,7 +1526,7 @@
                                 {selectedMarker.name}
                               </Text>
                               <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
-                                {selectedMarker.address}
+                                Address: {selectedMarker.address}
                               </Text>
                             </View>
                           </View>
@@ -2271,23 +2285,23 @@
       left: 0,
       right: 0,
       bottom: 0,
-      minHeight: '30%',
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      height: '30%',
+      backgroundColor: COLORS.white,
       paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: 12,
+      paddingTop: 8,
+      paddingBottom: 8,
       justifyContent: 'flex-end',
     },
     sheetCoverTitle: {
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: '800',
-      color: COLORS.white,
-      marginBottom: 4,
+      color: COLORS.neutral975,
+      marginBottom: 2,
     },
     sheetCoverAddress: {
-      fontSize: 16,
+      fontSize: 14,
       fontWeight: '600',
-      color: '#E5E7EB',
+      color: COLORS.neutral850,
     },
     topRightActions: {
       position: "absolute",

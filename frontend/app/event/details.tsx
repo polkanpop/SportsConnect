@@ -88,6 +88,43 @@ const formatEntryFee = (fee: any) => {
   return String(n)
 }
 
+const deriveBookingActionState = (
+  bookingStatusRaw: any,
+  sessionStatusRaw: any,
+  dateTime?: Date,
+): { reviewEnabled: boolean; cancelEnabled: boolean } => {
+  const bs = String(bookingStatusRaw ?? '').trim().toLowerCase()
+  const ss = String(sessionStatusRaw ?? '').trim().toLowerCase()
+  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now())
+
+  // C: rejected/cancelled -> both disabled
+  if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
+    return { reviewEnabled: false, cancelEnabled: false }
+  }
+
+  // Missed (D or F) -> both disabled
+  if (ss === 'missed') {
+    return { reviewEnabled: false, cancelEnabled: false }
+  }
+
+  // D: past + host ignored (pending) -> both disabled
+  if (isPast && bs === 'pending') {
+    return { reviewEnabled: false, cancelEnabled: false }
+  }
+
+  // E: completed -> review enabled, cancel disabled
+  if (ss === 'completed' || ss === 'complete') {
+    return { reviewEnabled: true, cancelEnabled: false }
+  }
+
+  // A/B: future + upcoming -> review disabled, cancel enabled
+  if (!isPast) {
+    return { reviewEnabled: false, cancelEnabled: true }
+  }
+
+  return { reviewEnabled: false, cancelEnabled: false }
+}
+
 const resolveVenueLabel = (row: any): string | null => {
   if (!row || typeof row !== 'object') return null
   return row.court_name || row.venue || row.address || null
@@ -985,6 +1022,39 @@ export default function DetailsPage() {
     linkedSessionsByCourtBookingQuery.error,
   ])
 
+  const bookingActionState = useMemo(() => {
+    if (parsed.kind === 'court_booking') {
+      const b: any = courtBookingQuery.data
+      return deriveBookingActionState(b?.status, b?.bookingstatus, parseTimestampLoose(b?.start_timestamp))
+    }
+    if (parsed.kind === 'event_booking') {
+      const b: any = eventBookingQuery.data
+      const eventid = Number(b?.eventid)
+      const evCombined = Number.isFinite(eventid) ? eventsCombinedList.find((x) => x.eventid === eventid) : null
+      const ev: any = evCombined || eventBookingEventQuery.data
+      const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? b?.start_timestamp ?? null)
+      return deriveBookingActionState(b?.status, b?.bookingstatus, start)
+    }
+    if (parsed.kind === 'session_booking') {
+      const b: any = sessionBookingQuery.data
+      const sessionid = Number(b?.sessionid)
+      const sCombined = Number.isFinite(sessionid) ? sessionsCombinedList.find((x) => x.sessionid === sessionid) : null
+      const s: any = sCombined || sessionBookingSessionQuery.data
+      const start = parseTimestampLoose(s?.start_timestamp ?? s?.time ?? b?.start_timestamp ?? null)
+      return deriveBookingActionState(b?.status, b?.bookingstatus, start)
+    }
+    return null
+  }, [
+    parsed.kind,
+    courtBookingQuery.data,
+    eventBookingQuery.data,
+    sessionBookingQuery.data,
+    eventBookingEventQuery.data,
+    sessionBookingSessionQuery.data,
+    eventsCombinedList,
+    sessionsCombinedList,
+  ])
+
   const canCancel = useMemo(() => {
     const lower = (v: any) => (typeof v === 'string' ? v.toLowerCase() : '')
     if (parsed.kind === 'court_booking') {
@@ -995,26 +1065,22 @@ export default function DetailsPage() {
         linkedSessionsByCourtBookingQuery.isFetching
       if (depsLoading) return false
       if (courtCancelBlockedReason) return false
-      return lower(courtBookingQuery.data?.bookingstatus ?? (courtBookingQuery.data as any)?.status) === 'upcoming'
+      return !!bookingActionState?.cancelEnabled
     }
-    if (parsed.kind === 'event_booking') return lower(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status) === 'upcoming'
-    if (parsed.kind === 'session_booking') return lower(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status) === 'upcoming'
+    if (parsed.kind === 'event_booking' || parsed.kind === 'session_booking') {
+      return !!bookingActionState?.cancelEnabled
+    }
     if (parsed.kind === 'created_event') return lower(createdEventQuery.data?.status) === 'upcoming'
     if (parsed.kind === 'created_session') return lower(createdSessionQuery.data?.status) === 'upcoming'
     return false
   }, [
     parsed.kind,
+    bookingActionState,
     courtCancelBlockedReason,
-    courtBookingQuery.data?.bookingstatus,
-    (courtBookingQuery.data as any)?.status,
     linkedEventsByCourtBookingQuery.isFetching,
     linkedEventsByCourtBookingQuery.isLoading,
     linkedSessionsByCourtBookingQuery.isFetching,
     linkedSessionsByCourtBookingQuery.isLoading,
-    eventBookingQuery.data?.bookingstatus,
-    (eventBookingQuery.data as any)?.status,
-    sessionBookingQuery.data?.bookingstatus,
-    (sessionBookingQuery.data as any)?.status,
     createdEventQuery.data?.status,
     createdSessionQuery.data?.status,
   ])
@@ -1045,25 +1111,18 @@ export default function DetailsPage() {
   ])
 
   const canReview = useMemo(() => {
-    const normalize = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '')
-    const isCompleted = (v: any) => {
-      const s = normalize(v)
-      return s === 'completed' || s === 'complete'
-    }
     if (parsed.kind === 'court_booking') {
-      const bookingStatus = (courtBookingQuery.data as any)?.bookingstatus ?? (courtBookingQuery.data as any)?.status
       const owneridRaw = Number((singleCourtQuery.data as any)?.ownerid)
       const isOwner = Number.isFinite(owneridRaw) && Number.isFinite(userId) && owneridRaw === Number(userId)
-      return isCompleted(bookingStatus) && !isOwner && !isRecordCancelled
+      return !!bookingActionState?.reviewEnabled && !isOwner && !isRecordCancelled
     }
-    if (parsed.kind === 'event_booking') {
-      return normalize(eventBookingQuery.data?.bookingstatus ?? (eventBookingQuery.data as any)?.status).includes('complete') && !isRecordCancelled
-    }
-    if (parsed.kind === 'session_booking') {
-      return normalize(sessionBookingQuery.data?.bookingstatus ?? (sessionBookingQuery.data as any)?.status).includes('complete') && !isRecordCancelled
+    if (parsed.kind === 'event_booking' || parsed.kind === 'session_booking') {
+      return !!bookingActionState?.reviewEnabled && !isRecordCancelled
     }
     return false
-  }, [parsed.kind, courtBookingQuery.data, eventBookingQuery.data, sessionBookingQuery.data, singleCourtQuery.data, userId, isRecordCancelled])
+  }, [parsed.kind, bookingActionState, singleCourtQuery.data, userId, isRecordCancelled])
+
+  const isBookingKind = parsed.kind === 'court_booking' || parsed.kind === 'event_booking' || parsed.kind === 'session_booking'
 
   const reviewNavParams = useMemo(() => {
     if (parsed.kind === 'court_booking') {
@@ -1454,10 +1513,18 @@ export default function DetailsPage() {
           {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
             <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>
           )}
-          {canReview && reviewNavParams && (
+          {isBookingKind && (
             <Pressable
-              style={({ pressed }) => [styles.reviewBtn, pressed && { opacity: 0.85 }]}
-              onPress={() => router.push({ pathname: '/event/reviewForm', params: reviewNavParams } as any)}
+              disabled={!canReview || !reviewNavParams}
+              style={({ pressed }) => [
+                styles.reviewBtn,
+                (!canReview || !reviewNavParams) && styles.reviewBtnDisabled,
+                pressed && canReview && !!reviewNavParams && { opacity: 0.85 },
+              ]}
+              onPress={() => {
+                if (!canReview || !reviewNavParams) return
+                router.push({ pathname: '/event/reviewForm', params: reviewNavParams } as any)
+              }}
             >
               <Text style={styles.reviewBtnText}>Write a Review</Text>
             </Pressable>
@@ -1595,6 +1662,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 10,
+  },
+  reviewBtnDisabled: {
+    opacity: 0.4,
   },
   reviewBtnText: {
     color: '#FFF',
