@@ -1521,22 +1521,15 @@
                                 <Text style={styles.placeholderText}>No cover image available</Text>
                               </View>
                             )}
-                            <View style={styles.sheetCoverOverlay}>
-                              <Text style={styles.sheetCoverTitle} numberOfLines={2} ellipsizeMode="tail">
-                                {selectedMarker.name}
-                              </Text>
-                              <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
-                                Address: {selectedMarker.address}
-                              </Text>
-                            </View>
                           </View>
                         );
                       })()}
 
-                      {/* ...existing code... */}
-                      {/* Action row */}
+                      {/* Title + action buttons are the only elements overlapping the image edge. */}
                       <View style={styles.titleRow}> 
-                        <View style={{ flex: 1 }} />
+                        <Text style={styles.sheetCoverTitle} numberOfLines={2} ellipsizeMode="tail">
+                          {selectedMarker.name}
+                        </Text>
                         <View style={styles.actionRow}> 
                         <TouchableOpacity
                           style={[styles.favoriteButton, isFavorite && styles.favoriteActive]}
@@ -1607,6 +1600,10 @@
                         </TouchableOpacity>
                         </View>
                       </View>
+
+                      <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
+                        Address: {selectedMarker.address}
+                      </Text>
 
 
                       {/* Venue Tags (moved under address) */}
@@ -2262,10 +2259,10 @@
     },
     sheetCoverFrame: {
       width: '100%',
-      height: 170,
+      height: 182,
       borderRadius: 16,
       overflow: 'hidden',
-      marginBottom: 14,
+      marginBottom: 0,
       backgroundColor: COLORS.neutral150,
       position: 'relative',
     },
@@ -2280,25 +2277,17 @@
       justifyContent: 'center',
       backgroundColor: COLORS.neutral150,
     },
-    sheetCoverOverlay: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: '30%',
-      backgroundColor: COLORS.white,
-      paddingHorizontal: 12,
-      paddingTop: 8,
-      paddingBottom: 8,
-      justifyContent: 'flex-end',
-    },
     sheetCoverTitle: {
+      flex: 1,
       fontSize: 20,
       fontWeight: '800',
       color: COLORS.neutral975,
-      marginBottom: 2,
+      marginRight: 10,
     },
     sheetCoverAddress: {
+      marginTop: 8,
+      marginBottom: 8,
+      paddingHorizontal: 10,
       fontSize: 14,
       fontWeight: '600',
       color: COLORS.neutral850,
@@ -2313,7 +2302,7 @@
     },
     favoriteButton: {
       marginRight: 10,
-      marginTop: -12,
+      marginTop: 0,
       padding: 6,
       borderRadius: 20,
       backgroundColor: '#eee',
@@ -2335,7 +2324,7 @@
       borderRadius: 20,
       paddingVertical: 8,
       paddingHorizontal: 14,
-      marginTop: -12,
+      marginTop: 0,
       height: 36,
     },
     bookingButtonDisabled: {
@@ -2361,8 +2350,11 @@
       flexDirection: 'row',
       alignItems: 'center',
       width: '100%',
-      marginBottom: 4,
+      marginTop: -18,
+      marginBottom: 2,
+      paddingHorizontal: 10,
       justifyContent: 'space-between',
+      zIndex: 5,
     },
     markerTitle: {
       fontSize: 17,
@@ -2375,6 +2367,7 @@
     actionRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexShrink: 0,
     },
     markerAddress: {
       fontSize: 16,

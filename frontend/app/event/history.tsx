@@ -88,8 +88,154 @@ function isNoisySubtitle(s?: string | null): boolean {
   return false
 }
 
+function firstNonEmptyText(...values: any[]): string {
+  for (const v of values) {
+    const s = typeof v === 'string' ? v.trim() : ''
+    if (!s) continue
+    if (/^[a-z_]+_\d+$/i.test(s)) continue
+    return s
+  }
+  return ''
+}
+
+function toIsoOrNow(ts: any): string {
+  const d = parseLoose(ts)
+  if (!Number.isNaN(d.getTime())) return d.toISOString()
+  return new Date().toISOString()
+}
+
+function buildSeedHistoryFromDashboard(dashboardRaw: any, userId: number): HistoryEntry[] {
+  const out: HistoryEntry[] = []
+
+  const courtBookings = Array.isArray(dashboardRaw?.court_bookings) ? dashboardRaw.court_bookings : []
+  for (const b of courtBookings) {
+    const id = Number(b?.courtbookingid)
+    if (!Number.isFinite(id)) continue
+    const courtName = firstNonEmptyText(b?.court_name, b?.courtName, b?.title) || `Court #${id}`
+    out.push({
+      id: `seed-court-${id}`,
+      ts: toIsoOrNow(b?.updated_at ?? b?.end_timestamp ?? b?.start_timestamp),
+      kind: 'court_booking',
+      title: `Booked court: ${courtName}`,
+      subtitle: null,
+      fromStatus: null,
+      toStatus: String(b?.bookingstatus ?? b?.status ?? 'upcoming'),
+      meta: {
+        courtbookingid: id,
+        availabilityid: b?.availabilityid ?? null,
+        start_timestamp: b?.start_timestamp ?? null,
+        end_timestamp: b?.end_timestamp ?? null,
+      },
+    })
+  }
+
+  const eventBookings = Array.isArray(dashboardRaw?.event_bookings) ? dashboardRaw.event_bookings : []
+  for (const b of eventBookings) {
+    const id = Number(b?.eventbookingid)
+    if (!Number.isFinite(id)) continue
+    const eventId = Number(b?.eventid)
+    const eventLabel = firstNonEmptyText(b?.event_title, b?.title, b?.name) || (Number.isFinite(eventId) ? `Event ${eventId}` : `Event booking ${id}`)
+    out.push({
+      id: `seed-event-${id}`,
+      ts: toIsoOrNow(b?.updated_at ?? b?.end_timestamp ?? b?.start_timestamp),
+      kind: 'event_booking',
+      title: `Booked event: ${eventLabel}`,
+      subtitle: null,
+      fromStatus: null,
+      toStatus: String(b?.bookingstatus ?? b?.status ?? 'upcoming'),
+      meta: {
+        eventbookingid: id,
+        eventid: Number.isFinite(eventId) ? eventId : null,
+        start_timestamp: b?.start_timestamp ?? null,
+        end_timestamp: b?.end_timestamp ?? null,
+      },
+    })
+  }
+
+  const sessionBookings = Array.isArray(dashboardRaw?.training_bookings) ? dashboardRaw.training_bookings : []
+  for (const b of sessionBookings) {
+    const id = Number(b?.tsbookingid)
+    if (!Number.isFinite(id)) continue
+    const sessionId = Number(b?.sessionid)
+    const label = firstNonEmptyText(b?.session_title, b?.title, b?.name) || (Number.isFinite(sessionId) ? `Session ${sessionId}` : `Session booking ${id}`)
+    out.push({
+      id: `seed-session-${id}`,
+      ts: toIsoOrNow(b?.updated_at ?? b?.end_timestamp ?? b?.start_timestamp),
+      kind: 'session_booking',
+      title: `Booked session: ${label}`,
+      subtitle: null,
+      fromStatus: null,
+      toStatus: String(b?.bookingstatus ?? b?.status ?? 'upcoming'),
+      meta: {
+        tsbookingid: id,
+        sessionid: Number.isFinite(sessionId) ? sessionId : null,
+        start_timestamp: b?.start_timestamp ?? null,
+        end_timestamp: b?.end_timestamp ?? null,
+      },
+    })
+  }
+
+  const createdEvents = Array.isArray(dashboardRaw?.events_combined) ? dashboardRaw.events_combined : []
+  for (const e of createdEvents) {
+    if (Number(e?.organizerid) !== userId) continue
+    const eventId = Number(e?.eventid)
+    if (!Number.isFinite(eventId)) continue
+    const title = firstNonEmptyText(e?.title, e?.event_title) || `Event ${eventId}`
+    out.push({
+      id: `seed-created-event-${eventId}`,
+      ts: toIsoOrNow(e?.updated_at ?? e?.end_timestamp ?? e?.start_timestamp ?? e?.time),
+      kind: 'created_event',
+      title: `Event created: ${title}`,
+      subtitle: null,
+      fromStatus: null,
+      toStatus: String(e?.status ?? ''),
+      meta: {
+        eventid: eventId,
+        courtbookingid: e?.courtbookingid ?? null,
+        start_timestamp: e?.start_timestamp ?? e?.time ?? null,
+        end_timestamp: e?.end_timestamp ?? null,
+        court_name: e?.court_name ?? e?.courtName ?? null,
+      },
+    })
+  }
+
+  const createdSessions = Array.isArray(dashboardRaw?.training_sessions_combined) ? dashboardRaw.training_sessions_combined : []
+  for (const s of createdSessions) {
+    if (Number(s?.coachid) !== userId) continue
+    const sessionId = Number(s?.sessionid)
+    if (!Number.isFinite(sessionId)) continue
+    const title = firstNonEmptyText(s?.title, s?.session_title) || `Session ${sessionId}`
+    out.push({
+      id: `seed-created-session-${sessionId}`,
+      ts: toIsoOrNow(s?.updated_at ?? s?.end_timestamp ?? s?.start_timestamp ?? s?.time),
+      kind: 'created_session',
+      title: `Session created: ${title}`,
+      subtitle: null,
+      fromStatus: null,
+      toStatus: String(s?.status ?? ''),
+      meta: {
+        sessionid: sessionId,
+        courtbookingid: s?.courtbookingid ?? null,
+        start_timestamp: s?.start_timestamp ?? s?.time ?? null,
+        end_timestamp: s?.end_timestamp ?? null,
+        court_name: s?.court_name ?? s?.courtName ?? null,
+      },
+    })
+  }
+
+  const dedup = new Map<string, HistoryEntry>()
+  for (const row of out) {
+    dedup.set(row.id, row)
+  }
+
+  return Array.from(dedup.values())
+    .sort((a, b) => +new Date(b.ts) - +new Date(a.ts))
+    .slice(0, 300)
+}
+
 function statusColor(s?: string | null) {
   const v = String(s ?? '').toLowerCase()
+  if (v.includes('miss')) return { bg: '#fef2f2', fg: '#991b1b', dot: '#dc2626' }
   if (v.includes('cancel')) return { bg: '#fee2e2', fg: '#b91c1c', dot: '#ef4444' }
   if (v.includes('complete') || v.includes('paid')) return { bg: '#dcfce7', fg: '#166534', dot: '#22c55e' }
   if (v.includes('approve')) return { bg: '#dcfce7', fg: '#166534', dot: '#22c55e' }
@@ -367,7 +513,19 @@ export default function HistoryPage() {
     try {
       // Always refresh from local storage first (fast) so the UI reflects
       // recent booking/creating/cancelling immediately when returning here.
-      const local = await loadLocal()
+      let local = await loadLocal()
+
+      // If local history is empty, seed from dashboard rows so users still see records.
+      if (local.length === 0 && typeof userId === 'number') {
+        const seeded = buildSeedHistoryFromDashboard(dashboardRaw, userId)
+        if (seeded.length > 0) {
+          local = seeded
+          itemsCountRef.current = seeded.length
+          hasLoadedOnceRef.current = true
+          setItems(seeded)
+          void setHistory(userId, seeded)
+        }
+      }
 
       const now = Date.now()
       const age = now - lastReloadAtRef.current
@@ -664,8 +822,6 @@ const styles = StyleSheet.create({
   scheduleText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
   subtitle: { marginTop: 4, fontSize: 14, fontWeight: '700', color: '#475569' },
   metaText: { marginTop: 4, fontSize: 12, fontWeight: '800', color: '#64748B' },
-  transitionRow: { marginTop: 8 },
-  transitionText: { fontSize: 14, fontWeight: '900', color: '#0F172A' },
   amount: { marginTop: 8, color: '#0F172A', fontWeight: '900', fontSize: 14 },
 
   emptyWrap: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 24 },
