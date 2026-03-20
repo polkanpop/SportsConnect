@@ -10,6 +10,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   FavouriteCourt,
   listCourtInfoByCourtIdsCached,
+  listEventsCombinedCached,
   CourtInfoRow,
   type CombinedEvent,
 } from "@/lib/backendApi";
@@ -116,9 +117,20 @@ export default function Home() {
   const refetchDashboard = dashboard.refetch
   const userInfo = bootstrapUserInfo.data ?? null
   const userId = typeof bootstrapUserId === 'number' ? bootstrapUserId : null
-  const eventsCombined = Array.isArray(dashboardRaw?.events_combined)
+  const dashboardEventsCombined = Array.isArray(dashboardRaw?.events_combined)
     ? (dashboardRaw.events_combined as CombinedEvent[])
     : []
+
+  const fallbackEventsQuery = useQuery({
+    queryKey: ['home-fallback-events-combined'],
+    queryFn: () => listEventsCombinedCached(),
+    enabled: !!userId && dashboardEventsCombined.length === 0,
+    staleTime: 60_000,
+  })
+
+  const eventsCombined = dashboardEventsCombined.length > 0
+    ? dashboardEventsCombined
+    : (Array.isArray(fallbackEventsQuery.data) ? (fallbackEventsQuery.data as CombinedEvent[]) : [])
 
   const isPlaceholderImageUri = (uri: string): boolean => {
     const u = uri.trim().toLowerCase();
@@ -179,7 +191,12 @@ export default function Home() {
   }
 
   const isUpcomingEvent = (ev: CombinedEvent) => {
-    const st = String((ev as any)?.status ?? '').toLowerCase().trim()
+    const st = String(
+      (ev as any)?.status ??
+      (ev as any)?.event_status ??
+      (ev as any)?.bookingstatus ??
+      ''
+    ).toLowerCase().trim()
     if (st.includes('cancel') || st.includes('complete') || st.includes('missed')) return false
     if (st && !st.includes('upcoming')) return false
 
