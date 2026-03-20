@@ -1226,7 +1226,6 @@ export default function EventPanel({ organizerId }: Props) {
 									) : (
 										<Text style={{ color: "#374151", fontWeight: "700" }}>{String((a.booking as any)?.status || "updated")}</Text>
 									)}
-									</View>
 									{expandedNoteEventIds.has(a.booking.eventbookingid) && (
 										<View style={{ marginTop: 8, backgroundColor: "#f9fafb", borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: "#d1d5db" }}>
 											<Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 4 }}>Note</Text>
