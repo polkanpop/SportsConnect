@@ -92,12 +92,15 @@
 
   const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat);
   const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng);
+  // Keep max zoom-out slightly tighter than whole-country width so panning remains possible.
+  const VN_VIEW_MAX_LAT_DELTA = VN_MAX_LAT_DELTA * 0.74;
+  const VN_VIEW_MAX_LNG_DELTA = VN_MAX_LNG_DELTA * 0.74;
   const VN_MIN_LAT_DELTA = 0.01;
   const VN_MIN_LNG_DELTA = 0.01;
-  const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MAX_LNG_DELTA });
+  const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
-  // Matches the collapsed bottom-sheet coverage (30%) + a small nav overlap buffer.
-  const MAP_BOTTOM_VIEWPORT_OFFSET_RATIO = 0.34;
+  // Collapsed sheet is 30%; this shifts focused points to center of visible map area.
+  const MAP_FOCUS_LAT_OFFSET_RATIO = 0.15;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -116,14 +119,13 @@
   }
 
   function clampRegionToVietnam(region: Region): Region {
-    const latitudeDelta = Math.max(VN_MIN_LAT_DELTA, Math.min(region.latitudeDelta, VN_MAX_LAT_DELTA));
-    const longitudeDelta = Math.max(VN_MIN_LNG_DELTA, Math.min(region.longitudeDelta, VN_MAX_LNG_DELTA));
+    const latitudeDelta = Math.max(VN_MIN_LAT_DELTA, Math.min(region.latitudeDelta, VN_VIEW_MAX_LAT_DELTA));
+    const longitudeDelta = Math.max(VN_MIN_LNG_DELTA, Math.min(region.longitudeDelta, VN_VIEW_MAX_LNG_DELTA));
 
     const halfLat = latitudeDelta / 2;
     const halfLng = longitudeDelta / 2;
-    const southPadding = latitudeDelta * MAP_BOTTOM_VIEWPORT_OFFSET_RATIO;
 
-    const centerLatMin = VN_BOUNDS.minLat + halfLat + southPadding;
+    const centerLatMin = VN_BOUNDS.minLat + halfLat;
     const centerLatMax = VN_BOUNDS.maxLat - halfLat;
     const centerLngMin = VN_BOUNDS.minLng + halfLng;
     const centerLngMax = VN_BOUNDS.maxLng - halfLng;
@@ -321,6 +323,9 @@
     const [weekOffset, setWeekOffset] = useState(0);
     const mapRegionRef = useRef<Region>(INITIAL_REGION);
     const favoriteIdsRef = useRef<number[]>([]);
+    const collapsedSheetHeightPx = Math.round(zoomWindow.height * 0.30);
+    const floatingButtonsBottom = Math.max(116, collapsedSheetHeightPx + 22);
+    const googleButtonBottom = floatingButtonsBottom + 70;
 
     // Approximate zoom stages for DynamicMap region deltas.
     const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
@@ -354,7 +359,7 @@
     const focusMapRegion = useCallback((latitude: number, longitude: number, stage: number, animated = true) => {
       const delta = ZOOM_STAGE_DELTAS.current[Math.max(0, Math.min(stage, ZOOM_STAGE_DELTAS.current.length - 1))];
       const nextRegion = clampRegionToVietnam({
-        latitude: latitude + (delta.latitudeDelta * MAP_BOTTOM_VIEWPORT_OFFSET_RATIO),
+        latitude: latitude - (delta.latitudeDelta * MAP_FOCUS_LAT_OFFSET_RATIO),
         longitude,
         latitudeDelta: delta.latitudeDelta,
         longitudeDelta: delta.longitudeDelta,
@@ -1495,7 +1500,7 @@
                 {/* Google Maps Redirect Button */}
                 {overlaysVisible && selectedMarker && (
                   <TouchableOpacity
-                    style={styles.googleMapsFloatingButton}
+                    style={[styles.googleMapsFloatingButton, { bottom: googleButtonBottom }]}
                     onPress={() => { void handleOpenGoogleMaps(); }}
                     activeOpacity={0.85}
                     accessibilityLabel="Open in Google Maps"
@@ -1506,7 +1511,7 @@
 
                 {/* My Location Button */}
                 {overlaysVisible && (
-                  <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocationPress}>
+                  <TouchableOpacity style={[styles.myLocationButton, { bottom: floatingButtonsBottom }]} onPress={handleMyLocationPress}>
                     <Image source={ICONS.location_icon} style={styles.myLocationIcon} />
                   </TouchableOpacity>
                 )}
@@ -2372,6 +2377,7 @@
     bookingButton: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: '#FF5733',
       borderRadius: 20,
       paddingVertical: 8,
@@ -2385,14 +2391,16 @@
     bookingIcon: {
       width: 20,
       height: 20,
-      marginRight: 8,
-      marginLeft: 2,
+      marginRight: 6,
       tintColor: '#fff',
     },
     bookingText: {
       color: '#fff',
       fontWeight: 'bold',
       fontSize: 15,
+      lineHeight: 18,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
     },
     placeholderText: {
       fontSize: 16,
@@ -2541,7 +2549,7 @@
     // Custom floating “My Location” button
     myLocationButton: {
       position: "absolute",
-      bottom: 300, //my button location
+      bottom: 300,
       right: 20,
       backgroundColor: COLORS.white,
       borderRadius: 50,

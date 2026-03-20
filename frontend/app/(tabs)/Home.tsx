@@ -316,6 +316,45 @@ export default function Home() {
     return null
   }
 
+  const missingEventTitleIds = React.useMemo(() => {
+    const ids = new Set<number>()
+    for (const ev of eventsCombined) {
+      const eventId = Number((ev as any)?.eventid)
+      if (!Number.isFinite(eventId)) continue
+      if (getEventTitle(ev)) continue
+      ids.add(eventId)
+    }
+    return Array.from(ids)
+  }, [eventsCombined])
+
+  const eventTitleFallbackQuery = useQuery({
+    queryKey: ['home-event-title-fallback', missingEventTitleIds.join(',')],
+    enabled: missingEventTitleIds.length > 0,
+    queryFn: async () => {
+      const rows = await listEventsCombinedCached()
+      const map: Record<number, string> = {}
+      for (const row of rows) {
+        const eventId = Number((row as any)?.eventid)
+        if (!Number.isFinite(eventId)) continue
+        const title =
+          normalizeText((row as any)?.title) ??
+          normalizeText((row as any)?.event_title) ??
+          normalizeText((row as any)?.eventname) ??
+          normalizeText((row as any)?.event_name) ??
+          normalizeText((row as any)?.name) ??
+          normalizeText((row as any)?.eventinfo?.title) ??
+          normalizeText((row as any)?.event_info?.title) ??
+          normalizeText((row as any)?.eventInfo?.title) ??
+          null
+        if (title) map[eventId] = title
+      }
+      return map
+    },
+    staleTime: 60_000,
+  })
+
+  const eventTitleFallbackMap = eventTitleFallbackQuery.data ?? {}
+
   const upcomingEvents = React.useMemo(
     () => (Array.isArray(eventsCombined) ? eventsCombined : []).filter(isUpcomingEvent),
     [eventsCombined]
@@ -833,7 +872,7 @@ export default function Home() {
                 {visibleNearbyEvents.slice(0, 10).map((ev) => {
                   const CARD_W = 320
                   const CARD_H = 190
-                  const title = getEventTitle(ev) ?? `Event ${ev.eventid}`
+                  const title = getEventTitle(ev) ?? eventTitleFallbackMap[Number((ev as any)?.eventid)] ?? `Event ${ev.eventid}`
                   const dateTimeLine = formatEventDateTimeLine(ev)
                   const origin = nearbyEventsOrigin
                   const coords = getEventCoords(ev)
