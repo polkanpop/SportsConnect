@@ -1,10 +1,15 @@
 import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import { queryKeys } from "@/hooks/query-keys";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
+import {
+  listEventsCombinedByOrganizerId,
+  listTrainingSessionsCombinedByCoachId,
+  syncPastUpcomingStatuses,
+} from "@/lib/backendApi";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 type UnifiedBooking = {
   id: string; // Unique identifier for each booking
   title: string;
-  /** Display status derived from session_status (bookingstatus column). */
+  /** Display status from DB values (no client clock-based guessing). */
   status: "Completed" | "Upcoming" | "Cancelled" | "Missed";
   mode: "Booking" | "Hosting";
   activity: "court" | "event" | "session";
@@ -66,21 +71,60 @@ const firstRelatedRow = (rel: any): any | null => {
   return null;
 };
 
+const firstText = (...values: any[]): string | null => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const s = value.trim();
+      if (s) return s;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item !== 'string') continue;
+        const s = item.trim();
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+};
+
+const mapStatusFromDb = (raw: any): UnifiedBooking['status'] => {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return 'Upcoming';
+  if (s.includes('cancel') || s === 'rejected') return 'Cancelled';
+  if (s.includes('complete')) return 'Completed';
+  if (s.includes('miss')) return 'Missed';
+  return 'Upcoming';
+};
+
+const pickTitle = (row: any, fallback: string): string => {
+  if (!row || typeof row !== 'object') return fallback;
+  const info = firstRelatedRow((row as any)?.eventinfo) || firstRelatedRow((row as any)?.trainingsessioninfo);
+  return firstText(
+    row.title,
+    (info as any)?.title,
+    row.name,
+  ) || fallback;
+};
+
 const pickVenueLabel = (row: any): string | null => {
   if (!row || typeof row !== 'object') return null;
   const booking = firstRelatedRow((row as any)?.courtbooking);
   const availability = firstRelatedRow((booking as any)?.courtavailability);
   const courtsRel = firstRelatedRow((availability as any)?.courts);
   const courtInfoRel = firstRelatedRow((courtsRel as any)?.courtinfo) || firstRelatedRow((availability as any)?.courtinfo);
-  return (
-    (courtInfoRel as any)?.name ||
-    (courtsRel as any)?.courtinfo ||
-    row.court_name ||
-    row.venue ||
-    row.address ||
-    (booking as any)?.selected_base_name ||
-    (booking as any)?.selected_court_name ||
-    null
+  const relatedInfo = firstRelatedRow((row as any)?.eventinfo) || firstRelatedRow((row as any)?.trainingsessioninfo);
+  return firstText(
+    (courtInfoRel as any)?.name,
+    (courtsRel as any)?.courtinfo,
+    row.court_name,
+    row.venue,
+    row.address,
+    (relatedInfo as any)?.venue,
+    (relatedInfo as any)?.address,
+    (booking as any)?.selected_base_name,
+    (booking as any)?.selected_court_name,
   );
 };
 
@@ -96,50 +140,6 @@ const formatDateWeekdayDDMMYYYY = (dt: Date) => {
 const formatTimeHHMM = (dt: Date) => {
   if (Number.isNaN(dt.getTime())) return '';
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
-};
-
-/**
- * Derive display status from session_status (bookingstatus column) with
- * Situation-D override: past + host-never-approved → Missed.
- */
-const deriveDisplayStatus = (
-  bookingStatusRaw: string,
-  sessionStatusRaw: string,
-  dateTime?: Date,
-): UnifiedBooking['status'] => {
-  const bs = (bookingStatusRaw || '').toLowerCase();
-  const ss = (sessionStatusRaw || '').toLowerCase();
-  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
-  const isApprovedOrJoined = bs === 'approved' || bs === 'joined';
-
-  // Situation D: time passed, host never approved
-  if (isPast && bs === 'pending' && (ss === 'upcoming' || ss === 'missed' || !ss)) {
-    return 'Missed';
-  }
-
-  // Past approved/joined records should not stay Upcoming.
-  if (isPast && isApprovedOrJoined && (ss === 'upcoming' || !ss)) {
-    return 'Completed';
-  }
-
-  // Direct mapping from session_status
-  if (ss === 'completed') return 'Completed';
-  if (ss.includes('cancel')) return 'Cancelled';
-  if (ss === 'missed') return 'Missed';
-  return 'Upcoming';
-};
-
-/** Legacy loose normalizer for Hosting mode (events/sessions the user created). */
-const normalizeStatusLoose = (statusRaw: any, dateTime?: Date): UnifiedBooking['status'] => {
-  const s = typeof statusRaw === 'string' ? statusRaw.toLowerCase() : '';
-  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
-  if (s.includes('cancel')) return 'Cancelled';
-  if (s.includes('complete')) return 'Completed';
-  if (s === 'missed') return 'Missed';
-  if (isPast && s.includes('pending')) return 'Missed';
-  if (isPast) return 'Completed';
-  if (s.includes('upcoming')) return 'Upcoming';
-  return 'Upcoming';
 };
 
 // Merge all bookings into a unified list
@@ -174,7 +174,7 @@ const mergeBookings = (params: {
       return {
         id: `court_${item.courtbookingid}`,
         title: displayCourtName || `Court Booking #${item.courtbookingid}`,
-        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
+        status: mapStatusFromDb(rawSessionStatus || rawBookingStatus),
         mode: 'Booking',
         activity: 'court',
         type: 'stadiumCal' as keyof typeof ICONS,
@@ -210,8 +210,8 @@ const mergeBookings = (params: {
       const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `event_${item.eventbookingid}`,
-        title: (ev?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Event #${item.eventid}`,
-        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
+        title: pickTitle({ ...ev, eventinfo: relatedInfo }, `Event #${item.eventid}`),
+        status: mapStatusFromDb(rawSessionStatus || rawBookingStatus),
         mode: 'Booking',
         activity: 'event',
         type: 'starCal' as keyof typeof ICONS,
@@ -248,8 +248,8 @@ const mergeBookings = (params: {
       const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `session_${item.tsbookingid}`,
-        title: (sess?.title as string | undefined) || (relatedInfo?.title as string | undefined) || `Training Session #${item.sessionid}`,
-        status: deriveDisplayStatus(rawBookingStatus, rawSessionStatus, dateTime),
+        title: pickTitle({ ...sess, trainingsessioninfo: relatedInfo }, `Training Session #${item.sessionid}`),
+        status: mapStatusFromDb(rawSessionStatus || rawBookingStatus),
         mode: 'Booking',
         activity: 'session',
         type: 'coachCal' as keyof typeof ICONS,
@@ -294,8 +294,8 @@ const mergeHosting = (params: {
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `created_event_${ev?.eventid}`,
-        title: (ev?.title as string | undefined) || `Event #${ev?.eventid}`,
-        status: normalizeStatusLoose(ev?.status, dateTime),
+        title: pickTitle(ev, `Event #${ev?.eventid}`),
+        status: mapStatusFromDb(ev?.status),
         mode: 'Hosting',
         activity: 'event',
         type: 'starCal' as keyof typeof ICONS,
@@ -316,8 +316,8 @@ const mergeHosting = (params: {
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `created_session_${s?.sessionid}`,
-        title: (s?.title as string | undefined) || `Training Session #${s?.sessionid}`,
-        status: normalizeStatusLoose(s?.status, dateTime),
+        title: pickTitle(s, `Training Session #${s?.sessionid}`),
+        status: mapStatusFromDb(s?.status),
         mode: 'Hosting',
         activity: 'session',
         type: 'coachCal' as keyof typeof ICONS,
@@ -473,18 +473,36 @@ export default function ActivityPage() {
     [courtBookingsData, eventBookingsData, trainingSessionBookingsData, eventsById, sessionsById]
   );
 
+  const hostingEventsQuery = useQuery({
+    queryKey: ['activity', 'hosting', 'events', userId ?? -1],
+    queryFn: () => listEventsCombinedByOrganizerId(userId as number),
+    enabled: typeof userId === 'number' && calendarMode === 'Hosting',
+    staleTime: 60_000,
+  })
+
+  const hostingSessionsQuery = useQuery({
+    queryKey: ['activity', 'hosting', 'sessions', userId ?? -1],
+    queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
+    enabled: typeof userId === 'number' && calendarMode === 'Hosting',
+    staleTime: 60_000,
+  })
+
   const createdEventsCombinedRaw = useMemo(
-    () => (Array.isArray(eventsCombined) && typeof userId === 'number'
-      ? eventsCombined.filter((e: any) => Number(e?.organizerid) === userId)
-      : []),
-    [eventsCombined, userId]
+    () => (Array.isArray(hostingEventsQuery.data)
+      ? hostingEventsQuery.data
+      : (Array.isArray(eventsCombined) && typeof userId === 'number'
+        ? eventsCombined.filter((e: any) => Number(e?.organizerid) === userId)
+        : [])),
+    [hostingEventsQuery.data, eventsCombined, userId]
   )
 
   const createdTrainingSessionsCombinedRaw = useMemo(
-    () => (Array.isArray(trainingSessionsCombined) && typeof userId === 'number'
-      ? trainingSessionsCombined.filter((s: any) => Number(s?.coachid) === userId)
-      : []),
-    [trainingSessionsCombined, userId]
+    () => (Array.isArray(hostingSessionsQuery.data)
+      ? hostingSessionsQuery.data
+      : (Array.isArray(trainingSessionsCombined) && typeof userId === 'number'
+        ? trainingSessionsCombined.filter((s: any) => Number(s?.coachid) === userId)
+        : [])),
+    [hostingSessionsQuery.data, trainingSessionsCombined, userId]
   )
 
   const hostingData = useMemo(
@@ -496,7 +514,57 @@ export default function ActivityPage() {
     [createdEventsCombinedRaw, createdTrainingSessionsCombinedRaw]
   );
 
+  const eventBookingsForSync = useMemo(() => {
+    return eventBookingsData.map((booking: any) => {
+      const eventId = Number(booking?.eventid)
+      const ev = Number.isFinite(eventId) ? eventsById.get(eventId) : null
+      return {
+        ...booking,
+        start_timestamp: (ev as any)?.start_timestamp ?? (ev as any)?.time ?? null,
+        end_timestamp: (ev as any)?.end_timestamp ?? null,
+      }
+    })
+  }, [eventBookingsData, eventsById])
+
+  const sessionBookingsForSync = useMemo(() => {
+    return trainingSessionBookingsData.map((booking: any) => {
+      const sessionId = Number(booking?.sessionid)
+      const sess = Number.isFinite(sessionId) ? sessionsById.get(sessionId) : null
+      return {
+        ...booking,
+        start_timestamp: (sess as any)?.start_timestamp ?? (sess as any)?.time ?? null,
+        end_timestamp: (sess as any)?.end_timestamp ?? null,
+      }
+    })
+  }, [trainingSessionBookingsData, sessionsById])
+
   const activeData = calendarMode === 'Hosting' ? hostingData : data;
+
+  useEffect(() => {
+    if (typeof userId !== 'number') return
+    const run = async () => {
+      const changed = await syncPastUpcomingStatuses({
+        events: createdEventsCombinedRaw as any,
+        sessions: createdTrainingSessionsCombinedRaw as any,
+        bookings: courtBookingsData as any,
+        eventBookings: eventBookingsForSync as any,
+        sessionBookings: sessionBookingsForSync as any,
+      })
+      if (!changed) return
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' })
+      await queryClient.invalidateQueries({ queryKey: ['activity', 'hosting', 'events', userId], refetchType: 'active' })
+      await queryClient.invalidateQueries({ queryKey: ['activity', 'hosting', 'sessions', userId], refetchType: 'active' })
+    }
+    void run()
+  }, [
+    userId,
+    queryClient,
+    createdEventsCombinedRaw,
+    createdTrainingSessionsCombinedRaw,
+    courtBookingsData,
+    eventBookingsForSync,
+    sessionBookingsForSync,
+  ])
   
   const weekDays = useMemo(() => getWeekDaysForOffset(weekOffset), [weekOffset]);
 
@@ -522,9 +590,8 @@ export default function ActivityPage() {
 
   const isLoading =
     userIdLoading ||
-    (calendarMode === 'Hosting'
-      ? dashboardLoading
-      : dashboardLoading);
+    dashboardLoading ||
+    (calendarMode === 'Hosting' && (hostingEventsQuery.isLoading || hostingSessionsQuery.isLoading));
 
   const getStatusStyle = (status: UnifiedBooking['status']) => {
     switch (status) {

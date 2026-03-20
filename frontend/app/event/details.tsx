@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -34,6 +34,7 @@ import {
   getEvent,
   invalidateEventsCombinedCache,
   invalidateTrainingSessionsCombinedCache,
+  syncPastUpcomingStatuses,
   updateCourtBooking,
   updateEvent,
   updateEventBooking,
@@ -105,6 +106,18 @@ const firstText = (...values: any[]): string | null => {
     }
   }
   return null
+}
+
+const resolveTitle = (row: any, fallback: string): string => {
+  if (!row || typeof row !== 'object') return fallback
+  const eventInfo = firstText(...(Array.isArray((row as any)?.eventinfo) ? (row as any).eventinfo.map((x: any) => x?.title) : []))
+  const sessionInfo = firstText(...(Array.isArray((row as any)?.trainingsessioninfo) ? (row as any).trainingsessioninfo.map((x: any) => x?.title) : []))
+  return firstText(
+    (row as any)?.title,
+    eventInfo,
+    sessionInfo,
+    (row as any)?.name,
+  ) || fallback
 }
 
 const deriveBookingActionState = (
@@ -540,6 +553,108 @@ export default function DetailsPage() {
     queryKey: ['details', 'createdSessionInfo', parsed.kind === 'created_session' ? parsed.id : null],
     queryFn: () => getTrainingSessionInfoBySessionId((parsed as any).id),
     enabled: parsed.kind === 'created_session',
+  })
+
+  const createdEventCourtBookingId = useMemo(() => {
+    if (parsed.kind !== 'created_event') return null
+    const raw = Number((createdEventQuery.data as any)?.courtbookingid)
+    return Number.isFinite(raw) ? raw : null
+  }, [parsed.kind, createdEventQuery.data])
+
+  const createdEventCourtBookingQuery = useQuery({
+    queryKey: ['details', 'createdEventCourtBooking', createdEventCourtBookingId],
+    queryFn: () => getCourtBooking(createdEventCourtBookingId!),
+    enabled:
+      createdEventCourtBookingId != null &&
+      !dashboardCourtBookings.some((x: any) => Number(x?.courtbookingid) === Number(createdEventCourtBookingId)),
+    staleTime: 60_000,
+  })
+
+  const createdEventCourtBooking = useMemo(() => {
+    if (createdEventCourtBookingId == null) return null
+    return (
+      dashboardCourtBookings.find((x: any) => Number(x?.courtbookingid) === Number(createdEventCourtBookingId)) ||
+      createdEventCourtBookingQuery.data ||
+      null
+    )
+  }, [createdEventCourtBookingId, dashboardCourtBookings, createdEventCourtBookingQuery.data])
+
+  const createdEventAvailabilityId = useMemo(() => {
+    const raw = Number((createdEventCourtBooking as any)?.availabilityid)
+    return Number.isFinite(raw) ? raw : null
+  }, [createdEventCourtBooking])
+
+  const createdEventAvailabilityQuery = useQuery({
+    queryKey: ['details', 'createdEventAvailability', createdEventAvailabilityId],
+    queryFn: () => getCourtAvailabilityById(createdEventAvailabilityId!),
+    enabled: createdEventAvailabilityId != null,
+    staleTime: 10 * 60_000,
+  })
+
+  const createdEventCourtid = useMemo(() => {
+    const raw = Number((createdEventAvailabilityQuery.data as any)?.courtid)
+    return Number.isFinite(raw) ? raw : null
+  }, [createdEventAvailabilityQuery.data])
+
+  const createdEventVenueInfoQuery = useQuery({
+    queryKey: ['details', 'createdEventVenue', createdEventCourtid],
+    queryFn: async () => {
+      const rows = await listCourtInfo({ courtids: [createdEventCourtid!] })
+      return Array.isArray(rows) && rows.length ? rows[0] : null
+    },
+    enabled: createdEventCourtid != null,
+    staleTime: 10 * 60_000,
+  })
+
+  const createdSessionCourtBookingId = useMemo(() => {
+    if (parsed.kind !== 'created_session') return null
+    const raw = Number((createdSessionQuery.data as any)?.courtbookingid)
+    return Number.isFinite(raw) ? raw : null
+  }, [parsed.kind, createdSessionQuery.data])
+
+  const createdSessionCourtBookingQuery = useQuery({
+    queryKey: ['details', 'createdSessionCourtBooking', createdSessionCourtBookingId],
+    queryFn: () => getCourtBooking(createdSessionCourtBookingId!),
+    enabled:
+      createdSessionCourtBookingId != null &&
+      !dashboardCourtBookings.some((x: any) => Number(x?.courtbookingid) === Number(createdSessionCourtBookingId)),
+    staleTime: 60_000,
+  })
+
+  const createdSessionCourtBooking = useMemo(() => {
+    if (createdSessionCourtBookingId == null) return null
+    return (
+      dashboardCourtBookings.find((x: any) => Number(x?.courtbookingid) === Number(createdSessionCourtBookingId)) ||
+      createdSessionCourtBookingQuery.data ||
+      null
+    )
+  }, [createdSessionCourtBookingId, dashboardCourtBookings, createdSessionCourtBookingQuery.data])
+
+  const createdSessionAvailabilityId = useMemo(() => {
+    const raw = Number((createdSessionCourtBooking as any)?.availabilityid)
+    return Number.isFinite(raw) ? raw : null
+  }, [createdSessionCourtBooking])
+
+  const createdSessionAvailabilityQuery = useQuery({
+    queryKey: ['details', 'createdSessionAvailability', createdSessionAvailabilityId],
+    queryFn: () => getCourtAvailabilityById(createdSessionAvailabilityId!),
+    enabled: createdSessionAvailabilityId != null,
+    staleTime: 10 * 60_000,
+  })
+
+  const createdSessionCourtid = useMemo(() => {
+    const raw = Number((createdSessionAvailabilityQuery.data as any)?.courtid)
+    return Number.isFinite(raw) ? raw : null
+  }, [createdSessionAvailabilityQuery.data])
+
+  const createdSessionVenueInfoQuery = useQuery({
+    queryKey: ['details', 'createdSessionVenue', createdSessionCourtid],
+    queryFn: async () => {
+      const rows = await listCourtInfo({ courtids: [createdSessionCourtid!] })
+      return Array.isArray(rows) && rows.length ? rows[0] : null
+    },
+    enabled: createdSessionCourtid != null,
+    staleTime: 10 * 60_000,
   })
 
   const cancelMutation = useMutation({
@@ -1187,17 +1302,32 @@ export default function DetailsPage() {
     if (parsed.kind === 'event_booking') {
       const eventid = (eventBookingQuery.data as any)?.eventid
       if (typeof eventid !== 'number') return null
-      const ev = eventsCombinedList.find((x) => x.eventid === eventid)
-      return { targettype: 'event', targetid: String(eventid), title: encodeURIComponent(ev?.title ?? `Event #${eventid}`) }
+      const ev = eventsCombinedList.find((x) => x.eventid === eventid) || eventBookingEventQuery.data
+      const titleText = resolveTitle({ ...(ev || {}), eventinfo: eventBookingInfoQuery.data ? [eventBookingInfoQuery.data] : [] }, `Event #${eventid}`)
+      return { targettype: 'event', targetid: String(eventid), title: encodeURIComponent(titleText) }
     }
     if (parsed.kind === 'session_booking') {
       const sessionid = (sessionBookingQuery.data as any)?.sessionid
       if (typeof sessionid !== 'number') return null
-      const s = sessionsCombinedList.find((x) => x.sessionid === sessionid)
-      return { targettype: 'trainingsession', targetid: String(sessionid), title: encodeURIComponent((s as any)?.title ?? `Session #${sessionid}`) }
+      const s = sessionsCombinedList.find((x) => x.sessionid === sessionid) || sessionBookingSessionQuery.data
+      const titleText = resolveTitle({ ...(s || {}), trainingsessioninfo: sessionBookingInfoQuery.data ? [sessionBookingInfoQuery.data] : [] }, `Session #${sessionid}`)
+      return { targettype: 'trainingsession', targetid: String(sessionid), title: encodeURIComponent(titleText) }
     }
     return null
-  }, [parsed.kind, courtCourtId, courtBookingQuery.data, singleAvailQuery.data, eventBookingQuery.data, eventsCombinedList, sessionBookingQuery.data, sessionsCombinedList])
+  }, [
+    parsed.kind,
+    courtCourtId,
+    courtBookingQuery.data,
+    singleAvailQuery.data,
+    eventBookingQuery.data,
+    eventsCombinedList,
+    eventBookingEventQuery.data,
+    eventBookingInfoQuery.data,
+    sessionBookingQuery.data,
+    sessionsCombinedList,
+    sessionBookingSessionQuery.data,
+    sessionBookingInfoQuery.data,
+  ])
 
   const isLoading =
     courtBookingQuery.isLoading ||
@@ -1272,15 +1402,27 @@ export default function DetailsPage() {
   const createdEventCourtName = useMemo(() => {
     if (createdEventId == null) return null
     const row = eventsCombinedList.find((e) => e.eventid === createdEventId)
-    return resolveVenueLabel(row)
-  }, [createdEventId, eventsCombinedList])
+    return (
+      createdEventVenueInfoQuery.data?.name ||
+      (createdEventCourtBooking as any)?.selected_court_name ||
+      (createdEventCourtBooking as any)?.selected_base_name ||
+      resolveVenueLabel(createdEventCourtBooking) ||
+      resolveVenueLabel(row)
+    )
+  }, [createdEventId, eventsCombinedList, createdEventVenueInfoQuery.data?.name, createdEventCourtBooking])
 
   const createdSessionId = parsed.kind === 'created_session' ? parsed.id : null
   const createdSessionCourtName = useMemo(() => {
     if (createdSessionId == null) return null
     const row = sessionsCombinedList.find((s) => s.sessionid === createdSessionId)
-    return resolveVenueLabel(row)
-  }, [createdSessionId, sessionsCombinedList])
+    return (
+      createdSessionVenueInfoQuery.data?.name ||
+      (createdSessionCourtBooking as any)?.selected_court_name ||
+      (createdSessionCourtBooking as any)?.selected_base_name ||
+      resolveVenueLabel(createdSessionCourtBooking) ||
+      resolveVenueLabel(row)
+    )
+  }, [createdSessionId, sessionsCombinedList, createdSessionVenueInfoQuery.data?.name, createdSessionCourtBooking])
 
   const summaryVenueName = useMemo(() => {
     if (parsed.kind === 'court_booking') return courtBookingCourt?.name || null
@@ -1313,12 +1455,26 @@ export default function DetailsPage() {
 
     if (parsed.kind === 'created_event') {
       const combined = eventsCombinedList.find((x) => x.eventid === parsed.id)
-      return resolveVenueNameOnly(createdEventInfoQuery.data) || resolveVenueNameOnly(createdEventQuery.data) || resolveVenueNameOnly(combined) || null
+      return (
+        createdEventVenueInfoQuery.data?.name ||
+        resolveVenueNameOnly(createdEventCourtBooking) ||
+        resolveVenueNameOnly(createdEventInfoQuery.data) ||
+        resolveVenueNameOnly(createdEventQuery.data) ||
+        resolveVenueNameOnly(combined) ||
+        null
+      )
     }
 
     if (parsed.kind === 'created_session') {
       const combined = sessionsCombinedList.find((x) => x.sessionid === parsed.id)
-      return resolveVenueNameOnly(createdSessionInfoQuery.data) || resolveVenueNameOnly(createdSessionQuery.data) || resolveVenueNameOnly(combined) || null
+      return (
+        createdSessionVenueInfoQuery.data?.name ||
+        resolveVenueNameOnly(createdSessionCourtBooking) ||
+        resolveVenueNameOnly(createdSessionInfoQuery.data) ||
+        resolveVenueNameOnly(createdSessionQuery.data) ||
+        resolveVenueNameOnly(combined) ||
+        null
+      )
     }
 
     return null
@@ -1339,8 +1495,78 @@ export default function DetailsPage() {
     sessionSummaryVenueInfoQuery.data?.name,
     createdEventInfoQuery.data,
     createdEventQuery.data,
+    createdEventVenueInfoQuery.data?.name,
+    createdEventCourtBooking,
     createdSessionInfoQuery.data,
     createdSessionQuery.data,
+    createdSessionVenueInfoQuery.data?.name,
+    createdSessionCourtBooking,
+  ])
+
+  useEffect(() => {
+    const run = async () => {
+      if (parsed.kind === 'unknown') return
+      const payload: Parameters<typeof syncPastUpcomingStatuses>[0] = {}
+
+      if (parsed.kind === 'court_booking' && courtBookingQuery.data) {
+        payload.bookings = [courtBookingQuery.data as any]
+      }
+
+      if (parsed.kind === 'event_booking' && eventBookingQuery.data) {
+        const eventId = Number((eventBookingQuery.data as any)?.eventid)
+        const evCombined = Number.isFinite(eventId) ? eventsCombinedList.find((x) => x.eventid === eventId) : null
+        const ev = evCombined || eventBookingEventQuery.data
+        payload.eventBookings = [{
+          ...(eventBookingQuery.data as any),
+          start_timestamp: (ev as any)?.start_timestamp ?? (ev as any)?.time ?? null,
+          end_timestamp: (ev as any)?.end_timestamp ?? null,
+          events: ev ? [ev] : undefined,
+        } as any]
+      }
+
+      if (parsed.kind === 'session_booking' && sessionBookingQuery.data) {
+        const sessionId = Number((sessionBookingQuery.data as any)?.sessionid)
+        const sCombined = Number.isFinite(sessionId) ? sessionsCombinedList.find((x) => x.sessionid === sessionId) : null
+        const s = sCombined || sessionBookingSessionQuery.data
+        payload.sessionBookings = [{
+          ...(sessionBookingQuery.data as any),
+          start_timestamp: (s as any)?.start_timestamp ?? (s as any)?.time ?? null,
+          end_timestamp: (s as any)?.end_timestamp ?? null,
+          trainingsessions: s ? [s] : undefined,
+        } as any]
+      }
+
+      if (parsed.kind === 'created_event' && createdEventQuery.data) {
+        payload.events = [createdEventQuery.data as any]
+      }
+
+      if (parsed.kind === 'created_session' && createdSessionQuery.data) {
+        payload.sessions = [createdSessionQuery.data as any]
+      }
+
+      const changed = await syncPastUpcomingStatuses(payload)
+      if (!changed) return
+
+      if (typeof userId === 'number') {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' })
+      }
+      await queryClient.invalidateQueries({ queryKey: ['details'] })
+    }
+
+    void run()
+  }, [
+    parsed.kind,
+    courtBookingQuery.data,
+    eventBookingQuery.data,
+    eventBookingEventQuery.data,
+    sessionBookingQuery.data,
+    sessionBookingSessionQuery.data,
+    createdEventQuery.data,
+    createdSessionQuery.data,
+    eventsCombinedList,
+    sessionsCombinedList,
+    userId,
+    queryClient,
   ])
 
   return (
@@ -1506,7 +1732,7 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Event">
-                  <Row label="Title" value={meta?.title || `Event #${ev.eventid}`} />
+                  <Row label="Title" value={resolveTitle({ ...(ev as any), eventinfo: meta ? [meta] : [] }, `Event #${ev.eventid}`)} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev.status)} />
                   <Row label="Court" value={createdEventCourtName || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1526,7 +1752,7 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Training Session">
-                  <Row label="Title" value={meta?.title || `Session #${s.sessionid}`} />
+                  <Row label="Title" value={resolveTitle({ ...(s as any), trainingsessioninfo: meta ? [meta] : [] }, `Session #${s.sessionid}`)} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s.status)} />
                   <Row label="Court" value={createdSessionCourtName || 'Unknown'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />

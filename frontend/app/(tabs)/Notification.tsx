@@ -12,10 +12,15 @@ function parseNotificationDate(raw: string): Date | null {
   const s = raw.trim()
   if (!s) return null
 
-  let d = new Date(s)
+  // DB stores UTC; if timezone is missing, force UTC to avoid local-time drift.
+  const normalized = s.replace(' ', 'T')
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized)
+  let d = new Date(hasTimezone ? normalized : `${normalized}Z`)
   if (!Number.isNaN(d.getTime())) return d
 
-  const normalized = s.replace(' ', 'T')
+  d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d
+
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/.test(normalized)) {
     d = new Date(`${normalized}Z`)
     if (!Number.isNaN(d.getTime())) return d
@@ -127,7 +132,7 @@ export default function NotificationsPage() {
   const formatRowTime = (iso: string) => {
     const d = parseNotificationDate(iso)
     if (!d) return ''
-    const delta = Date.now() - d.getTime()
+    const delta = Math.max(0, Date.now() - d.getTime())
     if (delta < 60_000) return 'now'
     if (delta < 60 * 60_000) return `${Math.floor(delta / 60_000)}m ago`
     if (delta < 24 * 60 * 60_000) return `${Math.floor(delta / (60 * 60_000))}h ago`

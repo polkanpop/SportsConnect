@@ -238,7 +238,7 @@ export async function deleteNotifications(notificationids: number[]): Promise<{ 
 // Some UIs rely on status enums rather than timestamps.
 // This performs best-effort background updates so passed items are not shown.
 let autoCompleteLastRunMs = 0
-let autoCompleteInFlight: Promise<void> | null = null
+let autoCompleteInFlight: Promise<boolean> | null = null
 
 function parseTimestampLoose(raw: unknown): Date | null {
 	if (typeof raw !== 'string') return null
@@ -273,18 +273,24 @@ async function autoCompletePastStatusesInBackground(payload: {
 	events?: CombinedEvent[]
 	sessions?: CombinedTrainingSession[]
 	bookings?: CourtBookingRow[]
-}): Promise<void> {
+	eventBookings?: Array<EventBookingRow & { start_timestamp?: string | null; end_timestamp?: string | null; events?: any }>
+	sessionBookings?: Array<TrainingSessionBookingRow & { start_timestamp?: string | null; end_timestamp?: string | null; trainingsessions?: any }>
+}): Promise<boolean> {
 	const nowMs = Date.now()
 	// Throttle to avoid spamming updates across screens.
 	if (autoCompleteInFlight) return autoCompleteInFlight
-	if (nowMs - autoCompleteLastRunMs < 30_000) return
+	if (nowMs - autoCompleteLastRunMs < 30_000) return false
 
 	autoCompleteInFlight = (async () => {
 		autoCompleteLastRunMs = Date.now()
 		const eventIdsToComplete: number[] = []
 		const sessionIdsToComplete: number[] = []
 		const bookingIdsToComplete: number[] = []
-		const bookingIdsToCancel: number[] = []
+		const bookingIdsToMissed: number[] = []
+		const eventBookingIdsToComplete: number[] = []
+		const eventBookingIdsToMissed: number[] = []
+		const tsBookingIdsToComplete: number[] = []
+		const tsBookingIdsToMissed: number[] = []
 
 		for (const ev of payload.events || []) {
 			if (!shouldAutoCompleteStatus((ev as any).status)) continue
@@ -300,16 +306,52 @@ async function autoCompletePastStatusesInBackground(payload: {
 		}
 		for (const b of payload.bookings || []) {
 			const st = String((b as any).bookingstatus ?? '').trim().toLowerCase()
-			if (st !== 'upcoming' && st !== 'pending') continue
+			if (st !== 'upcoming') continue
 			if (isPastEnd((b as any).end_timestamp, (b as any).start_timestamp)) {
 				if (typeof (b as any).courtbookingid === 'number') {
-					if (st === 'pending') bookingIdsToCancel.push((b as any).courtbookingid)
+					const approval = String((b as any).status ?? '').trim().toLowerCase()
+					if (approval === 'pending') bookingIdsToMissed.push((b as any).courtbookingid)
 					else bookingIdsToComplete.push((b as any).courtbookingid)
 				}
 			}
 		}
 
-		if (!eventIdsToComplete.length && !sessionIdsToComplete.length && !bookingIdsToComplete.length && !bookingIdsToCancel.length) return
+		for (const b of payload.eventBookings || []) {
+			const st = String((b as any).bookingstatus ?? '').trim().toLowerCase()
+			if (st !== 'upcoming') continue
+			const related = Array.isArray((b as any).events) ? (b as any).events[0] : (b as any).events
+			const start = (b as any).start_timestamp ?? (related as any)?.start_timestamp ?? (related as any)?.time
+			const end = (b as any).end_timestamp ?? (related as any)?.end_timestamp
+			if (isPastEnd(end, start) && typeof (b as any).eventbookingid === 'number') {
+				const approval = String((b as any).status ?? '').trim().toLowerCase()
+				if (approval === 'pending') eventBookingIdsToMissed.push((b as any).eventbookingid)
+				else eventBookingIdsToComplete.push((b as any).eventbookingid)
+			}
+		}
+
+		for (const b of payload.sessionBookings || []) {
+			const st = String((b as any).bookingstatus ?? '').trim().toLowerCase()
+			if (st !== 'upcoming') continue
+			const related = Array.isArray((b as any).trainingsessions) ? (b as any).trainingsessions[0] : (b as any).trainingsessions
+			const start = (b as any).start_timestamp ?? (related as any)?.start_timestamp ?? (related as any)?.time
+			const end = (b as any).end_timestamp ?? (related as any)?.end_timestamp
+			if (isPastEnd(end, start) && typeof (b as any).tsbookingid === 'number') {
+				const approval = String((b as any).status ?? '').trim().toLowerCase()
+				if (approval === 'pending') tsBookingIdsToMissed.push((b as any).tsbookingid)
+				else tsBookingIdsToComplete.push((b as any).tsbookingid)
+			}
+		}
+
+		if (
+			!eventIdsToComplete.length &&
+			!sessionIdsToComplete.length &&
+			!bookingIdsToComplete.length &&
+			!bookingIdsToMissed.length &&
+			!eventBookingIdsToComplete.length &&
+			!eventBookingIdsToMissed.length &&
+			!tsBookingIdsToComplete.length &&
+			!tsBookingIdsToMissed.length
+		) return false
 
 		const ops: Promise<any>[] = []
 		for (const id of eventIdsToComplete) {
@@ -339,12 +381,48 @@ async function autoCompletePastStatusesInBackground(payload: {
 				})
 			)
 		}
-		for (const id of bookingIdsToCancel) {
+		for (const id of bookingIdsToMissed) {
 			ops.push(
 				request(`/courtbookings/${encodeURIComponent(String(id))}`, {
 					method: 'PATCH',
-					body: JSON.stringify({ bookingstatus: 'cancelled', status: 'cancelled' }),
-					debugLabel: 'autoCancelPendingCourtBooking',
+					body: JSON.stringify({ bookingstatus: 'missed' }),
+					debugLabel: 'autoMissedPendingCourtBooking',
+				})
+			)
+		}
+		for (const id of eventBookingIdsToComplete) {
+			ops.push(
+				request(`/eventbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'completed' }),
+					debugLabel: 'autoCompleteEventBooking',
+				})
+			)
+		}
+		for (const id of eventBookingIdsToMissed) {
+			ops.push(
+				request(`/eventbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'missed' }),
+					debugLabel: 'autoMissedEventBooking',
+				})
+			)
+		}
+		for (const id of tsBookingIdsToComplete) {
+			ops.push(
+				request(`/tsbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'completed' }),
+					debugLabel: 'autoCompleteTrainingBooking',
+				})
+			)
+		}
+		for (const id of tsBookingIdsToMissed) {
+			ops.push(
+				request(`/tsbookings/${encodeURIComponent(String(id))}`, {
+					method: 'PATCH',
+					body: JSON.stringify({ bookingstatus: 'missed' }),
+					debugLabel: 'autoMissedTrainingBooking',
 				})
 			)
 		}
@@ -353,13 +431,24 @@ async function autoCompletePastStatusesInBackground(payload: {
 		// Bust combined caches once so subsequent reads reflect completion.
 		try { await invalidateCache('cache:events:combined:v1') } catch {}
 		try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+		return true
 	})()
 
 	try {
-		await autoCompleteInFlight
+		return await autoCompleteInFlight
 	} finally {
 		autoCompleteInFlight = null
 	}
+}
+
+export async function syncPastUpcomingStatuses(payload: {
+	events?: CombinedEvent[]
+	sessions?: CombinedTrainingSession[]
+	bookings?: CourtBookingRow[]
+	eventBookings?: Array<EventBookingRow & { start_timestamp?: string | null; end_timestamp?: string | null; events?: any }>
+	sessionBookings?: Array<TrainingSessionBookingRow & { start_timestamp?: string | null; end_timestamp?: string | null; trainingsessions?: any }>
+}): Promise<boolean> {
+	return autoCompletePastStatusesInBackground(payload)
 }
 
 export type CourtGeocode = {
