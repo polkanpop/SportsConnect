@@ -395,12 +395,12 @@ export default function NotificationsPage() {
                 {deleteMode ? (
                   <>
                     <TouchableOpacity
-                      style={styles.doneWrap}
+                      style={styles.deleteWrap}
                       onPress={exitDeleteMode}
                       activeOpacity={0.85}
                       disabled={actionLoading}
                     >
-                      <Text style={styles.doneText}>Done</Text>
+                      <Image source={ICONS.closeMenu} style={styles.closeIcon} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteWrap}
@@ -629,21 +629,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.neutral350,
     borderRadius: 8,
     backgroundColor: COLORS.neutral0,
-  },
-  doneWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 30,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: COLORS.neutral350,
-    borderRadius: 8,
-    backgroundColor: COLORS.neutral0,
-  },
-  doneText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.neutral900,
   },
   deleteIcon: {
     width: 18,

@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
-import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -203,13 +203,21 @@ export default function CourtBooking() {
   const { userId } = useAppBootstrap()
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
+  const { data: allCourtBookingsRaw, refetch: refetchCourtBookingsByCourtId } = useQuery({
+    queryKey: ['courtBookingsByCourtId', courtid],
+    queryFn: () => listCourtBookingsByCourtId(courtid),
+    enabled: Number.isFinite(courtid),
+    staleTime: 30_000,
+  })
+  const allCourtBookings = Array.isArray(allCourtBookingsRaw) ? allCourtBookingsRaw : []
 
   // Ensure we see fresh bookings after navigating back from Details/cancel.
   useFocusEffect(
     useCallback(() => {
       if (userId == null) return
       void refetchUserBookings()
-    }, [refetchUserBookings, userId])
+      if (Number.isFinite(courtid)) void refetchCourtBookingsByCourtId()
+    }, [courtid, refetchCourtBookingsByCourtId, refetchUserBookings, userId])
   )
 
   // Derive week dates (Mon -> Sun) with offset (future weeks only)
@@ -476,13 +484,21 @@ export default function CourtBooking() {
     const activeBaseName = String(selectedPc?.base_name ?? selectedBaseName ?? '').trim().toLowerCase()
     if (!activeBaseName) return null
 
+    const baseNameByPlayingCourtId = new Map<number, string>()
+    for (const pc of playingCourts) {
+      const pid = Number((pc as any)?.playingcourtid)
+      const bn = String((pc as any)?.base_name ?? '').trim().toLowerCase()
+      if (!Number.isFinite(pid) || !bn) continue
+      baseNameByPlayingCourtId.set(pid, bn)
+    }
+
     const [startH, startM] = startSlot.split(':').map(Number)
     const [endH, endM] = endSlot.split(':').map(Number)
     const reqStart = startH * 60 + startM
     const reqEnd = endH * 60 + endM
     if (!Number.isFinite(reqStart) || !Number.isFinite(reqEnd) || reqEnd <= reqStart) return null
 
-    const rows = Array.isArray(bookings) ? bookings : []
+    const rows = Array.isArray(allCourtBookings) ? allCourtBookings : []
     for (const b of rows) {
       const approval = String((b as any)?.status ?? '').toLowerCase()
       const bookingStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
@@ -491,7 +507,9 @@ export default function CourtBooking() {
       const bookingDate = String((b as any)?.bookingdate ?? '').slice(0, 10)
       if (bookingDate !== selectedDateStr) continue
 
-      const existingBase = String((b as any)?.selected_base_name ?? '').trim().toLowerCase()
+      const existingPid = Number((b as any)?.playingcourtid)
+      const derivedBase = Number.isFinite(existingPid) ? (baseNameByPlayingCourtId.get(existingPid) ?? '') : ''
+      const existingBase = String((b as any)?.selected_base_name ?? derivedBase).trim().toLowerCase()
       if (!existingBase || existingBase !== activeBaseName) continue
 
       const existingStart = timeMinutesFromTimestamp((b as any)?.start_timestamp)
@@ -511,7 +529,7 @@ export default function CourtBooking() {
     }
 
     return null
-  }, [selectedDateStr, startSlot, endSlot, selectedPart, bookings, selectedPc?.base_name, selectedBaseName])
+  }, [selectedDateStr, startSlot, endSlot, selectedPart, allCourtBookings, selectedPc?.base_name, selectedBaseName, playingCourts])
 
   // Require part selection when playing courts exist.
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !fullHalfOverlapError && (playingCourts.length === 0 || selectedPlayingCourtId != null))

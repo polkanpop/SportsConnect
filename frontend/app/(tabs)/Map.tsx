@@ -50,7 +50,7 @@
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
   import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
-  import { GestureHandlerRootView, Gesture, GestureDetector } from "react-native-gesture-handler";
+  import { GestureHandlerRootView, Gesture, GestureDetector, NativeViewGestureHandler } from "react-native-gesture-handler";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
   type Region = {
@@ -1137,7 +1137,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v22</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v26</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1509,6 +1509,7 @@
                   snapPoints={snapPoints}
                   index={0} // closed by default
                   bottomInset={0}
+                  enableContentPanningGesture={activeSheetTab !== 'Images'}
                   enablePanDownToClose={false} // Keep BottomSheet always enabled
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
@@ -1870,27 +1871,29 @@
                       })()}
 
                       {activeSheetTab === 'Images' && (aggregatedImages.length > 0 ? (
-                        <ScrollView
-                          horizontal
-                          nestedScrollEnabled
-                          directionalLockEnabled
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.imagesRow}
-                          style={styles.imagesScroller}
-                          alwaysBounceHorizontal
-                          bounces
-                          overScrollMode="always"
-                        >
-                          {aggregatedImages.map((image, idx) => (
-                            <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
-                              <ExpoImage
-                                source={{ uri: image }}
-                                style={styles.detailImageTile}
-                                contentFit="cover"
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
+                        <NativeViewGestureHandler disallowInterruption>
+                          <ScrollView
+                            horizontal
+                            nestedScrollEnabled
+                            directionalLockEnabled
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.imagesRow}
+                            style={styles.imagesScroller}
+                            alwaysBounceHorizontal
+                            bounces
+                            overScrollMode="always"
+                          >
+                            {aggregatedImages.map((image, idx) => (
+                              <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
+                                <ExpoImage
+                                  source={{ uri: image }}
+                                  style={styles.detailImageTile}
+                                  contentFit="cover"
+                                />
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </NativeViewGestureHandler>
                       ) : playingCourtsLoading ? (
                         <View style={styles.placeholderSection}>
                           <Text style={styles.placeholderText}>Loading images...</Text>

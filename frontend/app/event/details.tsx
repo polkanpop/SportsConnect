@@ -355,6 +355,16 @@ export default function DetailsPage() {
     staleTime: 10 * 60_000,
   })
 
+  const courtVenueInfoQuery = useQuery({
+    queryKey: ['details', 'courtVenueInfo', courtCourtId],
+    queryFn: async () => {
+      const rows = await listCourtInfo({ courtids: [courtCourtId!] })
+      return Array.isArray(rows) && rows.length ? rows[0] : null
+    },
+    enabled: courtCourtId != null,
+    staleTime: 10 * 60_000,
+  })
+
   const linkedEventsByCourtBookingQuery = {
     data: Array.isArray((courtBookingQuery.data as any)?.linked_events) ? (courtBookingQuery.data as any).linked_events : [],
     isLoading: false,
@@ -1266,6 +1276,8 @@ export default function DetailsPage() {
       const courtsRel = Array.isArray(avail?.courts) ? avail.courts[0] : (avail?.courts ?? null)
       const courtInfoRel = Array.isArray(courtsRel?.courtinfo) ? courtsRel.courtinfo[0] : (courtsRel?.courtinfo ?? null)
       const reviewVenueName =
+        (typeof (courtVenueInfoQuery.data as any)?.name === 'string' ? (courtVenueInfoQuery.data as any).name.trim() : null) ||
+        (typeof (singleCourtQuery.data as any)?.name === 'string' ? (singleCourtQuery.data as any).name.trim() : null) ||
         (typeof (courtInfoRel as any)?.name === 'string' ? (courtInfoRel as any).name.trim() : null) ||
         resolveVenueNameOnly(singleAvailQuery.data) ||
         resolveVenueNameOnly(courtBookingQuery.data)
@@ -1304,6 +1316,8 @@ export default function DetailsPage() {
     parsed.kind,
     courtCourtId,
     courtBookingQuery.data,
+    singleCourtQuery.data,
+    courtVenueInfoQuery.data,
     singleAvailQuery.data,
     eventBookingQuery.data,
     eventsCombinedList,
