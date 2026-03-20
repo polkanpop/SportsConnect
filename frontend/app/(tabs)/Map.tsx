@@ -1515,7 +1515,11 @@
                 >
                   {selectedMarker ? (
                     <BottomSheetScrollView
-                      contentContainerStyle={styles.bottomSheetContent}
+                      scrollEnabled={activeSheetTab !== 'Images'}
+                      contentContainerStyle={[
+                        styles.bottomSheetContent,
+                        activeSheetTab === 'Images' ? styles.bottomSheetContentImages : null,
+                      ]}
                       refreshControl={<RefreshControl refreshing={loadingMarkers} onRefresh={fetchMarkers} />}
                     >
                       {(() => {
@@ -1874,6 +1878,8 @@
                           contentContainerStyle={styles.imagesRow}
                           style={styles.imagesScroller}
                           alwaysBounceHorizontal
+                          bounces
+                          overScrollMode="always"
                         >
                           {aggregatedImages.map((image, idx) => (
                             <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
@@ -2273,7 +2279,10 @@
       alignItems: "flex-start",
       padding: 16,
       position: "relative",
-      paddingBottom: 20,
+      paddingBottom: 12,
+    },
+    bottomSheetContentImages: {
+      paddingBottom: 6,
     },
     sheetCoverFrame: {
       width: '100%',
