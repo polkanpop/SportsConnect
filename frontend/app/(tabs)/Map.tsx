@@ -273,6 +273,7 @@
     const zoomWindow = useWindowDimensions()
     const zoomFrameW = Math.max(260, Math.min(Math.round(zoomWindow.width * 0.92), 560))
     const zoomFrameH = Math.max(260, Math.min(Math.round(zoomWindow.height * 0.72), 640))
+    const [mapContainerHeight, setMapContainerHeight] = useState(zoomWindow.height)
     const zoomScale = useSharedValue(1)
     const zoomTX = useSharedValue(0)
     const zoomTY = useSharedValue(0)
@@ -330,9 +331,9 @@
     const [weekOffset, setWeekOffset] = useState(0);
     const mapRegionRef = useRef<Region>(INITIAL_REGION);
     const favoriteIdsRef = useRef<number[]>([]);
-    const collapsedSheetHeightPx = Math.round(zoomWindow.height * 0.30);
-    const floatingButtonsBottom = Math.max(116, collapsedSheetHeightPx + 22);
-    const googleButtonBottom = floatingButtonsBottom + 70;
+    const collapsedSheetHeightPx = Math.round(mapContainerHeight * 0.30);
+    const floatingButtonsBottom = Math.max(116, collapsedSheetHeightPx + 60);
+    const googleButtonBottom = floatingButtonsBottom + 62;
 
     // Approximate zoom stages for DynamicMap region deltas.
     const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
@@ -1153,7 +1154,7 @@
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <SafeAreaView style={styles.container}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1 }} onLayout={(e) => setMapContainerHeight(e.nativeEvent.layout.height)}>
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
                   style={styles.map}
