@@ -1126,7 +1126,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v14</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v15</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -1604,25 +1604,22 @@
                         <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
                           Address: {selectedMarker.address}
                         </Text>
-                      </View>
 
-
-                      {/* Venue Tags (moved under address) */}
-                      <View style={styles.sheetTagRow}>
-                        {/* Venue */}
-                        {(() => {
-                          const venueRaw = Array.isArray(selectedMarker.venue) ? selectedMarker.venue : [selectedMarker.venue].filter(Boolean)
-                          const venues = venueRaw.filter(Boolean).map(v => String(v))
-                          const lower = venues.map(v => v.toLowerCase())
-                          let venueDisplay: string[] = []
-                          if (lower.includes('indoor') && lower.includes('outdoor')) venueDisplay = ['In/Outdoor']
-                          else if (venues.length) venueDisplay = [venues[0]]
-                          return venueDisplay.map(v => (
-                            <View key={v} style={[styles.sheetTag, styles.sheetVenueTag]}>
-                              <Text style={[styles.sheetTagText, { color: '#fff' }]}>{v}</Text>
-                            </View>
-                          ))
-                        })()}
+                        <View style={styles.sheetTagRow}>
+                          {(() => {
+                            const venueRaw = Array.isArray(selectedMarker.venue) ? selectedMarker.venue : [selectedMarker.venue].filter(Boolean)
+                            const venues = venueRaw.filter(Boolean).map(v => String(v))
+                            const lower = venues.map(v => v.toLowerCase())
+                            let venueDisplay: string[] = []
+                            if (lower.includes('indoor') && lower.includes('outdoor')) venueDisplay = ['In/Outdoor']
+                            else if (venues.length) venueDisplay = [venues[0]]
+                            return venueDisplay.map(v => (
+                              <View key={v} style={[styles.sheetTag, styles.sheetVenueTag]}>
+                                <Text style={[styles.sheetTagText, { color: '#fff' }]}>{v}</Text>
+                              </View>
+                            ))
+                          })()}
+                        </View>
                       </View>
 
                       <View style={styles.sheetTabsRow}>

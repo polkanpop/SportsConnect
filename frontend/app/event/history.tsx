@@ -318,6 +318,25 @@ function stripNullTail(s: string): string {
     .trim()
 }
 
+function firstRelatedRow(v: any): any | null {
+  if (Array.isArray(v)) return (v[0] && typeof v[0] === 'object') ? v[0] : null
+  if (v && typeof v === 'object') return v
+  return null
+}
+
+function formatScheduleFromTimes(startRaw: any, endRaw: any): { date: string; time: string } | null {
+  const start = parseLoose(startRaw)
+  const end = parseLoose(endRaw)
+  if (Number.isNaN(start.getTime())) return null
+  const date = `${start.getDate()}-${start.getMonth() + 1}-${start.getFullYear()}`
+  const s = `${start.getHours()}:${pad2(start.getMinutes())}`
+  if (!Number.isNaN(end.getTime())) {
+    const e = `${end.getHours()}:${pad2(end.getMinutes())}`
+    return { date, time: `${s}-${e}` }
+  }
+  return { date, time: s }
+}
+
 export default function HistoryPage() {
   const router = useRouter()
   const { userId, dashboard } = useAppBootstrap()
@@ -660,47 +679,103 @@ export default function HistoryPage() {
             const cleanTitle = stripNullTail(item.title || '')
             let title = cleanTitle
             let venue = ''
+            let startRaw: any = meta?.start_timestamp ?? null
+            let endRaw: any = meta?.end_timestamp ?? null
 
             if (item.kind === 'event_booking') {
               const eb = typeof meta.eventbookingid === 'number' ? linkedRows.eventBookingById.get(meta.eventbookingid) : null
-              const eventId = Number(meta.eventid ?? eb?.eventid)
+              const ebEvent = firstRelatedRow((eb as any)?.events)
+              const ebEventInfo = firstRelatedRow((ebEvent as any)?.eventinfo)
+              const eventId = Number(meta.eventid ?? eb?.eventid ?? ebEvent?.eventid)
               const ev = Number.isFinite(eventId) ? linkedRows.eventById.get(eventId) : null
-              const eventName = firstNonEmptyText(eb?.event_title, eb?.title, eb?.name, ev?.title, ev?.event_title)
-              const venueName = firstNonEmptyText(eb?.court_name, eb?.courtName, ev?.court_name, ev?.courtName, ev?.address)
+              const eventName = firstNonEmptyText(
+                ev?.title,
+                ev?.event_title,
+                ebEvent?.title,
+                ebEventInfo?.title,
+                eb?.event_title,
+                eb?.title,
+                eb?.name,
+              )
+              const venueName = firstNonEmptyText(
+                ev?.court_name,
+                ev?.courtName,
+                ebEvent?.court_name,
+                ebEvent?.courtName,
+                eb?.court_name,
+                eb?.courtName,
+                meta?.court_name,
+                meta?.courtName,
+                ev?.address,
+                ebEvent?.address,
+              )
               title = eventName ? `Booked event: ${eventName}` : (cleanTitle || 'Booked event')
               venue = venueName
+              startRaw = startRaw ?? eb?.start_timestamp ?? ebEvent?.start_timestamp ?? ev?.start_timestamp ?? ebEvent?.time ?? ev?.time ?? null
+              endRaw = endRaw ?? eb?.end_timestamp ?? ebEvent?.end_timestamp ?? ev?.end_timestamp ?? null
             } else if (item.kind === 'session_booking') {
               const sb = typeof meta.tsbookingid === 'number' ? linkedRows.sessionBookingById.get(meta.tsbookingid) : null
-              const sessionId = Number(meta.sessionid ?? sb?.sessionid)
+              const sbSession = firstRelatedRow((sb as any)?.trainingsessions)
+              const sbSessionInfo = firstRelatedRow((sbSession as any)?.trainingsessioninfo)
+              const sessionId = Number(meta.sessionid ?? sb?.sessionid ?? sbSession?.sessionid)
               const sess = Number.isFinite(sessionId) ? linkedRows.sessionById.get(sessionId) : null
-              const sessionName = firstNonEmptyText(sb?.session_title, sb?.title, sb?.name, sess?.title, sess?.session_title)
-              const venueName = firstNonEmptyText(sb?.court_name, sb?.courtName, sess?.court_name, sess?.courtName, sess?.address)
+              const sessionName = firstNonEmptyText(
+                sess?.title,
+                sess?.session_title,
+                sbSession?.title,
+                sbSessionInfo?.title,
+                sb?.session_title,
+                sb?.title,
+                sb?.name,
+              )
+              const venueName = firstNonEmptyText(
+                sess?.court_name,
+                sess?.courtName,
+                sbSession?.court_name,
+                sbSession?.courtName,
+                sb?.court_name,
+                sb?.courtName,
+                meta?.court_name,
+                meta?.courtName,
+                sess?.address,
+                sbSession?.address,
+              )
               title = sessionName ? `Booked session: ${sessionName}` : (cleanTitle || 'Booked session')
               venue = venueName
+              startRaw = startRaw ?? sb?.start_timestamp ?? sbSession?.start_timestamp ?? sess?.start_timestamp ?? sbSession?.time ?? sess?.time ?? null
+              endRaw = endRaw ?? sb?.end_timestamp ?? sbSession?.end_timestamp ?? sess?.end_timestamp ?? null
             } else if (item.kind === 'court_booking') {
               const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
               const courtName = firstNonEmptyText(cb?.court_name, cb?.courtName, meta?.court_name, meta?.courtName)
               title = courtName ? `Booked court: ${courtName}` : (cleanTitle || 'Booked court')
               venue = firstNonEmptyText(cb?.address)
+              startRaw = startRaw ?? cb?.start_timestamp ?? null
+              endRaw = endRaw ?? cb?.end_timestamp ?? null
             } else if (item.kind === 'created_event') {
               const eventId = Number(meta.eventid)
               const ev = Number.isFinite(eventId) ? linkedRows.eventById.get(eventId) : null
               const eventName = firstNonEmptyText(ev?.title, ev?.event_title)
               title = eventName ? `Event created: ${eventName}` : (cleanTitle || 'Event created')
               venue = firstNonEmptyText(ev?.court_name, ev?.courtName, ev?.address)
+              startRaw = startRaw ?? ev?.start_timestamp ?? ev?.time ?? null
+              endRaw = endRaw ?? ev?.end_timestamp ?? null
             } else if (item.kind === 'created_session') {
               const sessionId = Number(meta.sessionid)
               const sess = Number.isFinite(sessionId) ? linkedRows.sessionById.get(sessionId) : null
               const sessionName = firstNonEmptyText(sess?.title, sess?.session_title)
               title = sessionName ? `Session created: ${sessionName}` : (cleanTitle || 'Session created')
               venue = firstNonEmptyText(sess?.court_name, sess?.courtName, sess?.address)
+              startRaw = startRaw ?? sess?.start_timestamp ?? sess?.time ?? null
+              endRaw = endRaw ?? sess?.end_timestamp ?? null
             }
 
-            return { title: title || 'Activity', venue }
+            return { title: title || 'Activity', venue, startRaw, endRaw }
           })()
 
+          const resolvedSchedule = schedule ?? formatScheduleFromTimes(titleAndVenue.startRaw, titleAndVenue.endRaw)
+
           const subtitleRaw = !isNoisySubtitle(item.subtitle ?? null) ? stripAddMe(String(item.subtitle)) : ''
-          const subtitleText = subtitleRaw && !(schedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
+          const subtitleText = subtitleRaw && !(resolvedSchedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
           const venueSubtitle = titleAndVenue.venue ? `Venue: ${titleAndVenue.venue}` : null
           const displaySubtitle = subtitleText || venueSubtitle
 
@@ -795,9 +870,9 @@ export default function HistoryPage() {
                   </View>
 
                   <Text style={styles.title}>{titleAndVenue.title}</Text>
-                  {!!schedule && (
+                  {!!resolvedSchedule && (
                     <View style={styles.scheduleWrap}>
-                      <Text style={styles.scheduleText}>Time: {schedule.time}</Text>
+                      <Text style={styles.scheduleText}>Time: {resolvedSchedule.time}</Text>
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && (
                         <Text style={styles.scheduleText}>Type: {createdType}</Text>
                       )}
@@ -815,10 +890,10 @@ export default function HistoryPage() {
                   {item.kind === 'court_booking' && !!courtType && (
                     <Text style={styles.metaText}>Type: {courtType}</Text>
                   )}
-                  {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !schedule && (
+                  {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !resolvedSchedule && (
                     <Text style={styles.metaText}>Type: {createdType}</Text>
                   )}
-                  {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !schedule && (
+                  {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !resolvedSchedule && (
                     <Text style={styles.metaText}>Court: {courtName}</Text>
                   )}
 
