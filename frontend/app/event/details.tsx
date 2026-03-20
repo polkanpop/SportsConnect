@@ -127,36 +127,17 @@ const deriveBookingActionState = (
 ): { reviewEnabled: boolean; cancelEnabled: boolean } => {
   const bs = String(bookingStatusRaw ?? '').trim().toLowerCase()
   const ss = String(sessionStatusRaw ?? '').trim().toLowerCase()
-  const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now())
-  const isApprovedOrJoined = bs === 'approved' || bs === 'joined'
 
-  // C: rejected/cancelled -> both disabled
   if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
     return { reviewEnabled: false, cancelEnabled: false }
   }
-
-  // E: approved/joined and already in the past should behave like completed.
-  if (isPast && isApprovedOrJoined) {
-    return { reviewEnabled: true, cancelEnabled: false }
-  }
-
-  // Missed (D or F) -> both disabled
   if (ss === 'missed') {
     return { reviewEnabled: false, cancelEnabled: false }
   }
-
-  // D: past + host ignored (pending) -> both disabled
-  if (isPast && bs === 'pending') {
-    return { reviewEnabled: false, cancelEnabled: false }
-  }
-
-  // E: completed -> review enabled, cancel disabled
   if (ss === 'completed' || ss === 'complete') {
     return { reviewEnabled: true, cancelEnabled: false }
   }
-
-  // A/B: future + upcoming -> review disabled, cancel enabled
-  if (!isPast) {
+  if (ss === 'upcoming') {
     return { reviewEnabled: false, cancelEnabled: true }
   }
 
@@ -1268,15 +1249,13 @@ export default function DetailsPage() {
 
   const canReview = useMemo(() => {
     if (parsed.kind === 'court_booking') {
-      const owneridRaw = Number((singleCourtQuery.data as any)?.ownerid)
-      const isOwner = Number.isFinite(owneridRaw) && Number.isFinite(userId) && owneridRaw === Number(userId)
-      return !!bookingActionState?.reviewEnabled && !isOwner && !isRecordCancelled
+      return !!bookingActionState?.reviewEnabled && !isRecordCancelled
     }
     if (parsed.kind === 'event_booking' || parsed.kind === 'session_booking') {
       return !!bookingActionState?.reviewEnabled && !isRecordCancelled
     }
     return false
-  }, [parsed.kind, bookingActionState, singleCourtQuery.data, userId, isRecordCancelled])
+  }, [parsed.kind, bookingActionState, isRecordCancelled])
 
   const isBookingKind = parsed.kind === 'court_booking' || parsed.kind === 'event_booking' || parsed.kind === 'session_booking'
 
@@ -1303,15 +1282,23 @@ export default function DetailsPage() {
       const eventid = (eventBookingQuery.data as any)?.eventid
       if (typeof eventid !== 'number') return null
       const ev = eventsCombinedList.find((x) => x.eventid === eventid) || eventBookingEventQuery.data
-      const titleText = resolveTitle({ ...(ev || {}), eventinfo: eventBookingInfoQuery.data ? [eventBookingInfoQuery.data] : [] }, `Event #${eventid}`)
-      return { targettype: 'event', targetid: String(eventid), title: encodeURIComponent(titleText) }
+      const titleText = resolveTitle({ ...(ev || {}), eventinfo: eventBookingInfoQuery.data ? [eventBookingInfoQuery.data] : [] }, 'Event')
+      return {
+        targettype: 'event',
+        targetid: String(eventid),
+        title: encodeURIComponent(titleText),
+      }
     }
     if (parsed.kind === 'session_booking') {
       const sessionid = (sessionBookingQuery.data as any)?.sessionid
       if (typeof sessionid !== 'number') return null
       const s = sessionsCombinedList.find((x) => x.sessionid === sessionid) || sessionBookingSessionQuery.data
-      const titleText = resolveTitle({ ...(s || {}), trainingsessioninfo: sessionBookingInfoQuery.data ? [sessionBookingInfoQuery.data] : [] }, `Session #${sessionid}`)
-      return { targettype: 'trainingsession', targetid: String(sessionid), title: encodeURIComponent(titleText) }
+      const titleText = resolveTitle({ ...(s || {}), trainingsessioninfo: sessionBookingInfoQuery.data ? [sessionBookingInfoQuery.data] : [] }, 'Training Session')
+      return {
+        targettype: 'trainingsession',
+        targetid: String(sessionid),
+        title: encodeURIComponent(titleText),
+      }
     }
     return null
   }, [
@@ -1649,14 +1636,14 @@ export default function DetailsPage() {
       ) : loadError ? (
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Failed to load</Text>
-          <Text style={styles.muted}>{(loadError as any)?.message || 'Unknown error'}</Text>
+          <Text style={styles.muted}>{(loadError as any)?.message || 'Error loading record'}</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Section title="Summary">
             <Row
               label="Venue Name"
-              value={summaryVenueName || 'Unknown'}
+              value={summaryVenueName || '—'}
             />
             <Row label="Type" value={headerTitle} />
           </Section>
@@ -1669,10 +1656,10 @@ export default function DetailsPage() {
               <>
                 <Section title="Booking">
                   <Row label="Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
-                  <Row label="Court Name" value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || 'Unknown'} />
-                  <Row label="Address" value={courtBookingCourt?.address || 'Unknown'} />
+                  <Row label="Court Name" value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || '—'} />
+                  <Row label="Address" value={courtBookingCourt?.address || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
-                  <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
+                  <Row label="Time" value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label="Note" value={b.note || '—'} />
                 </Section>
               </>
@@ -1690,12 +1677,12 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Event">
-                  <Row label="Title" value={ev?.title || evMeta?.title || `Event #${eventid}`} />
+                  <Row label="Title" value={resolveTitle({ ...(ev || {}), eventinfo: evMeta ? [evMeta] : [] }, 'Event')} />
                   <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
-                  <Row label="Court Name" value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || 'Unknown'} />
+                  <Row label="Court Name" value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
-                  <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
+                  <Row label="Time" value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label="Description" value={ev?.description || evMeta?.description || '—'} />
                 </Section>
               </>
@@ -1713,12 +1700,12 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Training Session">
-                  <Row label="Title" value={s?.title || sMeta?.title || `Session #${sessionid}`} />
+                  <Row label="Title" value={resolveTitle({ ...(s || {}), trainingsessioninfo: sMeta ? [sMeta] : [] }, 'Training Session')} />
                   <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
-                  <Row label="Court Name" value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || 'Unknown'} />
+                  <Row label="Court Name" value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
-                  <Row label="Time" value={`${formatTimeHHMM(start) || 'Unknown'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
+                  <Row label="Time" value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label="Description" value={s?.description || sMeta?.description || '—'} />
                 </Section>
               </>
@@ -1732,11 +1719,11 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Event">
-                  <Row label="Title" value={resolveTitle({ ...(ev as any), eventinfo: meta ? [meta] : [] }, `Event #${ev.eventid}`)} />
+                  <Row label="Title" value={resolveTitle({ ...(ev as any), eventinfo: meta ? [meta] : [] }, 'Event')} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev.status)} />
-                  <Row label="Court" value={createdEventCourtName || 'Unknown'} />
+                  <Row label="Court" value={createdEventCourtName || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
-                  <Row label="Time" value={formatTimeHHMM(start) || 'Unknown'} />
+                  <Row label="Time" value={formatTimeHHMM(start) || '—'} />
                   <Row label="Participants cap" value={(meta as any)?.participants_cap ?? '—'} />
                   <Row label="Entry fee" value={formatEntryFee(meta?.entry_fee)} />
                   <Row label="Description" value={meta?.description || '—'} />
@@ -1752,11 +1739,11 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Training Session">
-                  <Row label="Title" value={resolveTitle({ ...(s as any), trainingsessioninfo: meta ? [meta] : [] }, `Session #${s.sessionid}`)} />
+                  <Row label="Title" value={resolveTitle({ ...(s as any), trainingsessioninfo: meta ? [meta] : [] }, 'Training Session')} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s.status)} />
-                  <Row label="Court" value={createdSessionCourtName || 'Unknown'} />
+                  <Row label="Court" value={createdSessionCourtName || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
-                  <Row label="Time" value={formatTimeHHMM(start) || 'Unknown'} />
+                  <Row label="Time" value={formatTimeHHMM(start) || '—'} />
                   <Row label="Participants cap" value={(meta as any)?.participants_cap ?? '—'} />
                   <Row label="Entry fee" value={formatEntryFee(meta?.entry_fee)} />
                   <Row label="Description" value={meta?.description || '—'} />

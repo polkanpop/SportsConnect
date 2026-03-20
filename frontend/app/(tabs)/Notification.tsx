@@ -37,7 +37,6 @@ export default function NotificationsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -106,6 +105,14 @@ export default function NotificationsPage() {
   }, [categoryParam])
 
   const getIconFor = (row: NotificationRow) => {
+    const text = `${String(row.title || '')} ${String(row.message || '')} ${String(row.kind || '')}`.toLowerCase()
+    if (text.includes('approved') || text.includes('successful') || text.includes('accepted')) {
+      return ICONS.successfulNotification
+    }
+    if (text.includes('rejected') || text.includes('failed') || text.includes('declined')) {
+      return ICONS.failedNotification
+    }
+
     const cat = getRowCategory(row)
     const kind = (row.kind || '').toLowerCase()
     if (cat === 'event') return ICONS.eventNoti
@@ -178,17 +185,7 @@ export default function NotificationsPage() {
   const handleNotificationClick = async (row: NotificationRow) => {
     const id = row.notificationid
 
-    if (selectionMode) {
-      toggleSelection(id)
-      return
-    }
-
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    toggleSelection(id)
 
     if ((row.status || '').toLowerCase() !== 'unread') return
 
@@ -217,10 +214,6 @@ export default function NotificationsPage() {
       setUpdating(null);
     }
   };
-
-  const handleNotificationLongPress = (row: NotificationRow) => {
-    toggleSelection(row.notificationid)
-  }
 
   const handleMarkAllRead = async () => {
     const unreadCount = rows.reduce((acc, r) => acc + ((r.status || '').toLowerCase() === 'unread' ? 1 : 0), 0)
@@ -261,6 +254,12 @@ export default function NotificationsPage() {
     setDeleteConfirmVisible(true)
   }
 
+  const onPressDeleteSingle = (notificationid: number) => {
+    if (actionLoading) return
+    setSelectedIds(new Set([notificationid]))
+    setDeleteConfirmVisible(true)
+  }
+
   const renderItem = ({ item }: { item: NotificationRow }) => (
     <TouchableOpacity
       style={[
@@ -270,7 +269,6 @@ export default function NotificationsPage() {
         selectedIds.has(item.notificationid) && styles.selectedNotification,
       ]}
       onPress={() => handleNotificationClick(item)}
-      onLongPress={() => handleNotificationLongPress(item)}
       activeOpacity={0.85}
     >
       <Image source={getIconFor(item)} style={styles.notificationIcon} />
@@ -281,10 +279,28 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        {expanded.has(item.notificationid) && (
-          <Text style={styles.notificationMessage}>{item.message}</Text>
-        )}
+        <Text style={styles.notificationMessage} numberOfLines={selectedIds.has(item.notificationid) ? undefined : 2}>{item.message}</Text>
       </View>
+      {selectedIds.has(item.notificationid) && (
+        <View style={styles.selectedActionsRow}>
+          <TouchableOpacity
+            style={styles.deleteWrap}
+            onPress={() => toggleSelection(item.notificationid)}
+            activeOpacity={0.85}
+            disabled={actionLoading}
+          >
+            <Image source={ICONS.closeMenu} style={styles.closeIcon} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteWrap}
+            onPress={() => onPressDeleteSingle(item.notificationid)}
+            activeOpacity={0.85}
+            disabled={actionLoading}
+          >
+            <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -353,14 +369,24 @@ export default function NotificationsPage() {
             {section.title === 'Today' ? (
               <View style={styles.todayActionsRow}>
                 {selectionMode ? (
-                  <TouchableOpacity
-                    style={styles.deleteWrap}
-                    onPress={onPressDeleteSelected}
-                    activeOpacity={0.85}
-                    disabled={actionLoading}
-                  >
-                    <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      style={styles.deleteWrap}
+                      onPress={() => setSelectedIds(new Set())}
+                      activeOpacity={0.85}
+                      disabled={actionLoading}
+                    >
+                      <Image source={ICONS.closeMenu} style={styles.closeIcon} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteWrap}
+                      onPress={onPressDeleteSelected}
+                      activeOpacity={0.85}
+                      disabled={actionLoading}
+                    >
+                      <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
+                    </TouchableOpacity>
+                  </>
                 ) : null}
                 <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
                   <Text style={styles.markAllText}>Mark all as read</Text>
@@ -584,6 +610,11 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
   },
+  closeIcon: {
+    width: 16,
+    height: 16,
+    tintColor: COLORS.neutral925,
+  },
   sectionHeaderText: {
     fontSize: 19,
     fontWeight: '800',
@@ -631,7 +662,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.neutral800,
     marginTop: 4,
-    paddingRight: 6,
+    paddingRight: 2,
+  },
+  selectedActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 10,
   },
   notificationTime: {
     fontSize: 14,

@@ -141,6 +141,8 @@ export const ICONS = {
   tsNoti: require('../assets/icons/ts_noti.png'),
   courtNoti: require('../assets/icons/court_noti.png'),
   courtNotiPending: require('../assets/icons/court_noti_pending.png'),
+  successfulNotification: require('../assets/icons/successful_notification.png'),
+  failedNotification: require('../assets/icons/failed_notification.png'),
   deleteAll: require('../assets/icons/delete_all.png'),
 }; 
 

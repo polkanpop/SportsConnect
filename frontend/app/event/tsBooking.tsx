@@ -99,10 +99,6 @@ export default function TrainingSessionBooking() {
   const [confirmation, setConfirmation] = useState<TrainingSessionBookingRow | null>(null)
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
 
-  React.useEffect(() => {
-    if (alreadyBooked && confirmModalVisible) setConfirmModalVisible(false)
-  }, [alreadyBooked, confirmModalVisible])
-
   const isFree = session?.entry_fee == null
   const allowedMethods: ('cash' | 'vnpay')[] = useMemo(() => {
     if (!session || isFree || !session.support_payment_method) return []
@@ -117,10 +113,6 @@ export default function TrainingSessionBooking() {
 
   const handleSubmit = useCallback(async () => {
     if (!session || userId == null) return
-    if (alreadyBooked) {
-      setSubmitError('Already booked')
-      return
-    }
     if (!isFree && !paymentMethod) return
     setSubmitting(true)
     setSubmitError(null)
@@ -223,7 +215,7 @@ export default function TrainingSessionBooking() {
     } catch (e) {
       setSubmitError((e as any)?.message || 'Failed booking')
     } finally { setSubmitting(false) }
-  }, [session, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
+  }, [session, userId, paymentMethod, noteText, isFree, router, queryClient])
 
   const venues = asArray(session?.venue)
   let venueDisplay: string[] = []
@@ -344,7 +336,7 @@ export default function TrainingSessionBooking() {
           <View style={styles.bottomBar}>
             <TouchableOpacity style={[styles.confirmUnifiedBtn, !canSubmit && styles.confirmBtnDisabled]} disabled={!canSubmit} onPress={() => setConfirmModalVisible(true)}>
               <Text style={styles.confirmUnifiedText}>
-                {alreadyBooked ? 'Already Booked' : (submitting ? 'Submitting...' : 'Confirm Booking')}
+                {submitting ? 'Submitting...' : alreadyBooked ? 'Already Booked' : 'Confirm Booking'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -370,7 +362,7 @@ export default function TrainingSessionBooking() {
                 handleSubmit()
               }} disabled={!canSubmit}>
                 <Text style={[styles.modalBtnText, {color: '#fff'}]}>
-                  {alreadyBooked ? 'Already Booked' : 'Confirm'}
+                  Confirm
                 </Text>
               </TouchableOpacity>
             </View>

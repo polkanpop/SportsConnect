@@ -109,10 +109,6 @@ export default function EventBooking() {
   const [confirmation, setConfirmation] = useState<EventBookingRow | null>(null)
   const [confirmModalVisible, setConfirmModalVisible] = useState(false)
 
-  React.useEffect(() => {
-    if (alreadyBooked && confirmModalVisible) setConfirmModalVisible(false)
-  }, [alreadyBooked, confirmModalVisible])
-
   const isFree = event?.entry_fee == null
   const allowedMethods: ('cash' | 'vnpay')[] = useMemo(() => {
     if (!event || isFree || !event.support_payment_method) return []
@@ -130,10 +126,6 @@ export default function EventBooking() {
     const cancelled = String(event?.status ?? '').toLowerCase().includes('cancel')
     if (cancelled) {
       setSubmitError('Event was cancelled')
-      return
-    }
-    if (alreadyBooked) {
-      setSubmitError('Already booked')
       return
     }
     // For paid events require selected method
@@ -250,7 +242,7 @@ export default function EventBooking() {
     } catch (e) {
       setSubmitError((e as any)?.message || 'Failed booking')
     } finally { setSubmitting(false) }
-  }, [event, userId, alreadyBooked, paymentMethod, noteText, isFree, router, queryClient])
+  }, [event, userId, paymentMethod, noteText, isFree, router, queryClient])
 
   const venues = asArray(event?.venue)
   let venueDisplay: string[] = []
@@ -383,7 +375,7 @@ export default function EventBooking() {
               onPress={() => setConfirmModalVisible(true)}
             >
               <Text style={styles.confirmUnifiedText}>
-                {alreadyBooked ? 'Already Booked' : (submitting ? 'Submitting...' : 'Confirm Booking')}
+                {submitting ? 'Submitting...' : alreadyBooked ? 'Already Booked' : 'Confirm Booking'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -409,7 +401,7 @@ export default function EventBooking() {
                 handleSubmit()
               }} disabled={!canSubmit}>
                 <Text style={[styles.modalBtnText, {color: '#fff'}]}>
-                  {alreadyBooked ? 'Already Booked' : 'Confirm'}
+                  Confirm
                 </Text>
               </TouchableOpacity>
             </View>

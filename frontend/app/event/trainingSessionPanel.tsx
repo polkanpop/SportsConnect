@@ -487,8 +487,23 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'pending' }),
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'joined' }),
         ])
+        const dedupeByUser = (rows: TrainingSessionBookingRow[]) => {
+          const sorted = [...rows].sort((a, b) => Number(b.tsbookingid || 0) - Number(a.tsbookingid || 0))
+          const seen = new Set<number>()
+          const out: TrainingSessionBookingRow[] = []
+          for (const row of sorted) {
+            const uid = Number(row.userid)
+            if (!Number.isFinite(uid) || seen.has(uid)) continue
+            seen.add(uid)
+            out.push(row)
+          }
+          return out
+        }
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
-        const [pending, joined] = await Promise.all([enrichBookings(pendingRows || []), enrichBookings(joinedRows || [])])
+        const [pending, joined] = await Promise.all([
+          enrichBookings(dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
+          enrichBookings(dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
+        ])
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
         setApplicants(pending)
         setParticipants(joined)
@@ -1081,46 +1096,38 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
                   {String((a.booking as any)?.status ?? '').toLowerCase() === 'pending' ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity
-                      disabled={!!mutatingBookingIds[a.booking.tsbookingid]}
-                      onPress={() => onApproveApplicant(selectedSessionId, a.booking)}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: '#dcfce7',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 10,
-                        opacity: mutatingBookingIds[a.booking.tsbookingid] ? 0.6 : 1,
-                      }}
-                    >
-                      {mutatingBookingIds[a.booking.tsbookingid] === 'approve' ? (
-                        <ActivityIndicator size={14} />
-                      ) : (
-                        <Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />
-                      )}
-                    </TouchableOpacity>
+                    {!mutatingBookingIds[a.booking.tsbookingid] && (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => onApproveApplicant(selectedSessionId, a.booking)}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#dcfce7',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 10,
+                          }}
+                        >
+                          <Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                      disabled={!!mutatingBookingIds[a.booking.tsbookingid]}
-                      onPress={() => onRejectApplicant(selectedSessionId, a.booking)}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: '#fee2e2',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: mutatingBookingIds[a.booking.tsbookingid] ? 0.6 : 1,
-                      }}
-                    >
-                      {mutatingBookingIds[a.booking.tsbookingid] === 'reject' ? (
-                        <ActivityIndicator size={14} />
-                      ) : (
-                        <Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />
-                      )}
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => onRejectApplicant(selectedSessionId, a.booking)}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#fee2e2',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />
+                        </TouchableOpacity>
+                      </>
+                    )}
 
                     <TouchableOpacity
                       activeOpacity={0.75}

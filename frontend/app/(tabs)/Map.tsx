@@ -1508,6 +1508,7 @@
                   ref={bottomSheetRef}
                   snapPoints={snapPoints}
                   index={0} // closed by default
+                  bottomInset={72}
                   enablePanDownToClose={false} // Keep BottomSheet always enabled
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
@@ -1865,7 +1866,15 @@
                       })()}
 
                       {activeSheetTab === 'Images' && (aggregatedImages.length > 0 ? (
-                        <ScrollView horizontal={true} nestedScrollEnabled={true} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                        <ScrollView
+                          horizontal
+                          nestedScrollEnabled
+                          directionalLockEnabled
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.imagesRow}
+                          style={styles.imagesScroller}
+                          alwaysBounceHorizontal
+                        >
                           {aggregatedImages.map((image, idx) => (
                             <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
                               <ExpoImage
@@ -2264,7 +2273,7 @@
       alignItems: "flex-start",
       padding: 16,
       position: "relative",
-      paddingBottom: 96,
+      paddingBottom: 20,
     },
     sheetCoverFrame: {
       width: '100%',
@@ -2498,6 +2507,9 @@
     imagesRow: {
       paddingVertical: 6,
       paddingRight: 16,
+    },
+    imagesScroller: {
+      width: '100%',
     },
     detailImageTile: {
       width: DETAIL_IMAGE_TILE_WIDTH,

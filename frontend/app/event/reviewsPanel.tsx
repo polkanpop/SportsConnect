@@ -17,8 +17,49 @@ type ReviewItem = {
   key: string
   title: string
   subtitle: string
+  venueName?: string
   targettype: string
   targetid: number
+}
+
+function firstText(...values: any[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const s = value.trim()
+      if (s) return s
+      continue
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item !== 'string') continue
+        const s = item.trim()
+        if (s) return s
+      }
+    }
+  }
+  return null
+}
+
+function firstRelatedRow(rel: any): any | null {
+  if (Array.isArray(rel)) return rel[0] ?? null
+  if (rel && typeof rel === 'object') return rel
+  return null
+}
+
+function pickNestedTitle(row: any): string | null {
+  const info = firstRelatedRow((row as any)?.eventinfo) || firstRelatedRow((row as any)?.trainingsessioninfo)
+  return firstText((row as any)?.title, (info as any)?.title, (row as any)?.name)
+}
+
+function pickVenueName(row: any): string | null {
+  const info = firstRelatedRow((row as any)?.eventinfo) || firstRelatedRow((row as any)?.trainingsessioninfo)
+  return firstText(
+    (info as any)?.venue,
+    (info as any)?.address,
+    (row as any)?.venue,
+    (row as any)?.address,
+    (row as any)?.court_name,
+  )
 }
 
 function normalizeBookingStatus(row: any): string {
@@ -43,11 +84,7 @@ function isReviewableByStatusAndTime(opts: { bookingStatus?: unknown; sessionSta
   const ss = String(opts.sessionStatus ?? '').trim().toLowerCase()
   if (ss.includes('cancel') || ss === 'missed') return false
   if (ss === 'completed' || ss === 'complete') return true
-  const start = parseTimestampLoose(opts.startTs)
-  const end = parseTimestampLoose(opts.endTs)
-  const isPast = !!((end ?? start) && (end ?? start)!.getTime() < Date.now())
-  const approvedOrJoined = bs === 'approved' || bs === 'joined'
-  return isPast && approvedOrJoined
+  return false
 }
 
 export default function ReviewsPanel() {
@@ -147,10 +184,12 @@ export default function ReviewsPanel() {
         const courtName = courtNameFromBooking || (courtid != null
           ? (courtInfoByCourtId.get(courtid)?.name as string | undefined)
           : undefined)
+        const venueName = firstText(courtName, (av as any)?.venue_name, (av as any)?.address)
         items.push({
           key: `court_${cb.courtbookingid}`,
-          title: courtName ?? `Court Booking #${cb.courtbookingid}`,
+          title: venueName ?? 'Court',
           subtitle: 'Court',
+          venueName: venueName ?? undefined,
           targettype: 'court',
           targetid: courtid ?? Number(cb.courtbookingid),
         })
@@ -168,10 +207,13 @@ export default function ReviewsPanel() {
           endTs: (ev as any)?.end_timestamp,
         })
         if (!reviewable) continue
+        const title = pickNestedTitle(ev) || 'Event'
+        const venueName = pickVenueName(ev) || undefined
         items.push({
           key: `event_${eb.eventbookingid}`,
-          title: (ev?.title as string | undefined) ?? `Event #${eb.eventid}`,
+          title,
           subtitle: 'Event',
+          venueName,
           targettype: 'event',
           targetid: eb.eventid,
         })
@@ -189,10 +231,13 @@ export default function ReviewsPanel() {
           endTs: (sess as any)?.end_timestamp,
         })
         if (!reviewable) continue
+        const title = pickNestedTitle(sess) || 'Training Session'
+        const venueName = pickVenueName(sess) || undefined
         items.push({
           key: `session_${tb.tsbookingid}`,
-          title: (sess?.title as string | undefined) ?? `Training Session #${tb.sessionid}`,
+          title,
           subtitle: 'Training Session',
+          venueName,
           targettype: 'trainingsession',
           targetid: tb.sessionid,
         })
@@ -238,6 +283,7 @@ export default function ReviewsPanel() {
                     targettype: item.targettype,
                     targetid: String(item.targetid),
                     title: encodeURIComponent(item.title),
+                    venueName: item.venueName ? encodeURIComponent(item.venueName) : undefined,
                   },
                 })
               }

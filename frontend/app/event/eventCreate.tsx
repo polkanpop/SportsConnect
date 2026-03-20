@@ -16,6 +16,8 @@ import {
   CreateEventWithInfoPayload,
   cloudinarySignUpload,
   invalidateEventsCombinedCache,
+  getEvent,
+  getEventInfoByEventId,
   CourtBookingRow,
   listCourtInfoCached,
   CourtInfoRow,
@@ -66,6 +68,8 @@ const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
     return secureUrl
   }
 }
+
+const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export default function EventCreateScreen() {
   const router = useRouter()
@@ -353,7 +357,7 @@ export default function EventCreateScreen() {
       const resp = await createEventWithInfo(payload)
       return resp
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSuccessData(data)
 
       const createdEventId = typeof data?.event?.eventid === 'number' ? data.event.eventid : null
@@ -379,49 +383,64 @@ export default function EventCreateScreen() {
         })
       }
 
-      // Make the created event show up immediately in lists + details.
+      // Only add to lists when the DB returns a complete event + eventinfo row.
       if (typeof createdEventId === 'number') {
-        const evRow: any = data?.event
-        const infoRow: any = data?.eventinfo
-        const combinedRow: any = {
-          eventid: createdEventId,
-          time: evRow?.time,
-          status: evRow?.status ?? 'upcoming',
-          courtbookingid: evRow?.courtbookingid,
-          organizerid: evRow?.organizerid ?? (typeof userId === 'number' ? userId : undefined),
-          organizerName: null,
-          title: infoRow?.title ?? title.trim(),
-          description: infoRow?.description ?? (description.trim() || null),
-          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
-          numberofpeople: infoRow?.numberofpeople ?? 0,
-          participants_cap: infoRow?.participants_cap ?? participantsCapNum,
-          entry_fee: infoRow?.entry_fee ?? null,
-          support_payment_method: infoRow?.support_payment_method ?? null,
-          join_status: infoRow?.join_status ?? null,
-          start_timestamp: selectedBooking?.start_timestamp ?? null,
-          end_timestamp: selectedBooking?.end_timestamp ?? null,
-          address: selectedBooking?.address ?? undefined,
-          court_name: selectedBooking?.courtName ?? null,
+        let evRow: any = null
+        let infoRow: any = null
+        for (let i = 0; i < 4; i++) {
+          try {
+            const [ev, info] = await Promise.all([
+              getEvent(createdEventId),
+              getEventInfoByEventId(createdEventId),
+            ])
+            const titleText = String((info as any)?.title ?? '').trim()
+            if (ev && info && titleText) {
+              evRow = ev
+              infoRow = info
+              break
+            }
+          } catch {}
+          await waitFor(350)
         }
 
-        qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
-          const arr = Array.isArray(prev) ? prev : []
-          if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
-          return [combinedRow, ...arr]
-        })
-        if (typeof userId === 'number') {
-          qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+        if (evRow && infoRow) {
+          const combinedRow: any = {
+            eventid: createdEventId,
+            time: evRow?.time,
+            status: evRow?.status ?? 'upcoming',
+            courtbookingid: evRow?.courtbookingid,
+            organizerid: evRow?.organizerid ?? (typeof userId === 'number' ? userId : undefined),
+            organizerName: null,
+            title: infoRow?.title,
+            description: infoRow?.description ?? null,
+            images: (infoRow as any)?.images ?? null,
+            numberofpeople: infoRow?.numberofpeople ?? 0,
+            participants_cap: infoRow?.participants_cap ?? 0,
+            entry_fee: infoRow?.entry_fee ?? null,
+            support_payment_method: infoRow?.support_payment_method ?? null,
+            join_status: infoRow?.join_status ?? null,
+            start_timestamp: selectedBooking?.start_timestamp ?? null,
+            end_timestamp: selectedBooking?.end_timestamp ?? null,
+            address: selectedBooking?.address ?? undefined,
+            court_name: selectedBooking?.courtName ?? null,
+          }
+
+          qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
             const arr = Array.isArray(prev) ? prev : []
             if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
             return [combinedRow, ...arr]
           })
-        }
+          if (typeof userId === 'number') {
+            qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+              const arr = Array.isArray(prev) ? prev : []
+              if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+              return [combinedRow, ...arr]
+            })
+          }
 
-        qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)
-        qc.setQueryData(['details', 'createdEventInfo', createdEventId], {
-          ...(infoRow || {}),
-          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
-        })
+          qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)
+          qc.setQueryData(['details', 'createdEventInfo', createdEventId], infoRow)
+        }
       }
 
       const bumpParticipantsInEventsCombined = (eventId: number, delta: number) => {
@@ -514,6 +533,12 @@ export default function EventCreateScreen() {
       // Invalidate events list cache so new event appears
       void invalidateEventsCombinedCache()
       qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+      if (typeof userId === 'number') {
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        qc.invalidateQueries({ queryKey: ['createdEventsCombined', userId] })
+        qc.invalidateQueries({ queryKey: ['activity', 'hosting', 'events', userId] })
+      }
+      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
 

@@ -1820,7 +1820,10 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
                           <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
-                          <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>Status: {statusRaw || 'pending'}</Text>
+                          <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>
+                            <Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>
+                            <Text>{statusRaw || 'pending'}</Text>
+                          </Text>
                         </View>
                       </TouchableOpacity>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2491,7 +2494,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
             disabled={saveDisabled}
             style={[
               styles.saveBtn,
-              saveDisabled && styles.btnDisabled,
+              saveDisabled && styles.saveBtnDisabled,
             ]}
             activeOpacity={0.85}
           >
@@ -2980,6 +2983,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '900',
     fontSize: 15,
+  },
+  saveBtnDisabled: {
+    backgroundColor: '#F4C9A6',
+    opacity: 1,
   },
   saveSuccessText: {
     marginTop: 8,

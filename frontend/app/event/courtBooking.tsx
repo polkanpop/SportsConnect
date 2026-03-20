@@ -70,6 +70,17 @@ function formatHm(v: unknown) {
   return `${m[1].padStart(2, '0')}:${m[2]}`
 }
 
+function timeMinutesFromTimestamp(raw: unknown): number | null {
+  const s = String(raw ?? '').trim()
+  if (!s) return null
+  const m = s.match(/(?:T|\s)(\d{2}):(\d{2})/)
+  if (!m) return null
+  const hh = Number(m[1])
+  const mm = Number(m[2])
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  return hh * 60 + mm
+}
+
 // Format a start/end timestamp into same style used by event list: "Thu, Nov 20, 09:00 - 10:30"
 function formatRange(start?: string | null, end?: string | null) {
   if (!start) return 'Unknown date'
@@ -452,8 +463,58 @@ export default function CourtBooking() {
     return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
   }, [courtAmount, servicesTotal])
   const formattedAmount = 'Confirm'
+  const selectedPart = useMemo(() => {
+    const p = String((selectedPc as any)?.part || '').toLowerCase()
+    if (p === 'full' || p === 'half_a' || p === 'half_b') return p as 'full' | 'half_a' | 'half_b'
+    return null
+  }, [selectedPc])
+
+  const fullHalfOverlapError = useMemo(() => {
+    if (!selectedDateStr || !startSlot || !endSlot) return null
+    if (!selectedPart) return null
+
+    const activeBaseName = String(selectedPc?.base_name ?? selectedBaseName ?? '').trim().toLowerCase()
+    if (!activeBaseName) return null
+
+    const [startH, startM] = startSlot.split(':').map(Number)
+    const [endH, endM] = endSlot.split(':').map(Number)
+    const reqStart = startH * 60 + startM
+    const reqEnd = endH * 60 + endM
+    if (!Number.isFinite(reqStart) || !Number.isFinite(reqEnd) || reqEnd <= reqStart) return null
+
+    const rows = Array.isArray(bookings) ? bookings : []
+    for (const b of rows) {
+      const approval = String((b as any)?.status ?? '').toLowerCase()
+      const bookingStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+      if (approval.includes('reject') || bookingStatus.includes('cancel') || bookingStatus.includes('complete') || bookingStatus.includes('missed')) continue
+
+      const bookingDate = String((b as any)?.bookingdate ?? '').slice(0, 10)
+      if (bookingDate !== selectedDateStr) continue
+
+      const existingBase = String((b as any)?.selected_base_name ?? '').trim().toLowerCase()
+      if (!existingBase || existingBase !== activeBaseName) continue
+
+      const existingStart = timeMinutesFromTimestamp((b as any)?.start_timestamp)
+      const existingEnd = timeMinutesFromTimestamp((b as any)?.end_timestamp)
+      if (existingStart == null || existingEnd == null || existingEnd <= existingStart) continue
+      const overlaps = reqStart < existingEnd && existingStart < reqEnd
+      if (!overlaps) continue
+
+      const existingPart = String((b as any)?.selected_part ?? '').toLowerCase()
+      const existingIsHalf = existingPart === 'half_a' || existingPart === 'half_b'
+      if (selectedPart === 'full' && (existingPart === 'full' || existingIsHalf)) {
+        return 'This time slot overlaps with an existing booking for this court area.'
+      }
+      if ((selectedPart === 'half_a' || selectedPart === 'half_b') && existingPart === 'full') {
+        return 'A full-court booking already exists for this time slot.'
+      }
+    }
+
+    return null
+  }, [selectedDateStr, startSlot, endSlot, selectedPart, bookings, selectedPc?.base_name, selectedBaseName])
+
   // Require part selection when playing courts exist.
-  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && (playingCourts.length === 0 || selectedPlayingCourtId != null))
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !fullHalfOverlapError && (playingCourts.length === 0 || selectedPlayingCourtId != null))
   const courtBookingStatus = Boolean((courtInfo as any)?.auto_approve) ? 'approved' : 'pending'
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
@@ -487,17 +548,13 @@ export default function CourtBooking() {
   const bookingMutation = useCreateBookingWithPayment()
   const confirmBooking = async () => {
     if (!canConfirm || !availability || !userId || !startSlot || !endSlot || !paymentMethod) return
+    if (fullHalfOverlapError) { setSubmitError(fullHalfOverlapError); return }
     setSubmitError(null); setConfirmation(null)
     setSubmitting(true)
     const bookingDateStr = selectedDateStr
     if (!bookingDateStr) { setSubmitError('Selected date missing'); setSubmitting(false); return }
     const startTs = `${bookingDateStr} ${startSlot}:00`
     const endTs = `${bookingDateStr} ${endSlot}:00`
-    const selectedPart = (() => {
-      const p = String((selectedPc as any)?.part || '').toLowerCase()
-      if (p === 'full' || p === 'half_a' || p === 'half_b') return p as 'full' | 'half_a' | 'half_b'
-      return null
-    })()
     bookingMutation.mutate({
       availabilityid: availability.availabilityid,
       userid: userId,
@@ -1042,7 +1099,7 @@ export default function CourtBooking() {
               <Text style={styles.promoText}>Apply Promotion Code</Text>
             </TouchableOpacity>
           </View>
-          {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+          {(fullHalfOverlapError || submitError) && <Text style={styles.errorText}>{fullHalfOverlapError || submitError}</Text>}
           {confirmation && (
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>Booked!</Text>

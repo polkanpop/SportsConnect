@@ -15,6 +15,8 @@ import {
   createTrainingSessionWithInfo,
   CreateTrainingSessionWithInfoPayload,
   cloudinarySignUpload,
+  getTrainingSession,
+  getTrainingSessionInfoBySessionId,
   invalidateTrainingSessionsCombinedCache,
   CourtBookingRow,
   listCourtInfoCached,
@@ -63,6 +65,8 @@ const applyCloudinaryDeliveryOptimizations = (secureUrl: string) => {
     return secureUrl
   }
 }
+
+const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export default function TsCreate() {
   const router = useRouter()
@@ -313,7 +317,7 @@ export default function TsCreate() {
       const resp = await createTrainingSessionWithInfo(payload)
       return resp
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSuccessData(data)
 
       const createdSessionId = typeof data?.session?.sessionid === 'number' ? data.session.sessionid : null
@@ -337,49 +341,64 @@ export default function TsCreate() {
         })
       }
 
-      // Make the created session show up immediately in lists + details.
+      // Only add to lists when the DB returns a complete session + sessioninfo row.
       if (typeof createdSessionId === 'number') {
-        const sessionRow: any = data?.session
-        const infoRow: any = data?.sessioninfo
-        const combinedRow: any = {
-          sessionid: createdSessionId,
-          time: sessionRow?.time,
-          status: sessionRow?.status ?? 'upcoming',
-          courtbookingid: sessionRow?.courtbookingid,
-          coachid: sessionRow?.coachid ?? (typeof userId === 'number' ? userId : undefined),
-          coachName: null,
-          title: infoRow?.title ?? title.trim(),
-          description: infoRow?.description ?? (description.trim() || null),
-          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
-          numberofpeople: infoRow?.numberofpeople ?? 0,
-          participants_cap: infoRow?.participants_cap ?? participantsCapNum,
-          entry_fee: infoRow?.entry_fee ?? null,
-          support_payment_method: infoRow?.support_payment_method ?? null,
-          join_status: infoRow?.join_status ?? null,
-          start_timestamp: selectedBooking?.start_timestamp ?? null,
-          end_timestamp: selectedBooking?.end_timestamp ?? null,
-          address: selectedBooking?.address ?? undefined,
-          court_name: selectedBooking?.courtName ?? null,
+        let sessionRow: any = null
+        let infoRow: any = null
+        for (let i = 0; i < 4; i++) {
+          try {
+            const [session, info] = await Promise.all([
+              getTrainingSession(createdSessionId),
+              getTrainingSessionInfoBySessionId(createdSessionId),
+            ])
+            const titleText = String((info as any)?.title ?? '').trim()
+            if (session && info && titleText) {
+              sessionRow = session
+              infoRow = info
+              break
+            }
+          } catch {}
+          await waitFor(350)
         }
 
-        qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
-          const arr = Array.isArray(prev) ? prev : []
-          if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
-          return [combinedRow, ...arr]
-        })
-        if (typeof userId === 'number') {
-          qc.setQueryData(['createdTrainingSessionsCombined', userId], (prev: any) => {
+        if (sessionRow && infoRow) {
+          const combinedRow: any = {
+            sessionid: createdSessionId,
+            time: sessionRow?.time,
+            status: sessionRow?.status ?? 'upcoming',
+            courtbookingid: sessionRow?.courtbookingid,
+            coachid: sessionRow?.coachid ?? (typeof userId === 'number' ? userId : undefined),
+            coachName: null,
+            title: infoRow?.title,
+            description: infoRow?.description ?? null,
+            images: (infoRow as any)?.images ?? null,
+            numberofpeople: infoRow?.numberofpeople ?? 0,
+            participants_cap: infoRow?.participants_cap ?? 0,
+            entry_fee: infoRow?.entry_fee ?? null,
+            support_payment_method: infoRow?.support_payment_method ?? null,
+            join_status: infoRow?.join_status ?? null,
+            start_timestamp: selectedBooking?.start_timestamp ?? null,
+            end_timestamp: selectedBooking?.end_timestamp ?? null,
+            address: selectedBooking?.address ?? undefined,
+            court_name: selectedBooking?.courtName ?? null,
+          }
+
+          qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
             const arr = Array.isArray(prev) ? prev : []
             if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
             return [combinedRow, ...arr]
           })
-        }
+          if (typeof userId === 'number') {
+            qc.setQueryData(['createdTrainingSessionsCombined', userId], (prev: any) => {
+              const arr = Array.isArray(prev) ? prev : []
+              if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
+              return [combinedRow, ...arr]
+            })
+          }
 
-        qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
-        qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], {
-          ...(infoRow || {}),
-          images: (infoRow as any)?.images ?? (remoteImageUrls.length ? remoteImageUrls : null),
-        })
+          qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
+          qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], infoRow)
+        }
       }
 
       const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
@@ -450,6 +469,12 @@ export default function TsCreate() {
 
       void invalidateTrainingSessionsCombinedCache()
       qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      if (typeof userId === 'number') {
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
+        qc.invalidateQueries({ queryKey: ['activity', 'hosting', 'sessions', userId] })
+      }
+      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
 

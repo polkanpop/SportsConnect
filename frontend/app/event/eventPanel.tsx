@@ -489,10 +489,22 @@ export default function EventPanel({ organizerId }: Props) {
 					getEventBookingsByEventId(eventid, { status: "pending" }),
 					getEventBookingsByEventId(eventid, { status: "joined" }),
 				]);
+				const dedupeByUser = (rows: EventBookingRow[]) => {
+					const sorted = [...rows].sort((a, b) => Number(b.eventbookingid || 0) - Number(a.eventbookingid || 0));
+					const seen = new Set<number>();
+					const out: EventBookingRow[] = [];
+					for (const row of sorted) {
+						const uid = Number(row.userid);
+						if (!Number.isFinite(uid) || seen.has(uid)) continue;
+						seen.add(uid);
+						out.push(row);
+					}
+					return out;
+				};
 				const meta = hostEvents.find((e) => e.eventid === eventid);
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
-					enrichBookings(meta, Array.isArray(pendingRows) ? pendingRows : []),
-					enrichBookings(meta, Array.isArray(joinedRows) ? joinedRows : []),
+					enrichBookings(meta, dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
+					enrichBookings(meta, dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
 				]);
 				setApplicants(pendingEnriched);
 				setParticipants(joinedEnriched);
@@ -1156,45 +1168,37 @@ export default function EventPanel({ organizerId }: Props) {
 										</TouchableOpacity>
 
 									<View style={{ flexDirection: "row", alignItems: "center" }}>
-										<TouchableOpacity
-											disabled={!!mutatingBookingIds[a.booking.eventbookingid]}
-											onPress={() => onApproveApplicant(selectedHostEventId, a.booking)}
-											style={{
-												width: 36,
-												height: 36,
-												borderRadius: 18,
-												backgroundColor: "#dcfce7",
-												alignItems: "center",
-												justifyContent: "center",
-												marginRight: 10,
-												opacity: mutatingBookingIds[a.booking.eventbookingid] ? 0.6 : 1,
-											}}
-										>
-											{mutatingBookingIds[a.booking.eventbookingid] === "approve" ? (
-												<ActivityIndicator size={14} />
-											) : (
-												<Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />
+											{!mutatingBookingIds[a.booking.eventbookingid] && (
+												<>
+													<TouchableOpacity
+														onPress={() => onApproveApplicant(selectedHostEventId, a.booking)}
+														style={{
+															width: 36,
+															height: 36,
+															borderRadius: 18,
+															backgroundColor: "#dcfce7",
+															alignItems: "center",
+															justifyContent: "center",
+															marginRight: 10,
+														}}
+													>
+														<Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />
+													</TouchableOpacity>
+													<TouchableOpacity
+														onPress={() => onRejectApplicant(selectedHostEventId, a.booking)}
+														style={{
+															width: 36,
+															height: 36,
+															borderRadius: 18,
+															backgroundColor: "#fee2e2",
+															alignItems: "center",
+															justifyContent: "center",
+														}}
+													>
+														<Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />
+													</TouchableOpacity>
+												</>
 											)}
-										</TouchableOpacity>
-										<TouchableOpacity
-											disabled={!!mutatingBookingIds[a.booking.eventbookingid]}
-											onPress={() => onRejectApplicant(selectedHostEventId, a.booking)}
-											style={{
-												width: 36,
-												height: 36,
-												borderRadius: 18,
-												backgroundColor: "#fee2e2",
-												alignItems: "center",
-												justifyContent: "center",
-												opacity: mutatingBookingIds[a.booking.eventbookingid] ? 0.6 : 1,
-											}}
-										>
-											{mutatingBookingIds[a.booking.eventbookingid] === "reject" ? (
-												<ActivityIndicator size={14} />
-											) : (
-												<Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />
-											)}
-										</TouchableOpacity>
 										<TouchableOpacity
 											activeOpacity={0.75}
 											onPress={() => setExpandedNoteEventIds(prev => {

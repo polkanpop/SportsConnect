@@ -210,7 +210,7 @@ const mergeBookings = (params: {
       const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `event_${item.eventbookingid}`,
-        title: pickTitle({ ...ev, eventinfo: relatedInfo }, `Event #${item.eventid}`),
+        title: pickTitle({ ...ev, eventinfo: relatedInfo }, 'Event'),
         status: mapStatusFromDb(rawSessionStatus || rawBookingStatus),
         mode: 'Booking',
         activity: 'event',
@@ -248,7 +248,7 @@ const mergeBookings = (params: {
       const rawSessionStatus = safeStr(item.bookingstatus);
       return {
         id: `session_${item.tsbookingid}`,
-        title: pickTitle({ ...sess, trainingsessioninfo: relatedInfo }, `Training Session #${item.sessionid}`),
+        title: pickTitle({ ...sess, trainingsessioninfo: relatedInfo }, 'Training Session'),
         status: mapStatusFromDb(rawSessionStatus || rawBookingStatus),
         mode: 'Booking',
         activity: 'session',
@@ -294,7 +294,7 @@ const mergeHosting = (params: {
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `created_event_${ev?.eventid}`,
-        title: pickTitle(ev, `Event #${ev?.eventid}`),
+        title: pickTitle(ev, 'Event'),
         status: mapStatusFromDb(ev?.status),
         mode: 'Hosting',
         activity: 'event',
@@ -316,7 +316,7 @@ const mergeHosting = (params: {
       const dateTime = parseTimestampLoose(startTs ?? null);
       return {
         id: `created_session_${s?.sessionid}`,
-        title: pickTitle(s, `Training Session #${s?.sessionid}`),
+        title: pickTitle(s, 'Training Session'),
         status: mapStatusFromDb(s?.status),
         mode: 'Hosting',
         activity: 'session',
@@ -643,7 +643,7 @@ export default function ActivityPage() {
         </View>
 
         <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || 'Unknown'}
+          <Text style={styles.eventMetaLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || '—'}
         </Text>
 
         <Text style={styles.eventMetaLine}>
@@ -655,13 +655,13 @@ export default function ActivityPage() {
             const endText = formatTimeHHMM(end);
             if (startText && endText) return `${startText} - ${endText}`;
             if (startText) return startText;
-            return 'Unknown';
+            return '—';
           })()}
         </Text>
 
-        {item.activity !== 'court' && (
+        {item.activity !== 'court' && !!item.courtName && (
           <Text style={styles.eventMetaLine}>
-            <Text style={styles.eventMetaLabel}>Venue:</Text> {item.courtName || 'Unknown'}
+            <Text style={styles.eventMetaLabel}>Venue:</Text> {item.courtName}
           </Text>
         )}
       </View>

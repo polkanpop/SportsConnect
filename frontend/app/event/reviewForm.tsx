@@ -30,8 +30,10 @@ export default function ReviewForm() {
   const displayTitle = useMemo(() => {
     const rawTitle = title ? decodeURIComponent(String(title)) : ''
     const rawVenueName = venueName ? decodeURIComponent(String(venueName)) : ''
-    return rawVenueName || rawTitle || 'this booking'
-  }, [title, venueName])
+    const tt = String(targettype ?? '').toLowerCase()
+    if (tt === 'court') return rawVenueName || rawTitle || 'this booking'
+    return rawTitle || rawVenueName || 'this booking'
+  }, [title, venueName, targettype])
 
   const mutation = useMutation({
     mutationFn: () =>
