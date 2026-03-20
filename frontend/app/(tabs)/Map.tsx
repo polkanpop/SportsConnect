@@ -99,10 +99,10 @@
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
-  // Collapsed sheet is 30%; this shifts focused points to center of visible map area.
-  const MAP_FOCUS_LAT_OFFSET_RATIO = 0.15;
-  // Keep a small visual buffer so VN south edge does not sit under the 30% sheet head.
-  const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.18;
+  // Collapsed sheet is 30%; shift focused markers into the upper-third of the visible 70%.
+  const MAP_FOCUS_LAT_OFFSET_RATIO = 0.22;
+  // Push the map floor up so markers never sit behind the 30% collapsed sheet.
+  const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.32;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
