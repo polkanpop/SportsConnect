@@ -1222,6 +1222,7 @@ export default function EventPanel({ organizerId }: Props) {
 											<Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: "#111827" }} resizeMode="contain" />
 										</TouchableOpacity>
 									</View>
+									</View>
 									) : (
 										<Text style={{ color: "#374151", fontWeight: "700" }}>{String((a.booking as any)?.status || "updated")}</Text>
 									)}
