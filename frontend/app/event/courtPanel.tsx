@@ -1835,7 +1835,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                           </>
                         )}
                         <TouchableOpacity activeOpacity={0.75} onPress={() => setExpandedNoteIds(prev => { const n = new Set(prev); if (n.has(b.courtbookingid)) n.delete(b.courtbookingid); else n.add(b.courtbookingid); return n })} style={{ padding: 6 }}>
-                          <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
+                          <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
                         </TouchableOpacity>
                       </View>
                     </View>

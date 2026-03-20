@@ -44,7 +44,7 @@ export default function NotificationsPage() {
     return undefined
   }, [selectedCategory])
 
-  const typeToCategory = (type: string): NotificationCategory | null => {
+  const typeToCategory = useCallback((type: string): NotificationCategory | null => {
     switch (type) {
       case 'courtbooking':
         return 'court'
@@ -57,11 +57,11 @@ export default function NotificationsPage() {
       default:
         return null
     }
-  }
+  }, [])
 
-  const getRowCategory = (row: NotificationRow): NotificationCategory | null => {
+  const getRowCategory = useCallback((row: NotificationRow): NotificationCategory | null => {
     return (row.category as any) || typeToCategory(row.notificationtype) || null
-  }
+  }, [typeToCategory])
 
   const sourceRows = useMemo(() => {
     const base = Array.isArray(notifications) ? notifications : []

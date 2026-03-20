@@ -139,6 +139,16 @@
     };
   }
 
+  function isSameRegion(a: Region, b: Region): boolean {
+    const eps = 0.000001
+    return (
+      Math.abs(a.latitude - b.latitude) < eps &&
+      Math.abs(a.longitude - b.longitude) < eps &&
+      Math.abs(a.latitudeDelta - b.latitudeDelta) < eps &&
+      Math.abs(a.longitudeDelta - b.longitudeDelta) < eps
+    )
+  }
+
   function regionToBounds(region: Region) {
     const halfLat = Math.max(0, region.latitudeDelta / 2)
     const halfLng = Math.max(0, region.longitudeDelta / 2)
@@ -347,6 +357,7 @@
 
     const handleRegionChangeComplete = useCallback((region: Region) => {
       const clamped = clampRegionToVietnam(region);
+      if (isSameRegion(mapRegionRef.current, clamped)) return
       mapRegionRef.current = clamped;
       setMapRegion(clamped);
     }, []);
@@ -1126,7 +1137,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v19</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v20</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}

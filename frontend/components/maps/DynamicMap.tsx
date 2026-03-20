@@ -6,6 +6,17 @@ import Mapbox from '@rnmapbox/maps'
 import { GOONG_MAPTILES_KEY, MAPBOX_PUBLIC_TOKEN } from '@/env'
 import { buildGoongStyleUrl, regionToZoom, zoomToRegion } from '@/lib/goong-map'
 
+const MAPBOX_TOKEN_RUNTIME = (
+  MAPBOX_PUBLIC_TOKEN ||
+  ((Constants.expoConfig?.extra as any)?.MAPBOX_PUBLIC_TOKEN as string | undefined) ||
+  ((Constants.expoConfig?.extra as any)?.mapboxPublicToken as string | undefined) ||
+  ''
+).trim()
+
+if (MAPBOX_TOKEN_RUNTIME) {
+  Mapbox.setAccessToken(MAPBOX_TOKEN_RUNTIME)
+}
+
 type Coordinate = {
   latitude: number
   longitude: number
@@ -117,7 +128,7 @@ export function DynamicMap({
   const isExpoGo = executionEnvironment === 'storeClient'
   const goongStyleUrl = buildGoongStyleUrl(GOONG_MAPTILES_KEY)
   const styleUrl = goongStyleUrl || 'mapbox://styles/mapbox/streets-v12'
-  const canRenderMapbox = !isExpoGo && !!MAPBOX_PUBLIC_TOKEN
+  const canRenderMapbox = !isExpoGo && !!MAPBOX_TOKEN_RUNTIME
   const initialRegionFromCenter = useMemo(() => {
     if (!initialCenter) return undefined
     return zoomToRegion(initialCenter, initialZoom ?? 14)
@@ -150,7 +161,7 @@ export function DynamicMap({
 
   useEffect(() => {
     if (!canRenderMapbox) return
-    Mapbox.setAccessToken(MAPBOX_PUBLIC_TOKEN)
+    Mapbox.setAccessToken(MAPBOX_TOKEN_RUNTIME)
   }, [canRenderMapbox])
 
   useEffect(() => {

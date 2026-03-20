@@ -260,6 +260,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   }, [isDirty])
 
   const [saving, setSaving] = useState(false)
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null)
+  const saveSuccessTimerRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (!saveSuccessMessage) return
+    if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current)
+    saveSuccessTimerRef.current = setTimeout(() => {
+      setSaveSuccessMessage(null)
+    }, 2200)
+    return () => {
+      if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current)
+    }
+  }, [saveSuccessMessage])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
@@ -646,15 +659,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const onSave = async () => {
     if (!infoMeta?.sessioninfoid) return
-    if (!isDirty) {
-      Alert.alert('No changes', 'Edit a field before saving.')
-      return
-    }
+    if (!isDirty) return
 
     const cap = safeNumberOrNull(editCap)
 
     setSaving(true)
     setInfoError(null)
+    setSaveSuccessMessage(null)
     try {
       await updateTrainingSessionInfo(infoMeta.sessioninfoid, {
         title: editTitle.trim(),
@@ -679,6 +690,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       setEditImages(asStringArray((meta2 as any)?.images))
 			initialEditSnapshotRef.current = currentEditSnapshot
 			setPendingCloudinaryDeletes([])
+      setSaveSuccessMessage('Court updated successfully.')
     } catch (e: any) {
       setInfoError(e?.message || String(e))
     } finally {
@@ -1091,7 +1103,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       })}
                       style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
                     >
-                        <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
+                        <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1182,7 +1194,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     })}
                     style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
                   >
-                      <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
+                      <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.7}
@@ -1505,10 +1517,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 />
 
                 <TouchableOpacity
-                  disabled={saving}
+                  disabled={saving || !isDirty}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving ? '#9ca3af' : '#16a34a',
+                    backgroundColor: saving || !isDirty ? '#9ca3af' : '#16a34a',
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',
@@ -1516,6 +1528,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 >
                   <Text style={{ color: '#fff', fontWeight: '800' }}>{saving ? 'Saving...' : 'Save changes'}</Text>
                 </TouchableOpacity>
+
+                {saveSuccessMessage ? <Text style={{ marginTop: 8, color: '#15803d', fontWeight: '700', textAlign: 'center' }}>{saveSuccessMessage}</Text> : null}
 
                 <TouchableOpacity
                   disabled={cancellingSession || !canCancelSelectedSession}

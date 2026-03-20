@@ -248,12 +248,14 @@ export default function EventPanel({ organizerId }: Props) {
 	const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null);
 	const [pendingCloudinaryDeletes, setPendingCloudinaryDeletes] = useState<string[]>([]);
 	const [savingEvent, setSavingEvent] = useState(false);
+	const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 	const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, "approve" | "reject">>({});
 	const [expandedNoteEventIds, setExpandedNoteEventIds] = useState<Set<number>>(new Set());
 
 	const lastHydratedEventIdRef = useRef<number | null>(null);
 	const initialEditSnapshotRef = useRef<string>("");
 	const isDirtyRef = useRef<boolean>(false);
+	const saveSuccessTimerRef = useRef<any>(null);
 
 	const makeEditSnapshot = useCallback(
 		(payload: { title: string; description: string; cap: string; images: string[] }) => {
@@ -278,6 +280,17 @@ export default function EventPanel({ organizerId }: Props) {
 	useEffect(() => {
 		isDirtyRef.current = isDirty;
 	}, [isDirty]);
+
+	useEffect(() => {
+		if (!saveSuccessMessage) return;
+		if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+		saveSuccessTimerRef.current = setTimeout(() => {
+			setSaveSuccessMessage(null);
+		}, 2200);
+		return () => {
+			if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+		};
+	}, [saveSuccessMessage]);
 
 	const uploadOneToCloudinary = useCallback(
 		async (localUri: string, idx: number) => {
@@ -724,11 +737,9 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const onSaveEventInfo = useCallback(async () => {
 		if (selectedHostEventId == null) return;
-		if (!isDirty) {
-			Alert.alert("No changes", "Edit a field before saving.");
-			return;
-		}
+		if (!isDirty) return;
 		setSavingEvent(true);
+		setSaveSuccessMessage(null);
 		try {
 			const meta = await getEventInfoByEventId(selectedHostEventId);
 			if (!meta?.eventinfoid) throw new Error("Missing event info");
@@ -750,6 +761,7 @@ export default function EventPanel({ organizerId }: Props) {
 			await loadHostEvents();
 			initialEditSnapshotRef.current = currentEditSnapshot;
 			setPendingCloudinaryDeletes([]);
+			setSaveSuccessMessage("Court updated successfully.");
 		} catch (e: any) {
 			setHostEventsError(e?.message || String(e));
 		} finally {
@@ -1158,7 +1170,7 @@ export default function EventPanel({ organizerId }: Props) {
 											})}
 											style={{ padding: 6, alignItems: "center", justifyContent: "center", marginLeft: 2 }}
 										>
-												<Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: "#1f2937" }} resizeMode="contain" />
+												<Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
 										</TouchableOpacity>
 										<TouchableOpacity
 											activeOpacity={0.7}
@@ -1512,10 +1524,10 @@ export default function EventPanel({ organizerId }: Props) {
 						/>
 
 						<TouchableOpacity
-							disabled={savingEvent}
+							disabled={savingEvent || !isDirty}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent ? "#9ca3af" : COLORS.brandOrangeDeep,
+								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : COLORS.brandOrangeDeep,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",
@@ -1523,6 +1535,8 @@ export default function EventPanel({ organizerId }: Props) {
 						>
 							<Text style={{ color: "#fff", fontWeight: "800" }}>{savingEvent ? "Saving..." : "Save changes"}</Text>
 						</TouchableOpacity>
+
+						{saveSuccessMessage ? <Text style={{ marginTop: 8, color: "#15803d", fontWeight: "700", textAlign: "center" }}>{saveSuccessMessage}</Text> : null}
 
 						<TouchableOpacity
 							disabled={cancellingEvent || !canCancelSelectedEvent}
