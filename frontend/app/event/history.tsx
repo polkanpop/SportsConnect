@@ -644,7 +644,8 @@ export default function HistoryPage() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
+          pressRetentionOffset={{ top: 18, bottom: 18, left: 18, right: 18 }}
           activeOpacity={0.8}
         >
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
@@ -956,7 +957,16 @@ const styles = StyleSheet.create({
     right: 0,
     textAlign: 'center',
   },
-  backButton: { padding: 10, marginRight: 10, borderRadius: 28, backgroundColor: '#f2f2f2' },
+  backButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    borderRadius: 24,
+    backgroundColor: '#f2f2f2',
+    zIndex: 3,
+  },
   backIcon: { width: 20, height: 20, tintColor: '#333', resizeMode: 'contain' },
 
   subHeader: {

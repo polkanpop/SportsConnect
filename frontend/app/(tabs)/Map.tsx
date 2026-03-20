@@ -52,6 +52,7 @@
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector, NativeViewGestureHandler } from "react-native-gesture-handler";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+  import { regionToZoom } from '@/lib/goong-map'
 
   type Region = {
     latitude: number;
@@ -93,6 +94,8 @@
   const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng);
   const VN_MIN_LAT_DELTA = 0.01;
   const VN_MIN_LNG_DELTA = 0.01;
+  const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MAX_LNG_DELTA });
+  const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
   const MAP_BOTTOM_VIEWPORT_OFFSET_RATIO = 0.22;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -1144,6 +1147,12 @@
                   initialRegion={INITIAL_REGION}
                   region={mapRegion}
                   cameraCommandId={cameraCommandId}
+                  minZoomLevel={VN_MIN_ZOOM_LEVEL}
+                  maxZoomLevel={VN_MAX_ZOOM_LEVEL}
+                  maxBounds={{
+                    northEast: { latitude: VN_BOUNDS.maxLat, longitude: VN_BOUNDS.maxLng },
+                    southWest: { latitude: VN_BOUNDS.minLat, longitude: VN_BOUNDS.minLng },
+                  }}
                   scrollEnabled={true}
                   zoomEnabled={true}
                   showsUserLocation={true}

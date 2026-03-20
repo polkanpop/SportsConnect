@@ -64,6 +64,12 @@ export type DynamicMapProps = {
   initialRegion?: Region
   initialCenter?: Coordinate
   initialZoom?: number
+  minZoomLevel?: number
+  maxZoomLevel?: number
+  maxBounds?: {
+    northEast: Coordinate
+    southWest: Coordinate
+  }
   animateOnLoad?: boolean
   region?: Region
   cameraCommandId?: number
@@ -96,6 +102,9 @@ export function DynamicMap({
   initialRegion,
   initialCenter,
   initialZoom,
+  minZoomLevel,
+  maxZoomLevel,
+  maxBounds,
   animateOnLoad,
   region,
   cameraCommandId,
@@ -219,6 +228,12 @@ export function DynamicMap({
     >
       <Mapbox.Camera
         ref={cameraRef}
+        minZoomLevel={minZoomLevel}
+        maxZoomLevel={maxZoomLevel}
+        maxBounds={maxBounds ? {
+          ne: toMapboxCoordinate(maxBounds.northEast),
+          sw: toMapboxCoordinate(maxBounds.southWest),
+        } : undefined}
         defaultSettings={{
           centerCoordinate: toMapboxCoordinate({
             latitude: initialCameraRegionRef.current.latitude,

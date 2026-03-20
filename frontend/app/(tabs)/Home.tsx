@@ -132,6 +132,13 @@ export default function Home() {
     ? dashboardEventsCombined
     : (Array.isArray(fallbackEventsQuery.data) ? (fallbackEventsQuery.data as CombinedEvent[]) : [])
 
+  const eventsCombinedKey = React.useMemo(() => {
+    return eventsCombined
+      .slice(0, 50)
+      .map((ev: any) => `${String(ev?.eventid ?? '')}:${String(ev?.updated_at ?? ev?.start_timestamp ?? '')}`)
+      .join('|')
+  }, [eventsCombined])
+
   const isPlaceholderImageUri = (uri: string): boolean => {
     const u = uri.trim().toLowerCase();
     if (!u) return true;
@@ -198,8 +205,6 @@ export default function Home() {
       ''
     ).toLowerCase().trim()
     if (st.includes('cancel') || st.includes('complete') || st.includes('missed')) return false
-    if (st && !st.includes('upcoming')) return false
-
     const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
     const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
     const start = parseMaybeTimestamp(startRaw)
@@ -286,8 +291,8 @@ export default function Home() {
   }
 
   const nearbyEventsQuery = useQuery({
-    queryKey: ['home-nearby-events', userId, eventsCombined.length],
-    enabled: !!userId && eventsCombined.length > 0,
+    queryKey: ['home-nearby-events', userId, eventsCombined.length, eventsCombinedKey],
+    enabled: eventsCombined.length > 0,
     queryFn: async () => {
       const upcoming = eventsCombined.filter(isUpcomingEvent)
 
@@ -311,7 +316,8 @@ export default function Home() {
         })
 
       return {
-        events: filtered,
+        // If coordinate coverage is sparse, show upcoming events instead of empty state.
+        events: filtered.length > 0 ? filtered : upcoming,
         origin: { latitude: userLat as number, longitude: userLon as number },
       }
     },
@@ -463,6 +469,14 @@ export default function Home() {
             )}
           </TouchableOpacity>
         </View>
+
+        <View
+          style={{
+            height: 1,
+            backgroundColor: '#E5E7EB',
+            marginHorizontal: 16,
+          }}
+        />
 
         {/* Body */}
         {activeView === 'user' && (
