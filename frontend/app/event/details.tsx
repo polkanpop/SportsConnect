@@ -1532,7 +1532,7 @@ export default function DetailsPage() {
                 router.push({ pathname: '/event/reviewForm', params: reviewNavParams } as any)
               }}
             >
-              <Text style={styles.reviewBtnText}>Write a Review</Text>
+              <Text style={styles.reviewBtnText}>Review</Text>
             </Pressable>
           )}
         </ScrollView>

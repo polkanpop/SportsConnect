@@ -29,6 +29,18 @@ def _to_int(v):
         return None
 
 
+def _parse_ts(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace(" ", "T").replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def _first_list_or_obj(v: Any) -> dict[str, Any] | None:
     if isinstance(v, list):
         if v and isinstance(v[0], dict):
@@ -543,6 +555,42 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
 
         payload["status"] = "approved" if auto_approve else "pending"
         payload["bookingstatus"] = "upcoming"
+
+        # Treat pending bookings as occupied to prevent duplicate overlap attempts.
+        start_dt = _parse_ts(payload.get("start_timestamp"))
+        end_dt = _parse_ts(payload.get("end_timestamp"))
+        if start_dt and end_dt and end_dt > start_dt:
+            existing_rows = rest_select(
+                "courtbooking",
+                "courtbookingid,status,bookingstatus,start_timestamp,end_timestamp",
+                filters={"userid": final_userid},
+            )
+            if isinstance(existing_rows, list):
+                for ex in existing_rows:
+                    if not isinstance(ex, dict):
+                        continue
+                    ex_status = str(ex.get("status") or "").strip().lower()
+                    ex_booking_status = str(ex.get("bookingstatus") or "").strip().lower()
+                    is_inactive = (
+                        "cancel" in ex_status
+                        or "reject" in ex_status
+                        or "cancel" in ex_booking_status
+                        or "complete" in ex_booking_status
+                    )
+                    if is_inactive:
+                        continue
+
+                    ex_start = _parse_ts(ex.get("start_timestamp"))
+                    ex_end = _parse_ts(ex.get("end_timestamp"))
+                    if not ex_start or not ex_end or ex_end <= ex_start:
+                        continue
+
+                    overlaps = max(start_dt, ex_start) < min(end_dt, ex_end)
+                    if overlaps:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="You already have a pending or active booking that overlaps this time slot.",
+                        )
 
         print(f"[create_court_booking] auth_sub={auth_sub} supplied_userid={supplied_userid} final_userid={final_userid} availabilityid={payload.get('availabilityid')}")
 

@@ -4,8 +4,25 @@ import { deleteNotifications, listNotifications, markAllNotificationsRead, markN
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+function parseNotificationDate(raw: string): Date | null {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!s) return null
+
+  let d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d
+
+  const normalized = s.replace(' ', 'T')
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?$/.test(normalized)) {
+    d = new Date(`${normalized}Z`)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+
+  return null
+}
 
 export default function NotificationsPage() {
   const { dashboard, notifications } = useAppBootstrap()
@@ -18,6 +35,7 @@ export default function NotificationsPage() {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   const categoryParam: NotificationCategory | undefined = useMemo(() => {
     if (selectedCategory === 'Court') return 'court'
@@ -50,8 +68,12 @@ export default function NotificationsPage() {
     const filtered = categoryParam
       ? base.filter((row) => getRowCategory(row) === categoryParam)
       : base
-    return [...filtered].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-  }, [notifications, categoryParam])
+    return [...filtered].sort((a, b) => {
+      const bt = parseNotificationDate(b.time)?.getTime() ?? 0
+      const at = parseNotificationDate(a.time)?.getTime() ?? 0
+      return bt - at
+    })
+  }, [notifications, categoryParam, getRowCategory])
 
   useEffect(() => {
     setRows(sourceRows)
@@ -65,7 +87,11 @@ export default function NotificationsPage() {
     setRefreshing(true)
     try {
       const fresh = await listNotifications({ category: categoryParam })
-      const sorted = [...fresh].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      const sorted = [...fresh].sort((a, b) => {
+        const bt = parseNotificationDate(b.time)?.getTime() ?? 0
+        const at = parseNotificationDate(a.time)?.getTime() ?? 0
+        return bt - at
+      })
       setRows(sorted)
     } catch (e: any) {
       setError(e?.message || String(e))
@@ -87,8 +113,8 @@ export default function NotificationsPage() {
   }
 
   const getSectionTitle = (iso: string) => {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return 'Earlier'
+    const d = parseNotificationDate(iso)
+    if (!d) return 'Earlier'
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
     const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000
@@ -99,8 +125,8 @@ export default function NotificationsPage() {
   }
 
   const formatRowTime = (iso: string) => {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
+    const d = parseNotificationDate(iso)
+    if (!d) return ''
     const delta = Date.now() - d.getTime()
     if (delta < 60_000) return 'now'
     if (delta < 60 * 60_000) return `${Math.floor(delta / 60_000)}m ago`
@@ -124,8 +150,8 @@ export default function NotificationsPage() {
     buckets.delete('Yesterday')
 
     const dated = [...buckets.entries()].sort((a, b) => {
-      const at = new Date(a[1][0]?.time || 0).getTime()
-      const bt = new Date(b[1][0]?.time || 0).getTime()
+      const at = parseNotificationDate(a[1][0]?.time || '')?.getTime() ?? 0
+      const bt = parseNotificationDate(b[1][0]?.time || '')?.getTime() ?? 0
       return bt - at
     })
 
@@ -225,6 +251,11 @@ export default function NotificationsPage() {
     }
   }
 
+  const onPressDeleteSelected = () => {
+    if (!selectedIds.size || actionLoading) return
+    setDeleteConfirmVisible(true)
+  }
+
   const renderItem = ({ item }: { item: NotificationRow }) => (
     <TouchableOpacity
       style={[
@@ -319,7 +350,7 @@ export default function NotificationsPage() {
                 {selectionMode ? (
                   <TouchableOpacity
                     style={styles.deleteWrap}
-                    onPress={handleDeleteSelected}
+                    onPress={onPressDeleteSelected}
                     activeOpacity={0.85}
                     disabled={actionLoading}
                   >
@@ -346,6 +377,34 @@ export default function NotificationsPage() {
         onRefresh={handleRefresh}
         stickySectionHeadersEnabled
       />
+
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete notifications?</Text>
+            <Text style={styles.modalText}>Selected notifications will be deleted permanently.</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setDeleteConfirmVisible(false)}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnDelete]}
+                onPress={() => {
+                  setDeleteConfirmVisible(false)
+                  void handleDeleteSelected()
+                }}
+              >
+                <Text style={styles.modalBtnDeleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -593,5 +652,53 @@ const styles = StyleSheet.create({
   emptyTodayText: {
     color: COLORS.neutral700,
     fontSize: 13,
-  }
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: COLORS.neutral0,
+    borderRadius: 14,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.neutral900,
+  },
+  modalText: {
+    marginTop: 8,
+    color: COLORS.neutral700,
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 14,
+  },
+  modalBtn: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginLeft: 8,
+  },
+  modalBtnCancel: {
+    backgroundColor: COLORS.neutral100,
+  },
+  modalBtnDelete: {
+    backgroundColor: '#B91C1C',
+  },
+  modalBtnCancelText: {
+    color: COLORS.neutral900,
+    fontWeight: '700',
+  },
+  modalBtnDeleteText: {
+    color: '#fff',
+    fontWeight: '800',
+  },
 });

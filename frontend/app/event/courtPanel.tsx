@@ -169,6 +169,19 @@ function formatYmdToDmy(value: string | null | undefined): string {
   return `${m[3]}-${m[2]}-${m[1]}`
 }
 
+function formatBookingTimeOnly(startRaw: string | null | undefined, endRaw: string | null | undefined): string {
+  const start = String(startRaw || '')
+  const end = String(endRaw || '')
+  const sm = start.match(/(?:T|\s)(\d{2}:\d{2})/)
+  const em = end.match(/(?:T|\s)(\d{2}:\d{2})/)
+  const startHm = sm?.[1] || ''
+  const endHm = em?.[1] || ''
+  if (startHm && endHm) return `${startHm} - ${endHm}`
+  if (startHm) return startHm
+  if (endHm) return endHm
+  return 'Unknown time'
+}
+
 // Builds the main baseline snapshot from raw loaded values (NOT from React state).
 // Must stay in exact sync with the currentMainSnapshot useMemo.
 function buildMainSnapshotFromRaw(args: {
@@ -1781,6 +1794,11 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 const s = String(b.status ?? '').toLowerCase()
                 return !s || s === 'pending' || s === 'waiting'
               })
+              const bookingParticipants = pcBookings.filter((b) => {
+                const s = String(b.status ?? '').toLowerCase()
+                const bs = String(b.bookingstatus ?? '').toLowerCase()
+                return s === 'approved' || s === 'joined' || bs === 'upcoming'
+              })
               const bookingBlocked = pcBookings.filter((b) => {
                 const s = String(b.status ?? '').toLowerCase()
                 const bs = String(b.bookingstatus ?? '').toLowerCase()
@@ -1801,7 +1819,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                         {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
-                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : 'Unknown time'}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
+                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
                           <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>Status: {statusRaw || 'pending'}</Text>
                         </View>
                       </TouchableOpacity>
@@ -1817,7 +1835,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                           </>
                         )}
                         <TouchableOpacity activeOpacity={0.75} onPress={() => setExpandedNoteIds(prev => { const n = new Set(prev); if (n.has(b.courtbookingid)) n.delete(b.courtbookingid); else n.add(b.courtbookingid); return n })} style={{ padding: 6 }}>
-                          <Text style={{ fontSize: 16 }}>✏️</Text>
+                          <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1895,7 +1913,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                               style={[
                                 styles.dayCell,
                                 isSelected && { backgroundColor: '#f97316', borderColor: '#f97316' },
-                                hasBookings && !isSelected && { backgroundColor: '#FED7AA', borderColor: '#FED7AA' },
+                                hasBookings && !isSelected && { backgroundColor: '#fb923c', borderColor: '#fb923c' },
                                 isAvailable && !hasBookings && !isSelected && { backgroundColor: '#fff3e0' },
                                 !isAvailable && { opacity: 0.35 },
                               ]}
@@ -1923,7 +1941,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                                   {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 34, height: 34, borderRadius: 17 }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 34, height: 34 }} resizeMode="contain" />}
                                   <View style={{ flex: 1, marginLeft: 8 }}>
                                     <Text style={{ fontWeight: '700', fontSize: 13 }}>{displayName}</Text>
-                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 1 }}>{b.start_timestamp ? b.start_timestamp.slice(0, 16).replace('T', ' ') : ''}{b.end_timestamp ? ` – ${b.end_timestamp.slice(11, 16)}` : ''}</Text>
+                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 1 }}>{formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
                                   </View>
                                   <Text style={{ fontSize: 12, color: '#9a3412' }}>{String(b.status ?? b.bookingstatus ?? 'pending')}</Text>
                                 </TouchableOpacity>
@@ -1944,6 +1962,12 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                   {bookingApplicants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No applicants.</Text></View>
                   ) : bookingApplicants.map((b) => renderBookingRow(b, true))}
+
+                  {/* Owner List */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
+                  {bookingParticipants.length === 0 ? (
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
+                  ) : bookingParticipants.map((b) => renderBookingRow(b, false))}
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>

@@ -724,7 +724,10 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const onSaveEventInfo = useCallback(async () => {
 		if (selectedHostEventId == null) return;
-		if (!isDirty) return;
+		if (!isDirty) {
+			Alert.alert("No changes", "Edit a field before saving.");
+			return;
+		}
 		setSavingEvent(true);
 		try {
 			const meta = await getEventInfoByEventId(selectedHostEventId);
@@ -1155,7 +1158,7 @@ export default function EventPanel({ organizerId }: Props) {
 											})}
 											style={{ padding: 6, alignItems: "center", justifyContent: "center", marginLeft: 2 }}
 										>
-											<Text style={{ fontSize: 16 }}>✏️</Text>
+												<Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: "#1f2937" }} resizeMode="contain" />
 										</TouchableOpacity>
 										<TouchableOpacity
 											activeOpacity={0.7}
@@ -1509,10 +1512,10 @@ export default function EventPanel({ organizerId }: Props) {
 						/>
 
 						<TouchableOpacity
-							disabled={savingEvent || !isDirty}
+							disabled={savingEvent}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : COLORS.brandOrangeDeep,
+								backgroundColor: savingEvent ? "#9ca3af" : COLORS.brandOrangeDeep,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",
@@ -1526,7 +1529,7 @@ export default function EventPanel({ organizerId }: Props) {
 							onPress={() => setConfirmCancelVisible(true)}
 							style={{
 								marginTop: 10,
-								backgroundColor: cancellingEvent || !canCancelSelectedEvent ? "#9ca3af" : COLORS.brandOrangeDeep,
+								backgroundColor: cancellingEvent || !canCancelSelectedEvent ? "#9ca3af" : "#B91C1C",
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",

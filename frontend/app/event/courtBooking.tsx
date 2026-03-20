@@ -460,12 +460,7 @@ export default function CourtBooking() {
   const totalAmount = useMemo(() => {
     return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
   }, [courtAmount, servicesTotal])
-  const formattedAmount = useMemo(() => {
-    if (!totalAmount) return 'Confirm Booking'
-    try {
-      return `Confirm Booking - ${new Intl.NumberFormat('vi-VN').format(totalAmount)}₫`
-    } catch { return `Confirm Booking - ${totalAmount}₫` }
-  }, [totalAmount])
+  const formattedAmount = 'Confirm'
   // Disallow duplicate booking for same availability; require part selection when playing courts exist
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
   const courtBookingStatus = Boolean((courtInfo as any)?.auto_approve) ? 'approved' : 'pending'
@@ -765,7 +760,7 @@ export default function CourtBooking() {
                         <TouchableOpacity
                           key={d.key}
                           onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }}
-                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#FED7AA' }, (!isAvailable || isPast) && styles.dayCellDisabled]}
+                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#fb923c' }, (!isAvailable || isPast) && styles.dayCellDisabled]}
                           activeOpacity={0.8}
                         >
                           <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
@@ -885,7 +880,7 @@ export default function CourtBooking() {
               const isAvailable = isDaySelectable(d.key, d.dateStr)
               const selected = selectedDateStr === d.dateStr
               return (
-                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#FED7AA' }, (!isAvailable || isPast) && styles.dayCellDisabled]}>
+                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#fb923c' }, (!isAvailable || isPast) && styles.dayCellDisabled]}>
                   <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
                   <Text style={styles.dayDate}>{d.date.getDate()}</Text>
                 </TouchableOpacity>

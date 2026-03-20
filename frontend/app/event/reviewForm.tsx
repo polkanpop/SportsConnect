@@ -79,7 +79,7 @@ export default function ReviewForm() {
               <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
                 <Image source={ICONS.arrowLeft} style={styles.backIcon} />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Write a Review</Text>
+              <Text style={styles.headerTitle}>Review</Text>
               <View style={{ width: 44 }} />
             </View>
           </SafeAreaView>

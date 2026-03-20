@@ -646,7 +646,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const onSave = async () => {
     if (!infoMeta?.sessioninfoid) return
-    if (!isDirty) return
+    if (!isDirty) {
+      Alert.alert('No changes', 'Edit a field before saving.')
+      return
+    }
 
     const cap = safeNumberOrNull(editCap)
 
@@ -1088,7 +1091,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       })}
                       style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
                     >
-                      <Text style={{ fontSize: 16 }}>✏️</Text>
+                        <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1179,7 +1182,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     })}
                     style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
                   >
-                    <Text style={{ fontSize: 16 }}>✏️</Text>
+                      <Image source={ICONS.noteIcon} style={{ width: 16, height: 16, tintColor: '#1f2937' }} resizeMode="contain" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.7}
@@ -1502,10 +1505,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 />
 
                 <TouchableOpacity
-                  disabled={saving || !isDirty}
+                  disabled={saving}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving || !isDirty ? '#9ca3af' : '#16a34a',
+                    backgroundColor: saving ? '#9ca3af' : '#16a34a',
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',
