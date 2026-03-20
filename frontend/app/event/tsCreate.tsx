@@ -89,14 +89,21 @@ export default function TsCreate() {
       return s.includes('upcoming') || s.includes('active') || s.includes('scheduled')
     }
     const active = base.filter(isUpcoming)
-    const map = new Map<number, CourtBookingRow>()
+    const map = new Map<string, CourtBookingRow>()
     for (const b of active) {
       const cbid = Number((b as any)?.courtbookingid)
       const availabilityid = Number((b as any)?.availabilityid)
       if (!Number.isFinite(cbid)) continue
       const normalized = { ...(b as any), courtbookingid: cbid, availabilityid } as CourtBookingRow
-      const keyRaw = Number.isFinite(availabilityid) ? availabilityid : cbid
-      map.set(keyRaw, normalized)
+      const start = String((b as any)?.start_timestamp ?? '').trim()
+      const end = String((b as any)?.end_timestamp ?? '').trim()
+      const date = String((b as any)?.bookingdate ?? '').trim()
+      const court = String((b as any)?.courtid ?? '').trim()
+      const slotKey = `${court}|${date}|${start}|${end}`
+      const key = Number.isFinite(cbid)
+        ? `cb:${cbid}`
+        : (Number.isFinite(availabilityid) ? `av:${availabilityid}|${slotKey}` : `slot:${slotKey}`)
+      map.set(key, normalized)
     }
     return Array.from(map.values())
   }, [bookingsRaw, bookingsAllRaw, userId])

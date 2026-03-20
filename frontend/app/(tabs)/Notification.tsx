@@ -124,6 +124,37 @@ export default function NotificationsPage() {
     return ICONS.notifications
   }
 
+  const getBookingDecision = (row: NotificationRow): 'approved' | 'rejected' | null => {
+    const text = `${String(row.title || '')} ${String(row.message || '')} ${String(row.kind || '')}`.toLowerCase()
+    if (text.includes('approved') || text.includes('successful') || text.includes('accepted')) return 'approved'
+    if (text.includes('rejected') || text.includes('failed') || text.includes('declined')) return 'rejected'
+    return null
+  }
+
+  const getDisplayMessage = (row: NotificationRow) => {
+    const decision = getBookingDecision(row)
+    const category = getRowCategory(row)
+    if (!decision || !category) return row.message
+
+    if (category === 'court') {
+      return decision === 'approved'
+        ? 'Your court booking has been approved.'
+        : 'Your court booking has been rejected.'
+    }
+    if (category === 'event') {
+      return decision === 'approved'
+        ? 'Your event booking request has been approved.'
+        : 'Your event booking request has been rejected.'
+    }
+    if (category === 'training') {
+      return decision === 'approved'
+        ? 'Your training session booking request has been approved.'
+        : 'Your training session booking request has been rejected.'
+    }
+
+    return row.message
+  }
+
   const getSectionTitle = (iso: string) => {
     const d = parseNotificationDate(iso)
     if (!d) return 'Earlier'
@@ -292,7 +323,7 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={deleteMode && selectedIds.has(item.notificationid) ? undefined : 2}>{item.message}</Text>
+        <Text style={styles.notificationMessage} numberOfLines={deleteMode && selectedIds.has(item.notificationid) ? undefined : 2}>{getDisplayMessage(item)}</Text>
       </View>
     </TouchableOpacity>
   );
