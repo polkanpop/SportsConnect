@@ -321,7 +321,7 @@
     const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null); // State to store selected marker
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null); // State to store user location
     const [isFlatListVisible, setFlatListVisible] = useState(false); // To show/hide the FlatList
-    const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(0); // Track BottomSheet index
+    const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(-1); // Track BottomSheet index
     const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts (courtinfoid assumed)
     const [favouriteRecords, setFavouriteRecords] = useState<FavouriteCourt[]>([]); // full favourite rows
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
@@ -776,6 +776,8 @@
     useFocusEffect(useCallback(() => {
       fetchMarkers({ onlyIfCacheMissing: true, showLoading: false });
       refreshFavouritesOnly();
+      setSelectedMarker(null);
+      bottomSheetRef.current?.close();
     }, [fetchMarkers, refreshFavouritesOnly]));
 
     const availabilityOptions = ["Available", "Unavailable"];
@@ -806,7 +808,7 @@
           }
 
           if (location) {
-            focusMapRegion(location.coords.latitude, location.coords.longitude, 1);
+            focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
           }
         } catch (e) {
           console.log("Location error:", e);
@@ -1528,10 +1530,10 @@
                 <BottomSheet
                   ref={bottomSheetRef}
                   snapPoints={snapPoints}
-                  index={0} // closed by default
+                  index={-1}
                   bottomInset={0}
                   enableContentPanningGesture
-                  enablePanDownToClose={false}
+                  enablePanDownToClose={true}
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
                 >
