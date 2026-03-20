@@ -1173,10 +1173,10 @@ export default function DetailsPage() {
       const courtsRel = Array.isArray(avail?.courts) ? avail.courts[0] : (avail?.courts ?? null)
       const courtInfoRel = Array.isArray(courtsRel?.courtinfo) ? courtsRel.courtinfo[0] : (courtsRel?.courtinfo ?? null)
       const reviewVenueName =
-        resolveVenueNameOnly(courtInfoRel) ||
+        (typeof (courtInfoRel as any)?.name === 'string' ? (courtInfoRel as any).name.trim() : null) ||
         resolveVenueNameOnly(singleAvailQuery.data) ||
-        resolveVenueNameOnly(courtBookingQuery.data) ||
-        `Venue #${courtid}`
+        resolveVenueNameOnly(courtBookingQuery.data)
+      if (!reviewVenueName) return null
       return {
         targettype: 'court',
         targetid: String(courtid),
@@ -1571,6 +1571,15 @@ export default function DetailsPage() {
               ]}
               onPress={() => {
                 if (!canReview || !reviewNavParams) return
+                if (parsed.kind === 'court_booking') {
+                  console.log('[review] court booking venue payload', {
+                    source: {
+                      courtBooking: courtBookingQuery.data,
+                      singleAvailability: singleAvailQuery.data,
+                    },
+                    reviewNavParams,
+                  })
+                }
                 router.push({ pathname: '/event/reviewForm', params: reviewNavParams } as any)
               }}
             >

@@ -1865,7 +1865,7 @@
                       })()}
 
                       {activeSheetTab === 'Images' && (aggregatedImages.length > 0 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
+                        <ScrollView horizontal={true} nestedScrollEnabled={true} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                           {aggregatedImages.map((image, idx) => (
                             <TouchableOpacity key={`${image}:${idx}`} onPress={() => setZoomMapImageUri(image)} activeOpacity={0.9}>
                               <ExpoImage

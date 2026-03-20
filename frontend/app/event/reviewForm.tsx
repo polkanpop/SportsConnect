@@ -14,12 +14,11 @@ import { COLORS } from '@/constants/colors'
 export default function ReviewForm() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { targettype, targetid, title, venueName, courtName } = useLocalSearchParams<{
+  const { targettype, targetid, title, venueName } = useLocalSearchParams<{
     targettype: string
     targetid: string
     title: string
     venueName?: string
-    courtName?: string
   }>()
 
   const [rating, setRating] = useState(0)
@@ -31,9 +30,8 @@ export default function ReviewForm() {
   const displayTitle = useMemo(() => {
     const rawTitle = title ? decodeURIComponent(String(title)) : ''
     const rawVenueName = venueName ? decodeURIComponent(String(venueName)) : ''
-    const rawCourtName = courtName ? decodeURIComponent(String(courtName)) : ''
-    return rawVenueName || rawCourtName || rawTitle || 'this booking'
-  }, [title, venueName, courtName])
+    return rawVenueName || rawTitle || 'this booking'
+  }, [title, venueName])
 
   const mutation = useMutation({
     mutationFn: () =>

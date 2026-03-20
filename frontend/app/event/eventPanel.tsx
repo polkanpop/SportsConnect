@@ -1,4 +1,5 @@
 import { ICONS } from "@/constants/icons";
+import { queryKeys } from "@/hooks/query-keys";
 import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {
 	approveEventBooking,
@@ -22,6 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -204,6 +206,7 @@ function FreeBadge() {
 
 export default function EventPanel({ organizerId }: Props) {
 	const router = useRouter();
+	const queryClient = useQueryClient();
 	const [managementMode, setManagementMode] = useState<'event' | 'trainingSession'>('event');
 	const preferredSelectedEventIdRef = useRef<number | null>(null);
 
@@ -292,6 +295,17 @@ export default function EventPanel({ organizerId }: Props) {
 			if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
 		};
 	}, [saveSuccessMessage]);
+
+	const invalidateMutationCaches = useCallback(async () => {
+		if (typeof organizerId === "number") {
+			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any });
+		}
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: ["eventsCombined"] }),
+			queryClient.invalidateQueries({ queryKey: ["trainingSessionsCombined"] }),
+			queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === "details" }),
+		]);
+	}, [organizerId, queryClient]);
 
 	const uploadOneToCloudinary = useCallback(
 		async (localUri: string, idx: number) => {
@@ -697,12 +711,24 @@ export default function EventPanel({ organizerId }: Props) {
 	const onApproveApplicant = useCallback(
 		async (eventid: number, booking: EventBookingRow) => {
 			const bookingId = booking.eventbookingid;
+			const approvedApplicant = applicants.find((x) => x.booking.eventbookingid === bookingId) || null;
 			if (mutatingBookingIds[bookingId]) return;
 			if (String(booking.status || "").toLowerCase() !== "pending") return;
 			setMutatingBookingIds((prev) => ({ ...prev, [bookingId]: "approve" }));
 			try {
 				await approveEventBooking(booking.eventbookingid);
+				setApplicants((prev) => prev.filter((x) => x.booking.eventbookingid !== bookingId));
+				if (approvedApplicant) {
+					setParticipants((prev) => {
+						if (prev.some((x) => x.booking.eventbookingid === bookingId)) return prev;
+						return [{
+							...approvedApplicant,
+							booking: { ...approvedApplicant.booking, status: "joined" } as any,
+						}, ...prev];
+					});
+				}
 				await Promise.all([loadHostEvents(), loadBookingsForEvent(eventid)]);
+				await invalidateMutationCaches();
 			} catch (e: any) {
 				setBookingsError(e?.message || String(e));
 			} finally {
@@ -713,7 +739,7 @@ export default function EventPanel({ organizerId }: Props) {
 				});
 			}
 		},
-		[loadBookingsForEvent, loadHostEvents, mutatingBookingIds]
+		[applicants, invalidateMutationCaches, loadBookingsForEvent, loadHostEvents, mutatingBookingIds]
 	);
 
 	const onRejectApplicant = useCallback(
@@ -724,7 +750,9 @@ export default function EventPanel({ organizerId }: Props) {
 			setMutatingBookingIds((prev) => ({ ...prev, [bookingId]: "reject" }));
 			try {
 				await rejectEventBooking(booking.eventbookingid);
+				setApplicants((prev) => prev.filter((x) => x.booking.eventbookingid !== bookingId));
 				await loadBookingsForEvent(eventid);
+				await invalidateMutationCaches();
 			} catch (e: any) {
 				setBookingsError(e?.message || String(e));
 			} finally {
@@ -735,7 +763,7 @@ export default function EventPanel({ organizerId }: Props) {
 				});
 			}
 		},
-		[loadBookingsForEvent, mutatingBookingIds]
+		[invalidateMutationCaches, loadBookingsForEvent, mutatingBookingIds]
 	);
 
 	const onSaveEventInfo = useCallback(async () => {
@@ -762,6 +790,7 @@ export default function EventPanel({ organizerId }: Props) {
 				}
 			}
 			await loadHostEvents();
+			await invalidateMutationCaches();
 			initialEditSnapshotRef.current = currentEditSnapshot;
 			setEditBaselineSnapshot(currentEditSnapshot);
 			setPendingCloudinaryDeletes([]);
@@ -771,7 +800,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setSavingEvent(false);
 		}
-	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, isDirty, loadHostEvents, pendingCloudinaryDeletes, selectedHostEventId]);
+	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, invalidateMutationCaches, isDirty, loadHostEvents, pendingCloudinaryDeletes, selectedHostEventId]);
 
 	const canCancelSelectedEvent = useMemo(() => {
 		const s = String((selectedEvent as any)?.status ?? "").toLowerCase();
@@ -789,6 +818,7 @@ export default function EventPanel({ organizerId }: Props) {
 			await updateEvent(selectedHostEventId, { status: "cancelled" } as any);
 			setConfirmCancelVisible(false);
 			await loadHostEvents(selectedHostEventId);
+			await invalidateMutationCaches();
 			const detailsId = `created_event_${selectedHostEventId}`;
 			router.replace({ pathname: "/event/statusTransition", params: { anim: "cancel", detailsId } } as any);
 		} catch (e: any) {
@@ -796,7 +826,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setCancellingEvent(false);
 		}
-	}, [canCancelSelectedEvent, loadHostEvents, router, selectedHostEventId]);
+	}, [canCancelSelectedEvent, invalidateMutationCaches, loadHostEvents, router, selectedHostEventId]);
 
 	const isFree = (selectedEvent?.entry_fee ?? 0) <= 0;
 
@@ -1095,6 +1125,7 @@ export default function EventPanel({ organizerId }: Props) {
 										marginBottom: 10,
 									}}
 								>
+									{String((a.booking as any)?.status ?? "").toLowerCase() === "pending" ? (
 									<View style={{ flexDirection: "row", alignItems: "center" }}>
 										<TouchableOpacity
 											activeOpacity={0.75}
@@ -1191,6 +1222,9 @@ export default function EventPanel({ organizerId }: Props) {
 											<Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: "#111827" }} resizeMode="contain" />
 										</TouchableOpacity>
 									</View>
+									) : (
+										<Text style={{ color: "#374151", fontWeight: "700" }}>{String((a.booking as any)?.status || "updated")}</Text>
+									)}
 									</View>
 									{expandedNoteEventIds.has(a.booking.eventbookingid) && (
 										<View style={{ marginTop: 8, backgroundColor: "#f9fafb", borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: "#d1d5db" }}>
@@ -1531,7 +1565,7 @@ export default function EventPanel({ organizerId }: Props) {
 							disabled={savingEvent || !isDirty}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent || !isDirty ? "#9ca3af" : COLORS.brandOrangeDeep,
+								backgroundColor: savingEvent || !isDirty ? "#F4C9A6" : COLORS.brandOrangeDeep,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",

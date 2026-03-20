@@ -28,15 +28,49 @@ function normalizeBookingStatus(row: any): string {
   return bs
 }
 
+function parseTimestampLoose(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!s) return null
+  const normalized = s.includes(' ') && !s.includes('T') ? s.replace(' ', 'T') : s
+  const dt = new Date(normalized)
+  if (Number.isNaN(dt.getTime())) return null
+  return dt
+}
+
+function isReviewableByStatusAndTime(opts: { bookingStatus?: unknown; sessionStatus?: unknown; startTs?: unknown; endTs?: unknown }) {
+  const bs = String(opts.bookingStatus ?? '').trim().toLowerCase()
+  const ss = String(opts.sessionStatus ?? '').trim().toLowerCase()
+  if (ss.includes('cancel') || ss === 'missed') return false
+  if (ss === 'completed' || ss === 'complete') return true
+  const start = parseTimestampLoose(opts.startTs)
+  const end = parseTimestampLoose(opts.endTs)
+  const isPast = !!((end ?? start) && (end ?? start)!.getTime() < Date.now())
+  const approvedOrJoined = bs === 'approved' || bs === 'joined'
+  return isPast && approvedOrJoined
+}
+
 export default function ReviewsPanel() {
   const router = useRouter()
   const { userId, dashboard } = useAppBootstrap()
 
   const dashboardRaw = dashboard.data
   const dashboardLoading = dashboard.isLoading
-  const courtBookingsRaw = dashboardRaw?.court_bookings ?? []
-  const eventBookingsRaw = dashboardRaw?.event_bookings ?? []
-  const tsBookingsRaw = dashboardRaw?.training_bookings ?? []
+  const courtBookingsRaw =
+    dashboardRaw?.court_bookings ??
+    dashboardRaw?.courtbookings ??
+    dashboardRaw?.booked_courts ??
+    []
+  const eventBookingsRaw =
+    dashboardRaw?.event_bookings ??
+    dashboardRaw?.eventbookings ??
+    []
+  const tsBookingsRaw =
+    dashboardRaw?.training_bookings ??
+    dashboardRaw?.training_session_bookings ??
+    dashboardRaw?.ts_bookings ??
+    dashboardRaw?.tsbookings ??
+    []
 
   const { data: eventsCombined } = useQuery<any[]>({
     queryKey: ['eventsCombined'],
@@ -100,7 +134,13 @@ export default function ReviewsPanel() {
     // Court bookings (completed)
     if (Array.isArray(courtBookingsRaw)) {
       for (const cb of courtBookingsRaw) {
-        if (normalizeBookingStatus(cb) !== 'completed') continue
+        const reviewable = isReviewableByStatusAndTime({
+          bookingStatus: (cb as any)?.status,
+          sessionStatus: (cb as any)?.bookingstatus,
+          startTs: (cb as any)?.start_timestamp,
+          endTs: (cb as any)?.end_timestamp,
+        })
+        if (!reviewable) continue
         const av = availabilityById.get(Number(cb.availabilityid))
         const courtid = Number.isFinite(Number(av?.courtid)) ? Number(av?.courtid) : undefined
         const courtNameFromBooking = typeof (cb as any)?.court_name === 'string' ? (cb as any).court_name : undefined
@@ -120,8 +160,14 @@ export default function ReviewsPanel() {
     // Event bookings (completed)
     if (Array.isArray(eventBookingsRaw)) {
       for (const eb of eventBookingsRaw) {
-        if (normalizeBookingStatus(eb) !== 'completed') continue
         const ev = eventsById.get(eb.eventid)
+        const reviewable = isReviewableByStatusAndTime({
+          bookingStatus: (eb as any)?.status,
+          sessionStatus: (eb as any)?.bookingstatus,
+          startTs: (ev as any)?.start_timestamp ?? (ev as any)?.time,
+          endTs: (ev as any)?.end_timestamp,
+        })
+        if (!reviewable) continue
         items.push({
           key: `event_${eb.eventbookingid}`,
           title: (ev?.title as string | undefined) ?? `Event #${eb.eventid}`,
@@ -135,8 +181,14 @@ export default function ReviewsPanel() {
     // Training session bookings (completed)
     if (Array.isArray(tsBookingsRaw)) {
       for (const tb of tsBookingsRaw) {
-        if (normalizeBookingStatus(tb) !== 'completed') continue
         const sess = sessionsById.get(tb.sessionid)
+        const reviewable = isReviewableByStatusAndTime({
+          bookingStatus: (tb as any)?.status,
+          sessionStatus: (tb as any)?.bookingstatus,
+          startTs: (sess as any)?.start_timestamp ?? (sess as any)?.time,
+          endTs: (sess as any)?.end_timestamp,
+        })
+        if (!reviewable) continue
         items.push({
           key: `session_${tb.tsbookingid}`,
           title: (sess?.title as string | undefined) ?? `Training Session #${tb.sessionid}`,

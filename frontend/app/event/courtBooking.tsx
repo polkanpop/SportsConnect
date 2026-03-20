@@ -193,12 +193,6 @@ export default function CourtBooking() {
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
 
-  const isActiveCourtBooking = useCallback((b: CourtBookingRow) => {
-    const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
-    if (!s) return true
-    return !(s.includes('cancel') || s.includes('complete') || s.includes('reject'))
-  }, [])
-
   // Ensure we see fresh bookings after navigating back from Details/cancel.
   useFocusEffect(
     useCallback(() => {
@@ -338,9 +332,6 @@ export default function CourtBooking() {
   ])
 
   // Only block duplicates for the same availability when the existing booking is still active.
-  const hasBookingForCurrentAvailability = !!(
-    availability && bookings.some(b => b.availabilityid === availability.availabilityid && isActiveCourtBooking(b))
-  )
 
   const scheduleDisplayAvailability = useMemo(
     () => scheduleAvailability ?? availability ?? normalizedAvailRows[0] ?? null,
@@ -461,8 +452,8 @@ export default function CourtBooking() {
     return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
   }, [courtAmount, servicesTotal])
   const formattedAmount = 'Confirm'
-  // Disallow duplicate booking for same availability; require part selection when playing courts exist
-  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
+  // Require part selection when playing courts exist.
+  const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && (playingCourts.length === 0 || selectedPlayingCourtId != null))
   const courtBookingStatus = Boolean((courtInfo as any)?.auto_approve) ? 'approved' : 'pending'
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
@@ -1052,9 +1043,6 @@ export default function CourtBooking() {
             </TouchableOpacity>
           </View>
           {submitError && <Text style={styles.errorText}>{submitError}</Text>}
-          {hasBookingForCurrentAvailability && !confirmation && (
-            <Text style={styles.errorText}>You have already booked this court.</Text>
-          )}
           {confirmation && (
             <View style={styles.successBox}>
               <Text style={styles.successTitle}>Booked!</Text>

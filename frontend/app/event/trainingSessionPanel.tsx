@@ -20,7 +20,9 @@ import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { queryKeys } from '@/hooks/query-keys'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   approveTrainingSessionBooking,
   type CombinedTrainingSession,
@@ -176,6 +178,7 @@ function FreeBadge() {
 
 export default function TrainingSessionPanel({ coachId }: Props) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const mountedRef = useRef(true)
   const sessionsLoadIdRef = useRef(0)
   const bookingsLoadIdRef = useRef(0)
@@ -273,6 +276,17 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current)
     }
   }, [saveSuccessMessage])
+
+  const invalidateMutationCaches = useCallback(async () => {
+    if (typeof coachId === 'number') {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['eventsCombined'] }),
+      queryClient.invalidateQueries({ queryKey: ['trainingSessionsCombined'] }),
+      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
+    ])
+  }, [coachId, queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
@@ -515,10 +529,20 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const onApproveApplicant = useCallback(
     async (sessionId: number, booking: TrainingSessionBookingRow) => {
+      const bookingId = booking.tsbookingid
+      const approvedApplicant = applicants.find((x) => x.booking.tsbookingid === bookingId) || null
       setMutatingBookingIds((m) => ({ ...m, [booking.tsbookingid]: 'approve' }))
       try {
         await approveTrainingSessionBooking(booking.tsbookingid)
+        setApplicants((prev) => prev.filter((x) => x.booking.tsbookingid !== bookingId))
+        if (approvedApplicant) {
+          setParticipants((prev) => {
+            if (prev.some((x) => x.booking.tsbookingid === bookingId)) return prev
+            return [{ ...approvedApplicant, booking: { ...approvedApplicant.booking, status: 'joined' } as any }, ...prev]
+          })
+        }
         await Promise.all([loadSessions(sessionId), loadBookingsForSession(sessionId)])
+        await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
       } finally {
@@ -529,7 +553,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [loadBookingsForSession, loadSessions],
+    [applicants, invalidateMutationCaches, loadBookingsForSession, loadSessions],
   )
 
   const onRejectApplicant = useCallback(
@@ -537,7 +561,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       setMutatingBookingIds((m) => ({ ...m, [booking.tsbookingid]: 'reject' }))
       try {
         await rejectTrainingSessionBooking(booking.tsbookingid)
+        setApplicants((prev) => prev.filter((x) => x.booking.tsbookingid !== booking.tsbookingid))
         await loadBookingsForSession(sessionId)
+        await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
       } finally {
@@ -548,7 +574,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [loadBookingsForSession],
+    [invalidateMutationCaches, loadBookingsForSession],
   )
 
   useEffect(() => {
@@ -685,12 +711,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
       // Refresh after save so the list reflects changes
       await loadSessions(selectedSessionId)
+      await invalidateMutationCaches()
       const meta2 = await getTrainingSessionInfoBySessionId(selectedSessionId as number)
       setInfoMeta(meta2)
       setEditImages(asStringArray((meta2 as any)?.images))
 			initialEditSnapshotRef.current = currentEditSnapshot
 			setPendingCloudinaryDeletes([])
-      setSaveSuccessMessage('Court updated successfully.')
+      setSaveSuccessMessage('Training session updated successfully.')
     } catch (e: any) {
       setInfoError(e?.message || String(e))
     } finally {
@@ -708,6 +735,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       await updateTrainingSession(selectedSessionId, { status: 'cancelled' } as any)
       setConfirmCancelVisible(false)
       await loadSessions(selectedSessionId)
+      await invalidateMutationCaches()
       const detailsId = `created_session_${selectedSessionId}`
       router.replace({ pathname: '/event/statusTransition', params: { anim: 'cancel', detailsId } } as any)
     } catch (e: any) {
@@ -715,7 +743,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     } finally {
       setCancellingSession(false)
     }
-  }, [canCancelSelectedSession, loadSessions, router, selectedSessionId])
+  }, [canCancelSelectedSession, invalidateMutationCaches, loadSessions, router, selectedSessionId])
 
   const onRefresh = useCallback(async () => {
     setPullRefreshing(true)
@@ -1051,6 +1079,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </View>
                   </TouchableOpacity>
 
+                  {String((a.booking as any)?.status ?? '').toLowerCase() === 'pending' ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <TouchableOpacity
                       disabled={!!mutatingBookingIds[a.booking.tsbookingid]}
@@ -1121,6 +1150,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                     </TouchableOpacity>
                   </View>
+                  ) : (
+                    <Text style={{ color: '#374151', fontWeight: '700' }}>{String((a.booking as any)?.status || 'updated')}</Text>
+                  )}
                   </View>
                   {expandedNoteIds.has(a.booking.tsbookingid) && (
                     <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
@@ -1520,7 +1552,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   disabled={saving || !isDirty}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving || !isDirty ? '#9ca3af' : '#16a34a',
+                    backgroundColor: saving || !isDirty ? '#F4C9A6' : '#16a34a',
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',

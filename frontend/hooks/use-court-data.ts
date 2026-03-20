@@ -60,6 +60,9 @@ export function useCreateCourtBooking() {
       queryClient.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
       })
+      // Force dashboard + user booking list refresh so newly booked slots/records show immediately.
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(variables.userid) })
+      queryClient.invalidateQueries({ queryKey: ['courtbookings', 'user', variables.userid] })
     },
   })
 }

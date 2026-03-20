@@ -357,7 +357,7 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
           <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/event/userAccountSetting' as any)}>
+          <TouchableOpacity activeOpacity={1} disabled>
             <Text style={styles.changeThemeLink}>Change Theme</Text>
           </TouchableOpacity>
         </View>
