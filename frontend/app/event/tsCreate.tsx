@@ -416,7 +416,7 @@ export default function TsCreate() {
             const booking = await createTrainingSessionBooking({
               sessionid: sessionId,
               userid: userId,
-              status: 'pending',
+              status: autoApprove ? 'joined' : 'pending',
               bookingstatus: 'upcoming',
               note: null,
             } as any)

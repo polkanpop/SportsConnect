@@ -141,15 +141,16 @@ export default function EventBooking() {
     setSubmitting(true)
     setSubmitError(null)
     try {
+      const bookingStatus = event.join_status ? 'joined' : 'pending'
       const payment = await createPayment({
-        status: isFree ? 'paid' : 'pending',
+        status: 'paid',
         method: isFree ? 'cash' : paymentMethod!,
         amount: isFree ? 0 : (event.entry_fee! || 0)
       })
       const booking = await createEventBooking({
         eventid: event.eventid,
         userid: userId,
-        status: 'pending',
+        status: bookingStatus,
         paymentid: payment.paymentid,
         note: noteText || null,
       })

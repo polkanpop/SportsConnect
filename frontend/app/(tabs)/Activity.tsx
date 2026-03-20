@@ -110,10 +110,16 @@ const deriveDisplayStatus = (
   const bs = (bookingStatusRaw || '').toLowerCase();
   const ss = (sessionStatusRaw || '').toLowerCase();
   const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now());
+  const isApprovedOrJoined = bs === 'approved' || bs === 'joined';
 
   // Situation D: time passed, host never approved
   if (isPast && bs === 'pending' && (ss === 'upcoming' || ss === 'missed' || !ss)) {
     return 'Missed';
+  }
+
+  // Past approved/joined records should not stay Upcoming.
+  if (isPast && isApprovedOrJoined && (ss === 'upcoming' || !ss)) {
+    return 'Completed';
   }
 
   // Direct mapping from session_status

@@ -468,6 +468,7 @@ export default function CourtBooking() {
   }, [totalAmount])
   // Disallow duplicate booking for same availability; require part selection when playing courts exist
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !hasBookingForCurrentAvailability && (playingCourts.length === 0 || selectedPlayingCourtId != null))
+  const courtBookingStatus = Boolean((courtInfo as any)?.auto_approve) ? 'approved' : 'pending'
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey, dateStr)) return
@@ -514,7 +515,7 @@ export default function CourtBooking() {
     bookingMutation.mutate({
       availabilityid: availability.availabilityid,
       userid: userId,
-      status: 'pending',
+      status: courtBookingStatus,
       paymentMethod: paymentMethod,
       start_timestamp: startTs,
       end_timestamp: endTs,

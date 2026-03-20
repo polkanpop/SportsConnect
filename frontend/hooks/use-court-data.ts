@@ -113,8 +113,7 @@ export function useCreateBookingWithPayment() {
       duration_minutes?: number | null
       total_amount?: number | null
     }) => {
-      const paymentStatus = payload.paymentMethod === 'cash' ? 'pending' : 'paid'
-      const payment = await createPayment({ status: paymentStatus, method: payload.paymentMethod, amount: payload.amount })
+      const payment = await createPayment({ status: 'paid', method: payload.paymentMethod, amount: payload.amount })
       const booking = await createCourtBooking({
         availabilityid: payload.availabilityid,
         userid: payload.userid,

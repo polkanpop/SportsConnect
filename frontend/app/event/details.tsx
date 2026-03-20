@@ -96,10 +96,16 @@ const deriveBookingActionState = (
   const bs = String(bookingStatusRaw ?? '').trim().toLowerCase()
   const ss = String(sessionStatusRaw ?? '').trim().toLowerCase()
   const isPast = !!(dateTime && !Number.isNaN(dateTime.getTime()) && dateTime.getTime() < Date.now())
+  const isApprovedOrJoined = bs === 'approved' || bs === 'joined'
 
   // C: rejected/cancelled -> both disabled
   if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
     return { reviewEnabled: false, cancelEnabled: false }
+  }
+
+  // E: approved/joined and already in the past should behave like completed.
+  if (isPast && isApprovedOrJoined) {
+    return { reviewEnabled: true, cancelEnabled: false }
   }
 
   // Missed (D or F) -> both disabled

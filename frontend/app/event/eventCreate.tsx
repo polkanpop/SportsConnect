@@ -475,7 +475,7 @@ export default function EventCreateScreen() {
             const booking = await createEventBooking({
               eventid: eventId,
               userid: userId,
-              status: 'pending',
+              status: autoApprove ? 'joined' : 'pending',
               bookingstatus: 'upcoming',
               note: null,
             } as any)

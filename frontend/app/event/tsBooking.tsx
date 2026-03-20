@@ -125,15 +125,16 @@ export default function TrainingSessionBooking() {
     setSubmitting(true)
     setSubmitError(null)
     try {
+      const bookingStatus = session.join_status ? 'joined' : 'pending'
       const payment = await createPayment({
-        status: isFree ? 'paid' : 'pending',
+        status: 'paid',
         method: isFree ? 'cash' : paymentMethod!,
         amount: isFree ? 0 : (session.entry_fee! || 0)
       })
       const booking = await createTrainingSessionBooking({
         sessionid: session.sessionid,
         userid: userId,
-        status: 'pending',
+        status: bookingStatus,
         paymentid: payment.paymentid,
         note: noteText || null,
       })
