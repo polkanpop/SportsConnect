@@ -1799,6 +1799,18 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 const bs = String(b.bookingstatus ?? '').toLowerCase()
                 return s === 'approved' || s === 'joined' || bs === 'upcoming'
               })
+              const dedupedBookingParticipants = (() => {
+                const seen = new Set<number>()
+                const sorted = [...bookingParticipants].sort((a, b) => Number(b.courtbookingid || 0) - Number(a.courtbookingid || 0))
+                const out: CourtBookingRow[] = []
+                for (const row of sorted) {
+                  const uid = Number(row.userid)
+                  if (!Number.isFinite(uid) || seen.has(uid)) continue
+                  seen.add(uid)
+                  out.push(row)
+                }
+                return out
+              })()
               const bookingBlocked = pcBookings.filter((b) => {
                 const s = String(b.status ?? '').toLowerCase()
                 const bs = String(b.bookingstatus ?? '').toLowerCase()
@@ -1968,9 +1980,9 @@ export default function CourtPanel(props: { ownerId: number | null }) {
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
-                  {bookingParticipants.length === 0 ? (
+                  {dedupedBookingParticipants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
-                  ) : bookingParticipants.map((b) => renderBookingRow(b, false))}
+                  ) : dedupedBookingParticipants.map((b) => renderBookingRow(b, false))}
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>

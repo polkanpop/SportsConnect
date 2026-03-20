@@ -1509,14 +1509,14 @@
                   snapPoints={snapPoints}
                   index={0} // closed by default
                   bottomInset={0}
-                  enableContentPanningGesture={activeSheetTab !== 'Images'}
-                  enablePanDownToClose={false} // Keep BottomSheet always enabled
+                  enableContentPanningGesture
+                  enablePanDownToClose
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
                 >
                   {selectedMarker ? (
                     <BottomSheetScrollView
-                      scrollEnabled={activeSheetTab !== 'Images'}
+                      scrollEnabled
                       contentContainerStyle={[
                         styles.bottomSheetContent,
                         activeSheetTab === 'Images' ? styles.bottomSheetContentImages : null,

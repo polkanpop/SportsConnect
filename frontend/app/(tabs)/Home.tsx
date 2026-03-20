@@ -236,36 +236,34 @@ export default function Home() {
     queryKey: ['home-nearby-events', userId, eventsCombined.length],
     enabled: !!userId && eventsCombined.length > 0,
     queryFn: async () => {
+      const upcoming = eventsCombined.filter((ev) => {
+        const st = String(ev?.status ?? '').toLowerCase()
+        if (st.includes('cancel') || st.includes('complete')) return false
+
+        const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+        const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+        const start = parseMaybeTimestamp(startRaw)
+        const end = parseMaybeTimestamp(endRaw)
+        const nowTs = Date.now()
+
+        if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
+        if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
+        return true
+      })
+
       const perm = await Location.requestForegroundPermissionsAsync()
       if (!perm.granted) {
-        return { events: [] as CombinedEvent[], origin: null as { latitude: number; longitude: number } | null }
+        return { events: upcoming, origin: null as { latitude: number; longitude: number } | null }
       }
 
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
       const userLat = pos?.coords?.latitude
       const userLon = pos?.coords?.longitude
       if (!Number.isFinite(userLat) || !Number.isFinite(userLon)) {
-        return { events: [] as CombinedEvent[], origin: null as { latitude: number; longitude: number } | null }
+        return { events: upcoming, origin: null as { latitude: number; longitude: number } | null }
       }
 
-      const filtered = eventsCombined
-        .filter((ev) => {
-          const st = String(ev?.status ?? '').toLowerCase()
-          if (st.includes('cancel') || st.includes('complete')) return false
-
-          const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
-          const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
-          const start = parseMaybeTimestamp(startRaw)
-          const end = parseMaybeTimestamp(endRaw)
-          const nowTs = Date.now()
-
-          if (end && !Number.isNaN(end.getTime())) {
-            if (end.getTime() < nowTs) return false
-          } else if (start && !Number.isNaN(start.getTime())) {
-            if (start.getTime() < nowTs) return false
-          }
-          return true
-        })
+      const filtered = upcoming
         .filter((ev) => {
           const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
           const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
