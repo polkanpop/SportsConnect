@@ -8,12 +8,12 @@ import smtplib
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from jose import jwt
 from ..db import rest_select, rest_upsert, rest_update
-from ..auth import get_jwt_secret, HS_ALGORITHM
+from ..auth import get_jwt_secret, HS_ALGORITHM, decode_token
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
 from ..login_rules import (
     record_login_attempt,
@@ -743,3 +743,183 @@ def session_close(payload: dict):
     revoked = revoke_refresh_token(rt)
     # revoke already updates last_used_at; expose touched=True for consistency
     return {"status": "ok", "revoked": revoked, "touched": True}
+
+
+@router.post('/sync')
+def sync_social_user(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Provision or retrieve a Supabase OAuth user (Google / Apple) in our backend DB.
+
+    Called by the app after a successful Supabase OAuth sign-in. The endpoint:
+    1. Validates the Supabase-issued JWT.
+    2. Finds an existing user by email, OR creates new users / userinfo / userlogin rows.
+    3. Issues a backend JWT (with numeric userid as sub) so the app can use all
+       protected endpoints without UUID-sub mismatch errors.
+    Returns userid, username, email, name, logintype, and a token pair.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+    token = authorization.removeprefix("Bearer ").strip()
+
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        raise
+
+    email = (payload.get("email") or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Token has no email claim")
+
+    # Extract display name from Supabase JWT user/app metadata
+    user_meta = payload.get("user_metadata") or {}
+    raw_meta = payload.get("raw_user_meta_data") or {}
+    name = (
+        user_meta.get("full_name")
+        or user_meta.get("name")
+        or raw_meta.get("full_name")
+        or raw_meta.get("name")
+        or email.split("@")[0]
+    ).strip()
+
+    # Determine provider (Google, Apple, etc.)
+    app_meta = payload.get("app_metadata") or {}
+    raw_provider = (app_meta.get("provider") or "").strip()
+    provider = raw_provider.capitalize() if raw_provider else "Social"
+
+    t0 = _now_ms()
+
+    # --- Existing user path ---
+    existing_info = find_user_by_email(email)
+    if existing_info:
+        userid = existing_info.get("userid")
+        login_row = rest_select(
+            "userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True
+        )
+        username = (login_row.get("username") if login_row else None) or email.split("@")[0]
+        logintype = (login_row.get("logintype") if login_row else None) or provider
+        try:
+            tokens = create_user_tokens(userid, username, email, False)
+        except Exception as e:
+            logger.warning(f"/auth/sync token creation failed userid={userid} err={e}")
+            raise HTTPException(status_code=500, detail="Failed issuing tokens")
+        logger.debug(f"/auth/sync existing user userid={userid} elapsedMs={_now_ms()-t0}")
+        return {
+            "status": "ok",
+            "userid": userid,
+            "username": username,
+            "email": email,
+            "name": existing_info.get("name") or name,
+            "logintype": logintype,
+            "accessToken": tokens["access_token"],
+            "accessTokenExpiresAt": tokens["access_token_expires_at"],
+            "refreshToken": tokens["refresh_token"],
+            "refreshTokenExpiresAt": tokens["refresh_token_expires_at"],
+        }
+
+    # --- New user provisioning ---
+    role = "player"
+    try:
+        users_rows = rest_upsert("users", {"role": role})
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence users_userid_seq" in msg:
+            try:
+                max_row = rest_select("users", "userid", single=True, order={"column": "userid", "desc": True})
+            except Exception:
+                max_row = None
+            next_userid = (max_row.get("userid") if max_row else 0) + 1
+            try:
+                users_rows = rest_upsert("users", {"userid": next_userid, "role": role})
+            except Exception as e3:
+                raise HTTPException(status_code=500, detail=f"users insert failed: {e3}")
+        else:
+            raise HTTPException(status_code=500, detail=f"users insert failed: {e}")
+
+    if not users_rows or not isinstance(users_rows, list):
+        raise HTTPException(status_code=500, detail="Unexpected users insert response")
+    userid = users_rows[0].get("userid")
+    if not userid:
+        raise HTTPException(status_code=500, detail="No userid returned from users insert")
+
+    try:
+        info_rows = rest_upsert("userinfo", {"userid": userid, "name": name, "email": email})
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence userinfo_infoid_seq" in msg:
+            try:
+                max_row = rest_select("userinfo", "infoid", single=True, order={"column": "infoid", "desc": True})
+            except Exception:
+                max_row = None
+            next_infoid = (max_row.get("infoid") if max_row else 0) + 1
+            try:
+                info_rows = rest_upsert("userinfo", {"infoid": next_infoid, "userid": userid, "name": name, "email": email})
+            except Exception as e3:
+                raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e3}")
+        else:
+            raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
+
+    # Derive a unique username from the email prefix
+    base_username = email.split("@")[0]
+    username = base_username
+    if find_userlogin_by_username(username):
+        username = f"{base_username}_{userid}"
+
+    try:
+        login_rows = rest_upsert("userlogin", {
+            "userid": userid,
+            "username": username,
+            "passwordhash": "",  # Social users have no password
+            "logintype": provider,
+        })
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence userlogin_loginid_seq" in msg:
+            try:
+                max_row = rest_select("userlogin", "loginid", single=True, order={"column": "loginid", "desc": True})
+            except Exception:
+                max_row = None
+            next_loginid = (max_row.get("loginid") if max_row else 0) + 1
+            try:
+                login_rows = rest_upsert("userlogin", {
+                    "loginid": next_loginid,
+                    "userid": userid,
+                    "username": username,
+                    "passwordhash": "",
+                    "logintype": provider,
+                })
+            except Exception as e3:
+                raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e3}")
+        else:
+            raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
+
+    # Mark the email as pre-verified (OAuth providers already verify email ownership)
+    try:
+        ver_rec = _create_or_update_unverified(userid, email)
+        rest_update(
+            "unverified_users",
+            {"unverifiedid": ver_rec.get("unverifiedid")},
+            {"email_verified": True, "token_hash": f"SOCIAL:{provider}:{userid}"},
+        )
+    except Exception:
+        pass  # Non-critical; verification check uses email lookup so this row is optional
+
+    try:
+        tokens = create_user_tokens(userid, username, email, False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed issuing tokens: {e}")
+
+    logger.debug(f"/auth/sync new user userid={userid} provider={provider} elapsedMs={_now_ms()-t0}")
+    return {
+        "status": "ok",
+        "userid": userid,
+        "username": username,
+        "email": email,
+        "name": name,
+        "logintype": provider,
+        "accessToken": tokens["access_token"],
+        "accessTokenExpiresAt": tokens["access_token_expires_at"],
+        "refreshToken": tokens["refresh_token"],
+        "refreshTokenExpiresAt": tokens["refresh_token_expires_at"],
+    }

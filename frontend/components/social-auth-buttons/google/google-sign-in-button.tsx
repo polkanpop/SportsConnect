@@ -9,6 +9,7 @@ import { Image } from 'expo-image';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@/env';
 
 // Helper: parse the fragment returned from /authorize redirect (#access_token=...)
 function parseFragment(url: string) {
@@ -41,7 +42,8 @@ export default function GoogleSignInButton() {
     setLoading(true);
     // Prefer public env; fallback to app.json extras for development convenience
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined);
-  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_BASE_URL;
+    // Derive backend base URL (strip /api suffix if present so we can call /api/auth/sync explicitly)
+    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
     if (!supabaseUrl) {
       console.error('Missing EXPO_PUBLIC_SUPABASE_URL env');
       setLoading(false);
@@ -116,6 +118,15 @@ export default function GoogleSignInButton() {
                   name: syncJson.name,
                   logintype: syncJson.logintype || 'Google',
                 }));
+                if (syncJson.accessToken && syncJson.refreshToken) {
+                  await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+                    accessToken: syncJson.accessToken,
+                    accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
+                    refreshToken: syncJson.refreshToken,
+                    refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
+                  }));
+                  await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
+                }
               }
             } catch (e) {
               console.error('[GoogleSignIn] backend sync (exchange) failed', e);
@@ -180,6 +191,15 @@ export default function GoogleSignInButton() {
               logintype: syncJson.logintype || 'Google',
             }),
           );
+          if (syncJson.accessToken && syncJson.refreshToken) {
+            await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+              accessToken: syncJson.accessToken,
+              accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
+              refreshToken: syncJson.refreshToken,
+              refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
+            }));
+            await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
+          }
         }
       }
     } catch (e) {
