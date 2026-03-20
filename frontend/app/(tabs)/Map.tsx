@@ -101,6 +101,8 @@
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
   // Collapsed sheet is 30%; this shifts focused points to center of visible map area.
   const MAP_FOCUS_LAT_OFFSET_RATIO = 0.15;
+  // Keep a small visual buffer so VN south edge does not sit under the 30% sheet head.
+  const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.18;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -124,8 +126,13 @@
 
     const halfLat = latitudeDelta / 2;
     const halfLng = longitudeDelta / 2;
+    const totalLatSpan = VN_BOUNDS.maxLat - VN_BOUNDS.minLat;
+    const centerRangeLat = Math.max(0, totalLatSpan - latitudeDelta);
+    const desiredSouthPadding = latitudeDelta * MAP_SOUTH_VISUAL_BUFFER_RATIO;
+    // Cap padding so pan range remains positive and smooth.
+    const southPadding = Math.min(desiredSouthPadding, centerRangeLat * 0.6);
 
-    const centerLatMin = VN_BOUNDS.minLat + halfLat;
+    const centerLatMin = VN_BOUNDS.minLat + halfLat + southPadding;
     const centerLatMax = VN_BOUNDS.maxLat - halfLat;
     const centerLngMin = VN_BOUNDS.minLng + halfLng;
     const centerLngMax = VN_BOUNDS.maxLng - halfLng;

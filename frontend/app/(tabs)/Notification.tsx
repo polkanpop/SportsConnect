@@ -2,6 +2,7 @@ import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { deleteNotifications, listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
+import { listHistory, type HistoryEntry } from '@/storage/history'
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -30,10 +31,11 @@ function parseNotificationDate(raw: string): Date | null {
 }
 
 export default function NotificationsPage() {
-  const { dashboard, notifications } = useAppBootstrap()
+  const { dashboard, notifications, userId } = useAppBootstrap()
   const [selectedCategory, setSelectedCategory] = useState<"All" | "Court" | "Event" | "Training">("All");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [rows, setRows] = useState<NotificationRow[]>([]);
+  const [historyRows, setHistoryRows] = useState<HistoryEntry[]>([])
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
@@ -68,8 +70,101 @@ export default function NotificationsPage() {
     return (row.category as any) || typeToCategory(row.notificationtype) || null
   }, [typeToCategory])
 
+  useEffect(() => {
+    let active = true
+    if (typeof userId !== 'number') {
+      setHistoryRows([])
+      return
+    }
+    ;(async () => {
+      const entries = await listHistory(userId)
+      if (!active) return
+      setHistoryRows(Array.isArray(entries) ? entries : [])
+    })()
+    return () => {
+      active = false
+    }
+  }, [userId])
+
+  const getDecisionFromStatuses = useCallback((fromRaw: unknown, toRaw: unknown): 'approved' | 'rejected' | null => {
+    const from = String(fromRaw ?? '').trim().toLowerCase()
+    const to = String(toRaw ?? '').trim().toLowerCase()
+    if (!to) return null
+
+    const fromPending = !from || from.includes('pending')
+    if (!fromPending) return null
+
+    if (to.includes('approve') || to.includes('joined') || to.includes('accept')) return 'approved'
+    if (to.includes('reject') || to.includes('fail') || to.includes('declin') || to.includes('cancel')) return 'rejected'
+    return null
+  }, [])
+
+  const localOutcomeNotifications = useMemo<NotificationRow[]>(() => {
+    const out: NotificationRow[] = []
+
+    for (const h of historyRows) {
+      const kind = String(h.kind || '').toLowerCase()
+      if (kind !== 'court_booking' && kind !== 'event_booking' && kind !== 'session_booking') continue
+
+      const meta: any = h.meta || {}
+      const fromStatus = String(h.fromStatus ?? meta?.fromStatus ?? 'pending')
+      const toStatus = String(h.toStatus ?? meta?.status ?? meta?.bookingstatus ?? '')
+      const decision = getDecisionFromStatuses(fromStatus, toStatus)
+      if (!decision) continue
+
+      const category: NotificationCategory =
+        kind === 'court_booking' ? 'court' : kind === 'event_booking' ? 'event' : 'training'
+
+      const bookingId =
+        kind === 'court_booking'
+          ? Number(meta?.courtbookingid ?? meta?.id ?? NaN)
+          : kind === 'event_booking'
+            ? Number(meta?.eventbookingid ?? meta?.id ?? NaN)
+            : Number(meta?.tsbookingid ?? meta?.id ?? NaN)
+      const stableIdBase = Number.isFinite(bookingId)
+        ? bookingId
+        : Math.abs((h.id || '').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0))
+      const rowId = -1 * (stableIdBase * 10 + (decision === 'approved' ? 1 : 2))
+
+      const message =
+        category === 'court'
+          ? (decision === 'approved' ? 'Your court booking request was approved.' : 'Your court booking request was rejected.')
+          : category === 'event'
+            ? (decision === 'approved' ? 'Your event booking request was approved.' : 'Your event booking request was rejected.')
+            : (decision === 'approved' ? 'Your training session booking request was approved.' : 'Your training session booking request was rejected.')
+
+      out.push({
+        notificationid: rowId,
+        status: 'unread',
+        userid: typeof userId === 'number' ? userId : 0,
+        title: decision === 'approved' ? 'Booking request approved' : 'Booking request rejected',
+        message,
+        time: h.ts,
+        notificationtype: category === 'court' ? 'courtbooking' : category === 'event' ? 'eventbooking' : 'tsbooking',
+        notificationtypeid: Number.isFinite(bookingId) ? bookingId : null,
+        category,
+        kind: 'booking_outcome',
+        data: {
+          fromStatus,
+          toStatus,
+          source: 'history',
+        },
+      })
+    }
+
+    const seen = new Set<number>()
+    return out
+      .sort((a, b) => (parseNotificationDate(b.time)?.getTime() ?? 0) - (parseNotificationDate(a.time)?.getTime() ?? 0))
+      .filter((row) => {
+        if (seen.has(row.notificationid)) return false
+        seen.add(row.notificationid)
+        return true
+      })
+  }, [getDecisionFromStatuses, historyRows, userId])
+
   const sourceRows = useMemo(() => {
-    const base = Array.isArray(notifications) ? notifications : []
+    const baseRemote = Array.isArray(notifications) ? notifications : []
+    const base = [...baseRemote, ...localOutcomeNotifications]
     const filtered = categoryParam
       ? base.filter((row) => getRowCategory(row) === categoryParam)
       : base
@@ -78,7 +173,7 @@ export default function NotificationsPage() {
       const at = parseNotificationDate(a.time)?.getTime() ?? 0
       return bt - at
     })
-  }, [notifications, categoryParam, getRowCategory])
+  }, [notifications, localOutcomeNotifications, categoryParam, getRowCategory])
 
   useEffect(() => {
     setRows(sourceRows)
@@ -124,12 +219,14 @@ export default function NotificationsPage() {
     return ICONS.notifications
   }
 
-  const getBookingDecision = (row: NotificationRow): 'approved' | 'rejected' | null => {
+  const getBookingDecision = useCallback((row: NotificationRow): 'approved' | 'rejected' | null => {
+    const statusDecision = getDecisionFromStatuses((row as any)?.data?.fromStatus, (row as any)?.data?.toStatus)
+    if (statusDecision) return statusDecision
     const text = `${String(row.title || '')} ${String(row.message || '')} ${String(row.kind || '')}`.toLowerCase()
     if (text.includes('approved') || text.includes('successful') || text.includes('accepted')) return 'approved'
     if (text.includes('rejected') || text.includes('failed') || text.includes('declined')) return 'rejected'
     return null
-  }
+  }, [getDecisionFromStatuses])
 
   const getDisplayMessage = (row: NotificationRow) => {
     const decision = getBookingDecision(row)
