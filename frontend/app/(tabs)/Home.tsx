@@ -178,6 +178,42 @@ export default function Home() {
     return null
   }
 
+  const isUpcomingEvent = (ev: CombinedEvent) => {
+    const st = String((ev as any)?.status ?? '').toLowerCase().trim()
+    if (st.includes('cancel') || st.includes('complete') || st.includes('missed')) return false
+    if (st && !st.includes('upcoming')) return false
+
+    const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+    const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
+    const start = parseMaybeTimestamp(startRaw)
+    const end = parseMaybeTimestamp(endRaw)
+    const nowTs = Date.now()
+
+    if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
+    if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
+    return true
+  }
+
+  const getEventCoords = (ev: CombinedEvent) => {
+    const latRaw =
+      (ev as any)?.latitude ??
+      (ev as any)?.lat ??
+      (ev as any)?.court_latitude ??
+      (ev as any)?.courtinfo?.latitude ??
+      (ev as any)?.location?.latitude
+    const lonRaw =
+      (ev as any)?.longitude ??
+      (ev as any)?.lng ??
+      (ev as any)?.court_longitude ??
+      (ev as any)?.courtinfo?.longitude ??
+      (ev as any)?.location?.longitude
+
+    const lat = typeof latRaw === 'number' ? latRaw : Number(latRaw)
+    const lon = typeof lonRaw === 'number' ? lonRaw : Number(lonRaw)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+    return { lat, lon }
+  }
+
   const asStringArrayLoose = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
     if (typeof v !== 'string') return [];
@@ -236,20 +272,7 @@ export default function Home() {
     queryKey: ['home-nearby-events', userId, eventsCombined.length],
     enabled: !!userId && eventsCombined.length > 0,
     queryFn: async () => {
-      const upcoming = eventsCombined.filter((ev) => {
-        const st = String(ev?.status ?? '').toLowerCase()
-        if (st.includes('cancel') || st.includes('complete')) return false
-
-        const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
-        const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
-        const start = parseMaybeTimestamp(startRaw)
-        const end = parseMaybeTimestamp(endRaw)
-        const nowTs = Date.now()
-
-        if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
-        if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
-        return true
-      })
+      const upcoming = eventsCombined.filter(isUpcomingEvent)
 
       const perm = await Location.requestForegroundPermissionsAsync()
       if (!perm.granted) {
@@ -265,10 +288,9 @@ export default function Home() {
 
       const filtered = upcoming
         .filter((ev) => {
-          const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
-          const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false
-          return haversineKm(userLat as number, userLon as number, lat, lon) <= 20
+          const coords = getEventCoords(ev)
+          if (!coords) return false
+          return haversineKm(userLat as number, userLon as number, coords.lat, coords.lon) <= 50
         })
 
       return {
@@ -289,21 +311,8 @@ export default function Home() {
       : null
 
   const visibleNearbyEvents = React.useMemo(() => {
-    const nowTs = now.getTime()
-    return (Array.isArray(nearbyEvents) ? nearbyEvents : []).filter((ev) => {
-      const st = String(ev?.status ?? '').toLowerCase()
-      if (st.includes('cancel') || st.includes('complete')) return false
-
-      const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
-      const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
-      const start = parseMaybeTimestamp(startRaw)
-      const end = parseMaybeTimestamp(endRaw)
-
-      if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
-      if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
-      return true
-    })
-  }, [nearbyEvents, now])
+    return (Array.isArray(nearbyEvents) ? nearbyEvents : []).filter(isUpcomingEvent)
+  }, [nearbyEvents])
 
   const favoriteLocationsQuery = useQuery({
     queryKey: ['home-favorite-locations', userId, favouriteCourts.length],
@@ -761,10 +770,9 @@ export default function Home() {
                     `Event ${ev.eventid}`
                   const dateTimeLine = formatEventDateTimeLine(ev)
                   const origin = nearbyEventsOrigin
-                  const lat = typeof ev.latitude === 'number' ? ev.latitude : Number(ev.latitude)
-                  const lon = typeof ev.longitude === 'number' ? ev.longitude : Number(ev.longitude)
-                  const distanceKm = origin && Number.isFinite(lat) && Number.isFinite(lon)
-                    ? haversineKm(origin.latitude, origin.longitude, lat as number, lon as number)
+                  const coords = getEventCoords(ev)
+                  const distanceKm = origin && coords
+                    ? haversineKm(origin.latitude, origin.longitude, coords.lat, coords.lon)
                     : null
                   const distanceLabel = distanceKm != null ? formatKmLabel(distanceKm) : null
                   const approxDistanceLabel = distanceLabel ? `≈ ${distanceLabel}` : null

@@ -1510,7 +1510,7 @@
                   index={0} // closed by default
                   bottomInset={0}
                   enableContentPanningGesture
-                  enablePanDownToClose
+                  enablePanDownToClose={false}
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
                 >
