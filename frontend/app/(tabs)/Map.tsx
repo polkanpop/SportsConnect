@@ -1508,7 +1508,7 @@
                   ref={bottomSheetRef}
                   snapPoints={snapPoints}
                   index={0} // closed by default
-                  bottomInset={72}
+                  bottomInset={0}
                   enablePanDownToClose={false} // Keep BottomSheet always enabled
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}

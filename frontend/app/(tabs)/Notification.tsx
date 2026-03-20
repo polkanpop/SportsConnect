@@ -38,6 +38,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [deleteMode, setDeleteMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
@@ -84,7 +85,6 @@ export default function NotificationsPage() {
   }, [sourceRows])
 
   const loading = (dashboard.isLoading && rows.length === 0) || actionLoading || refreshing
-  const selectionMode = selectedIds.size > 0
 
   const handleRefresh = useCallback(async () => {
     setError(null)
@@ -184,8 +184,10 @@ export default function NotificationsPage() {
 
   const handleNotificationClick = async (row: NotificationRow) => {
     const id = row.notificationid
-
-    toggleSelection(id)
+    if (deleteMode) {
+      toggleSelection(id)
+      return
+    }
 
     if ((row.status || '').toLowerCase() !== 'unread') return
 
@@ -215,6 +217,16 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleNotificationLongPress = (row: NotificationRow) => {
+    setDeleteMode(true)
+    setSelectedIds(prev => {
+      if (prev.has(row.notificationid)) return prev
+      const next = new Set(prev)
+      next.add(row.notificationid)
+      return next
+    })
+  }
+
   const handleMarkAllRead = async () => {
     const unreadCount = rows.reduce((acc, r) => acc + ((r.status || '').toLowerCase() === 'unread' ? 1 : 0), 0)
     if (unreadCount === 0) return
@@ -241,6 +253,7 @@ export default function NotificationsPage() {
     try {
       await deleteNotifications(ids)
       setSelectedIds(new Set())
+      setDeleteMode(false)
     } catch (e: any) {
       setRows(prevRows)
       setError(e?.message || String(e))
@@ -254,10 +267,9 @@ export default function NotificationsPage() {
     setDeleteConfirmVisible(true)
   }
 
-  const onPressDeleteSingle = (notificationid: number) => {
-    if (actionLoading) return
-    setSelectedIds(new Set([notificationid]))
-    setDeleteConfirmVisible(true)
+  const exitDeleteMode = () => {
+    setDeleteMode(false)
+    setSelectedIds(new Set())
   }
 
   const renderItem = ({ item }: { item: NotificationRow }) => (
@@ -266,9 +278,10 @@ export default function NotificationsPage() {
         styles.notificationRow,
         (item.status || '').toLowerCase() !== "unread" && styles.viewedNotification,
         updating === item.notificationid && styles.updatingRow,
-        selectedIds.has(item.notificationid) && styles.selectedNotification,
+        deleteMode && selectedIds.has(item.notificationid) && styles.selectedNotification,
       ]}
       onPress={() => handleNotificationClick(item)}
+      onLongPress={() => handleNotificationLongPress(item)}
       activeOpacity={0.85}
     >
       <Image source={getIconFor(item)} style={styles.notificationIcon} />
@@ -279,28 +292,8 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={selectedIds.has(item.notificationid) ? undefined : 2}>{item.message}</Text>
+        <Text style={styles.notificationMessage} numberOfLines={deleteMode && selectedIds.has(item.notificationid) ? undefined : 2}>{item.message}</Text>
       </View>
-      {selectedIds.has(item.notificationid) && (
-        <View style={styles.selectedActionsRow}>
-          <TouchableOpacity
-            style={styles.deleteWrap}
-            onPress={() => toggleSelection(item.notificationid)}
-            activeOpacity={0.85}
-            disabled={actionLoading}
-          >
-            <Image source={ICONS.closeMenu} style={styles.closeIcon} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.deleteWrap}
-            onPress={() => onPressDeleteSingle(item.notificationid)}
-            activeOpacity={0.85}
-            disabled={actionLoading}
-          >
-            <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
-          </TouchableOpacity>
-        </View>
-      )}
     </TouchableOpacity>
   );
 
@@ -368,15 +361,15 @@ export default function NotificationsPage() {
             <Text style={styles.sectionHeaderText}>{section.title}</Text>
             {section.title === 'Today' ? (
               <View style={styles.todayActionsRow}>
-                {selectionMode ? (
+                {deleteMode ? (
                   <>
                     <TouchableOpacity
-                      style={styles.deleteWrap}
-                      onPress={() => setSelectedIds(new Set())}
+                      style={styles.doneWrap}
+                      onPress={exitDeleteMode}
                       activeOpacity={0.85}
                       disabled={actionLoading}
                     >
-                      <Image source={ICONS.closeMenu} style={styles.closeIcon} />
+                      <Text style={styles.doneText}>Done</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteWrap}
@@ -606,6 +599,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.neutral0,
   },
+  doneWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 30,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: COLORS.neutral350,
+    borderRadius: 8,
+    backgroundColor: COLORS.neutral0,
+  },
+  doneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.neutral900,
+  },
   deleteIcon: {
     width: 18,
     height: 18,
@@ -663,12 +671,6 @@ const styles = StyleSheet.create({
     color: COLORS.neutral800,
     marginTop: 4,
     paddingRight: 2,
-  },
-  selectedActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginLeft: 10,
   },
   notificationTime: {
     fontSize: 14,

@@ -127,17 +127,18 @@ const deriveBookingActionState = (
 ): { reviewEnabled: boolean; cancelEnabled: boolean } => {
   const bs = String(bookingStatusRaw ?? '').trim().toLowerCase()
   const ss = String(sessionStatusRaw ?? '').trim().toLowerCase()
+  const combined = `${bs} ${ss}`
 
-  if (bs === 'rejected' || bs.includes('cancel') || ss.includes('cancel')) {
+  if (bs === 'rejected' || combined.includes('cancel')) {
     return { reviewEnabled: false, cancelEnabled: false }
   }
-  if (ss === 'missed') {
+  if (combined.includes('missed')) {
     return { reviewEnabled: false, cancelEnabled: false }
   }
-  if (ss === 'completed' || ss === 'complete') {
+  if (combined.includes('complete')) {
     return { reviewEnabled: true, cancelEnabled: false }
   }
-  if (ss === 'upcoming') {
+  if (combined.includes('upcoming')) {
     return { reviewEnabled: false, cancelEnabled: true }
   }
 
@@ -179,8 +180,6 @@ const resolveVenueNameOnly = (row: any): string | null => {
     (firstAvailability as any)?.venue,
     (firstBooking as any)?.venue?.name,
     (firstBooking as any)?.venue,
-    (row as any)?.court_name,
-    (row as any)?.courtName,
   )
 }
 

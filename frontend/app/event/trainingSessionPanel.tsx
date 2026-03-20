@@ -487,8 +487,27 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'pending' }),
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'joined' }),
         ])
+        const toMillis = (v: any): number | null => {
+          if (typeof v !== 'string') return null
+          const s = v.trim()
+          if (!s) return null
+          const d = new Date(s)
+          return Number.isFinite(d.getTime()) ? d.getTime() : null
+        }
+        const meta = sessions.find((s) => s.sessionid === sessionId)
+        const scopeStart = toMillis((meta as any)?.time ?? (meta as any)?.start_timestamp ?? null)
+        const scopeEnd = toMillis((meta as any)?.end_timestamp ?? null)
+        const inScope = (row: TrainingSessionBookingRow) => {
+          if (Number((row as any)?.sessionid) !== Number(sessionId)) return false
+          const rowStart = toMillis((row as any)?.time ?? (row as any)?.start_timestamp ?? null)
+          const rowEnd = toMillis((row as any)?.end_timestamp ?? null)
+          if (scopeStart != null && rowStart != null && rowStart !== scopeStart) return false
+          if (scopeEnd != null && rowEnd != null && rowEnd !== scopeEnd) return false
+          return true
+        }
         const dedupeByUser = (rows: TrainingSessionBookingRow[]) => {
-          const sorted = [...rows].sort((a, b) => Number(b.tsbookingid || 0) - Number(a.tsbookingid || 0))
+          const scoped = rows.filter(inScope)
+          const sorted = [...scoped].sort((a, b) => Number(b.tsbookingid || 0) - Number(a.tsbookingid || 0))
           const seen = new Set<number>()
           const out: TrainingSessionBookingRow[] = []
           for (const row of sorted) {
@@ -521,7 +540,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setBookingsLoading(false)
       }
     },
-    [enrichBookings],
+    [enrichBookings, sessions],
   )
 
   const loadBlockedForTarget = useCallback(

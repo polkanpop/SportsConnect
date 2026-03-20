@@ -489,8 +489,27 @@ export default function EventPanel({ organizerId }: Props) {
 					getEventBookingsByEventId(eventid, { status: "pending" }),
 					getEventBookingsByEventId(eventid, { status: "joined" }),
 				]);
+				const toMillis = (v: any): number | null => {
+					if (typeof v !== 'string') return null;
+					const s = v.trim();
+					if (!s) return null;
+					const d = parseTimestampLoose(s);
+					return d && Number.isFinite(d.getTime()) ? d.getTime() : null;
+				};
+				const meta = hostEvents.find((e) => e.eventid === eventid);
+				const scopeStart = toMillis((meta as any)?.start_timestamp ?? (meta as any)?.time ?? null);
+				const scopeEnd = toMillis((meta as any)?.end_timestamp ?? null);
+				const inScope = (row: EventBookingRow) => {
+					if (Number((row as any)?.eventid) !== Number(eventid)) return false;
+					const rowStart = toMillis((row as any)?.start_timestamp ?? (row as any)?.time ?? null);
+					const rowEnd = toMillis((row as any)?.end_timestamp ?? null);
+					if (scopeStart != null && rowStart != null && rowStart !== scopeStart) return false;
+					if (scopeEnd != null && rowEnd != null && rowEnd !== scopeEnd) return false;
+					return true;
+				};
 				const dedupeByUser = (rows: EventBookingRow[]) => {
-					const sorted = [...rows].sort((a, b) => Number(b.eventbookingid || 0) - Number(a.eventbookingid || 0));
+					const scoped = rows.filter(inScope);
+					const sorted = [...scoped].sort((a, b) => Number(b.eventbookingid || 0) - Number(a.eventbookingid || 0));
 					const seen = new Set<number>();
 					const out: EventBookingRow[] = [];
 					for (const row of sorted) {
@@ -501,7 +520,6 @@ export default function EventPanel({ organizerId }: Props) {
 					}
 					return out;
 				};
-				const meta = hostEvents.find((e) => e.eventid === eventid);
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
 					enrichBookings(meta, dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
 					enrichBookings(meta, dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
