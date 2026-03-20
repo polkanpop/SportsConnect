@@ -142,13 +142,6 @@ export default function LoginScreen() {
           <AppleSignInButton />
         </View>
 
-        <TouchableOpacity onPress={async () => {
-          const { error } = await supabase.auth.signInAnonymously();
-          if (!error) router.replace('/(tabs)/Home');
-        }}>
-          <Text style={styles.quickAccessText}>Quick Access to Home</Text>
-        </TouchableOpacity>
-
         <View style={styles.signupRow}>
           <Text style={styles.textDark}>Don&apos;t have an account?</Text>
           <Link href="/(auth)/signup"><Text style={styles.signUpLink}>Sign up</Text></Link>

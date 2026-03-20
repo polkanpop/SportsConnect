@@ -668,11 +668,8 @@ export default function HistoryPage() {
           const showDate = !prev || formatDateHeader(prev.ts) !== formatDateHeader(item.ts)
           const statusRaw = item.toStatus || item.fromStatus || ''
           const isJoin = (item.kind === 'event_booking' || item.kind === 'session_booking') && /^joined\b/i.test(String(item.title || ''))
-          const statusLabel = isJoin ? 'Joined' : formatStatusLabel(statusRaw)
-          const statusColors = isJoin ? statusColor('approved') : statusColor(statusRaw)
           const schedule = formatScheduleParts(item)
           const badges = kindBadges(item.kind)
-          const statusIsDuplicate = !!statusLabel && badges.some((b) => b.toLowerCase() === statusLabel.toLowerCase())
 
           const meta: any = item.meta || {}
           const titleAndVenue = (() => {
@@ -773,11 +770,35 @@ export default function HistoryPage() {
           })()
 
           const resolvedSchedule = schedule ?? formatScheduleFromTimes(titleAndVenue.startRaw, titleAndVenue.endRaw)
+          const resolvedStart = parseLoose(titleAndVenue.startRaw)
+
+          const displayStatusLabel = (() => {
+            const bookingStatus = String(meta?.status ?? item.fromStatus ?? '').trim().toLowerCase()
+            const sessionStatus = String(meta?.bookingstatus ?? item.toStatus ?? '').trim().toLowerCase()
+            const isPast = !Number.isNaN(resolvedStart.getTime()) && resolvedStart.getTime() < Date.now()
+
+            if (sessionStatus === 'missed' || statusRaw.toLowerCase() === 'missed') return 'Missed'
+            if (isPast && bookingStatus === 'pending' && (sessionStatus === 'upcoming' || sessionStatus === 'missed' || !sessionStatus)) {
+              return 'Missed'
+            }
+            if (isJoin) return 'Joined'
+            return formatStatusLabel(statusRaw)
+          })()
+
+          const statusColors = displayStatusLabel === 'Joined' ? statusColor('approved') : statusColor(displayStatusLabel)
+          const statusIsDuplicate = !!displayStatusLabel && badges.some((b) => b.toLowerCase() === displayStatusLabel.toLowerCase())
 
           const subtitleRaw = !isNoisySubtitle(item.subtitle ?? null) ? stripAddMe(String(item.subtitle)) : ''
           const subtitleText = subtitleRaw && !(resolvedSchedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
           const venueSubtitle = titleAndVenue.venue ? `Venue: ${titleAndVenue.venue}` : null
-          const displaySubtitle = subtitleText || venueSubtitle
+          const missedSubtitle = displayStatusLabel === 'Missed'
+            ? (item.kind === 'event_booking'
+              ? 'You missed this event'
+              : item.kind === 'session_booking'
+                ? 'You missed this session'
+                : 'You missed this booking')
+            : null
+          const displaySubtitle = missedSubtitle || subtitleText || venueSubtitle
 
           const paymentMethod = (() => {
             if (item.kind === 'event_booking' && typeof meta.eventbookingid === 'number') {
@@ -860,9 +881,9 @@ export default function HistoryPage() {
                         )
                       })}
 
-                      {!!statusLabel && !statusIsDuplicate && (
+                      {!!displayStatusLabel && !statusIsDuplicate && (
                         <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
-                          <Text style={[styles.statusBadgeText, { color: statusColors.fg }]}>{statusLabel}</Text>
+                          <Text style={[styles.statusBadgeText, { color: statusColors.fg }]}>{displayStatusLabel}</Text>
                         </View>
                       )}
                     </View>

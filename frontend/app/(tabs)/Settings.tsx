@@ -134,9 +134,8 @@ export default function SettingsPage() {
 
         {/* Section One */}
         <View style={styles.card}>
-          <SettingRow icon={ICONS.user} label="Account" onPress={() => router.push('/event/userAccountSetting')} />
+          <SettingRow icon={ICONS.user} label="Account" disabled />
           <SettingRow icon={ICONS.notifications} label="Notification" />
-          <SettingRow icon={ICONS.lock} label="Data and Privacy" />
           <SettingRow icon={ICONS.settingCourt} label="Court Register" onPress={() => router.push('/event/courtRegister')} />
         </View>
 
@@ -194,12 +193,19 @@ const SettingRow = ({
   icon,
   label,
   onPress,
+  disabled,
 }: {
   icon: any;
   label: string;
   onPress?: () => void;
+  disabled?: boolean;
 }) => (
-  <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={onPress}>
+  <TouchableOpacity
+    activeOpacity={disabled ? 1 : 0.7}
+    style={[styles.row, disabled && styles.rowDisabled]}
+    onPress={disabled ? undefined : onPress}
+    disabled={!!disabled}
+  >
     <View style={styles.rowLeft}>
       <Image source={icon} style={styles.rowIcon} />
       <Text style={styles.rowText}>{label}</Text>
@@ -278,6 +284,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#E6E6E6",
+  },
+  rowDisabled: {
+    opacity: 0.55,
   },
   rowLeft: {
     flexDirection: "row",

@@ -1126,7 +1126,7 @@
           <SafeAreaView style={styles.container}>
             <View style={{ flex: 1 }}>
                 <View style={styles.otaProofBanner}>
-                  <Text style={styles.otaProofText}>OTA WORKING - v15</Text>
+                  <Text style={styles.otaProofText}>OTA WORKING - v16</Text>
                   <Text style={styles.otaProofSubText}>Markers: {markers.length}</Text>
                 </View>
                 {/* Map View (render first so overlays appear above on Android) */}
@@ -2269,15 +2269,15 @@
       marginTop: -56,
       backgroundColor: COLORS.white,
       borderRadius: 16,
-      paddingTop: 10,
-      paddingBottom: 10,
+      paddingTop: 8,
+      paddingBottom: 6,
       paddingHorizontal: 10,
       shadowColor: '#000',
       shadowOpacity: 0.08,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 3 },
       elevation: 2,
-      marginBottom: 8,
+      marginBottom: 14,
       zIndex: 6,
     },
     sheetCoverImage: {
@@ -2299,7 +2299,7 @@
       marginRight: 10,
     },
     sheetCoverAddress: {
-      marginTop: 8,
+      marginTop: 6,
       fontSize: 14,
       fontWeight: '600',
       color: COLORS.neutral850,
@@ -2537,7 +2537,7 @@
       flexDirection: 'row',
       flexWrap: 'wrap',
       marginTop: 4,
-      marginBottom: 14,
+      marginBottom: 4,
     },
     sheetTag: {
       backgroundColor: '#333',
