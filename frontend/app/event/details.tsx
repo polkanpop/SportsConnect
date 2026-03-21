@@ -1665,10 +1665,31 @@ export default function DetailsPage() {
             const b = courtBookingQuery.data
             const start = parseTimestampLoose(b.start_timestamp)
             const end = parseTimestampLoose(b.end_timestamp)
+            const _approvalStatus = String((b as any)?.status ?? '').toLowerCase()
+            const _lifecycleStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+            const _courtBadges: Array<{ label: string; bg: string; fg: string }> = (() => {
+              if (_approvalStatus === 'pending') return [{ label: 'Pending', bg: '#92400E', fg: '#FEF3C7' }]
+              if (_approvalStatus === 'rejected') return [{ label: 'Rejected', bg: '#991B1B', fg: '#FEE2E2' }]
+              if (_approvalStatus === 'approved') {
+                if (_lifecycleStatus === 'cancelled') return []
+                if (_lifecycleStatus === 'completed') return [{ label: 'Approved', bg: '#166534', fg: '#DCFCE7' }, { label: 'Completed', bg: '#374151', fg: '#F3F4F6' }]
+                return [{ label: 'Approved', bg: '#166534', fg: '#DCFCE7' }, { label: 'Upcoming', bg: '#1E40AF', fg: '#DBEAFE' }]
+              }
+              return []
+            })()
             return (
               <>
+                {_courtBadges.length > 0 && (
+                  <View style={styles.badgeRow}>
+                    {_courtBadges.map(badge => (
+                      <View key={badge.label} style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <Section title="Booking">
-                  <Row label="Booking Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
+                  <Row label="Booking Status" value={formatStatusTitleCase(b.status || b.bookingstatus)} />
                   <Row label="Court Name" value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || '—'} />
                   <Row label="Address" value={courtBookingCourt?.address || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1687,8 +1708,28 @@ export default function DetailsPage() {
             const evMeta = eventBookingInfoQuery.data
             const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null)
             const end = parseTimestampLoose(ev?.end_timestamp ?? null)
+            const _evBookingStatus = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
+            const _evSessionStatus = String(ev?.status ?? '').toLowerCase()
+            const _evBadges: Array<{ label: string; bg: string; fg: string }> = (() => {
+              if (_evBookingStatus === 'pending') return [{ label: 'Pending', bg: '#92400E', fg: '#FEF3C7' }]
+              if (_evBookingStatus === 'cancelled') return []
+              if (_evBookingStatus === 'joined') {
+                if (_evSessionStatus.includes('completed')) return [{ label: 'Joined', bg: '#166534', fg: '#DCFCE7' }, { label: 'Completed', bg: '#374151', fg: '#F3F4F6' }]
+                return [{ label: 'Joined', bg: '#166534', fg: '#DCFCE7' }, { label: 'Upcoming', bg: '#1E40AF', fg: '#DBEAFE' }]
+              }
+              return []
+            })()
             return (
               <>
+                {_evBadges.length > 0 && (
+                  <View style={styles.badgeRow}>
+                    {_evBadges.map(badge => (
+                      <View key={badge.label} style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <Section title="Event">
                   <Row label="Title" value={resolveTitle({ ...(ev || {}), eventinfo: evMeta ? [evMeta] : [] }, 'Event')} />
                   <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
@@ -1710,8 +1751,28 @@ export default function DetailsPage() {
             const sMeta = sessionBookingInfoQuery.data
             const start = parseTimestampLoose(s?.start_timestamp ?? s?.time ?? null)
             const end = parseTimestampLoose(s?.end_timestamp ?? null)
+            const _tsBookingStatus = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
+            const _tsSessionStatus = String(s?.status ?? '').toLowerCase()
+            const _tsBadges: Array<{ label: string; bg: string; fg: string }> = (() => {
+              if (_tsBookingStatus === 'pending') return [{ label: 'Pending', bg: '#92400E', fg: '#FEF3C7' }]
+              if (_tsBookingStatus === 'cancelled') return []
+              if (_tsBookingStatus === 'joined') {
+                if (_tsSessionStatus.includes('completed')) return [{ label: 'Joined', bg: '#166534', fg: '#DCFCE7' }, { label: 'Completed', bg: '#374151', fg: '#F3F4F6' }]
+                return [{ label: 'Joined', bg: '#166534', fg: '#DCFCE7' }, { label: 'Upcoming', bg: '#1E40AF', fg: '#DBEAFE' }]
+              }
+              return []
+            })()
             return (
               <>
+                {_tsBadges.length > 0 && (
+                  <View style={styles.badgeRow}>
+                    {_tsBadges.map(badge => (
+                      <View key={badge.label} style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <Section title="Training Session">
                   <Row label="Title" value={resolveTitle({ ...(s || {}), trainingsessioninfo: sMeta ? [sMeta] : [] }, 'Training Session')} />
                   <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
@@ -1938,6 +1999,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontSize: 12,
     fontWeight: '600',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   reviewBtn: {
     backgroundColor: '#2563EB',

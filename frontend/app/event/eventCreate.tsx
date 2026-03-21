@@ -98,11 +98,13 @@ export default function EventCreateScreen() {
     } else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') {
       base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
     }
-    // Show usable (upcoming) bookings + pending bookings (auto_approve=false courts awaiting approval).
+    // Show usable bookings: approved/pending approval (upcoming lifecycle), exclude rejected/cancelled/completed.
     const isUsable = (b: CourtBookingRow) => {
-      const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
-      if (s.includes('cancel') || s.includes('complete') || s.includes('reject')) return false
-      return s.includes('upcoming') || s.includes('active') || s.includes('scheduled') || s.includes('pending') || !s
+      const approvalStatus = String((b as any)?.status ?? '').toLowerCase()
+      const lifecycleStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+      if (approvalStatus === 'rejected') return false
+      if (lifecycleStatus === 'cancelled' || lifecycleStatus === 'completed' || lifecycleStatus === 'missed') return false
+      return true
     }
     const active = base.filter(isUsable)
 
@@ -647,8 +649,8 @@ export default function EventCreateScreen() {
   const renderBookingItem = ({ item }: { item: EnrichedBooking }) => {
     const isEvent = usedEventBookingIds.has(item.courtbookingid)
     const isTraining = usedSessionBookingIds.has(item.courtbookingid)
-    const bStatus = String((item as any)?.bookingstatus ?? (item as any)?.status ?? '').toLowerCase()
-    const isPending = bStatus.includes('pending') && !bStatus.includes('upcoming') && !bStatus.includes('active')
+    const bStatus = String((item as any)?.status ?? '').toLowerCase()
+    const isPending = bStatus === 'pending'
     const disabled = isEvent || isTraining || isPending
     const tag = isEvent ? 'Event' : (isTraining ? 'Training' : (isPending ? 'Pending' : null))
     return (
