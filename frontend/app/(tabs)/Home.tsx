@@ -1,7 +1,7 @@
 
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Image as ExpoImage } from 'expo-image'
 import * as Location from 'expo-location'
@@ -27,6 +27,7 @@ import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
   const router = useRouter();
+  const { panel: panelParam } = useLocalSearchParams<{ panel?: string }>();
 
   const [activeView, setActiveView] = useState<ManagementPanelKey>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
@@ -47,6 +48,14 @@ export default function Home() {
       if (finished) setMenuVisible(false);
     });
   };
+
+  // Deep-link receiver: Notification tab can push panel=court to open court management directly.
+  useEffect(() => {
+    if (panelParam === 'court') {
+      setActiveView('court');
+      setManagementPanelExpanded(true);
+    }
+  }, [panelParam]);
 
   // Time logic
   const [now, setNow] = useState(new Date());
@@ -202,7 +211,10 @@ export default function Home() {
       ''
     ).toLowerCase().trim()
     if (st.includes('cancel') || st.includes('complete') || st.includes('missed')) return false
-    const startRaw = String((ev as any)?.start_timestamp ?? (ev as any)?.time ?? '').trim()
+    // Only filter by time if we have a reliable start_timestamp resolved from the court booking.
+    // Falling back to ev.time (the raw events.time column) is unsafe — it often holds a stale
+    // creation date for test data, causing every event whose booking wasn't fetched to disappear.
+    const startRaw = String((ev as any)?.start_timestamp ?? '').trim()
     const endRaw = String((ev as any)?.end_timestamp ?? '').trim()
     const start = parseMaybeTimestamp(startRaw)
     const end = parseMaybeTimestamp(endRaw)

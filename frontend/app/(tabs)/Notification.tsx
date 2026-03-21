@@ -420,7 +420,20 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={deleteMode && selectedIds.has(item.notificationid) ? undefined : 2}>{getDisplayMessage(item)}</Text>
+        <Text style={styles.notificationMessage} numberOfLines={
+          (deleteMode && selectedIds.has(item.notificationid))
+            ? undefined
+            : (item.status || '').toLowerCase() === 'unread'
+              ? 1
+              : undefined
+        }>{getDisplayMessage(item)}</Text>
+        {(item.kind || '').toLowerCase() === 'incoming_booking' && (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court' } })}
+          >
+            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>navigate →</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );

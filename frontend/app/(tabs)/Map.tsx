@@ -811,11 +811,13 @@
     // Handle marker when pressed
     const handleMarkerPress = async (marker: MarkerType) => {
       setSelectedMarker(marker);
-    // Favorite state derived from favoriteIds
-    setIsFavorite(favoriteIds.includes(marker.courtid));
+      // Favorite state derived from favoriteIds
+      setIsFavorite(favoriteIds.includes(marker.courtid));
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      // open bottom sheet
-      bottomSheetRef.current?.snapToIndex(0);
+      // Defer the sheet open until after React commits the state update.
+      // Without this, the sheet either shows stale content (marker A while B is selected)
+      // or is a no-op when already at index 0 (switching between markers).
+      requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0));
     };
 
     const handleOpenGoogleMaps = useCallback(async () => {
@@ -852,7 +854,7 @@
       setSelectedMarker(marker); // Set the selected marker
       setFlatListVisible(false); // Hide the FlatList
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      bottomSheetRef.current?.snapToIndex(0); // Open BottomSheet
+      requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0)); // Open BottomSheet after state commits
     };
 
     // Update bottom sheet index on change

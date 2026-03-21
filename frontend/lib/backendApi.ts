@@ -1938,10 +1938,10 @@ function normalizeStringArrayLoose(v: unknown): string[] {
 export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
 	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
-		request('/events', { debugLabel: 'listEvents' }),
-		request('/eventinfo', { debugLabel: 'listEventInfoAll' }),
-		safeGet('/courtbookings', 'listCourtBookingsAll'),
-		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		request('/events?limit=200', { debugLabel: 'listEvents' }),
+		request('/eventinfo?limit=500', { debugLabel: 'listEventInfoAll' }),
+		safeGet('/courtbookings?limit=200', 'listCourtBookingsAll'),
+		safeGet('/courtavailability?limit=500', 'listCourtAvailabilityAll'),
 	])
 
 	if (!Array.isArray(eventsData)) return []
