@@ -98,13 +98,13 @@ export default function EventCreateScreen() {
     } else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') {
       base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
     }
-    // Only show usable (upcoming) bookings; cancelled/completed bookings can stack visually after cancel/rebook.
-    const isUpcoming = (b: CourtBookingRow) => {
+    // Show usable (upcoming) bookings + pending bookings (auto_approve=false courts awaiting approval).
+    const isUsable = (b: CourtBookingRow) => {
       const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
-      if (s.includes('cancel') || s.includes('complete')) return false
-      return s.includes('upcoming') || s.includes('active') || s.includes('scheduled')
+      if (s.includes('cancel') || s.includes('complete') || s.includes('reject')) return false
+      return s.includes('upcoming') || s.includes('active') || s.includes('scheduled') || s.includes('pending') || !s
     }
-    const active = base.filter(isUpcoming)
+    const active = base.filter(isUsable)
 
     // Ensure uniqueness for Venue & Court list by exact booking identity + slot signature.
     const map = new Map<string, CourtBookingRow>()
@@ -647,8 +647,10 @@ export default function EventCreateScreen() {
   const renderBookingItem = ({ item }: { item: EnrichedBooking }) => {
     const isEvent = usedEventBookingIds.has(item.courtbookingid)
     const isTraining = usedSessionBookingIds.has(item.courtbookingid)
-    const disabled = isEvent || isTraining
-    const tag = isEvent ? 'Event' : (isTraining ? 'Training' : null)
+    const bStatus = String((item as any)?.bookingstatus ?? (item as any)?.status ?? '').toLowerCase()
+    const isPending = bStatus.includes('pending') && !bStatus.includes('upcoming') && !bStatus.includes('active')
+    const disabled = isEvent || isTraining || isPending
+    const tag = isEvent ? 'Event' : (isTraining ? 'Training' : (isPending ? 'Not verified' : null))
     return (
       <TouchableOpacity
         style={[styles.bookingItem, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
@@ -658,7 +660,7 @@ export default function EventCreateScreen() {
         <View style={{ flex: 1 }}>
           <View style={styles.bookingTitleRow}>
             <Text style={styles.bookingTitle} numberOfLines={1}>{item.courtName || `Booking ${item.courtbookingid}`}</Text>
-            {tag && <View style={[styles.bookingTag, isEvent ? styles.bookingTagEvent : styles.bookingTagTraining]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
+            {tag && <View style={[styles.bookingTag, isEvent ? styles.bookingTagEvent : (isTraining ? styles.bookingTagTraining : styles.bookingTagPending)]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
           </View>
           {item.address && <Text style={styles.bookingMeta} numberOfLines={1}>{item.address}</Text>}
           <Text style={styles.bookingMeta}>{formatRange(item.start_timestamp as any, item.end_timestamp as any)}</Text>
@@ -1010,6 +1012,7 @@ const styles = StyleSheet.create({
   bookingTag: { marginLeft:6, backgroundColor:'#444', paddingHorizontal:6, paddingVertical:2, borderRadius:8 },
   bookingTagEvent: { backgroundColor:'#ff6b3b' },
   bookingTagTraining: { backgroundColor:'#6a5acd' },
+  bookingTagPending: { backgroundColor:'#b45309' },
   bookingTagText: { color:'#fff', fontSize:12, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },

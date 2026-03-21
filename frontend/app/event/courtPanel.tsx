@@ -1796,8 +1796,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
               })
               const bookingParticipants = pcBookings.filter((b) => {
                 const s = String(b.status ?? '').toLowerCase()
-                const bs = String(b.bookingstatus ?? '').toLowerCase()
-                return s === 'approved' || s === 'joined' || bs === 'upcoming'
+                return s === 'approved' || s === 'joined'
               })
               const dedupedBookingParticipants = (() => {
                 const seen = new Set<number>()
@@ -1811,11 +1810,6 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 }
                 return out
               })()
-              const bookingBlocked = pcBookings.filter((b) => {
-                const s = String(b.status ?? '').toLowerCase()
-                const bs = String(b.bookingstatus ?? '').toLowerCase()
-                return s.includes('reject') || bs.includes('cancel')
-              })
               const dateBookings = bookingSelectedDate ? pcBookings.filter((b) => (typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) === bookingSelectedDate) : []
 
               const renderBookingRow = (b: CourtBookingRow, showActions: boolean) => {
@@ -2012,11 +2006,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Administrator List</Text>
                   <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No administrators yet.</Text></View>
 
-                  {/* Block List */}
-                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Block List</Text>
-                  {bookingBlocked.length === 0 ? (
-                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No blocked bookings.</Text></View>
-                  ) : bookingBlocked.map((b) => renderBookingRow(b, false))}
+
                 </>
               )
             })()

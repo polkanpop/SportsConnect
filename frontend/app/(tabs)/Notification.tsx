@@ -45,6 +45,13 @@ export default function NotificationsPage() {
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
 
+  const categoryParam: NotificationCategory | undefined = useMemo(() => {
+    if (selectedCategory === 'Court') return 'court'
+    if (selectedCategory === 'Event') return 'event'
+    if (selectedCategory === 'Training') return 'training'
+    return undefined
+  }, [selectedCategory])
+
   // Silently refresh notifications whenever the tab is focused (at most once per 30 s)
   const lastSilentRefreshRef = useRef<number>(0);
   useFocusEffect(
@@ -64,13 +71,6 @@ export default function NotificationsPage() {
         .catch(() => { /* silent — user can pull-to-refresh if needed */ });
     }, [categoryParam])
   );
-
-  const categoryParam: NotificationCategory | undefined = useMemo(() => {
-    if (selectedCategory === 'Court') return 'court'
-    if (selectedCategory === 'Event') return 'event'
-    if (selectedCategory === 'Training') return 'training'
-    return undefined
-  }, [selectedCategory])
 
   const typeToCategory = useCallback((type: string): NotificationCategory | null => {
     switch (type) {
@@ -451,7 +451,9 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={1}>{item.title ? '\u200b' : ''}</Text>
+        {(item.kind || '').toLowerCase() !== 'incoming_booking' && (
+          <Text style={styles.notificationMessage} numberOfLines={1}>{item.title ? '\u200b' : ''}</Text>
+        )}
         {expandedIds.has(item.notificationid) && (
           <Text style={styles.notificationMessage}>{getDisplayMessage(item)}</Text>
         )}
