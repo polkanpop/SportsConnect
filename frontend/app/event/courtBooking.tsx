@@ -648,15 +648,16 @@ export default function CourtBooking() {
 
           void appendHistory(userId, {
             kind: 'court_booking',
-            title: `Booked court: ${courtTitle}`,
+            title: `Booked venue: ${courtTitle}`,
             subtitle: null,
-            fromStatus: 'pending',
-            toStatus: String(data.booking?.status ?? data.booking?.bookingstatus ?? 'approved'),
+            fromStatus: null,
+            toStatus: 'pending',
             meta: {
               courtbookingid: data.booking?.courtbookingid,
               availabilityid: availability.availabilityid,
               start_timestamp: startTs,
               end_timestamp: endTs,
+              venue_name: courtInfo?.name ?? null,
             },
           })
         }

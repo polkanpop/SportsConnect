@@ -501,10 +501,45 @@ export default function HistoryPage() {
         return entry
       })
 
-      if (changed) {
-        void setHistory(userId, enriched)
+      // Inject resolution entries: for pending court_booking entries whose live status
+      // is now approved or rejected, create a separate timeline card (written once).
+      const existingIdSet = new Set(enriched.map(e => e.id))
+      const resolutionEntries: HistoryEntry[] = []
+      for (const entry of enriched) {
+        if (entry.kind !== 'court_booking') continue
+        const storedTo = String(entry.toStatus ?? '').trim().toLowerCase()
+        if (storedTo !== 'pending') continue
+        const meta: any = entry.meta || {}
+        const cbId = meta.courtbookingid
+        if (typeof cbId !== 'number') continue
+        const cb = courtBookingById.get(cbId)
+        if (!cb) continue
+        const liveApproval = String(cb?.status ?? '').trim().toLowerCase()
+        if (liveApproval !== 'approved' && liveApproval !== 'rejected') continue
+        const resId = `${entry.id}-resolution`
+        if (existingIdSet.has(resId)) continue
+        const approvalTs = cb?.updated_at ? toIsoOrNow(cb.updated_at) : new Date().toISOString()
+        resolutionEntries.push({
+          id: resId,
+          ts: approvalTs,
+          kind: 'court_booking',
+          title: entry.title,
+          subtitle: null,
+          fromStatus: 'pending',
+          toStatus: liveApproval,
+          meta: { ...meta },
+        })
+        changed = true
       }
-      return enriched
+
+      const finalEntries = resolutionEntries.length > 0
+        ? [...enriched, ...resolutionEntries].sort((a, b) => +new Date(b.ts) - +new Date(a.ts))
+        : enriched
+
+      if (changed) {
+        void setHistory(userId, finalEntries)
+      }
+      return finalEntries
     } catch {
       return rows
     }
@@ -751,8 +786,9 @@ export default function HistoryPage() {
               endRaw = endRaw ?? sb?.end_timestamp ?? sbSession?.end_timestamp ?? sess?.end_timestamp ?? null
             } else if (item.kind === 'court_booking') {
               const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
-              const courtName = firstNonEmptyText(cb?.court_name, cb?.courtName, meta?.court_name, meta?.courtName)
-              title = courtName ? `Booked court: ${courtName}` : (cleanTitle || 'Booked court')
+              // Prefer stored venue_name, then live court_name from dashboard
+              const venueName = firstNonEmptyText(meta?.venue_name, cb?.court_name, cb?.courtName, meta?.court_name, meta?.courtName)
+              title = venueName ? `Booked venue: ${venueName}` : (cleanTitle || 'Booked venue')
               venue = firstNonEmptyText(cb?.address)
               startRaw = startRaw ?? cb?.start_timestamp ?? null
               endRaw = endRaw ?? cb?.end_timestamp ?? null
@@ -785,24 +821,20 @@ export default function HistoryPage() {
             const sessionStatus = String(meta?.bookingstatus ?? item.toStatus ?? '').trim().toLowerCase()
             const isPast = !Number.isNaN(resolvedStart.getTime()) && resolvedStart.getTime() < Date.now()
 
-            // Court bookings: use live dashboard approval + lifecycle status
+            // Court bookings: use stored toStatus only — live data is no longer used here.
+            // Resolution entries (fromStatus=pending, toStatus=approved/rejected) carry the final state.
             if (item.kind === 'court_booking') {
-              const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
-              const liveApproval = String(cb?.status ?? '').trim().toLowerCase()
-              const liveLifecycle = String(cb?.bookingstatus ?? '').trim().toLowerCase()
-              if (liveApproval === 'rejected') return 'Rejected'
-              if (liveApproval === 'approved') {
+              const storedTo = String(item.toStatus ?? '').trim().toLowerCase()
+              if (storedTo === 'rejected') return 'Rejected'
+              if (storedTo === 'approved') {
+                const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
+                const liveLifecycle = String(cb?.bookingstatus ?? '').trim().toLowerCase()
                 if (liveLifecycle === 'missed') return 'Missed'
                 if (liveLifecycle === 'completed') return 'Completed'
                 if (liveLifecycle === 'cancelled') return 'Cancelled'
                 return 'Approved'
               }
-              if (liveApproval === 'pending') return 'Pending'
-              // Fall back to stored toStatus
-              const storedStatus = String(item.toStatus ?? '').trim().toLowerCase()
-              if (storedStatus === 'rejected') return 'Rejected'
-              if (storedStatus === 'approved') return 'Approved'
-              if (storedStatus === 'pending') return 'Pending'
+              return 'Pending'
             }
 
             if (sessionStatus === 'missed' || statusRaw.toLowerCase() === 'missed') return 'Missed'

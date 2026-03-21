@@ -136,6 +136,18 @@ export default function NotificationsPage() {
       const category: NotificationCategory =
         kind === 'court_booking' ? 'court' : kind === 'event_booking' ? 'event' : 'training'
 
+      // Extract venue / event / session name for the notification message
+      const venueName = (() => {
+        if (kind === 'court_booking') {
+          return meta?.venue_name ?? null
+        }
+        // For event/session bookings, try to pull a concise name from the title
+        const t = String(h.title ?? '')
+        const m = t.match(/^(?:Booked event|Booked session|Event created|Session created):\s*(.+)$/i)
+        return m ? m[1].trim() : null
+      })()
+      const venueFor = venueName ? ` for ${venueName}` : ''
+
       const bookingId =
         kind === 'court_booking'
           ? Number(meta?.courtbookingid ?? meta?.id ?? NaN)
@@ -149,10 +161,10 @@ export default function NotificationsPage() {
 
       const message =
         category === 'court'
-          ? (decision === 'approved' ? 'Your court booking request was approved.' : 'Your court booking request was rejected.')
+          ? (decision === 'approved' ? `Your court booking${venueFor} was approved.` : `Your court booking${venueFor} was rejected.`)
           : category === 'event'
-            ? (decision === 'approved' ? 'Your event booking request was approved.' : 'Your event booking request was rejected.')
-            : (decision === 'approved' ? 'Your training session booking request was approved.' : 'Your training session booking request was rejected.')
+            ? (decision === 'approved' ? `Your event booking${venueFor} was approved.` : `Your event booking${venueFor} was rejected.`)
+            : (decision === 'approved' ? `Your training session booking${venueFor} was approved.` : `Your training session booking${venueFor} was rejected.`)
 
       out.push({
         notificationid: rowId,
@@ -238,6 +250,14 @@ export default function NotificationsPage() {
       return ICONS.courtNoti
     }
     return ICONS.notifications
+  }
+
+  const isOutcomeIcon = (row: NotificationRow) => {
+    const text = `${String(row.title || '')} ${String(row.message || '')} ${String(row.kind || '')}`.toLowerCase()
+    return (
+      text.includes('approved') || text.includes('successful') || text.includes('accepted') ||
+      text.includes('rejected') || text.includes('failed') || text.includes('declined')
+    )
   }
 
   const getBookingDecision = useCallback((row: NotificationRow): 'approved' | 'rejected' | null => {
@@ -443,7 +463,7 @@ export default function NotificationsPage() {
       onLongPress={() => handleNotificationLongPress(item)}
       activeOpacity={0.85}
     >
-      <Image source={getIconFor(item)} style={styles.notificationIcon} />
+      <Image source={getIconFor(item)} style={isOutcomeIcon(item) ? styles.notificationIconLarge : styles.notificationIcon} />
       <View style={styles.notificationContent}>
         <View style={styles.titleTimeRow}>
           <Text style={styles.notificationTitle} numberOfLines={1}>
@@ -806,6 +826,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     marginRight: 12,
+    resizeMode: 'contain',
+  },
+  notificationIconLarge: {
+    width: 44,
+    height: 44,
+    marginRight: 10,
     resizeMode: 'contain',
   },
   notificationContent: {
