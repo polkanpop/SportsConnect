@@ -3,8 +3,8 @@ import { COLORS } from "@/constants/colors";
 import { deleteNotifications, listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { listHistory, type HistoryEntry } from '@/storage/history'
-import { router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -44,6 +44,26 @@ export default function NotificationsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
+
+  // Silently refresh notifications whenever the tab is focused (at most once per 30 s)
+  const lastSilentRefreshRef = useRef<number>(0);
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - lastSilentRefreshRef.current < 30_000) return;
+      lastSilentRefreshRef.current = now;
+      listNotifications({ category: categoryParam })
+        .then(fresh => {
+          const sorted = [...fresh].sort((a, b) => {
+            const bt = parseNotificationDate(b.time)?.getTime() ?? 0;
+            const at = parseNotificationDate(a.time)?.getTime() ?? 0;
+            return bt - at;
+          });
+          setRows(sorted);
+        })
+        .catch(() => { /* silent — user can pull-to-refresh if needed */ });
+    }, [categoryParam])
+  );
 
   const categoryParam: NotificationCategory | undefined = useMemo(() => {
     if (selectedCategory === 'Court') return 'court'
@@ -437,13 +457,13 @@ export default function NotificationsPage() {
             ? undefined
             : expandedIds.has(item.notificationid)
               ? undefined
-              : 1
+              : 0
         }>{getDisplayMessage(item)}</Text>
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
             onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: item.data?.courtid } })}
           >
-            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View court</Text>
+            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
           </TouchableOpacity>
         )}
       </View>
