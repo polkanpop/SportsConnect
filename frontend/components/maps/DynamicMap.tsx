@@ -205,6 +205,7 @@ export function DynamicMap({
     <Mapbox.MapView
       style={style}
       styleURL={styleUrl}
+      contentInset={[0, 0, 350, 0]}
       logoEnabled={false}
       attributionEnabled={false}
       compassEnabled={false}
