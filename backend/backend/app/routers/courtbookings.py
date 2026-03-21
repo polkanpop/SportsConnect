@@ -603,7 +603,10 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
 
         print(f"[create_court_booking] auth_sub={auth_sub} supplied_userid={supplied_userid} final_userid={final_userid} availabilityid={payload.get('availabilityid')}")
 
-        resp = rest_insert("courtbooking", payload)
+        # Strip frontend-only or non-schema fields before inserting into Supabase.
+        _non_schema_keys = {'venue_name'}
+        insert_payload = {k: v for k, v in payload.items() if k not in _non_schema_keys}
+        resp = rest_insert("courtbooking", insert_payload)
         if not isinstance(resp, list) or not resp:
             raise HTTPException(status_code=500, detail="Insert did not return representation; check Supabase headers/policies")
         row = resp[0]
@@ -614,6 +617,14 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
         try:
             booking_id = int(row.get(PRIMARY_KEY))
             base_name = payload.get("selected_base_name") or payload.get("selected_court_name") or "Court"
+            venue_name = payload.get("venue_name") or base_name
+            if courtid is not None and venue_name == base_name:
+                try:
+                    court_row = rest_select("courts", "name", filters={"courtid": courtid}, single=True)
+                    if isinstance(court_row, dict) and court_row.get("name"):
+                        venue_name = str(court_row.get("name"))
+                except Exception:
+                    pass
 
             # Booker notification
             if auto_approve:
@@ -624,8 +635,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
                     kind="approved",
                     notificationtypeid=booking_id,
                     title="Booking confirmed",
-                    message=f"Your booking for {base_name} has been approved.",
-                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name},
+                    message=f"Your court booking for {venue_name} has been approved.",
+                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
                 )
             else:
                 create_notification(
@@ -635,8 +646,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
                     kind="submitted",
                     notificationtypeid=booking_id,
                     title="Booking submitted",
-                    message=f"Your booking for {base_name} is pending approval.",
-                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name},
+                    message=f"Your court booking for {venue_name} is pending approval.",
+                    data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
                 )
 
             # Owner notification (incoming booking)
@@ -753,6 +764,14 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                 if new_status and new_status.lower() != prev_status.lower():
                     booker_userid = int(existing.get("userid"))
                     base_name = row.get("selected_base_name") or row.get("selected_court_name") or "Court"
+                    venue_name = row.get("venue_name") or base_name
+                    if courtid is not None and venue_name == base_name:
+                        try:
+                            court_row = rest_select("courts", "name", filters={"courtid": courtid}, single=True)
+                            if isinstance(court_row, dict) and court_row.get("name"):
+                                venue_name = str(court_row.get("name"))
+                        except Exception:
+                            pass
                     if new_status.lower() == "approved":
                         create_notification(
                             userid=booker_userid,
@@ -761,8 +780,8 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                             kind="approved",
                             notificationtypeid=int(courtbookingid),
                             title="Booking approved",
-                            message=f"Your booking for {base_name} has been approved.",
-                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name},
+                            message=f"Your court booking for {venue_name} has been approved.",
+                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
                         )
                     elif new_status.lower() == "rejected":
                         create_notification(
@@ -772,8 +791,8 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                             kind="rejected",
                             notificationtypeid=int(courtbookingid),
                             title="Booking rejected",
-                            message=f"Your booking for {base_name} was rejected.",
-                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name},
+                            message=f"Your court booking for {venue_name} has been rejected.",
+                            data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
                         )
         except Exception as e:
             print("[courtbookings] notification update failed:", str(e))
