@@ -19,6 +19,7 @@ import {
   getEvent,
   getEventInfoByEventId,
   CourtBookingRow,
+  listCourtBookings,
   listCourtInfoCached,
   CourtInfoRow,
   listEventsCombinedCached,
@@ -80,7 +81,14 @@ export default function EventCreateScreen() {
   const bookingsLoading = dashboard.isLoading
   const bookingsError = dashboard.error
   const bookingsRaw = dashboardRaw?.court_bookings ?? []
-  const bookingsAllRaw: CourtBookingRow[] = []
+  // Fallback query: fetches directly from /courtbookings when the dashboard cache is stale
+  // (e.g. immediately after creating a booking before the Redis cache is busted).
+  const { data: bookingsAllRaw = [] } = useQuery<CourtBookingRow[]>({
+    queryKey: queryKeys.courtBookingsUser(typeof userId === 'number' ? userId : null),
+    queryFn: () => listCourtBookings({ userid: userId as number }),
+    enabled: typeof userId === 'number' && (!Array.isArray(bookingsRaw) || bookingsRaw.length === 0),
+    staleTime: 60_000,
+  })
 
   // Effective bookings list combining filtered result or client-side filtered fallback
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {

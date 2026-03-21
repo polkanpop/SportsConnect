@@ -43,6 +43,7 @@ export default function NotificationsPage() {
   const [deleteMode, setDeleteMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
 
   const categoryParam: NotificationCategory | undefined = useMemo(() => {
     if (selectedCategory === 'Court') return 'court'
@@ -317,9 +318,18 @@ export default function NotificationsPage() {
       return
     }
 
-    if ((row.status || '').toLowerCase() !== 'unread') return
+    // Toggle expand/collapse for already-read notifications
+    if ((row.status || '').toLowerCase() !== 'unread') {
+      setExpandedIds(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+      return
+    }
 
-    // Optimistic update to mark read
+    // Mark unread as read and auto-expand
     setUpdating(id);
     const idx = rows.findIndex(r => r.notificationid === id);
     if (idx === -1) return;
@@ -330,6 +340,7 @@ export default function NotificationsPage() {
       copy[idx] = updated;
       return copy;
     });
+    setExpandedIds(prev => { const next = new Set(prev); next.add(id); return next; });
     try {
       await markNotificationRead(id)
     } catch (e: any) {
@@ -339,6 +350,7 @@ export default function NotificationsPage() {
         copy[idx] = original;
         return copy;
       });
+      setExpandedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
       setError(e?.message || String(e))
     } finally {
       setUpdating(null);
@@ -423,15 +435,15 @@ export default function NotificationsPage() {
         <Text style={styles.notificationMessage} numberOfLines={
           (deleteMode && selectedIds.has(item.notificationid))
             ? undefined
-            : (item.status || '').toLowerCase() === 'unread'
-              ? 1
-              : undefined
+            : expandedIds.has(item.notificationid)
+              ? undefined
+              : 1
         }>{getDisplayMessage(item)}</Text>
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
-            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court' } })}
+            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: item.data?.courtid } })}
           >
-            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>navigate →</Text>
+            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View court</Text>
           </TouchableOpacity>
         )}
       </View>

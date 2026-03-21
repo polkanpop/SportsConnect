@@ -312,6 +312,8 @@
       zoomBaseScale.value = 1; zoomBaseX.value = 0; zoomBaseY.value = 0
     }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomMapImageUri, zoomScale, zoomTX, zoomTY])
     const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
+    const bottomSheetReadyRef = useRef(false); // true after first onChange fires (layout complete)
+    const pendingSnapRef = useRef<number | null>(null); // snap queued before sheet is ready
 
     const [searchQuery, setSearchQuery] = useState(""); // State for search query
     const [markers, setMarkers] = useState<MarkerType[]>([]); // fetched markers
@@ -379,10 +381,11 @@
 
     const handleRegionChangeComplete = useCallback((region: Region) => {
       const clamped = clampRegionToVietnam(region);
-      if (isSameRegion(mapRegionRef.current, clamped)) return
+      if (isSameRegion(mapRegionRef.current, clamped)) return;
       mapRegionRef.current = clamped;
       setMapRegion(clamped);
-      setCameraCommandId((prev) => prev + 1);
+      // Do NOT call setCameraCommandId here — that would re-trigger the camera animation
+      // every time a programmatic move completes, creating an infinite loop.
     }, []);
 
     useEffect(() => {
@@ -817,7 +820,11 @@
       // Defer the sheet open until after React commits the state update.
       // Without this, the sheet either shows stale content (marker A while B is selected)
       // or is a no-op when already at index 0 (switching between markers).
-      requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0));
+      if (bottomSheetReadyRef.current) {
+        requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0));
+      } else {
+        pendingSnapRef.current = 0;
+      }
     };
 
     const handleOpenGoogleMaps = useCallback(async () => {
@@ -854,12 +861,24 @@
       setSelectedMarker(marker); // Set the selected marker
       setFlatListVisible(false); // Hide the FlatList
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0)); // Open BottomSheet after state commits
+      if (bottomSheetReadyRef.current) {
+        requestAnimationFrame(() => bottomSheetRef.current?.snapToIndex(0));
+      } else {
+        pendingSnapRef.current = 0;
+      }
     };
 
-    // Update bottom sheet index on change
+    // Update bottom sheet index on change; also flushes any snap queued before layout was ready
     const handleSheetChange = useCallback((index: number) => {
       setBottomSheetIndex(index);
+      if (!bottomSheetReadyRef.current) {
+        bottomSheetReadyRef.current = true;
+        if (pendingSnapRef.current !== null) {
+          const target = pendingSnapRef.current;
+          pendingSnapRef.current = null;
+          bottomSheetRef.current?.snapToIndex(target);
+        }
+      }
     }, []);
 
     // Keep map UI overlays from overlapping the BottomSheet when expanded
