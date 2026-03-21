@@ -82,16 +82,16 @@ export default function WaitingForVerificationScreen() {
 
 const styles = StyleSheet.create({
 	container: { flex: 1, paddingHorizontal: 28, paddingTop: 80, backgroundColor: '#f8f8f8' },
-	title: { fontSize: 24, fontWeight: '800', color: '#15803d', textAlign: 'center', marginBottom: 16 },
-	subtitle: { textAlign: 'center', fontSize: 14, color: '#15803d' },
+	title: { fontSize: 24, fontWeight: '800', color: '#FF6017', textAlign: 'center', marginBottom: 16 },
+	subtitle: { textAlign: 'center', fontSize: 14, color: '#FF6017' },
 	email: { textAlign: 'center', fontSize: 16, fontWeight: '600', marginTop: 4, marginBottom: 24, color: '#6A6B6B' },
 	info: { textAlign: 'center', fontSize: 14, color: '#6A6B6B', marginBottom: 24 },
-	resendBtn: { backgroundColor: '#15803d', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
+	resendBtn: { backgroundColor: '#FF6017', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
 	resendText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 	manualCheck: { alignItems: 'center', marginBottom: 24 },
-	manualCheckText: { color: '#15803d', fontWeight: '600', textDecorationLine: 'underline' },
+	manualCheckText: { color: '#FF6017', fontWeight: '600', textDecorationLine: 'underline' },
 	error: { color: '#dc2626', textAlign: 'center', marginTop: 12 },
-	verified: { color: '#15803d', textAlign: 'center', fontWeight: '700', marginBottom: 20 },
+	verified: { color: '#FF6017', textAlign: 'center', fontWeight: '700', marginBottom: 20 },
 	backLogin: { alignItems: 'center', marginTop: 'auto', marginBottom: 40 },
-	backLoginText: { color: '#15803d', fontWeight: '700' }
+	backLoginText: { color: '#FF6017', fontWeight: '700' }
 });
