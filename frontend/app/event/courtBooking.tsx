@@ -470,7 +470,9 @@ export default function CourtBooking() {
   const totalAmount = useMemo(() => {
     return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
   }, [courtAmount, servicesTotal])
-  const formattedAmount = 'Confirm'
+  const formattedAmount = totalAmount > 0
+    ? `Confirm Booking — ${Math.round(totalAmount).toLocaleString('en-US')}đ`
+    : 'Confirm Booking'
   const selectedPart = useMemo(() => {
     const p = String((selectedPc as any)?.part || '').toLowerCase()
     if (p === 'full' || p === 'half_a' || p === 'half_b') return p as 'full' | 'half_a' | 'half_b'

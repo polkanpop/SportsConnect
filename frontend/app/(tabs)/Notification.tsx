@@ -803,8 +803,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   notificationIcon: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     marginRight: 12,
     resizeMode: 'contain',
   },
