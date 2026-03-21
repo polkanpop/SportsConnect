@@ -579,6 +579,10 @@ export default function CourtBooking() {
     return blocked
   }, [timeSlots, bookedIntervalsForDate])
 
+  const isStartSlotBlocked = useCallback((slot: string) => {
+    return blockedStartSlotSet.has(slot)
+  }, [blockedStartSlotSet])
+
   // Given a picked startSlot, the maximum permitted end = earliest booking start after startSlot
   const maxEndMinutes = useMemo(() => {
     if (!startSlot) return Infinity
@@ -590,6 +594,31 @@ export default function CourtBooking() {
     }
     return cutoff
   }, [startSlot, bookedIntervalsForDate])
+
+  const isEndSlotBlocked = useCallback((slot: string) => {
+    if (!startSlot) return true
+    const [sh, sm] = startSlot.split(':').map(Number)
+    const [eh, em] = slot.split(':').map(Number)
+    const startM = sh * 60 + sm
+    const endM = eh * 60 + em
+    if (!Number.isFinite(startM) || !Number.isFinite(endM) || endM <= startM) return true
+    if (endM > maxEndMinutes) return true
+    for (const [bookedStart, bookedEnd] of bookedIntervalsForDate) {
+      if (startM < bookedEnd && bookedStart < endM) return true
+    }
+    return false
+  }, [startSlot, maxEndMinutes, bookedIntervalsForDate])
+
+  useEffect(() => {
+    if (startSlot && isStartSlotBlocked(startSlot)) {
+      setStartSlot(null)
+      setEndSlot(null)
+      return
+    }
+    if (endSlot && isEndSlotBlocked(endSlot)) {
+      setEndSlot(null)
+    }
+  }, [startSlot, endSlot, isStartSlotBlocked, isEndSlotBlocked])
 
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey, dateStr)) return
@@ -642,7 +671,6 @@ export default function CourtBooking() {
       playingcourtid: selectedPc?.playingcourtid ?? availability.playingcourtid ?? null,
       selected_court_name: selectedPc?.name ?? null,
       selected_base_name: selectedPc?.base_name ?? selectedBaseName ?? null,
-      venue_name: courtInfo?.name ?? null,
       selected_part: selectedPart,
       selected_surface: selectedPc?.surface ?? null,
       court_price_at_booking: Number.isFinite(Number(courtAmount)) ? Number(courtAmount) : null,
@@ -901,11 +929,14 @@ export default function CourtBooking() {
                       <Text style={styles.subHeading}>Select Time</Text>
                       <Text style={styles.smallText}>Start</Text>
                       <View style={styles.slotRow}>
-                        {visibleTimeSlots.map((ts) => (
-                          <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
-                            <Text style={styles.slotText}>{ts}</Text>
-                          </TouchableOpacity>
-                        ))}
+                        {visibleTimeSlots.map((ts) => {
+                          const disabled = isStartSlotBlocked(ts)
+                          return (
+                            <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
+                              <Text style={[styles.slotText, disabled && styles.slotTextDisabled]}>{ts}</Text>
+                            </TouchableOpacity>
+                          )
+                        })}
                       </View>
                       {visibleTimeSlots.length === 0 && (
                         <Text style={styles.durationWarning}>No future slots available for today.</Text>
@@ -914,11 +945,14 @@ export default function CourtBooking() {
                         <>
                           <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
                           <View style={styles.slotRow}>
-                            {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => (
-                              <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
-                                <Text style={styles.slotText}>{ts}</Text>
-                              </TouchableOpacity>
-                            ))}
+                            {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
+                              const disabled = isEndSlotBlocked(ts)
+                              return (
+                                <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
+                                  <Text style={[styles.slotText, disabled && styles.slotTextDisabled]}>{ts}</Text>
+                                </TouchableOpacity>
+                              )
+                            })}
                           </View>
                           {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
                           {isStartInPast && <Text style={styles.durationWarning}>Selected start time has already passed. Please choose another slot.</Text>}
@@ -1019,21 +1053,27 @@ export default function CourtBooking() {
               <Text style={styles.subHeading}>Select Time</Text>
               <Text style={styles.smallText}>Start</Text>
               <View style={styles.slotRow}>
-                {timeSlots.map((ts) => (
-                  <TouchableOpacity key={ts} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive]}>
-                    <Text style={styles.slotText}>{ts}</Text>
-                  </TouchableOpacity>
-                ))}
+                {visibleTimeSlots.map((ts) => {
+                  const disabled = isStartSlotBlocked(ts)
+                  return (
+                    <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
+                      <Text style={[styles.slotText, disabled && styles.slotTextDisabled]}>{ts}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
               {startSlot && (
                 <>
                   <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
                   <View style={styles.slotRow}>
-                    {timeSlots.filter((ts) => ts > startSlot!).map((ts) => (
-                      <TouchableOpacity key={ts} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive]}>
-                        <Text style={styles.slotText}>{ts}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
+                      const disabled = isEndSlotBlocked(ts)
+                      return (
+                        <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectEnd(ts)} style={[styles.slotBtn, endSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
+                          <Text style={[styles.slotText, disabled && styles.slotTextDisabled]}>{ts}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
                   </View>
                   {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
                 </>
@@ -1258,7 +1298,9 @@ const styles = StyleSheet.create({
   slotRow: { flexDirection: 'row', flexWrap: 'wrap' },
   slotBtn: { width: 62, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
   slotBtnActive: { backgroundColor: COLORS.brandOrangeDeep },
+  slotBtnDisabled: { backgroundColor: '#D1D5DB', borderWidth: 1, borderColor: '#D1D5DB' },
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  slotTextDisabled: { color: '#6B7280' },
   paymentRow: { flexDirection: 'row', marginTop: 20 },
   payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', marginRight: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },

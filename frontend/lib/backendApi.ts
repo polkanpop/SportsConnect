@@ -1430,6 +1430,7 @@ export type CourtBookingRow = {
 	playingcourtid?: number | null
 	selected_court_name?: string | null
 	selected_base_name?: string | null
+	venue_name?: string | null
 	selected_part?: 'full' | 'half_a' | 'half_b' | null
 	selected_surface?: string | null
 	court_price_at_booking?: number | null

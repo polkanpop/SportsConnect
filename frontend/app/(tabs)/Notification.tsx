@@ -30,6 +30,14 @@ function parseNotificationDate(raw: string): Date | null {
   return null
 }
 
+function firstNonEmptyText(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = String(value ?? '').trim()
+    if (text) return text
+  }
+  return null
+}
+
 export default function NotificationsPage() {
   const { dashboard, notifications, userId } = useAppBootstrap()
   const [selectedCategory, setSelectedCategory] = useState<"All" | "Court" | "Event" | "Training">("All");
@@ -211,6 +219,16 @@ export default function NotificationsPage() {
     })
   }, [notifications, localOutcomeNotifications, categoryParam, getRowCategory])
 
+  const courtBookingById = useMemo(() => {
+    const rows = Array.isArray(dashboard.data?.court_bookings) ? dashboard.data.court_bookings : []
+    const map = new Map<number, any>()
+    for (const row of rows) {
+      const id = Number((row as any)?.courtbookingid)
+      if (Number.isFinite(id)) map.set(id, row)
+    }
+    return map
+  }, [dashboard.data])
+
   useEffect(() => {
     setRows(sourceRows)
   }, [sourceRows])
@@ -272,16 +290,49 @@ export default function NotificationsPage() {
     return null
   }, [getDecisionFromStatuses])
 
+  const getCourtVenueName = useCallback((row: NotificationRow) => {
+    const data = (row.data || {}) as Record<string, any>
+    const bookingIdCandidates = [Number(data?.courtbookingid), Number(row.notificationtypeid)]
+      .filter((value) => Number.isFinite(value)) as number[]
+
+    let booking: any = null
+    for (const bookingId of bookingIdCandidates) {
+      const match = courtBookingById.get(bookingId)
+      if (match) {
+        booking = match
+        break
+      }
+    }
+
+    return firstNonEmptyText(
+      data?.venue_name,
+      booking?.venue_name,
+      booking?.court_name,
+      booking?.courtName,
+      (row.kind || '').toLowerCase() === 'booking_outcome'
+        ? String(row.message || '').match(/your court booking for\s+(.+?)\s+(?:was|has been)\s+(?:approved|rejected)/i)?.[1]
+        : null,
+    )
+  }, [courtBookingById])
+
   const getDisplayMessage = (row: NotificationRow) => {
     const decision = getBookingDecision(row)
     const category = getRowCategory(row)
-    if (!decision || !category) return row.message
+    const kind = String(row.kind || '').toLowerCase()
+    const rawText = `${String(row.title || '')} ${String(row.message || '')}`.toLowerCase()
+    if (!category) return row.message
 
     if (category === 'court') {
-      return decision === 'approved'
-        ? 'Your court booking has been approved.'
-        : 'Your court booking has been rejected.'
+      const venueName = getCourtVenueName(row)
+      const venueSuffix = venueName ? ` for ${venueName}` : ''
+      if (decision === 'approved') return `Your court booking${venueSuffix} has been approved.`
+      if (decision === 'rejected') return `Your court booking${venueSuffix} has been rejected.`
+      if (kind === 'submitted' || rawText.includes('pending approval')) {
+        return `Your court booking${venueSuffix} is pending approval.`
+      }
+      return row.message
     }
+    if (!decision) return row.message
     if (category === 'event') {
       return decision === 'approved'
         ? 'Your event booking request has been approved.'
@@ -466,7 +517,9 @@ export default function NotificationsPage() {
       onLongPress={() => handleNotificationLongPress(item)}
       activeOpacity={0.85}
     >
-      <Image source={getIconFor(item)} style={isOutcomeIcon(item) ? styles.notificationIconLarge : styles.notificationIcon} />
+      <View style={styles.notificationIconWrap}>
+        <Image source={getIconFor(item)} style={isOutcomeIcon(item) ? styles.notificationIconOutcome : styles.notificationIcon} />
+      </View>
       <View style={styles.notificationContent}>
         <View style={styles.titleTimeRow}>
           <Text style={styles.notificationTitle} numberOfLines={1}>
@@ -825,16 +878,21 @@ const styles = StyleSheet.create({
   updatingRow: {
     opacity: 0.6,
   },
-  notificationIcon: {
-    width: 36,
-    height: 36,
-    marginRight: 10,
-    resizeMode: 'contain',
-  },
-  notificationIconLarge: {
+  notificationIconWrap: {
     width: 40,
     height: 40,
     marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationIcon: {
+    width: 34,
+    height: 34,
+    resizeMode: 'contain',
+  },
+  notificationIconOutcome: {
+    width: 30,
+    height: 30,
     resizeMode: 'contain',
   },
   notificationContent: {
