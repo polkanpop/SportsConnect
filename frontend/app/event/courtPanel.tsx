@@ -1830,17 +1830,46 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 const s = String(b.status ?? '').toLowerCase()
                 return s === 'approved' || s === 'joined'
               })
-              const dedupedBookingParticipants = (() => {
-                const seen = new Set<number>()
-                const sorted = [...bookingParticipants].sort((a, b) => Number(b.courtbookingid || 0) - Number(a.courtbookingid || 0))
-                const out: CourtBookingRow[] = []
-                for (const row of sorted) {
+              const mergedParticipants = (() => {
+                // Group all approved bookings by userid
+                const byUser = new Map<number, CourtBookingRow[]>()
+                for (const row of bookingParticipants) {
                   const uid = Number(row.userid)
-                  if (!Number.isFinite(uid) || seen.has(uid)) continue
-                  seen.add(uid)
-                  out.push(row)
+                  if (!Number.isFinite(uid)) continue
+                  const arr = byUser.get(uid) ?? []
+                  arr.push(row)
+                  byUser.set(uid, arr)
                 }
-                return out
+                const toMin = (raw: string | null | undefined): number | null => {
+                  const m = String(raw ?? '').match(/(?:T|\s)(\d{2}):(\d{2})/)
+                  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+                }
+                const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+                const result: { userid: number; row: CourtBookingRow; timeDisplay: string }[] = []
+                for (const [uid, bookings] of byUser.entries()) {
+                  const sorted = [...bookings].sort((a, b) => (toMin(a.start_timestamp) ?? 0) - (toMin(b.start_timestamp) ?? 0))
+                  // Build [startMin, endMin] intervals
+                  const intervals: [number, number][] = []
+                  for (const b of sorted) {
+                    const s = toMin(b.start_timestamp)
+                    const e = toMin(b.end_timestamp)
+                    if (s != null && e != null && e > s) intervals.push([s, e])
+                  }
+                  // Merge consecutive / overlapping intervals
+                  const merged: [number, number][] = []
+                  for (const [s, e] of intervals) {
+                    if (merged.length && s <= merged[merged.length - 1][1]) {
+                      merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], e)
+                    } else {
+                      merged.push([s, e])
+                    }
+                  }
+                  const timeDisplay = merged.length
+                    ? merged.map(([s, e]) => `${fmt(s)} - ${fmt(e)}`).join(' ; ')
+                    : 'Unknown time'
+                  result.push({ userid: uid, row: sorted[sorted.length - 1], timeDisplay })
+                }
+                return result
               })()
               const dateBookings = bookingSelectedDate ? pcBookings.filter((b) => {
                 if ((typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) !== bookingSelectedDate) return false
@@ -1849,20 +1878,20 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 return !s.includes('reject') && !bs.includes('cancel') && s !== 'pending' && s !== 'waiting'
               }) : []
 
-              const renderBookingRow = (b: CourtBookingRow, showActions: boolean) => {
+              const renderBookingRow = (b: CourtBookingRow, showActions: boolean, overrideTime?: string) => {
                 const uid = b.userid
                 const displayName = bookingUserNames[uid] || `User ${uid}`
                 const pfpUri = bookingUserPfps[uid] || null
                 const noteExp = expandedNoteIds.has(b.courtbookingid)
                 const statusRaw = String(b.status ?? b.bookingstatus ?? '')
                 return (
-                  <View key={b.courtbookingid} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                  <View key={`${b.courtbookingid}-${overrideTime ?? ''}`} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                         {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
-                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={1}>{formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
+                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
                           <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>
                             <Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>
                             <Text>{statusRaw || 'pending'}</Text>
@@ -2011,9 +2040,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
-                  {dedupedBookingParticipants.length === 0 ? (
+                  {mergedParticipants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
-                  ) : dedupedBookingParticipants.map((b) => renderBookingRow(b, false))}
+                  ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay))}
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>

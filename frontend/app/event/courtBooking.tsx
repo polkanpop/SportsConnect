@@ -965,11 +965,11 @@ export default function CourtBooking() {
                         <TouchableOpacity
                           key={d.key}
                           onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }}
-                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#fb923c' }, (!isAvailable || isPast) && styles.dayCellDisabled]}
+                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled]}
                           activeOpacity={0.8}
                         >
                           <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
-                          <Text style={styles.dayDate}>{d.date.getDate()}</Text>
+                          <Text style={[styles.dayDate, selected && styles.dayCellSelectedText]}>{d.date.getDate()}</Text>
                         </TouchableOpacity>
                       )
                     })}
@@ -1101,9 +1101,9 @@ export default function CourtBooking() {
               const isAvailable = isDaySelectable(d.key, d.dateStr)
               const selected = selectedDateStr === d.dateStr
               return (
-                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && { backgroundColor: '#fb923c' }, (!isAvailable || isPast) && styles.dayCellDisabled]}>
+                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled]}>
                   <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline]}>{d.label}</Text>
-                  <Text style={styles.dayDate}>{d.date.getDate()}</Text>
+                  <Text style={[styles.dayDate, selected && styles.dayCellSelectedText]}>{d.date.getDate()}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -1351,7 +1351,9 @@ const styles = StyleSheet.create({
   errorText: { color: '#c00', marginTop: 8, fontSize: 13 },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
   dayCell: { flex: 1, marginHorizontal: 2, paddingVertical: 10, borderRadius: 10, backgroundColor: '#e9e9e9', alignItems: 'center' },
-  dayCellSelected: { backgroundColor: COLORS.brandOrangeYellow },
+  dayCellSelected: { backgroundColor: '#f97316' },
+  dayCellAvailable: { backgroundColor: '#fff3e0' },
+  dayCellSelectedText: { color: '#fff' },
   dayCellDisabled: { opacity: 0.35 },
   dayLabel: { fontSize: 12, fontWeight: '600', color: '#222' },
   todayUnderline: { textDecorationLine: 'underline' },
