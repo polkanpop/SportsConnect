@@ -451,9 +451,6 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        {(item.kind || '').toLowerCase() !== 'incoming_booking' && (
-          <Text style={styles.notificationMessage} numberOfLines={1}>{item.title ? '\u200b' : ''}</Text>
-        )}
         {expandedIds.has(item.notificationid) && (
           <Text style={styles.notificationMessage}>{getDisplayMessage(item)}</Text>
         )}
@@ -790,7 +787,7 @@ const styles = StyleSheet.create({
   },
   notificationRow: {
     flexDirection: "row",
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,

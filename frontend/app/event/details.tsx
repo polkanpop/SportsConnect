@@ -1668,7 +1668,7 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title="Booking">
-                  <Row label="Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
+                  <Row label="Booking Status" value={formatStatusTitleCase(b.bookingstatus || b.status)} />
                   <Row label="Court Name" value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || '—'} />
                   <Row label="Address" value={courtBookingCourt?.address || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1691,7 +1691,7 @@ export default function DetailsPage() {
               <>
                 <Section title="Event">
                   <Row label="Title" value={resolveTitle({ ...(ev || {}), eventinfo: evMeta ? [evMeta] : [] }, 'Event')} />
-                  <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
+                  <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
                   <Row label="Court Name" value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1714,7 +1714,7 @@ export default function DetailsPage() {
               <>
                 <Section title="Training Session">
                   <Row label="Title" value={resolveTitle({ ...(s || {}), trainingsessioninfo: sMeta ? [sMeta] : [] }, 'Training Session')} />
-                  <Row label="Approve Status" value={formatStatusTitleCase((b as any)?.status ?? 'pending')} />
+                  <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
                   <Row label="Court Name" value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />

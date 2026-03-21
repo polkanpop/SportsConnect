@@ -650,7 +650,7 @@ export default function EventCreateScreen() {
     const bStatus = String((item as any)?.bookingstatus ?? (item as any)?.status ?? '').toLowerCase()
     const isPending = bStatus.includes('pending') && !bStatus.includes('upcoming') && !bStatus.includes('active')
     const disabled = isEvent || isTraining || isPending
-    const tag = isEvent ? 'Event' : (isTraining ? 'Training' : (isPending ? 'Not verified' : null))
+    const tag = isEvent ? 'Event' : (isTraining ? 'Training' : (isPending ? 'Pending' : null))
     return (
       <TouchableOpacity
         style={[styles.bookingItem, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}

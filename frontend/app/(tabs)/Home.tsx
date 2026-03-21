@@ -430,7 +430,7 @@ export default function Home() {
       : null
 
   const favoriteLocationsQuery = useQuery({
-    queryKey: ['home-favorite-locations', userId],
+    queryKey: ['home-favorite-locations', userId, favouriteCourts.map((f) => f.courtid).join(',')],
     enabled: !!userId,
     queryFn: async () => {
       const favRows: FavouriteCourt[] = Array.isArray(favouriteCourts)
