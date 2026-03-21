@@ -84,25 +84,25 @@
   };
 
   const VN_BOUNDS = {
-    minLat: 8.0,
-    maxLat: 23.6,
-    minLng: 102.0,
-    maxLng: 110.6,
+    minLat: 6.8,
+    maxLat: 24.8,
+    minLng: 100.8,
+    maxLng: 112.0,
   } as const;
 
   const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat);
   const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng);
-  // Keep max zoom-out slightly tighter than whole-country width so panning remains possible.
-  const VN_VIEW_MAX_LAT_DELTA = VN_MAX_LAT_DELTA * 0.74;
-  const VN_VIEW_MAX_LNG_DELTA = VN_MAX_LNG_DELTA * 0.74;
+  // Keep max zoom-out slightly tighter than full bounds so panning remains possible.
+  const VN_VIEW_MAX_LAT_DELTA = VN_MAX_LAT_DELTA * 0.8;
+  const VN_VIEW_MAX_LNG_DELTA = VN_MAX_LNG_DELTA * 0.8;
   const VN_MIN_LAT_DELTA = 0.01;
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
   // Collapsed sheet is 30%; shift focused markers into the upper-third of the visible 70%.
   const MAP_FOCUS_LAT_OFFSET_RATIO = 0.22;
-  // Push the map floor up so markers never sit behind the 30% collapsed sheet.
-  const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.32;
+  // Keep only a light south buffer so users can still pan toward the southern edge.
+  const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.12;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
@@ -1533,7 +1533,7 @@
                   index={-1}
                   bottomInset={0}
                   enableContentPanningGesture
-                  enablePanDownToClose={true}
+                  enablePanDownToClose={false}
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
                 >
