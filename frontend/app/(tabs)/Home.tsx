@@ -19,6 +19,7 @@ import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/hooks/query-keys'
 import EventPanel from "@/app/event/eventPanel";
 import CourtPanel from "@/app/event/courtPanel";
 import ReviewsPanel from "@/app/event/reviewsPanel";
@@ -117,20 +118,20 @@ export default function Home() {
   const refetchDashboard = dashboard.refetch
   const userInfo = bootstrapUserInfo.data ?? null
   const userId = typeof bootstrapUserId === 'number' ? bootstrapUserId : null
-  const dashboardEventsCombined = Array.isArray(dashboardRaw?.events_combined)
-    ? (dashboardRaw.events_combined as CombinedEvent[])
-    : []
 
-  const fallbackEventsQuery = useQuery({
-    queryKey: ['home-fallback-events-combined'],
+  // Always fetch the global public events list via the shared queryKeys.eventsCombined key.
+  // This ensures every user account sees all public events (not just ones tied to their own
+  // court bookings), and post-creation invalidateQueries({ queryKey: queryKeys.eventsCombined })
+  // in eventCreate.tsx triggers an immediate refetch on the creator's device.
+  const eventsQuery = useQuery<CombinedEvent[]>({
+    queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
-    enabled: !!userId && dashboardEventsCombined.length === 0,
+    enabled: !!userId,
     staleTime: 60_000,
+    gcTime: 5 * 60 * 1000,
   })
 
-  const eventsCombined = dashboardEventsCombined.length > 0
-    ? dashboardEventsCombined
-    : (Array.isArray(fallbackEventsQuery.data) ? (fallbackEventsQuery.data as CombinedEvent[]) : [])
+  const eventsCombined = Array.isArray(eventsQuery.data) ? eventsQuery.data : []
 
   const [nearbyEventsOrigin, setNearbyEventsOrigin] = useState<{ latitude: number; longitude: number } | null>(null)
   const [locationResolved, setLocationResolved] = useState(false)
@@ -328,7 +329,7 @@ export default function Home() {
   }, [eventsCombined])
 
   const eventTitleFallbackQuery = useQuery({
-    queryKey: ['home-event-title-fallback', missingEventTitleIds.join(',')],
+    queryKey: ['home-event-title-fallback', userId, missingEventTitleIds.join(',')],
     enabled: missingEventTitleIds.length > 0,
     queryFn: async () => {
       const rows = await listEventsCombinedCached()
@@ -407,17 +408,15 @@ export default function Home() {
     return filtered.length > 0 ? filtered : upcomingEvents
   }, [upcomingEvents, nearbyEventsOrigin])
 
-  const nearbyEventsLoading = dashboard.isLoading || (dashboardEventsCombined.length === 0 && fallbackEventsQuery.isLoading)
-  const nearbyEventsError = dashboardEventsCombined.length === 0
-    ? (fallbackEventsQuery.error instanceof Error
-      ? fallbackEventsQuery.error.message
-      : fallbackEventsQuery.error
-        ? String(fallbackEventsQuery.error)
-        : null)
-    : null
+  const nearbyEventsLoading = eventsQuery.isLoading
+  const nearbyEventsError = eventsQuery.error instanceof Error
+    ? eventsQuery.error.message
+    : eventsQuery.error
+      ? String(eventsQuery.error)
+      : null
 
   const favoriteLocationsQuery = useQuery({
-    queryKey: ['home-favorite-locations', userId, favouriteCourts.length],
+    queryKey: ['home-favorite-locations', userId],
     enabled: !!userId,
     queryFn: async () => {
       const favRows: FavouriteCourt[] = Array.isArray(favouriteCourts)
@@ -563,10 +562,10 @@ export default function Home() {
                 onRefresh={async () => {
                   setPullRefreshingFavs(true);
                   try {
-                    await refetchDashboard();
                     await Promise.all([
+                      refetchDashboard(),
+                      eventsQuery.refetch(),
                       refetchFavoriteLocations(),
-                      dashboardEventsCombined.length === 0 ? fallbackEventsQuery.refetch() : Promise.resolve(),
                     ]);
                   } finally {
                     setPullRefreshingFavs(false);

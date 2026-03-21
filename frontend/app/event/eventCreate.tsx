@@ -126,7 +126,7 @@ export default function EventCreateScreen() {
 
   // Load all courtinfo (cached helper) once (could be narrowed later)
   const { data: allCourtInfo } = useQuery({
-    queryKey: ['courtInfoAllForEventCreate'],
+    queryKey: queryKeys.courtInfo,
     queryFn: () => listCourtInfoCached(),
     staleTime: 5*60*1000,
   })
@@ -256,7 +256,7 @@ export default function EventCreateScreen() {
 
   // Enrich bookings with court name/address by fetching availability -> courtid (simple sequential fetch)
   const { data: enrichedBookings, isLoading: enriching } = useQuery({
-    queryKey: ['enrichedBookings', effectiveBookings],
+    queryKey: ['enrichedBookings', userId, (effectiveBookings as CourtBookingRow[]).map(b => b.courtbookingid).join(',')],
     enabled: Array.isArray(effectiveBookings) && effectiveBookings.length > 0,
     queryFn: async () => {
       const result: EnrichedBooking[] = []
@@ -278,12 +278,12 @@ export default function EventCreateScreen() {
 
   // Fetch events and training sessions to mark used bookings
   const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({
-    queryKey: ['eventsCombinedForCreate'],
+    queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
     staleTime: 60_000,
   })
   const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
-    queryKey: ['trainingSessionsCombinedForCreate'],
+    queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombined(),
     staleTime: 60_000,
   })
@@ -438,7 +438,7 @@ export default function EventCreateScreen() {
             return [combinedRow, ...arr]
           })
           if (typeof userId === 'number') {
-            qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+            qc.setQueryData(queryKeys.createdEventsCombined(userId), (prev: any) => {
               const arr = Array.isArray(prev) ? prev : []
               if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
               return [combinedRow, ...arr]
@@ -476,13 +476,12 @@ export default function EventCreateScreen() {
             return exists ? arr : [booking, ...arr]
           })
         }
-        upsert(['eventBookingsByUserId', userId])
-        upsert(['eventBookings', userId])
+        upsert(queryKeys.eventBookingsUser(userId))
       }
 
       const bumpParticipantsInCreatedEventsCombined = (eventId: number, delta: number) => {
         if (typeof userId !== 'number') return
-        qc.setQueryData(['createdEventsCombined', userId], (prev: any) => {
+        qc.setQueryData(queryKeys.createdEventsCombined(userId), (prev: any) => {
           if (!Array.isArray(prev)) return prev
           return prev.map((row: any) => {
             if (row?.eventid !== eventId) return row
@@ -542,8 +541,8 @@ export default function EventCreateScreen() {
       qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
-        qc.invalidateQueries({ queryKey: ['createdEventsCombined', userId] })
-        qc.invalidateQueries({ queryKey: ['activity', 'hosting', 'events', userId] })
+        qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
+        qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success

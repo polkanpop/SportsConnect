@@ -193,8 +193,8 @@ export default function EventBooking() {
           return exists ? arr : [booking, ...arr]
         })
       }
-      upsert(['eventBookingsByUserId', userId])
-      upsert(['eventBookings', userId])
+      upsert(queryKeys.eventBookingsUser(userId))
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsUser(userId) })
 
       // Best-effort participant increment
       const approvalStatus = String((booking as any)?.status ?? '').toLowerCase()
@@ -210,7 +210,6 @@ export default function EventBooking() {
               return { ...row, numberofpeople: Number.isFinite(cur) ? cur + 1 : row.numberofpeople }
             })
           })
-          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         } catch {
           // Ignore count sync failures to avoid blocking booking

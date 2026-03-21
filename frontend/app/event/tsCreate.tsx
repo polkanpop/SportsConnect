@@ -479,7 +479,7 @@ export default function TsCreate() {
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
-        qc.invalidateQueries({ queryKey: ['activity', 'hosting', 'sessions', userId] })
+        qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success

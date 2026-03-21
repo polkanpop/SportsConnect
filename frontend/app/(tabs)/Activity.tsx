@@ -474,14 +474,14 @@ export default function ActivityPage() {
   );
 
   const hostingEventsQuery = useQuery({
-    queryKey: ['activity', 'hosting', 'events', userId ?? -1],
+    queryKey: queryKeys.activityHostingEvents(userId ?? -1),
     queryFn: () => listEventsCombinedByOrganizerId(userId as number),
     enabled: typeof userId === 'number' && calendarMode === 'Hosting',
     staleTime: 60_000,
   })
 
   const hostingSessionsQuery = useQuery({
-    queryKey: ['activity', 'hosting', 'sessions', userId ?? -1],
+    queryKey: queryKeys.activityHostingSessions(userId ?? -1),
     queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
     enabled: typeof userId === 'number' && calendarMode === 'Hosting',
     staleTime: 60_000,
@@ -552,8 +552,8 @@ export default function ActivityPage() {
       })
       if (!changed) return
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' })
-      await queryClient.invalidateQueries({ queryKey: ['activity', 'hosting', 'events', userId], refetchType: 'active' })
-      await queryClient.invalidateQueries({ queryKey: ['activity', 'hosting', 'sessions', userId], refetchType: 'active' })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId), refetchType: 'active' })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId), refetchType: 'active' })
     }
     void run()
   }, [

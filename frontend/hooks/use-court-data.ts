@@ -61,8 +61,8 @@ export function useCreateCourtBooking() {
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
       })
       // Force dashboard + user booking list refresh so newly booked slots/records show immediately.
+      queryClient.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(variables.userid) })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(variables.userid) })
-      queryClient.invalidateQueries({ queryKey: ['courtbookings', 'user', variables.userid] })
     },
   })
 }
@@ -74,16 +74,17 @@ export function useDeleteCourtBooking() {
     mutationFn: (payload: { courtbookingid: number; availabilityid: number; userid: number }) => deleteCourtBooking(payload.courtbookingid),
     onMutate: async (payload) => {
       // Optimistically update user bookings cache
-      const key = ['courtbookings','user', payload.userid]
+      const key = queryKeys.courtBookingsUser(payload.userid)
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData<any[]>(key) || []
       qc.setQueryData<any[]>(key, prev.filter(b => b.courtbookingid !== payload.courtbookingid))
       return { prev }
     },
     onError: (_err, payload, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['courtbookings','user', payload.userid], ctx.prev)
+      if (ctx?.prev) qc.setQueryData(queryKeys.courtBookingsUser(payload.userid), ctx.prev)
     },
     onSuccess: (_data, payload) => {
+      qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(payload.userid) })
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(payload.userid) })
       // Invalidate availability to reflect freed slot
       qc.invalidateQueries({
@@ -142,6 +143,7 @@ export function useCreateBookingWithPayment() {
       qc.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
       })
+      qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(data.booking.userid) })
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(data.booking.userid) })
     },
   })
