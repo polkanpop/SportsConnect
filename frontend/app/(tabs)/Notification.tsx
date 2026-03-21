@@ -139,7 +139,10 @@ export default function NotificationsPage() {
       // Extract venue / event / session name for the notification message
       const venueName = (() => {
         if (kind === 'court_booking') {
-          return meta?.venue_name ?? null
+          if (meta?.venue_name) return meta.venue_name as string
+          // Fallback: extract from stored title "Booked venue: XYZ"
+          const titleMatch = String(h.title ?? '').match(/^Booked venue:\s*(.+)$/i)
+          return titleMatch ? titleMatch[1].trim() : null
         }
         // For event/session bookings, try to pull a concise name from the title
         const t = String(h.title ?? '')
@@ -823,14 +826,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   notificationIcon: {
-    width: 32,
-    height: 32,
-    marginRight: 12,
+    width: 36,
+    height: 36,
+    marginRight: 10,
     resizeMode: 'contain',
   },
   notificationIconLarge: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     marginRight: 10,
     resizeMode: 'contain',
   },

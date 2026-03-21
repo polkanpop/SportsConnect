@@ -537,6 +537,60 @@ export default function CourtBooking() {
   const canConfirm = !!(selectedDateStr && startSlot && endSlot && paymentMethod && userId && availability && !durationInvalid && !isStartInPast && !fullHalfOverlapError && (playingCourts.length === 0 || selectedPlayingCourtId != null))
   const courtBookingStatus = Boolean((courtInfo as any)?.auto_approve) ? 'approved' : 'pending'
 
+  // Blocked time slots: intervals from active bookings on selected date & base
+  const bookedIntervalsForDate = useMemo(() => {
+    if (!selectedDateStr || !selectedBaseName) return [] as Array<[number, number]>
+    const baseNameByPid = new Map<number, string>()
+    for (const pc of playingCourts) {
+      const pid = Number((pc as any).playingcourtid)
+      const bn = String((pc as any).base_name ?? '').trim().toLowerCase()
+      if (Number.isFinite(pid) && bn) baseNameByPid.set(pid, bn)
+    }
+    const activeBaseLower = selectedBaseName.trim().toLowerCase()
+    const result: Array<[number, number]> = []
+    for (const b of allCourtBookings) {
+      const approval = String((b as any)?.status ?? '').toLowerCase()
+      const bStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+      if (approval.includes('reject') || bStatus.includes('cancel') || bStatus.includes('complete') || bStatus.includes('missed')) continue
+      const bDate = String((b as any)?.bookingdate ?? '').slice(0, 10)
+      if (bDate !== selectedDateStr) continue
+      const bPid = Number((b as any)?.playingcourtid)
+      const derivedBase = Number.isFinite(bPid) ? (baseNameByPid.get(bPid) ?? '') : ''
+      const bookingBase = String((b as any)?.selected_base_name ?? derivedBase).trim().toLowerCase()
+      if (!bookingBase || bookingBase !== activeBaseLower) continue
+      const bStart = timeMinutesFromTimestamp((b as any)?.start_timestamp)
+      const bEnd = timeMinutesFromTimestamp((b as any)?.end_timestamp)
+      if (bStart == null || bEnd == null || bEnd <= bStart) continue
+      result.push([bStart, bEnd])
+    }
+    return result
+  }, [selectedDateStr, selectedBaseName, allCourtBookings, playingCourts])
+
+  // A start slot is blocked if it falls within any existing booking interval
+  const blockedStartSlotSet = useMemo(() => {
+    const blocked = new Set<string>()
+    for (const slot of timeSlots) {
+      const [hh, mm] = slot.split(':').map(Number)
+      const slotMin = hh * 60 + mm
+      for (const [bStart, bEnd] of bookedIntervalsForDate) {
+        if (slotMin >= bStart && slotMin < bEnd) { blocked.add(slot); break }
+      }
+    }
+    return blocked
+  }, [timeSlots, bookedIntervalsForDate])
+
+  // Given a picked startSlot, the maximum permitted end = earliest booking start after startSlot
+  const maxEndMinutes = useMemo(() => {
+    if (!startSlot) return Infinity
+    const [sh, sm] = startSlot.split(':').map(Number)
+    const startM = sh * 60 + sm
+    let cutoff = Infinity
+    for (const [bStart] of bookedIntervalsForDate) {
+      if (bStart > startM && bStart < cutoff) cutoff = bStart
+    }
+    return cutoff
+  }, [startSlot, bookedIntervalsForDate])
+
   const onSelectDay = (dateStr: string, dayKey: string) => {
     if (!isDaySelectable(dayKey, dateStr)) return
     if (selectedDateStr === dateStr) {
@@ -588,6 +642,7 @@ export default function CourtBooking() {
       playingcourtid: selectedPc?.playingcourtid ?? availability.playingcourtid ?? null,
       selected_court_name: selectedPc?.name ?? null,
       selected_base_name: selectedPc?.base_name ?? selectedBaseName ?? null,
+      venue_name: courtInfo?.name ?? null,
       selected_part: selectedPart,
       selected_surface: selectedPc?.surface ?? null,
       court_price_at_booking: Number.isFinite(Number(courtAmount)) ? Number(courtAmount) : null,
