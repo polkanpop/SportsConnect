@@ -334,12 +334,6 @@
     const collapsedSheetHeightPx = Math.round(mapContainerHeight * 0.30);
     const floatingButtonsBottom = Math.max(116, collapsedSheetHeightPx + 60);
     const googleButtonBottom = floatingButtonsBottom + 62;
-    const mapBottomPaddingPx = useMemo(() => {
-      if (bottomSheetIndex < 0) return 0;
-      if (bottomSheetIndex === 0) return Math.round(mapContainerHeight * 0.30);
-      if (bottomSheetIndex === 1) return Math.round(mapContainerHeight * 0.70);
-      return mapContainerHeight;
-    }, [bottomSheetIndex, mapContainerHeight]);
 
     // Approximate zoom stages for DynamicMap region deltas.
     const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
@@ -1166,7 +1160,6 @@
                 {/* Map View (render first so overlays appear above on Android) */}
                 <DynamicMap
                   style={styles.map}
-                  mapPadding={{ top: 0, right: 0, bottom: mapBottomPaddingPx, left: 0 }}
                   initialRegion={INITIAL_REGION}
                   region={mapRegion}
                   cameraCommandId={cameraCommandId}

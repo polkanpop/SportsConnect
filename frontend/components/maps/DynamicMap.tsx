@@ -61,12 +61,6 @@ type GeoFeatureCollection = {
 
 export type DynamicMapProps = {
   style: StyleProp<ViewStyle>
-  mapPadding?: {
-    top: number
-    right: number
-    bottom: number
-    left: number
-  }
   initialRegion?: Region
   initialCenter?: Coordinate
   initialZoom?: number
@@ -105,7 +99,6 @@ function toMapboxCoordinate(coordinate: Coordinate) {
 
 export function DynamicMap({
   style,
-  mapPadding,
   initialRegion,
   initialCenter,
   initialZoom,
@@ -151,10 +144,6 @@ export function DynamicMap({
   }, [initialCenter, initialZoom])
   const resolvedInitialRegion = initialRegion ?? initialRegionFromCenter
   const currentRegion = region ?? resolvedInitialRegion
-  const mapPaddingArray = useMemo<[number, number, number, number] | undefined>(() => {
-    if (!mapPadding) return undefined
-    return [mapPadding.top, mapPadding.right, mapPadding.bottom, mapPadding.left]
-  }, [mapPadding])
   const initialCameraRegionRef = useRef<Region | undefined>(currentRegion)
   const shouldShowUserLocation = showUserLocation ?? showsUserLocation
   const validMarkers = useMemo(
@@ -204,25 +193,9 @@ export function DynamicMap({
         longitude: target.longitude,
       }),
       zoomLevel: regionToZoom(target),
-      padding: mapPaddingArray,
       animationDuration: 900,
     })
-  }, [cameraCommandId, mapPaddingArray, mapReady])
-
-  useEffect(() => {
-    if (!mapReady) return
-    if (!currentRegion) return
-
-    cameraRef.current?.setCamera({
-      centerCoordinate: toMapboxCoordinate({
-        latitude: currentRegion.latitude,
-        longitude: currentRegion.longitude,
-      }),
-      zoomLevel: regionToZoom(currentRegion),
-      padding: mapPaddingArray,
-      animationDuration: 0,
-    })
-  }, [currentRegion, mapPaddingArray, mapReady])
+  }, [cameraCommandId, mapReady])
 
   if (!canRenderMapbox || !initialCameraRegionRef.current) {
     return <View style={style} />
@@ -255,7 +228,6 @@ export function DynamicMap({
     >
       <Mapbox.Camera
         ref={cameraRef}
-        padding={mapPaddingArray}
         minZoomLevel={minZoomLevel}
         maxZoomLevel={maxZoomLevel}
         maxBounds={maxBounds ? {
@@ -268,7 +240,6 @@ export function DynamicMap({
             longitude: initialCameraRegionRef.current.longitude,
           }),
           zoomLevel: regionToZoom(initialCameraRegionRef.current),
-          padding: mapPaddingArray,
         }}
       />
       {shouldShowUserLocation ? <Mapbox.UserLocation visible /> : null}
