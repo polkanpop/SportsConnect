@@ -396,7 +396,11 @@ export default function ActivityPage() {
     if (typeof userId !== 'number') return;
     setRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId), refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId), refetchType: 'active' }),
+      ]);
     } finally {
       setRefreshing(false);
     }
@@ -416,6 +420,9 @@ export default function ActivityPage() {
       if (now - lastFocusInvalidateRef.current < 5_000) return
       lastFocusInvalidateRef.current = now
       void queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId), type: 'active' })
+      // Also keep hosting queries fresh so Hosting tab is fast and reflects new events
+      void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingEvents(userId), type: 'all' })
+      void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingSessions(userId), type: 'all' })
     }, [queryClient, userId])
   );
 
@@ -468,15 +475,17 @@ export default function ActivityPage() {
   const hostingEventsQuery = useQuery({
     queryKey: queryKeys.activityHostingEvents(userId ?? -1),
     queryFn: () => listEventsCombinedByOrganizerId(userId as number),
-    enabled: typeof userId === 'number' && calendarMode === 'Hosting',
+    enabled: typeof userId === 'number',  // prefetch eagerly so Hosting tab loads instantly
     staleTime: 60_000,
+    refetchOnMount: true,  // always re-check after invalidation, overrides global false default
   })
 
   const hostingSessionsQuery = useQuery({
     queryKey: queryKeys.activityHostingSessions(userId ?? -1),
     queryFn: () => listTrainingSessionsCombinedByCoachId(userId as number),
-    enabled: typeof userId === 'number' && calendarMode === 'Hosting',
+    enabled: typeof userId === 'number',  // prefetch eagerly
     staleTime: 60_000,
+    refetchOnMount: true,
   })
 
   const createdEventsCombinedRaw = useMemo(

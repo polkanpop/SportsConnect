@@ -451,6 +451,12 @@ export default function EventCreateScreen() {
               if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
               return [combinedRow, ...arr]
             })
+            // Inject into the Hosting tab cache so it appears immediately without waiting for a refetch
+            qc.setQueryData(queryKeys.activityHostingEvents(userId), (prev: any) => {
+              const arr = Array.isArray(prev) ? prev : []
+              if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+              return [combinedRow, ...arr]
+            })
           }
 
           qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)

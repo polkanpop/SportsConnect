@@ -451,16 +451,13 @@ export default function NotificationsPage() {
           </Text>
           <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={
-          (deleteMode && selectedIds.has(item.notificationid))
-            ? undefined
-            : expandedIds.has(item.notificationid)
-              ? undefined
-              : 0
-        }>{getDisplayMessage(item)}</Text>
+        <Text style={styles.notificationMessage} numberOfLines={1}>{item.title ? '\u200b' : ''}</Text>
+        {expandedIds.has(item.notificationid) && (
+          <Text style={styles.notificationMessage}>{getDisplayMessage(item)}</Text>
+        )}
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
-            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: item.data?.courtid } })}
+            onPress={() => router.push({ pathname: '/(tabs)/Map' as any, params: { deeplink_courtid: String(item.data?.courtid ?? '') } })}
           >
             <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
           </TouchableOpacity>
@@ -525,6 +522,8 @@ export default function NotificationsPage() {
       )}
 
       <SectionList
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
         sections={sections}
         keyExtractor={(item) => item.notificationid.toString()}
         renderItem={renderItem}
