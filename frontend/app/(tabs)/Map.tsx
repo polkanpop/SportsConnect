@@ -782,64 +782,23 @@
 
     const availabilityOptions = ["Available", "Unavailable"];
 
-    // Request location permissions and fetch user location
-    const hasCenteredRef = useRef(false);
-    const firstUserCoordinate = useRef<{ latitude: number; longitude: number } | null>(null);
-
-    useEffect(() => {
-      (async () => {
-        if (hasCenteredRef.current) return;
-        hasCenteredRef.current = true;
-
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== "granted") {
-            console.log("Permission denied");
-            return;
-          }
-
-          const location = await Location.getCurrentPositionAsync({});
-          setUserLocation(location);
-          if (!firstUserCoordinate.current) {
-            firstUserCoordinate.current = {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            };
-          }
-
-          if (location) {
-            focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
-          }
-        } catch (e) {
-          console.log("Location error:", e);
-        }
-      })();
-    }, [focusMapRegion]);
-
-    // Center map on user’s current location when pressing the “My Location” button
-    const handleMyLocationPress = async () => {
-      if (!userLocation) {
+    // Center map on user location - called on every tab focus and by the My Location button
+    const handleMyLocationPress = useCallback(async () => {
+      try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          console.log("Permission denied");
-          return;
-        }
-
-        // Fetch location if not already available
+        if (status !== "granted") return;
         const location = await Location.getCurrentPositionAsync({});
         setUserLocation(location);
-        if (!firstUserCoordinate.current) {
-          firstUserCoordinate.current = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          };
-        }
-
         focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
-      } else {
-        focusMapRegion(userLocation.coords.latitude, userLocation.coords.longitude, 2);
+      } catch (e) {
+        console.log("Location error:", e);
       }
-    };
+    }, [focusMapRegion]);
+
+    // Every time the user enters the Map tab, auto-center to their location
+    useFocusEffect(useCallback(() => {
+      void handleMyLocationPress();
+    }, [handleMyLocationPress]));
 
     // Handle marker when pressed
     const handleMarkerPress = async (marker: MarkerType) => {
