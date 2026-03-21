@@ -613,6 +613,36 @@ export default function ActivityPage() {
   };
 
   const renderRecord = (item: UnifiedBooking) => {
+    const bs = item.bookingStatus.toLowerCase()
+    const ss = item.sessionStatus.toLowerCase()
+
+    let badges: Array<{ label: string; bg: string }> = []
+    if (item.mode === 'Booking') {
+      if (item.activity === 'court') {
+        if (bs === 'pending') {
+          badges = [{ label: 'Pending', bg: '#EAB308' }]
+        } else if (bs === 'rejected') {
+          badges = [{ label: 'Rejected', bg: '#EF4444' }]
+        } else if (bs === 'approved') {
+          if (ss !== 'cancelled') {
+            const approvedBadge = { label: 'Approved', bg: '#22C55E' }
+            if (ss === 'completed') badges = [approvedBadge, { label: 'Completed', bg: '#6B7280' }]
+            else if (ss === 'missed') badges = [approvedBadge, { label: 'Missed', bg: '#374151' }]
+            else badges = [approvedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
+          }
+        }
+      } else {
+        if (bs === 'pending') {
+          badges = [{ label: 'Pending', bg: '#EAB308' }]
+        } else if (bs === 'joined') {
+          const joinedBadge = { label: 'Joined', bg: '#22C55E' }
+          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: 'Completed', bg: '#6B7280' }]
+          else if (ss.includes('missed') || item.status === 'Missed') badges = [joinedBadge, { label: 'Missed', bg: '#374151' }]
+          else badges = [joinedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
+        }
+      }
+    }
+
     return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -638,9 +668,19 @@ export default function ActivityPage() {
         </Text>
 
         <View style={{ marginTop: 8 }}>
-          <View style={[styles.statusPill, getStatusStyle(item.status)]}>
-            <Text style={styles.statusText}>{item.status}</Text>
-          </View>
+          {badges.length > 0 ? (
+            <View style={styles.badgeRow}>
+              {badges.map(b => (
+                <View key={b.label} style={[styles.statusPill, { backgroundColor: b.bg }]}>
+                  <Text style={styles.statusText}>{b.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={[styles.statusPill, getStatusStyle(item.status)]}>
+              <Text style={styles.statusText}>{item.status}</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.eventMetaLine}>
@@ -1121,6 +1161,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignSelf: 'flex-start',
     flexShrink: 0,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignSelf: 'flex-start',
   },
   statusText: {
     fontSize: 12,

@@ -672,20 +672,12 @@ export default function EventCreateScreen() {
     )
   }
 
-  // Auto-select first AVAILABLE booking when list loads
-  useEffect(() => {
-    if (!bookingsLoading && Array.isArray(availableEnrichedBookings) && availableEnrichedBookings.length && selectedBookingId == null) {
-      setSelectedBookingId(availableEnrichedBookings[0].courtbookingid)
-    }
-  }, [bookingsLoading, availableEnrichedBookings, selectedBookingId])
-
-  // If current selection becomes unavailable (booked by event/training after refresh), switch to first available or clear.
+  // If current selection becomes unavailable (booked by event/training after refresh), clear it.
   useEffect(() => {
     if (selectedBookingId != null) {
       const stillAvailable = availableEnrichedBookings.some(b => b.courtbookingid === selectedBookingId)
       if (!stillAvailable) {
-        if (availableEnrichedBookings.length) setSelectedBookingId(availableEnrichedBookings[0].courtbookingid)
-        else setSelectedBookingId(null)
+        setSelectedBookingId(null)
       }
     }
   }, [availableEnrichedBookings, selectedBookingId])
