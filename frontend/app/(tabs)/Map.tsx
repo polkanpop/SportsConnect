@@ -99,9 +99,9 @@
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
-  // Collapsed sheet is 20%; shift focused markers into the upper-third of the visible 80%.
-  const MAP_FOCUS_LAT_OFFSET_RATIO = 0.14;
-  // Push the map floor up so markers never sit behind the 20% collapsed sheet.
+  // Collapsed sheet is 30%; shift focused markers into the upper-third of the visible 70%.
+  const MAP_FOCUS_LAT_OFFSET_RATIO = 0.20;
+  // Push the map floor up so markers never sit behind the 30% collapsed sheet.
   const MAP_SOUTH_VISUAL_BUFFER_RATIO = 0.08;
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -399,7 +399,7 @@
     }, []);
 
     // Snap points for the BottomSheet
-    const snapPoints = useMemo(() => ["20%", "70%", "100%"], []);
+    const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);
 
     // Reset tab state when selecting a new marker
     useEffect(() => {
@@ -782,14 +782,22 @@
 
     const availabilityOptions = ["Available", "Unavailable"];
 
-    // Center map on user location - called on every tab focus and by the My Location button
+    // Center map on user location - called on every tab focus and by the My Location button.
+    // Use last-known position for an immediate snap, then update with a fresh GPS fix.
     const handleMyLocationPress = useCallback(async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
-        const location = await Location.getCurrentPositionAsync({});
-        setUserLocation(location);
-        focusMapRegion(location.coords.latitude, location.coords.longitude, 2);
+        // Immediate center from cached position (no GPS wait)
+        const lastKnown = await Location.getLastKnownPositionAsync();
+        if (lastKnown) {
+          setUserLocation(lastKnown);
+          focusMapRegion(lastKnown.coords.latitude, lastKnown.coords.longitude, 2);
+        }
+        // Then refresh with accurate fix
+        const fresh = await Location.getCurrentPositionAsync({});
+        setUserLocation(fresh);
+        focusMapRegion(fresh.coords.latitude, fresh.coords.longitude, 2);
       } catch (e) {
         console.log("Location error:", e);
       }
