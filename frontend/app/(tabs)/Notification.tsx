@@ -338,18 +338,19 @@ export default function NotificationsPage() {
       return
     }
 
-    // Toggle expand/collapse for already-read notifications
-    if ((row.status || '').toLowerCase() !== 'unread') {
-      setExpandedIds(prev => {
-        const next = new Set(prev)
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        return next
-      })
-      return
-    }
+    // Always toggle expand/collapse — decoupled from read/unread status.
+    // This prevents the silent background refresh from breaking the toggle
+    // (if the server returns the row as 'unread' again, status no longer gates collapse).
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
-    // Mark unread as read and auto-expand
+    // Side-effect only: mark as read if currently unread
+    if ((row.status || '').toLowerCase() !== 'unread') return
+
     setUpdating(id);
     const idx = rows.findIndex(r => r.notificationid === id);
     if (idx === -1) return;
@@ -360,17 +361,15 @@ export default function NotificationsPage() {
       copy[idx] = updated;
       return copy;
     });
-    setExpandedIds(prev => { const next = new Set(prev); next.add(id); return next; });
     try {
       await markNotificationRead(id)
     } catch (e: any) {
-      // rollback
+      // rollback row status only — keep expanded since user tapped to open
       setRows(prev => {
         const copy = [...prev];
         copy[idx] = original;
         return copy;
       });
-      setExpandedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
       setError(e?.message || String(e))
     } finally {
       setUpdating(null);

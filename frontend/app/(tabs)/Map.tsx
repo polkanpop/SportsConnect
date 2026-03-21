@@ -312,6 +312,7 @@
       zoomBaseScale.value = 1; zoomBaseX.value = 0; zoomBaseY.value = 0
     }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomMapImageUri, zoomScale, zoomTX, zoomTY])
     const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
+    const bottomSheetHasOpenedRef = useRef(false); // true after the sheet has been successfully opened once
 
     const [searchQuery, setSearchQuery] = useState(""); // State for search query
     const [markers, setMarkers] = useState<MarkerType[]>([]); // fetched markers
@@ -815,9 +816,13 @@
       // Favorite state derived from favoriteIds
       setIsFavorite(favoriteIds.includes(marker.courtid));
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      // Defer opening so React has committed the state update and the sheet content is ready.
-      // 50 ms is enough for even the initial mount layout measurement to complete.
-      setTimeout(() => bottomSheetRef.current?.snapToIndex(0), 50);
+      // First open needs a longer delay: the BottomSheet layout measurement hasn't run yet.
+      // After that, 50 ms is sufficient for subsequent taps.
+      const delay = bottomSheetHasOpenedRef.current ? 50 : 300;
+      setTimeout(() => {
+        bottomSheetRef.current?.snapToIndex(0);
+        bottomSheetHasOpenedRef.current = true;
+      }, delay);
     };
 
     const handleOpenGoogleMaps = useCallback(async () => {
@@ -854,7 +859,11 @@
       setSelectedMarker(marker); // Set the selected marker
       setFlatListVisible(false); // Hide the FlatList
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      setTimeout(() => bottomSheetRef.current?.snapToIndex(0), 50); // Open BottomSheet after state commits
+      const delay = bottomSheetHasOpenedRef.current ? 50 : 300;
+      setTimeout(() => {
+        bottomSheetRef.current?.snapToIndex(0);
+        bottomSheetHasOpenedRef.current = true;
+      }, delay); // Open BottomSheet after state commits
     };
 
     // Update bottom sheet index on change

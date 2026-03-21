@@ -61,7 +61,7 @@ def _normalize_images(v: Any):
 
 @router.get("", response_model=list[dict])
 @cache(expire=120, key_builder=make_key_builder("events"))
-def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+def list_events(organizerid: int | None = Query(None), status: str | None = Query(None), courtbookingid: int | None = Query(None), limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
     try:
         filters: dict[str, int | str] = {}
         if organizerid is not None:

@@ -406,29 +406,16 @@ export default function ActivityPage() {
   // spamming the backend every time the user switches tabs.
   const lastFocusInvalidateRef = useRef<number>(0)
 
-  // Ensure bookings refresh when returning to this tab after creating a booking.
+  // Refresh dashboard whenever the user focuses this tab.
+  // Throttled to 5 s to avoid spamming the backend on rapid tab switches,
+  // but short enough that coming back right after a booking creation gets fresh data.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId !== 'number') return;
       const now = Date.now()
-      // Throttle at 10 s so rapid tab switches don't spam the backend,
-      // but a user returning right after booking creation still gets fresh data.
-      if (now - lastFocusInvalidateRef.current < 10_000) return
+      if (now - lastFocusInvalidateRef.current < 5_000) return
       lastFocusInvalidateRef.current = now
-
-      const key = queryKeys.dashboard(userId)
-      const st = queryClient.getQueryState(key)
-      const isFetching = st?.fetchStatus === 'fetching'
-      const hasData = !!st?.data
-      const isInvalidated = st?.isInvalidated ?? false
-      const staleForMs = now - (st?.dataUpdatedAt || 0)
-      // Refresh if: no data yet, query was explicitly invalidated (e.g. after booking creation),
-      // or data is older than 2 minutes.
-      const shouldRefresh = !hasData || isInvalidated || staleForMs > 2 * 60_000
-
-      if (!isFetching && shouldRefresh) {
-        void queryClient.refetchQueries({ queryKey: key, type: 'active' })
-      }
+      void queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId), type: 'active' })
     }, [queryClient, userId])
   );
 

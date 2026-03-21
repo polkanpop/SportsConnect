@@ -73,8 +73,16 @@ def _fetch_court_bookings_relational(userid: int) -> List[Dict[str, Any]]:
                 ")"
                 ")"
                 "),"
-                "events!events_courtbookingid_fkey(eventid,courtbookingid,time,status,organizerid),"
-                "trainingsessions!trainingsessions_courtbookingid_fkey(sessionid,courtbookingid,time,status,coachid)"
+                "events!events_courtbookingid_fkey("
+                "eventid,courtbookingid,time,status,organizerid,"
+                "eventinfo!eventinfo_eventid_fkey("
+                "eventinfoid,title,description,images,numberofpeople,"
+                "entry_fee,support_payment_method,participants_cap,join_status)),"
+                "trainingsessions!trainingsessions_courtbookingid_fkey("
+                "sessionid,courtbookingid,time,status,coachid,"
+                "trainingsessioninfo!trainingsessioninfo_sessionid_fkey("
+                "sessioninfoid,title,description,images,numberofpeople,"
+                "entry_fee,support_payment_method,participants_cap,join_status))"
             ),
             filters={"userid": userid},
             order={"column": "courtbookingid"},
@@ -211,6 +219,9 @@ def _attach_linked_details(
 
 
 def _collect_combined(rows: List[Dict[str, Any]], rel_key: str) -> List[Dict[str, Any]]:
+    # Meta-info key varies by rel type.
+    _META_KEYS = {"events": "eventinfo", "trainingsessions": "trainingsessioninfo"}
+    meta_key = _META_KEYS.get(rel_key, "")
     combined: List[Dict[str, Any]] = []
     if not isinstance(rows, list):
         return combined
@@ -226,23 +237,52 @@ def _collect_combined(rows: List[Dict[str, Any]], rel_key: str) -> List[Dict[str
             for child in rel:
                 if not isinstance(child, dict):
                     continue
+                # Flatten nested eventinfo / trainingsessioninfo if present.
+                meta = child.get(meta_key) if meta_key else None
+                if isinstance(meta, list):
+                    meta = meta[0] if meta else {}
+                if not isinstance(meta, dict):
+                    meta = {}
+                base_child = {k: v for k, v in child.items() if k != meta_key}
                 combined.append(
                     {
-                        **child,
+                        **base_child,
                         "courtid": child.get("courtid") if child.get("courtid") is not None else parent_courtid,
                         "court_name": child.get("court_name") if child.get("court_name") else parent_court_name,
                         "start_timestamp": child.get("start_timestamp") if child.get("start_timestamp") else parent_start,
                         "end_timestamp": child.get("end_timestamp") if child.get("end_timestamp") else parent_end,
+                        "title": meta.get("title"),
+                        "description": meta.get("description"),
+                        "images": meta.get("images"),
+                        "numberofpeople": meta.get("numberofpeople"),
+                        "participants_cap": meta.get("participants_cap"),
+                        "entry_fee": meta.get("entry_fee"),
+                        "support_payment_method": meta.get("support_payment_method"),
+                        "join_status": meta.get("join_status"),
                     }
                 )
         elif isinstance(rel, dict):
+            meta = rel.get(meta_key) if meta_key else None
+            if isinstance(meta, list):
+                meta = meta[0] if meta else {}
+            if not isinstance(meta, dict):
+                meta = {}
+            base_rel = {k: v for k, v in rel.items() if k != meta_key}
             combined.append(
                 {
-                    **rel,
+                    **base_rel,
                     "courtid": rel.get("courtid") if rel.get("courtid") is not None else parent_courtid,
                     "court_name": rel.get("court_name") if rel.get("court_name") else parent_court_name,
                     "start_timestamp": rel.get("start_timestamp") if rel.get("start_timestamp") else parent_start,
                     "end_timestamp": rel.get("end_timestamp") if rel.get("end_timestamp") else parent_end,
+                    "title": meta.get("title"),
+                    "description": meta.get("description"),
+                    "images": meta.get("images"),
+                    "numberofpeople": meta.get("numberofpeople"),
+                    "participants_cap": meta.get("participants_cap"),
+                    "entry_fee": meta.get("entry_fee"),
+                    "support_payment_method": meta.get("support_payment_method"),
+                    "join_status": meta.get("join_status"),
                 }
             )
     return combined

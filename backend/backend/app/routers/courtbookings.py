@@ -92,6 +92,15 @@ async def _invalidate_courtbookings_swr_cache(request: Request) -> None:
         await redis.delete(key)
 
 
+async def _invalidate_user_dashboard_cache(app: Any, userid: int) -> None:
+    """Delete the dashboard SWR cache entry for a user so the next request fetches fresh data."""
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+    cache_key = f"sportsconnect:me:dashboard:v2:userid={userid}"
+    await redis.delete(cache_key)
+
+
 def _schedule_background_refresh(coro: Any) -> None:
     task = asyncio.create_task(coro)
 
@@ -372,7 +381,7 @@ async def _refresh_by_id_cache(*, app: Any, cache_key: str, courtbookingid: int)
 
 
 @router.get("", response_model=list[dict])
-async def list_court_bookings(request: Request, userid: int | None = Query(None), courtid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+async def list_court_bookings(request: Request, userid: int | None = Query(None), courtid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
     try:
         cache_key = _cache_list_key(userid=userid, courtid=courtid, status=status, limit=limit, offset=offset)
         redis = getattr(request.app.state, "redis", None)
@@ -650,6 +659,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
 
         background_tasks.add_task(invalidate_namespace, "courtbookings", "courtavailability")
         background_tasks.add_task(_invalidate_courtbookings_swr_cache, request)
+        if final_userid is not None:
+            background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, final_userid)
         return row
     except HTTPException:
         raise
@@ -769,6 +780,13 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
 
         background_tasks.add_task(invalidate_namespace, "courtbookings", "courtavailability")
         background_tasks.add_task(_invalidate_courtbookings_swr_cache, request)
+        # Bust the booker's dashboard cache so their next pull sees the updated status
+        if existing:
+            _booker_id = existing.get("userid")
+            if _booker_id is not None:
+                background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, int(_booker_id))
+        if auth_userid is not None:
+            background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, auth_userid)
         return row
     except HTTPException:
         raise
