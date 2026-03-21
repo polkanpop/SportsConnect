@@ -197,7 +197,7 @@ export default function CourtBooking() {
     const [eh, em] = endSlot.split(':').map(Number)
     return (eh*60+em) - (sh*60+sm)
   }, [startSlot, endSlot])
-  const durationInvalid = !!(startSlot && endSlot && (durationMinutes < 60 || durationMinutes > 180))
+  const durationInvalid = !!(startSlot && endSlot && durationMinutes < 60)
 
   // Resolve numeric userid similar to other screens via query
   const { userId } = useAppBootstrap()
@@ -408,10 +408,21 @@ export default function CourtBooking() {
     })
   }, [selectedDateStr, timeSlots])
 
+  // For start time, only expose slots where at least 1 hour of booking time remains before closing.
+  const startVisibleSlots = useMemo(() => {
+    if (!scheduleDisplayAvailability) return visibleTimeSlots
+    const [eh, em] = String(scheduleDisplayAvailability.end_time).split(':').map(Number)
+    const courtEndMinutes = eh * 60 + em
+    return visibleTimeSlots.filter((slot) => {
+      const [hh, mm] = slot.split(':').map(Number)
+      return (hh * 60 + mm) + 60 <= courtEndMinutes
+    })
+  }, [visibleTimeSlots, scheduleDisplayAvailability])
+
   // If a previously selected slot becomes invalid as time moves on, clear it.
   useEffect(() => {
     if (!startSlot) return
-    if (!visibleTimeSlots.includes(startSlot)) {
+    if (!startVisibleSlots.includes(startSlot)) {
       setStartSlot(null)
       setEndSlot(null)
       return
@@ -419,7 +430,7 @@ export default function CourtBooking() {
     if (endSlot && !visibleTimeSlots.includes(endSlot)) {
       setEndSlot(null)
     }
-  }, [visibleTimeSlots, startSlot, endSlot])
+  }, [startVisibleSlots, visibleTimeSlots, startSlot, endSlot])
 
   const isStartInPast = useMemo(() => {
     if (!selectedDateStr || !startSlot) return false
@@ -561,10 +572,52 @@ export default function CourtBooking() {
       const bStart = timeMinutesFromTimestamp((b as any)?.start_timestamp)
       const bEnd = timeMinutesFromTimestamp((b as any)?.end_timestamp)
       if (bStart == null || bEnd == null || bEnd <= bStart) continue
+      // Only full-court (or legacy unknown-part) bookings block time slots.
+      // Half-court bookings only disable specific court cards (handled in Step 3).
+      const bPart = String((b as any)?.selected_part ?? '').toLowerCase()
+      if (bPart === 'half_a' || bPart === 'half_b') continue
       result.push([bStart, bEnd])
     }
     return result
   }, [selectedDateStr, selectedBaseName, allCourtBookings, playingCourts])
+
+  // Which parts have conflicting bookings for the currently selected time window.
+  // Used to disable specific court cards in Step 3 selection.
+  const conflictingPartSet = useMemo(() => {
+    if (!selectedDateStr || !startSlot || !endSlot) return new Set<string>()
+    const activeBaseLower = String(selectedBaseName ?? '').trim().toLowerCase()
+    if (!activeBaseLower) return new Set<string>()
+    const [sh, sm] = startSlot.split(':').map(Number)
+    const [eh, em] = endSlot.split(':').map(Number)
+    const reqStart = sh * 60 + sm
+    const reqEnd = eh * 60 + em
+    const baseNameByPid = new Map<number, string>()
+    for (const pc of playingCourts) {
+      const pid = Number((pc as any).playingcourtid)
+      const bn = String((pc as any).base_name ?? '').trim().toLowerCase()
+      if (Number.isFinite(pid) && bn) baseNameByPid.set(pid, bn)
+    }
+    const conflicting = new Set<string>()
+    for (const b of allCourtBookings) {
+      const approval = String((b as any)?.status ?? '').toLowerCase()
+      const bStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+      if (approval.includes('reject') || bStatus.includes('cancel') || bStatus.includes('complete') || bStatus.includes('missed')) continue
+      const bDate = String((b as any)?.bookingdate ?? '').slice(0, 10)
+      if (bDate !== selectedDateStr) continue
+      const bPid = Number((b as any)?.playingcourtid)
+      const derivedBase = Number.isFinite(bPid) ? (baseNameByPid.get(bPid) ?? '') : ''
+      const bookingBase = String((b as any)?.selected_base_name ?? derivedBase).trim().toLowerCase()
+      if (!bookingBase || bookingBase !== activeBaseLower) continue
+      const bStart = timeMinutesFromTimestamp((b as any)?.start_timestamp)
+      const bEnd = timeMinutesFromTimestamp((b as any)?.end_timestamp)
+      if (bStart == null || bEnd == null || bEnd <= bStart) continue
+      if (reqStart < bEnd && bStart < reqEnd) {
+        const part = String((b as any)?.selected_part ?? '').toLowerCase()
+        conflicting.add(part || 'full')
+      }
+    }
+    return conflicting
+  }, [selectedDateStr, startSlot, endSlot, selectedBaseName, allCourtBookings, playingCourts])
 
   // A start slot is blocked if it falls within any existing booking interval
   const blockedStartSlotSet = useMemo(() => {
@@ -929,7 +982,7 @@ export default function CourtBooking() {
                       <Text style={styles.subHeading}>Select Time</Text>
                       <Text style={styles.smallText}>Start</Text>
                       <View style={styles.slotRow}>
-                        {visibleTimeSlots.map((ts) => {
+                        {startVisibleSlots.map((ts) => {
                           const disabled = isStartSlotBlocked(ts)
                           return (
                             <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
@@ -938,7 +991,7 @@ export default function CourtBooking() {
                           )
                         })}
                       </View>
-                      {visibleTimeSlots.length === 0 && (
+                      {startVisibleSlots.length === 0 && (
                         <Text style={styles.durationWarning}>No future slots available for today.</Text>
                       )}
                       {startSlot && (
@@ -954,7 +1007,7 @@ export default function CourtBooking() {
                               )
                             })}
                           </View>
-                          {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
+                          {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking duration must be at least 1 hour.</Text>}
                           {isStartInPast && <Text style={styles.durationWarning}>Selected start time has already passed. Please choose another slot.</Text>}
                         </>
                       )}
@@ -971,6 +1024,15 @@ export default function CourtBooking() {
                     {baseGroupCourts.map((pc) => {
                       const courtLabel = String(pc.name || pc.base_name || `Court ${pc.playingcourtid}`)
                       const active = selectedPlayingCourtId === pc.playingcourtid
+                      const pcPart = String((pc as any).part || '').toLowerCase()
+                      const isCourtDisabled = (() => {
+                        if (!conflictingPartSet.size) return false
+                        if (pcPart === 'half_a' || pcPart === 'half_b') {
+                          return conflictingPartSet.has(pcPart) || conflictingPartSet.has('full')
+                        }
+                        // Full court is blocked if any booking overlaps (any part taken)
+                        return conflictingPartSet.size > 0
+                      })()
                       const imgs: string[] = (pc as any).images || []
                       const rawImg = imgs[0]
                       const imageUri = typeof rawImg === 'string' && rawImg.trim()
@@ -983,8 +1045,9 @@ export default function CourtBooking() {
                       return (
                         <TouchableOpacity
                           key={pc.playingcourtid}
+                          disabled={isCourtDisabled}
                           onPress={() => setSelectedPlayingCourtId(pc.playingcourtid)}
-                          style={[styles.selectCourtCard, active && styles.selectCourtCardActive]}
+                          style={[styles.selectCourtCard, active && styles.selectCourtCardActive, isCourtDisabled && styles.selectCourtCardDisabled]}
                           activeOpacity={0.8}
                         >
                           <View style={styles.selectCourtImageWrap}>
@@ -1053,7 +1116,7 @@ export default function CourtBooking() {
               <Text style={styles.subHeading}>Select Time</Text>
               <Text style={styles.smallText}>Start</Text>
               <View style={styles.slotRow}>
-                {visibleTimeSlots.map((ts) => {
+                {startVisibleSlots.map((ts) => {
                   const disabled = isStartSlotBlocked(ts)
                   return (
                     <TouchableOpacity key={ts} disabled={disabled} onPress={() => onSelectStart(ts)} style={[styles.slotBtn, startSlot === ts && styles.slotBtnActive, disabled && styles.slotBtnDisabled]}>
@@ -1075,7 +1138,7 @@ export default function CourtBooking() {
                       )
                     })}
                   </View>
-                  {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking time must be between 1 and 3 hours.</Text>}
+                  {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking duration must be at least 1 hour.</Text>}
                 </>
               )}
             </View>
@@ -1368,6 +1431,7 @@ const styles = StyleSheet.create({
   modalBtnText: { fontSize:14, fontWeight:'600', color: COLORS.brown900 },
   selectCourtCard: { width: IMAGE_TILE_WIDTH, borderRadius: 14, overflow: 'hidden', borderWidth: 2, borderColor: '#E5E7EB', backgroundColor: '#fff' },
   selectCourtCardActive: { borderColor: COLORS.brandOrangeDeep },
+  selectCourtCardDisabled: { opacity: 0.38 },
   selectCourtImageWrap: { width: '100%', height: IMAGE_TILE_HEIGHT },
   selectCourtImage: { width: '100%', height: '100%' },
   selectCourtImagePlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },

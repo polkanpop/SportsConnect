@@ -49,7 +49,6 @@ export function useCreateCourtBooking() {
       playingcourtid?: number | null
       selected_court_name?: string | null
       selected_base_name?: string | null
-      venue_name?: string | null
       selected_part?: 'full' | 'half_a' | 'half_b' | null
       selected_surface?: string | null
       court_price_at_booking?: number | null
@@ -112,7 +111,6 @@ export function useCreateBookingWithPayment() {
       playingcourtid?: number | null
       selected_court_name?: string | null
       selected_base_name?: string | null
-      venue_name?: string | null
       selected_part?: 'full' | 'half_a' | 'half_b' | null
       selected_surface?: string | null
       court_price_at_booking?: number | null
@@ -132,7 +130,6 @@ export function useCreateBookingWithPayment() {
         playingcourtid: payload.playingcourtid ?? null,
         selected_court_name: payload.selected_court_name ?? null,
         selected_base_name: payload.selected_base_name ?? null,
-        venue_name: payload.venue_name ?? null,
         selected_part: payload.selected_part ?? null,
         selected_surface: payload.selected_surface ?? null,
         court_price_at_booking: payload.court_price_at_booking ?? null,
