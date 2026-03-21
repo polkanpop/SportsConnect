@@ -459,7 +459,8 @@ export default function NotificationsPage() {
         )}
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
-            onPress={() => router.push({ pathname: '/(tabs)/Map' as any, params: { deeplink_courtid: String(item.data?.courtid ?? '') } })}
+            style={{ alignSelf: 'flex-start' }}
+            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: String(item.data?.courtid ?? ''), courtbookingid: String(item.data?.courtbookingid ?? '') } })}
           >
             <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
           </TouchableOpacity>

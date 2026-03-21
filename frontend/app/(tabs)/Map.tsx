@@ -25,7 +25,7 @@
   import * as Location from "expo-location";
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
   import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-  import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+  import { useFocusEffect, useRouter } from 'expo-router';
   import {
     Dimensions,
     FlatList,
@@ -313,9 +313,7 @@
     }, [zoomBaseScale, zoomBaseX, zoomBaseY, zoomMapImageUri, zoomScale, zoomTX, zoomTY])
     const bottomSheetRef = useRef<BottomSheet>(null); // Ref to BottomSheet
     const bottomSheetHasOpenedRef = useRef(false); // true after the sheet has been successfully opened once
-    const deeplinkHandledRef = useRef<string | null>(null); // tracks last handled deeplink courtid to avoid re-trigger
 
-    const { deeplink_courtid } = useLocalSearchParams<{ deeplink_courtid?: string }>();
     const [searchQuery, setSearchQuery] = useState(""); // State for search query
     const [markers, setMarkers] = useState<MarkerType[]>([]); // fetched markers
     const [filteredMarkers, setFilteredMarkers] = useState<MarkerType[]>([]); // filtered subset
@@ -401,31 +399,6 @@
       setMarkers((prev) => (sameMarkerList(prev, nextMarkers) ? prev : nextMarkers));
       setFilteredMarkers((prev) => (sameMarkerList(prev, nextMarkers) ? prev : nextMarkers));
     }, []);
-
-    // Deep-link handler: navigate to a specific court from Notification "View Booking"
-    useEffect(() => {
-      if (!deeplink_courtid || deeplinkHandledRef.current === deeplink_courtid) return;
-      if (markers.length === 0) return; // wait until markers are loaded
-      const targetId = Number(deeplink_courtid);
-      const marker = markers.find(m => m.courtid === targetId);
-      if (!marker) return;
-      deeplinkHandledRef.current = deeplink_courtid;
-      setSelectedMarker(marker);
-      setIsFavorite(favoriteIds.includes(marker.courtid));
-      setActiveSheetTab('Schedule');
-      setWeekOffset(0);
-      focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
-      const delay = bottomSheetHasOpenedRef.current ? 50 : 300;
-      setTimeout(() => {
-        bottomSheetRef.current?.snapToIndex(0);
-        bottomSheetHasOpenedRef.current = true;
-      }, delay);
-    }, [deeplink_courtid, markers, favoriteIds, focusMapRegion]);
-
-    // Reset handled ref when courtid changes so a re-navigation works
-    useEffect(() => {
-      deeplinkHandledRef.current = null;
-    }, [deeplink_courtid]);
 
     // Snap points for the BottomSheet
     const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);

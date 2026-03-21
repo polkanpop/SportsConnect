@@ -216,8 +216,8 @@ function buildMainSnapshotFromRaw(args: {
   })
 }
 
-export default function CourtPanel(props: { ownerId: number | null }) {
-  const { ownerId } = props
+export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null }) {
+  const { ownerId, deeplinkCourtId, deeplinkCourtBookingId } = props
   const router = useRouter()
 
   const [rows, setRows] = useState<Array<{ court: CourtRow; info: CourtInfoRow | null }>>([])
@@ -225,7 +225,9 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   const [error, setError] = useState<string | null>(null)
   const [pullRefreshing, setPullRefreshing] = useState(false)
 
-  const [selectedCourtId, setSelectedCourtId] = useState<number | null>(null)
+  const [selectedCourtId, setSelectedCourtId] = useState<number | null>(
+    typeof deeplinkCourtId === 'number' ? deeplinkCourtId : null
+  )
 
   const selected = useMemo(() => {
     if (selectedCourtId == null) return null
@@ -588,6 +590,7 @@ export default function CourtPanel(props: { ownerId: number | null }) {
   }, [])
 
   const bookingsLoadedForCourtRef = useRef<number | null>(null)
+  const deeplinkHandledForRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!selected || editMode !== 'booking') return
@@ -595,6 +598,35 @@ export default function CourtPanel(props: { ownerId: number | null }) {
     bookingsLoadedForCourtRef.current = selected.court.courtid
     loadCourtBookings(selected.court.courtid)
   }, [editMode, selected?.court?.courtid]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link: court owner taps "View booking" in Notification → auto-select court → booking tab → date + playing court
+  useEffect(() => {
+    if (!deeplinkCourtId || !deeplinkCourtBookingId) return
+    if (deeplinkHandledForRef.current === deeplinkCourtBookingId) return
+    if (loading) return
+    if (!rows.some(r => r.court.courtid === deeplinkCourtId)) return
+    if (selectedCourtId !== deeplinkCourtId) { setSelectedCourtId(deeplinkCourtId); return }
+    if (editMode !== 'booking') { setEditMode('booking'); return }
+    if (bookingsLoadedForCourtRef.current !== deeplinkCourtId || bookingLoading) return
+    const booking = courtBookings.find(b => b.courtbookingid === deeplinkCourtBookingId)
+    if (!booking) { deeplinkHandledForRef.current = deeplinkCourtBookingId; return }
+    const avail = (availability || []).find(a => a.availabilityid === booking.availabilityid)
+    const pcId: number | null = avail ? (Number((avail as any).playingcourtid) || null) : null
+    const pc = pcId != null ? playingCourts.find(p => Number((p as any).playingcourtid) === pcId) : null
+    const baseName = pc ? String((pc as any).base_name || (pc as any).name || '').trim() || null : null
+    const bookingDate = typeof booking.bookingdate === 'string' ? booking.bookingdate.slice(0, 10) : null
+    let weekOffset = 0
+    if (bookingDate) {
+      const todayOnly = new Date(); todayOnly.setHours(0, 0, 0, 0)
+      const bDate = new Date(`${bookingDate}T00:00:00`)
+      weekOffset = Math.max(0, Math.min(4, Math.floor((bDate.getTime() - todayOnly.getTime()) / (7 * 24 * 60 * 60 * 1000))))
+    }
+    if (baseName) setBookingSelectedBaseName(baseName)
+    if (pcId != null) setBookingSelectedPcId(pcId)
+    if (bookingDate) setBookingSelectedDate(bookingDate)
+    setBookingWeekOffset(weekOffset)
+    deeplinkHandledForRef.current = deeplinkCourtBookingId
+  }, [deeplinkCourtId, deeplinkCourtBookingId, loading, rows, selectedCourtId, editMode, bookingLoading, courtBookings, availability, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -1810,7 +1842,12 @@ export default function CourtPanel(props: { ownerId: number | null }) {
                 }
                 return out
               })()
-              const dateBookings = bookingSelectedDate ? pcBookings.filter((b) => (typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) === bookingSelectedDate) : []
+              const dateBookings = bookingSelectedDate ? pcBookings.filter((b) => {
+                if ((typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) !== bookingSelectedDate) return false
+                const s = String(b.status ?? '').toLowerCase()
+                const bs = String(b.bookingstatus ?? '').toLowerCase()
+                return !s.includes('reject') && !bs.includes('cancel') && s !== 'pending' && s !== 'waiting'
+              }) : []
 
               const renderBookingRow = (b: CourtBookingRow, showActions: boolean) => {
                 const uid = b.userid
