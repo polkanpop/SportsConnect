@@ -803,9 +803,10 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   notificationIcon: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     marginRight: 12,
+    resizeMode: 'contain',
   },
   notificationContent: {
     flex: 1,

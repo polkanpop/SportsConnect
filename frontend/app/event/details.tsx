@@ -324,6 +324,7 @@ export default function DetailsPage() {
     queryFn: () => getCourtBooking((parsed as any).id),
     enabled: parsed.kind === 'court_booking',
     initialData: parsed.kind === 'court_booking' ? (bootstrapCourtBooking as any) : undefined,
+    initialDataUpdatedAt: 0,
     staleTime: 60_000,
   })
 
@@ -382,6 +383,7 @@ export default function DetailsPage() {
     queryFn: () => getEventBooking((parsed as any).id),
     enabled: parsed.kind === 'event_booking',
     initialData: parsed.kind === 'event_booking' ? (bootstrapEventBooking as any) : undefined,
+    initialDataUpdatedAt: 0,
     staleTime: 60_000,
   })
   const sessionBookingQuery = useQuery({
@@ -389,6 +391,7 @@ export default function DetailsPage() {
     queryFn: () => getTrainingSessionBooking((parsed as any).id),
     enabled: parsed.kind === 'session_booking',
     initialData: parsed.kind === 'session_booking' ? (bootstrapSessionBooking as any) : undefined,
+    initialDataUpdatedAt: 0,
     staleTime: 60_000,
   })
 

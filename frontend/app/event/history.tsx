@@ -63,8 +63,9 @@ function formatStatusLabel(raw?: string | null): string {
   if (v.includes('complete')) return 'Completed'
   if (v.includes('upcoming')) return 'Upcoming'
   if (v.includes('approve')) return 'Approved'
+  if (v.includes('reject')) return 'Rejected'
   if (v.includes('paid')) return 'Paid'
-  if (v.includes('pending')) return 'Joined'
+  if (v.includes('pending')) return 'Pending'
   return v.charAt(0).toUpperCase() + v.slice(1)
 }
 
@@ -237,8 +238,9 @@ function statusColor(s?: string | null) {
   const v = String(s ?? '').toLowerCase()
   if (v.includes('miss')) return { bg: '#fef2f2', fg: '#991b1b', dot: '#dc2626' }
   if (v.includes('cancel')) return { bg: '#fee2e2', fg: '#b91c1c', dot: '#ef4444' }
+  if (v.includes('reject')) return { bg: '#fee2e2', fg: '#991b1b', dot: '#ef4444' }
   if (v.includes('complete') || v.includes('paid')) return { bg: '#dcfce7', fg: '#166534', dot: '#22c55e' }
-  if (v.includes('approve')) return { bg: '#dcfce7', fg: '#166534', dot: '#22c55e' }
+  if (v.includes('approve') || v.includes('join')) return { bg: '#dcfce7', fg: '#166534', dot: '#22c55e' }
   if (v.includes('pending')) return { bg: '#fef3c7', fg: '#92400e', dot: '#f59e0b' }
   if (v.includes('upcoming')) return { bg: '#e0f2fe', fg: '#075985', dot: '#0ea5e9' }
   return { bg: '#eef2ff', fg: '#3730a3', dot: '#6366f1' }
@@ -782,6 +784,26 @@ export default function HistoryPage() {
             const bookingStatus = String(meta?.status ?? item.fromStatus ?? '').trim().toLowerCase()
             const sessionStatus = String(meta?.bookingstatus ?? item.toStatus ?? '').trim().toLowerCase()
             const isPast = !Number.isNaN(resolvedStart.getTime()) && resolvedStart.getTime() < Date.now()
+
+            // Court bookings: use live dashboard approval + lifecycle status
+            if (item.kind === 'court_booking') {
+              const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
+              const liveApproval = String(cb?.status ?? '').trim().toLowerCase()
+              const liveLifecycle = String(cb?.bookingstatus ?? '').trim().toLowerCase()
+              if (liveApproval === 'rejected') return 'Rejected'
+              if (liveApproval === 'approved') {
+                if (liveLifecycle === 'missed') return 'Missed'
+                if (liveLifecycle === 'completed') return 'Completed'
+                if (liveLifecycle === 'cancelled') return 'Cancelled'
+                return 'Approved'
+              }
+              if (liveApproval === 'pending') return 'Pending'
+              // Fall back to stored toStatus
+              const storedStatus = String(item.toStatus ?? '').trim().toLowerCase()
+              if (storedStatus === 'rejected') return 'Rejected'
+              if (storedStatus === 'approved') return 'Approved'
+              if (storedStatus === 'pending') return 'Pending'
+            }
 
             if (sessionStatus === 'missed' || statusRaw.toLowerCase() === 'missed') return 'Missed'
             if (isPast && bookingStatus === 'pending' && (sessionStatus === 'upcoming' || sessionStatus === 'missed' || !sessionStatus)) {

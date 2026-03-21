@@ -719,6 +719,9 @@ export default function EventCreateScreen() {
             {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
               <Text style={styles.smallText}>No available courts for event booking.</Text>
             )}
+            {!bookingSelectionLoading && !bookingsError && availableEnrichedBookings.length > 0 && availableEnrichedBookings.every(b => String((b as any)?.status ?? '').toLowerCase() === 'pending') && (
+              <Text style={styles.smallText}>Your court booking is awaiting approval — no approved court available yet.</Text>
+            )}
             {selectedBooking && (
               <View style={styles.selectedBookingBox}>
                 <View style={styles.bookingTitleRow}>
