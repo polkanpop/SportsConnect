@@ -681,7 +681,12 @@ export default function EventCreateScreen() {
         setSelectedBookingId(null)
       }
     }
-  }, [availableEnrichedBookings, selectedBookingId])
+    // Auto-select the first approved/available booking when nothing is selected
+    if (selectedBookingId == null && !bookingSelectionLoading && availableEnrichedBookings.length > 0) {
+      const firstApproved = availableEnrichedBookings.find(b => String((b as any).status ?? '').toLowerCase() !== 'pending')
+      if (firstApproved) setSelectedBookingId(firstApproved.courtbookingid)
+    }
+  }, [availableEnrichedBookings, selectedBookingId, bookingSelectionLoading])
 
   // Refresh combined feeds on focus so booking usage tags stay current.
   useFocusEffect(

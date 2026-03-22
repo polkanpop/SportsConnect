@@ -50,6 +50,7 @@
   
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
+  import { useQuery } from '@tanstack/react-query';
   import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector, NativeViewGestureHandler } from "react-native-gesture-handler";

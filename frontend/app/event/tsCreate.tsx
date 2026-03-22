@@ -620,6 +620,7 @@ export default function TsCreate() {
     )
   }
 
+  // If current selection becomes unavailable (booked by event/training after refresh), clear it.
   useEffect(() => {
     if (selectedBookingId != null) {
       const stillAvailable = availableEnrichedBookings.some(b => b.courtbookingid === selectedBookingId)
@@ -627,7 +628,12 @@ export default function TsCreate() {
         setSelectedBookingId(null)
       }
     }
-  }, [availableEnrichedBookings, selectedBookingId])
+    // Auto-select the first approved/available booking when nothing is selected
+    if (selectedBookingId == null && !bookingSelectionLoading && availableEnrichedBookings.length > 0) {
+      const firstApproved = availableEnrichedBookings.find(b => String((b as any).status ?? '').toLowerCase() !== 'pending')
+      if (firstApproved) setSelectedBookingId(firstApproved.courtbookingid)
+    }
+  }, [availableEnrichedBookings, selectedBookingId, bookingSelectionLoading])
 
   useFocusEffect(
     useCallback(() => {

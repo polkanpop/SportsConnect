@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
@@ -271,8 +271,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [bookingSelectedDate, setBookingSelectedDate] = useState<string | null>(null)
   const [bookingWeekOffset, setBookingWeekOffset] = useState(0)
   const [bookingSelectedSlot, setBookingSelectedSlot] = useState<string | null>(null)
-  const [bookingBlinkOn, setBookingBlinkOn] = useState(false)
-  const bookingBlinkRef = useRef<any>(null)
+  const bookingBlinkOpacity = useSharedValue(1)
 
   const [selectedSubPart, setSelectedSubPart] = useState<PlayingCourtPart>('full')
   const [subEditName, setSubEditName] = useState('')
@@ -674,15 +673,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setBookingSelectedSlot(null)
   }, [bookingSelectedDate])
 
-  // Blink animation for selected booking slot group
+  // Smooth blink animation for selected booking slot group
   useEffect(() => {
     if (!bookingSelectedSlot) {
-      setBookingBlinkOn(false)
-      if (bookingBlinkRef.current) { clearInterval(bookingBlinkRef.current); bookingBlinkRef.current = null }
+      bookingBlinkOpacity.value = withTiming(1, { duration: 150 })
       return
     }
-    bookingBlinkRef.current = setInterval(() => setBookingBlinkOn(b => !b), 350)
-    return () => { if (bookingBlinkRef.current) { clearInterval(bookingBlinkRef.current); bookingBlinkRef.current = null } }
+    bookingBlinkOpacity.value = withRepeat(withTiming(0.35, { duration: 500 }), -1, true)
   }, [bookingSelectedSlot])
 
   useEffect(() => {
@@ -2071,9 +2068,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 const nextBooking = nextSlot ? slotToBookingMap.get(nextSlot) : undefined
                                 const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
                                 const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
-                                const slotBg = isBooked
-                                  ? (isInSelectedGroup ? (bookingBlinkOn ? '#fb923c' : '#f97316') : '#f97316')
-                                  : '#1e1e1e'
+                                const slotBg = isBooked ? '#f97316' : '#1e1e1e'
+                                const animatedSlotStyle = useAnimatedStyle(() => ({
+                                  opacity: isInSelectedGroup ? bookingBlinkOpacity.value : 1,
+                                }))
                                 return (
                                   <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
                                     {/* Left connector track with dot */}
@@ -2087,6 +2085,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                       )}
                                     </View>
                                     {/* Slot box */}
+                                    <Animated.View style={[{ flex: 1, height: 40 }, animatedSlotStyle]}>
                                     <TouchableOpacity
                                       onPress={() => {
                                         if (!isBooked) { setBookingSelectedSlot(null); return }
@@ -2107,6 +2106,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                         {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
                                       </Text>
                                     </TouchableOpacity>
+                                    </Animated.View>
                                   </View>
                                 )
                               })}
