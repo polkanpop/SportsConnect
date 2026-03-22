@@ -30,12 +30,17 @@ function asArray(v: any): string[] {
 }
 
 function formatTime(session: CombinedTrainingSession | null): string {
-  if (!session || !session.time) return 'Unknown date'
+  if (!session) return 'Unknown date'
+  const start = (session as any).start_timestamp || session.time
+  const end = (session as any).end_timestamp
+  if (!start) return 'Unknown date'
   try {
-    const d = new Date(session.time)
-    const day = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-    const tm = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    return `${day}, ${tm}`
+    const startD = new Date(start)
+    const endD = end ? new Date(end) : null
+    const day = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    const startTime = startD.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    const endTime = endD ? endD.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''
+    return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
   } catch { return 'Unknown date' }
 }
 
@@ -89,6 +94,11 @@ export default function TrainingSessionBooking() {
     })
   }, [userId, sessionid, userSessionBookingsRaw])
 
+  const isCancelledSession = useMemo(() => {
+    const s = String(session?.status ?? '').toLowerCase()
+    return s.includes('cancel')
+  }, [session?.status])
+
   // Mirror courtBooking layout: always expanded, remove toggle arrow logic
   const [courtExpanded] = useState(true)
   const [noteExpanded, setNoteExpanded] = useState(false)
@@ -109,10 +119,15 @@ export default function TrainingSessionBooking() {
     return []
   }, [session, isFree])
 
-  const canSubmit = !!session && !!userId && !alreadyBooked && !submitting && !confirmation && (isFree || (!!paymentMethod))
+  const canSubmit = !!session && !!userId && !alreadyBooked && !isCancelledSession && !submitting && !confirmation && (isFree || (!!paymentMethod))
 
   const handleSubmit = useCallback(async () => {
     if (!session || userId == null) return
+    const cancelled = String(session?.status ?? '').toLowerCase().includes('cancel')
+    if (cancelled) {
+      setSubmitError('Training session was cancelled')
+      return
+    }
     if (!isFree && !paymentMethod) return
     setSubmitting(true)
     setSubmitError(null)
@@ -133,6 +148,25 @@ export default function TrainingSessionBooking() {
 
       // Avoid "caching" feeling: refresh both the user's bookings and the cached session list immediately.
       // (listTrainingSessionsCombinedCached uses fetchWithCache, so invalidate that too.)
+
+      // Make Activity reflect the booking immediately
+      const upsert = (key: readonly unknown[]) => {
+        queryClient.setQueryData(key, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          const exists = arr.some((b: any) => {
+            if (typeof b?.sessionid !== 'number') return false
+            if (b.sessionid !== session.sessionid) return false
+            const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+            return !s.includes('cancel')
+          })
+          return exists ? arr : [booking, ...arr]
+        })
+      }
+      if (typeof userId === 'number') {
+        upsert(queryKeys.trainingBookingsUser(userId))
+        queryClient.invalidateQueries({ queryKey: queryKeys.trainingBookingsUser(userId) })
+      }
+
       try { await invalidateTrainingSessionsCombinedCache() } catch {}
       queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
@@ -200,7 +234,7 @@ export default function TrainingSessionBooking() {
           title: session.title,
           courtName: session.court_name || '',
           subtitle: 'Training Session',
-          date: (() => { const d = new Date(session.time ?? new Date().toISOString()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
+          date: (() => { const d = new Date((session as any).start_timestamp || session.time || new Date().toISOString()); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })(),
           time: formatTime(session),
           location: session.address || 'Unknown Location',
           price: isFree ? 0 : session.entry_fee,
@@ -239,6 +273,12 @@ export default function TrainingSessionBooking() {
         <View style={styles.sectionCard}>
           {loadingSessions && <Text style={styles.statusText}>Loading session...</Text>}
           {!loadingSessions && !session && <Text style={styles.errorText}>Session not found.</Text>}
+          {!loadingSessions && !!session && isCancelledSession && (
+            <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
+              <Text style={{ color: '#cc0000', fontWeight: '700' }}>This training session was cancelled.</Text>
+              <Text style={{ color: '#cc0000', marginTop: 2 }}>Booking is disabled.</Text>
+            </View>
+          )}
           {session && (
             <View style={styles.titleRowInline}>
               <Text style={styles.sessionTitle}>{session.title || `Session ${session.sessionid}`}</Text>

@@ -9,6 +9,18 @@ router = APIRouter(prefix="/tsbookings", tags=["training"])
 
 PRIMARY_KEY = "tsbookingid"
 
+
+def _sync_ts_participant_count(sessionid: int) -> None:
+    """Recompute trainingsessioninfo.numberofpeople from joined bookings.
+    Mirrors _sync_event_participant_count in eventbookings.py."""
+    joined_rows = rest_select(
+        "tsbookings",
+        "tsbookingid",
+        filters={"sessionid": sessionid, "status": "joined"},
+    )
+    joined_count = len(joined_rows) if isinstance(joined_rows, list) else 0
+    rest_update("trainingsessioninfo", {"sessionid": sessionid}, {"numberofpeople": joined_count})
+
 @router.get("", response_model=list[dict])
 @cache(expire=30, key_builder=make_key_builder("tsbookings"))
 def list_ts_bookings(sessionid: int | None = Query(None), userid: int | None = Query(None), status: str | None = Query(None), limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)):
@@ -86,6 +98,12 @@ def create_ts_booking(body: dict, background_tasks: BackgroundTasks, current_use
             resp = rest_insert("tsbookings", payload)
         except Exception:
             resp = rest_upsert("tsbookings", payload)
+
+        if desired_status == "joined":
+            try:
+                _sync_ts_participant_count(sessionid)
+            except Exception as e:
+                print("[tsbookings] failed to sync numberofpeople on create:", str(e))
 
         # Notifications (best-effort)
         try:
@@ -167,6 +185,12 @@ def update_ts_booking(tsbookingid: int, body: dict, background_tasks: Background
                 raise HTTPException(status_code=422, detail="No fields to update")
 
         resp = rest_update("tsbookings", {PRIMARY_KEY: tsbookingid}, payload)
+
+        if "status" in payload:
+            try:
+                _sync_ts_participant_count(int(existing.get("sessionid")))
+            except Exception as e:
+                print("[tsbookings] failed to sync numberofpeople:", str(e))
 
         # Coach moderation notifications (best-effort)
         try:

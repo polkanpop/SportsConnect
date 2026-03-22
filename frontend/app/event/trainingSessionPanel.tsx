@@ -57,9 +57,37 @@ function safeNumberOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function parseTimestampLoose(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!s) return null
+  let d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+  if (m) {
+    d = new Date(`${m[1]}T${m[2]}:00`)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return null
+}
+
+function isHiddenSessionStatus(statusRaw: unknown): boolean {
+  const st = String(statusRaw ?? '').trim().toLowerCase()
+  return st === 'completed' || st === 'cancelled'
+}
+
+function isPastSessionLoose(s: any): boolean {
+  const end = parseTimestampLoose(s?.end_timestamp ?? null)
+  const start = parseTimestampLoose(s?.time ?? s?.start_timestamp ?? null)
+  const now = Date.now()
+  if (end) return end.getTime() < now
+  if (start) return start.getTime() < now
+  return false
+}
+
 function formatSessionDateLabel(session: { time?: string | null }) {
   const candidate = String(session.time || '').trim()
-  const d = candidate ? new Date(candidate) : null
+  const d = candidate ? parseTimestampLoose(candidate) : null
   if (!d || Number.isNaN(d.getTime())) return 'Date: -'
   const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
   const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -240,6 +268,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const lastHydratedSessionIdRef = useRef<number | null>(null)
   const initialEditSnapshotRef = useRef<string>('')
   const isDirtyRef = useRef<boolean>(false)
+  const [editBaselineSnapshot, setEditBaselineSnapshot] = useState<string>('')
 
   const makeEditSnapshot = useCallback((payload: { title: string; description: string; cap: string; images: string[] }) => {
     const title = String(payload.title || '').trim()
@@ -254,9 +283,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   }, [editCap, editDescription, editImages, editTitle, makeEditSnapshot])
 
   const isDirty = useMemo(() => {
-    if (!initialEditSnapshotRef.current) return false
-    return currentEditSnapshot !== initialEditSnapshotRef.current
-  }, [currentEditSnapshot])
+    if (!editBaselineSnapshot) return false
+    return currentEditSnapshot !== editBaselineSnapshot
+  }, [currentEditSnapshot, editBaselineSnapshot])
 
   useEffect(() => {
     isDirtyRef.current = isDirty
@@ -404,8 +433,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         const rows = await listTrainingSessionsCombinedByCoachId(coachId)
         if (!mountedRef.current || loadId !== sessionsLoadIdRef.current) return
         const normalized = Array.isArray(rows) ? rows : []
-        setSessions(normalized)
-        if (normalized.length === 0) {
+        const filtered = normalized.filter((s) => {
+          if (isHiddenSessionStatus((s as any)?.status)) return false
+          if (isPastSessionLoose(s)) return false
+          return true
+        })
+        setSessions(filtered)
+        if (filtered.length === 0) {
           setSelectedSessionId(null)
           return
         }
@@ -418,10 +452,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
               : null
 
         setSelectedSessionId((prev) => {
-          const has = (id: number | null) => id != null && normalized.some((s) => s.sessionid === id)
+          const has = (id: number | null) => id != null && filtered.some((s) => s.sessionid === id)
           if (preferred != null && has(preferred)) return preferred
           if (has(prev)) return prev
-          return normalized[0].sessionid
+          return filtered[0].sessionid
         })
       } catch (e: any) {
         if (!mountedRef.current || loadId !== sessionsLoadIdRef.current) return
@@ -564,6 +598,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const onApproveApplicant = useCallback(
     async (sessionId: number, booking: TrainingSessionBookingRow) => {
       const bookingId = booking.tsbookingid
+      if (mutatingBookingIds[bookingId]) return
+      if (String(booking.status || '').toLowerCase() !== 'pending') return
       const approvedApplicant = applicants.find((x) => x.booking.tsbookingid === bookingId) || null
       setMutatingBookingIds((m) => ({ ...m, [booking.tsbookingid]: 'approve' }))
       try {
@@ -592,6 +628,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
   const onRejectApplicant = useCallback(
     async (sessionId: number, booking: TrainingSessionBookingRow) => {
+      if (mutatingBookingIds[booking.tsbookingid]) return
+      if (String(booking.status || '').toLowerCase() !== 'pending') return
       setMutatingBookingIds((m) => ({ ...m, [booking.tsbookingid]: 'reject' }))
       try {
         await rejectTrainingSessionBooking(booking.tsbookingid)
@@ -661,7 +699,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setEditCap(nextCap)
         setEditImages(nextImages)
 
-        initialEditSnapshotRef.current = makeEditSnapshot({ title: nextTitle, description: nextDesc, cap: nextCap, images: nextImages })
+        const snap = makeEditSnapshot({ title: nextTitle, description: nextDesc, cap: nextCap, images: nextImages })
+        initialEditSnapshotRef.current = snap
+        setEditBaselineSnapshot(snap)
       } catch (e: any) {
         setInfoMeta(null)
         setInfoError(e?.message || String(e))
@@ -749,8 +789,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       const meta2 = await getTrainingSessionInfoBySessionId(selectedSessionId as number)
       setInfoMeta(meta2)
       setEditImages(asStringArray((meta2 as any)?.images))
-			initialEditSnapshotRef.current = currentEditSnapshot
-			setPendingCloudinaryDeletes([])
+      initialEditSnapshotRef.current = currentEditSnapshot
+      setEditBaselineSnapshot(currentEditSnapshot)
+      setPendingCloudinaryDeletes([])
       setSaveSuccessMessage('Training session updated successfully.')
     } catch (e: any) {
       setInfoError(e?.message || String(e))
@@ -1213,15 +1254,14 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     backgroundColor: '#fff',
                     borderRadius: 12,
                     padding: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
                     marginBottom: 10,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={(e) => {
-                      openActionMenuForUser(p.booking.userid, p.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
-                    }}
+                    activeOpacity={0.75}
+                    onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(p.booking.userid) } } as any)}
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                   >
                     {p.pfp ? (
@@ -1243,18 +1283,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     </View>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    activeOpacity={0.75}
-                    onPress={() => setExpandedNoteIds(prev => {
-                      const n = new Set(prev);
-                      if (n.has(p.booking.tsbookingid)) n.delete(p.booking.tsbookingid);
-                      else n.add(p.booking.tsbookingid);
-                      return n;
-                    })}
-                    style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
-                  >
-                      <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={(e) => {
                       openActionMenuForUser(p.booking.userid, p.name, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })
@@ -1267,13 +1295,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   >
                     <Image source={ICONS.dotdotdot} style={{ width: 18, height: 18, tintColor: '#111827' }} resizeMode="contain" />
                   </TouchableOpacity>
-                  </View>
-                  {expandedNoteIds.has(p.booking.tsbookingid) && (
-                    <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: '#d1d5db' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
-                      <Text style={{ fontSize: 13, color: '#555' }}>{(p.booking as any).note?.trim() ? (p.booking as any).note : 'No note provided.'}</Text>
-                    </View>
-                  )}
                 </View>
               ))}
             </View>
@@ -1400,7 +1421,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             <Text style={{ fontSize: 18, fontWeight: '700' }}>Event Modify</Text>
             <TouchableOpacity
               activeOpacity={0.75}
-              onPress={() => router.push((`/event/details?id=created_session_${selectedSessionId}` as any) as any)}
+              onPress={() => router.push({ pathname: '/event/details', params: { id: `created_session_${selectedSessionId}` } } as any)}
               style={{ paddingHorizontal: 6, paddingVertical: 4 }}
             >
               <Text style={{ color: '#2563eb', fontWeight: '800', textDecorationLine: 'underline' }}>Details</Text>

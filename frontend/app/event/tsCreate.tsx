@@ -19,6 +19,7 @@ import {
   getTrainingSessionInfoBySessionId,
   invalidateTrainingSessionsCombinedCache,
   CourtBookingRow,
+  listCourtBookings,
   listCourtInfoCached,
   listTrainingSessionsCombined,
   listTrainingSessionsCombinedCached,
@@ -77,18 +78,30 @@ export default function TsCreate() {
   const bookingsLoading = dashboard.isLoading
   const bookingsError = dashboard.error
   const bookingsRaw = dashboardRaw?.court_bookings ?? []
-  const bookingsAllRaw: CourtBookingRow[] = []
+  // Fallback query: fetches directly from /courtbookings when the dashboard cache is stale
+  // (e.g. immediately after creating a booking before the Redis cache is busted).
+  const { data: bookingsAllRaw = [] } = useQuery<CourtBookingRow[]>({
+    queryKey: queryKeys.courtBookingsUser(typeof userId === 'number' ? userId : null),
+    queryFn: () => listCourtBookings({ userid: userId as number }),
+    enabled: typeof userId === 'number' && (!Array.isArray(bookingsRaw) || bookingsRaw.length === 0),
+    staleTime: 60_000,
+  })
 
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {
     let base: CourtBookingRow[] = []
-    if (Array.isArray(bookingsRaw) && bookingsRaw.length) base = bookingsRaw
-    else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
-    const isUpcoming = (b: CourtBookingRow) => {
-      const s = String((b as any)?.bookingstatus ?? (b as any)?.status ?? '').toLowerCase()
-      if (s.includes('cancel') || s.includes('complete')) return false
-      return s.includes('upcoming') || s.includes('active') || s.includes('scheduled')
+    if (Array.isArray(bookingsRaw) && bookingsRaw.length) {
+      base = bookingsRaw
+    } else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') {
+      base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
     }
-    const active = base.filter(isUpcoming)
+    const isUsable = (b: CourtBookingRow) => {
+      const approvalStatus = String((b as any)?.status ?? '').toLowerCase()
+      const lifecycleStatus = String((b as any)?.bookingstatus ?? '').toLowerCase()
+      if (approvalStatus === 'rejected') return false
+      if (lifecycleStatus === 'cancelled' || lifecycleStatus === 'completed' || lifecycleStatus === 'missed') return false
+      return true
+    }
+    const active = base.filter(isUsable)
     const map = new Map<string, CourtBookingRow>()
     for (const b of active) {
       const cbid = Number((b as any)?.courtbookingid)
@@ -108,7 +121,7 @@ export default function TsCreate() {
     return Array.from(map.values())
   }, [bookingsRaw, bookingsAllRaw, userId])
 
-  const { data: allCourtInfo } = useQuery({ queryKey: ['courtInfoAllForTsCreate'], queryFn: () => listCourtInfoCached(), staleTime: 5*60*1000 })
+  const { data: allCourtInfo } = useQuery({ queryKey: queryKeys.courtInfo, queryFn: () => listCourtInfoCached(), staleTime: 5*60*1000 })
 
   const [expandedCourts, setExpandedCourts] = useState(false)
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null)
@@ -233,7 +246,7 @@ export default function TsCreate() {
   }, [])
 
   const { data: enrichedBookings, isLoading: enriching } = useQuery({
-    queryKey: ['enrichedBookings', effectiveBookings],
+    queryKey: ['enrichedBookings', userId, (effectiveBookings as CourtBookingRow[]).map(b => b.courtbookingid).join(',')],
     enabled: Array.isArray(effectiveBookings) && effectiveBookings.length > 0,
     queryFn: async () => {
       const result: EnrichedBooking[] = []
@@ -257,8 +270,16 @@ export default function TsCreate() {
     return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
   }, [enrichedBookings, selectedBookingId])
 
-  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({ queryKey: ['trainingSessionsCombinedForCreate'], queryFn: () => listTrainingSessionsCombined(), staleTime: 60_000 })
-  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({ queryKey: ['eventsCombinedForCreate'], queryFn: () => listEventsCombinedCached(), staleTime: 60_000 })
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
+    queryKey: queryKeys.trainingSessionsCombined,
+    queryFn: () => listTrainingSessionsCombined(),
+    staleTime: 60_000,
+  })
+  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({
+    queryKey: queryKeys.eventsCombined,
+    queryFn: () => listEventsCombinedCached(),
+    staleTime: 60_000,
+  })
   const usedSessionBookingIds = useMemo(() => new Set<number>((sessionsCombined||[]).map((s:any)=>Number(s?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [sessionsCombined])
   const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:any)=>Number(e?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
   const bookingSelectionLoading = bookingsLoading || enriching || sessionsCombinedLoading || eventsCombinedLoading
@@ -401,6 +422,12 @@ export default function TsCreate() {
               if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
               return [combinedRow, ...arr]
             })
+            // Inject into the Hosting tab cache so it appears immediately without waiting for a refetch
+            qc.setQueryData(queryKeys.activityHostingSessions(userId), (prev: any) => {
+              const arr = Array.isArray(prev) ? prev : []
+              if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
+              return [combinedRow, ...arr]
+            })
           }
 
           qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
@@ -410,6 +437,19 @@ export default function TsCreate() {
 
       const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
         qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.sessionid !== sessionId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
+      }
+
+      const bumpParticipantsInCreatedSessionsCombined = (sessionId: number, delta: number) => {
+        if (typeof userId !== 'number') return
+        qc.setQueryData(['createdTrainingSessionsCombined', userId], (prev: any) => {
           if (!Array.isArray(prev)) return prev
           return prev.map((row: any) => {
             if (row?.sessionid !== sessionId) return row
@@ -463,25 +503,31 @@ export default function TsCreate() {
 
             upsertUserBookingCache(booking)
             bumpParticipantsInSessionsCombined(sessionId, +1)
+            bumpParticipantsInCreatedSessionsCombined(sessionId, +1)
 
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
             void invalidateTrainingSessionsCombinedCache()
-            qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+            // Delay so the backend background-task cache bust completes before we refetch.
+            setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }), 2000)
           } catch {}
 
-          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+          setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) }), 2000)
         })()
       }
 
       void invalidateTrainingSessionsCombinedCache()
-      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
-      if (typeof userId === 'number') {
-        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
-        qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
-        qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
-      }
-      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
+      // Delayed 2 s so the backend background-task cache bust completes first;
+      // setQueryData above already makes the session visible immediately.
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+        if (typeof userId === 'number') {
+          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+          qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
+          qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
+        }
+        qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
+      }, 2000)
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
 
@@ -549,8 +595,10 @@ export default function TsCreate() {
   const renderBookingItem = ({ item }: { item: EnrichedBooking }) => {
     const isSession = usedSessionBookingIds.has(item.courtbookingid)
     const isEvent = usedEventBookingIds.has(item.courtbookingid)
-    const disabled = isSession || isEvent
-    const tag = isSession ? 'Training' : (isEvent ? 'Event' : null)
+    const bStatus = String((item as any)?.status ?? '').toLowerCase()
+    const isPending = bStatus === 'pending'
+    const disabled = isSession || isEvent || isPending
+    const tag = isSession ? 'Training' : (isEvent ? 'Event' : (isPending ? 'Pending' : null))
     return (
       <TouchableOpacity
         style={[styles.bookingItem, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
@@ -560,7 +608,7 @@ export default function TsCreate() {
         <View style={{ flex: 1 }}>
           <View style={styles.bookingTitleRow}>
             <Text style={styles.bookingTitle} numberOfLines={1}>{item.courtName || `Booking ${item.courtbookingid}`}</Text>
-            {tag && <View style={[styles.bookingTag, isSession ? styles.bookingTagTraining : styles.bookingTagEvent]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
+            {tag && <View style={[styles.bookingTag, isSession ? styles.bookingTagTraining : (isEvent ? styles.bookingTagEvent : styles.bookingTagPending)]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
           </View>
           {item.address && <Text style={styles.bookingMeta} numberOfLines={1}>{item.address}</Text>}
           <Text style={styles.bookingMeta}>{formatRange(item.start_timestamp as any, item.end_timestamp as any)}</Text>
@@ -579,7 +627,9 @@ export default function TsCreate() {
   useEffect(() => {
     if (selectedBookingId != null) {
       const stillAvailable = availableEnrichedBookings.some(b => b.courtbookingid === selectedBookingId)
-      if (!stillAvailable) { if (availableEnrichedBookings.length) setSelectedBookingId(availableEnrichedBookings[0].courtbookingid); else setSelectedBookingId(null) }
+      if (!stillAvailable) {
+        setSelectedBookingId(null)
+      }
     }
   }, [availableEnrichedBookings, selectedBookingId])
 
@@ -893,6 +943,7 @@ const styles = StyleSheet.create({
   bookingTag: { marginLeft:6, backgroundColor:'#444', paddingHorizontal:6, paddingVertical:2, borderRadius:8 },
   bookingTagEvent: { backgroundColor:'#ff6b3b' },
   bookingTagTraining: { backgroundColor:'#6a5acd' },
+  bookingTagPending: { backgroundColor:'#b45309' },
   bookingTagText: { color:'#fff', fontSize:12, fontWeight:'700' },
   bookingTitle: { fontSize:14, fontWeight:'700', color:'#222' },
   bookingMeta: { fontSize:12, color:'#555', marginTop:2 },

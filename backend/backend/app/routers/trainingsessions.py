@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
 from fastapi_cache.decorator import cache
-from ..db import rest_select, rest_update
+from ..db import rest_select, rest_update, rest_insert, rest_delete
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
 from ..notifications_service import create_notification
@@ -173,11 +173,6 @@ def create_training_session_with_info(body: dict, background_tasks: BackgroundTa
                 raise HTTPException(status_code=422, detail="Cannot infer session time; supply time explicitly")
             session_payload["time"] = start_ts
         try:
-            sess_resp = rest_select("trainingsessions", "*", filters=None)
-        except Exception:
-            sess_resp = None
-        try:
-            from ..db import rest_insert, rest_delete
             session_insert = rest_insert("trainingsessions", session_payload)
         except RuntimeError as e:
             if "409" in str(e):
@@ -212,18 +207,17 @@ def create_training_session_with_info(body: dict, background_tasks: BackgroundTa
             info_payload_with_auto["entry_fee"] = entry_fee
             info_payload_with_auto["support_payment_method"] = support_payment_method
         try:
-            from ..db import rest_insert as _rest_insert, rest_delete as _rest_delete
             try:
-                info_resp = _rest_insert("trainingsessioninfo", info_payload_with_auto)
+                info_resp = rest_insert("trainingsessioninfo", info_payload_with_auto)
             except RuntimeError as e:
                 # If auto_approve column doesn't exist yet, retry without it.
                 if "auto_approve" in str(e).lower() and ("column" in str(e).lower() or "unknown" in str(e).lower()):
-                    info_resp = _rest_insert("trainingsessioninfo", info_payload)
+                    info_resp = rest_insert("trainingsessioninfo", info_payload)
                 else:
                     raise
         except RuntimeError as e:
             try:
-                _rest_delete("trainingsessions", {"sessionid": sessionid})
+                rest_delete("trainingsessions", {"sessionid": sessionid})
             except Exception:
                 pass
             if "409" in str(e):
@@ -231,7 +225,7 @@ def create_training_session_with_info(body: dict, background_tasks: BackgroundTa
             raise HTTPException(status_code=400, detail=str(e))
         if not isinstance(info_resp, list) or not info_resp:
             try:
-                _rest_delete("trainingsessions", {"sessionid": sessionid})
+                rest_delete("trainingsessions", {"sessionid": sessionid})
             except Exception:
                 pass
             raise HTTPException(status_code=500, detail="Trainingsessioninfo insert did not return representation")
@@ -295,7 +289,7 @@ def update_training_session(sessionid: int, body: dict, background_tasks: Backgr
             except Exception:
                 pass
 
-        background_tasks.add_task(invalidate_namespace, "trainingsessions")
+        background_tasks.add_task(invalidate_namespace, "trainingsessions", "trainingsessioninfo")
         return out
     except HTTPException:
         raise

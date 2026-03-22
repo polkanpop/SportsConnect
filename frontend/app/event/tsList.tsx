@@ -94,7 +94,7 @@ const TrainingSessionListScreen = () => {
     refetchOnMount: false,
   })
   useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
-  useEffect(() => { if (queryError && !sessionsData) setError('Failed to load sessions') }, [queryError, sessionsData])
+  useEffect(() => { if (!loading && !sessionsData) setError('Failed to load sessions') }, [loading, sessionsData])
 
   useEffect(() => {
     return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))
@@ -505,11 +505,11 @@ const TrainingSessionListScreen = () => {
             />
           }
         >
-          {loading && visibleSessions.length === 0 && (
+          {(loading || isFetching) && visibleSessions.length === 0 && (
             <SkeletonList count={6} style={{ paddingTop: 6 }} />
           )}
           {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
-          {!loading && !error && filteredSessions.length === 0 && (
+          {!loading && !isFetching && !error && filteredSessions.length === 0 && (
             <Text style={[styles.statusText, { paddingVertical: 30 }]}>No sessions found</Text>
           )}
           {visibleSessions.map(s => {
