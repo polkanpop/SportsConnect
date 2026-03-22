@@ -510,17 +510,17 @@ export default function TsCreate() {
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
             await invalidateTrainingSessionsCombinedCache()
-            void qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+            void qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' })
             void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
         })()
       }
 
       await invalidateTrainingSessionsCombinedCache()
-      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
-        qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
+        qc.invalidateQueries({ queryKey: queryKeys.createdTrainingSessionsCombined(typeof userId === 'number' ? userId : null) })
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })

@@ -54,8 +54,8 @@ def update_event_info(eventinfoid: int, body: dict, background_tasks: Background
             raise HTTPException(status_code=422, detail="No fields to update")
 
         resp = rest_update("eventinfo", {PRIMARY_KEY: eventinfoid}, payload)
+        background_tasks.add_task(invalidate_namespace, "eventinfo", "events")
         if isinstance(resp, list) and resp:
-            background_tasks.add_task(invalidate_namespace, "eventinfo", "events")
             return resp[0]
         return payload
     except HTTPException:

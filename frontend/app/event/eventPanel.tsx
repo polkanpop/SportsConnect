@@ -303,14 +303,18 @@ export default function EventPanel({ organizerId }: Props) {
 			invalidateEventsCombinedCache(),
 			invalidateTrainingSessionsCombinedCache(),
 		])
-		if (typeof organizerId === "number") {
-			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any });
+		if (typeof organizerId === 'number') {
+			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any })
 		}
 		await Promise.all([
-			queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined }),
-			queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }),
-			queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === "details" }),
-		]);
+			queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' }),
+			queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' }),
+			queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
+		])
+		if (typeof organizerId === 'number') {
+			queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(organizerId), refetchType: 'none' })
+			queryClient.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(organizerId), refetchType: 'none' })
+		}
 	}, [organizerId, queryClient]);
 
 	const uploadOneToCloudinary = useCallback(
@@ -778,19 +782,19 @@ export default function EventPanel({ organizerId }: Props) {
 						return { ...row, numberofpeople: next }
 					})
 				})
-				await Promise.all([loadHostEvents(), loadBookingsForEvent(eventid)]);
-				await invalidateMutationCaches();
-			} catch (e: any) {
-				setBookingsError(e?.message || String(e));
-			} finally {
-				setMutatingBookingIds((prev) => {
-					const next = { ...prev };
-					delete next[bookingId];
-					return next;
-				});
-			}
+await loadBookingsForEvent(eventid);
+			await invalidateMutationCaches();
+		} catch (e: any) {
+			setBookingsError(e?.message || String(e));
+		} finally {
+			setMutatingBookingIds((prev) => {
+				const next = { ...prev };
+				delete next[bookingId];
+				return next;
+			});
+		}
 		},
-		[applicants, invalidateMutationCaches, loadBookingsForEvent, loadHostEvents, mutatingBookingIds, queryClient]
+		[applicants, invalidateMutationCaches, loadBookingsForEvent, mutatingBookingIds, queryClient]
 	);
 
 	const onRejectApplicant = useCallback(
@@ -875,7 +879,6 @@ export default function EventPanel({ organizerId }: Props) {
 					console.warn('[eventPanel] cloudinary delete failed', e?.message || String(e));
 				}
 			}
-			await loadHostEvents();
 			await invalidateMutationCaches();
 			initialEditSnapshotRef.current = currentEditSnapshot;
 			setEditBaselineSnapshot(currentEditSnapshot);
@@ -886,7 +889,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setSavingEvent(false);
 		}
-	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, invalidateMutationCaches, isDirty, loadHostEvents, organizerId, pendingCloudinaryDeletes, queryClient, selectedHostEventId]);
+	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, invalidateMutationCaches, isDirty, organizerId, pendingCloudinaryDeletes, queryClient, selectedHostEventId]);
 
 	const canCancelSelectedEvent = useMemo(() => {
 		const s = String((selectedEvent as any)?.status ?? "").toLowerCase();

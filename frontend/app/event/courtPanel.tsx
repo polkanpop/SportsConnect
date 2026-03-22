@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
@@ -271,7 +271,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [bookingSelectedDate, setBookingSelectedDate] = useState<string | null>(null)
   const [bookingWeekOffset, setBookingWeekOffset] = useState(0)
   const [bookingSelectedSlot, setBookingSelectedSlot] = useState<string | null>(null)
-  const bookingBlinkOpacity = useSharedValue(1)
 
   const [selectedSubPart, setSelectedSubPart] = useState<PlayingCourtPart>('full')
   const [subEditName, setSubEditName] = useState('')
@@ -672,15 +671,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   useEffect(() => {
     setBookingSelectedSlot(null)
   }, [bookingSelectedDate])
-
-  // Smooth blink animation for selected booking slot group
-  useEffect(() => {
-    if (!bookingSelectedSlot) {
-      bookingBlinkOpacity.value = withTiming(1, { duration: 150 })
-      return
-    }
-    bookingBlinkOpacity.value = withRepeat(withTiming(0.35, { duration: 500 }), -1, true)
-  }, [bookingSelectedSlot])
 
   useEffect(() => {
     if (!selected) return
@@ -2068,10 +2058,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 const nextBooking = nextSlot ? slotToBookingMap.get(nextSlot) : undefined
                                 const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
                                 const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
-                                const slotBg = isBooked ? '#f97316' : '#1e1e1e'
-                                const animatedSlotStyle = useAnimatedStyle(() => ({
-                                  opacity: isInSelectedGroup ? bookingBlinkOpacity.value : 1,
-                                }))
+                                const slotBg = isInSelectedGroup ? '#c2410c' : (isBooked ? '#f97316' : '#1e1e1e')
                                 return (
                                   <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
                                     {/* Left connector track with dot */}
@@ -2085,7 +2072,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                       )}
                                     </View>
                                     {/* Slot box */}
-                                    <Animated.View style={[{ flex: 1, height: 40 }, animatedSlotStyle]}>
+                                    <View style={{ flex: 1, height: 40 }}>
                                     <TouchableOpacity
                                       onPress={() => {
                                         if (!isBooked) { setBookingSelectedSlot(null); return }
@@ -2098,15 +2085,22 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                         borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
                                         borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
                                         paddingHorizontal: 10, justifyContent: 'center',
-                                        borderWidth: 0.5, borderColor: isBooked ? '#f97316' : '#e5e7eb',
+                                        borderWidth: 0.5, borderColor: isInSelectedGroup ? '#c2410c' : (isBooked ? '#f97316' : '#e5e7eb'),
                                         borderTopWidth: connToPrev ? 0 : 0.5,
                                       }}
                                     >
-                                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
-                                        {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
-                                      </Text>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
+                                          {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
+                                        </Text>
+                                        {isBooked && booking && (
+                                          <Text style={{ fontSize: 11, color: '#fff', opacity: 0.85, flexShrink: 1, marginLeft: 6 }} numberOfLines={1}>
+                                            {bookingUserNames[booking.userid] || `User ${booking.userid}`}
+                                          </Text>
+                                        )}
+                                      </View>
                                     </TouchableOpacity>
-                                    </Animated.View>
+                                    </View>
                                   </View>
                                 )
                               })}

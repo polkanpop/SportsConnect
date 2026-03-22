@@ -317,10 +317,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
     }
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' }),
       queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
     ])
+    if (typeof coachId === 'number') {
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(coachId), refetchType: 'none' })
+    }
   }, [coachId, queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
@@ -632,7 +635,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return { ...row, numberofpeople: next }
           })
         })
-        await Promise.all([loadSessions(sessionId), loadBookingsForSession(sessionId)])
+        await loadBookingsForSession(sessionId)
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
@@ -644,7 +647,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [applicants, invalidateMutationCaches, loadBookingsForSession, loadSessions, queryClient],
+    [applicants, invalidateMutationCaches, loadBookingsForSession, queryClient],
   )
 
   const onRejectApplicant = useCallback(
@@ -832,11 +835,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 			}
 
       // Refresh after save so the list reflects changes
-      await loadSessions(selectedSessionId)
       await invalidateMutationCaches()
-      const meta2 = await getTrainingSessionInfoBySessionId(selectedSessionId as number)
-      setInfoMeta(meta2)
-      setEditImages(asStringArray((meta2 as any)?.images))
+      setInfoMeta((prev) => prev ? { ...prev, title: nextTitle, description: nextDescription, participants_cap: cap ?? prev.participants_cap ?? null, images: nextImages } : prev)
       initialEditSnapshotRef.current = currentEditSnapshot
       setEditBaselineSnapshot(currentEditSnapshot)
       setPendingCloudinaryDeletes([])

@@ -17,6 +17,7 @@ export const queryKeys = {
   eventsCombined: ['eventsCombined'] as const,
   trainingSessionsCombined: ['trainingSessionsCombined'] as const,
   createdEventsCombined: (userid: number | null) => ['createdEventsCombined', userid ?? -1] as const,
+  createdTrainingSessionsCombined: (userid: number | null) => ['createdTrainingSessionsCombined', userid ?? -1] as const,
   activityHostingEvents: (userid: number | null) => ['activity', 'hosting', 'events', userid ?? -1] as const,
   activityHostingSessions: (userid: number | null) => ['activity', 'hosting', 'sessions', userid ?? -1] as const,
   dashboard: (userid: number | null) => ['dashboard', userid ?? -1] as const,

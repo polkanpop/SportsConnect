@@ -53,8 +53,8 @@ def update_training_session_info(sessioninfoid: int, body: dict, background_task
             raise HTTPException(status_code=422, detail="No fields to update")
 
         resp = rest_update("trainingsessioninfo", {PRIMARY_KEY: sessioninfoid}, payload)
+        background_tasks.add_task(invalidate_namespace, "trainingsessioninfo", "trainingsessions")
         if isinstance(resp, list) and resp:
-            background_tasks.add_task(invalidate_namespace, "trainingsessioninfo", "trainingsessions")
             return resp[0]
         return payload
     except HTTPException:
