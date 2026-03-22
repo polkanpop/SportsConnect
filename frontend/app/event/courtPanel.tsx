@@ -2058,7 +2058,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 const nextBooking = nextSlot ? slotToBookingMap.get(nextSlot) : undefined
                                 const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
                                 const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
-                                const slotBg = isInSelectedGroup ? '#c2410c' : (isBooked ? '#f97316' : '#1e1e1e')
+                                const slotBg = isInSelectedGroup ? '#ea580c' : (isBooked ? '#f97316' : '#fff3e0')
+                                const slotTextColor = isBooked ? '#fff' : '#9a3412'
+                                const slotBorderColor = isInSelectedGroup ? '#ea580c' : (isBooked ? '#f97316' : '#FED7AA')
                                 return (
                                   <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
                                     {/* Left connector track with dot */}
@@ -2085,12 +2087,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                         borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
                                         borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
                                         paddingHorizontal: 10, justifyContent: 'center',
-                                        borderWidth: 0.5, borderColor: isInSelectedGroup ? '#c2410c' : (isBooked ? '#f97316' : '#e5e7eb'),
+                                        borderWidth: 0.5, borderColor: slotBorderColor,
                                         borderTopWidth: connToPrev ? 0 : 0.5,
                                       }}
                                     >
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: slotTextColor }}>
                                           {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
                                         </Text>
                                         {isBooked && booking && (

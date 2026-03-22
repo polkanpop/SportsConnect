@@ -546,7 +546,6 @@ export default function EventCreateScreen() {
 
             // Ensure AsyncStorage cached combined list doesn't stick at 0
             await invalidateEventsCombinedCache()
-            void qc.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' })
             void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
         })()
@@ -554,7 +553,6 @@ export default function EventCreateScreen() {
 
       // Invalidate events list cache so new event appears.
       await invalidateEventsCombinedCache()
-      qc.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })

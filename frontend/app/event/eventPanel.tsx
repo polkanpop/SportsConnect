@@ -306,15 +306,7 @@ export default function EventPanel({ organizerId }: Props) {
 		if (typeof organizerId === 'number') {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any })
 		}
-		await Promise.all([
-			queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' }),
-			queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' }),
-			queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
-		])
-		if (typeof organizerId === 'number') {
-			queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(organizerId), refetchType: 'none' })
-			queryClient.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(organizerId), refetchType: 'none' })
-		}
+		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
 	}, [organizerId, queryClient]);
 
 	const uploadOneToCloudinary = useCallback(

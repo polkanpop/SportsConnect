@@ -316,14 +316,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     if (typeof coachId === 'number') {
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
     }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined, refetchType: 'none' }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined, refetchType: 'none' }),
-      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
-    ])
-    if (typeof coachId === 'number') {
-      queryClient.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(coachId), refetchType: 'none' })
-    }
+    queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
   }, [coachId, queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
@@ -635,7 +628,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return { ...row, numberofpeople: next }
           })
         })
-        await loadBookingsForSession(sessionId)
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
@@ -647,7 +639,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [applicants, invalidateMutationCaches, loadBookingsForSession, queryClient],
+    [applicants, invalidateMutationCaches, queryClient],
   )
 
   const onRejectApplicant = useCallback(
