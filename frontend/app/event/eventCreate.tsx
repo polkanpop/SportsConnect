@@ -320,7 +320,7 @@ export default function EventCreateScreen() {
     return await r.json()
   }
 
-  const selectedBooking = useMemo(() => availableEnrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null, [availableEnrichedBookings, selectedBookingId])
+  const selectedBooking = useMemo(() => enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null, [enrichedBookings, selectedBookingId])
 
   // Derived payment methods array or null
   const paymentMethodsValue = useMemo<('cash'|'vnpay'|'both')[] | null>(() => {
@@ -733,10 +733,10 @@ export default function EventCreateScreen() {
                 <Text style={styles.selectedBookingMeta}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
               </View>
             )}
-            {expandedCourts && availableEnrichedBookings && (
+            {expandedCourts && enrichedBookings && (
               <View style={styles.bookingList}>
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:4 }}>
-                  {availableEnrichedBookings.map(b => (
+                  {enrichedBookings.map(b => (
                     <React.Fragment key={b.courtbookingid}>{renderBookingItem({ item: b })}</React.Fragment>
                   ))}
                 </ScrollView>
