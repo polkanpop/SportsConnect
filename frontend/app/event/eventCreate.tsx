@@ -265,7 +265,9 @@ export default function EventCreateScreen() {
 
   // Enrich bookings with court name/address by fetching availability -> courtid (simple sequential fetch)
   const { data: enrichedBookings, isLoading: enriching } = useQuery({
-    queryKey: ['enrichedBookings', userId, (effectiveBookings as CourtBookingRow[]).map(b => b.courtbookingid).join(',')],
+    queryKey: ['enrichedBookings', userId,
+      (effectiveBookings as CourtBookingRow[]).map(b => `${b.courtbookingid}:${(b as any).status ?? ''}:${(b as any).bookingstatus ?? ''}`).join(','),
+    ],
     enabled: Array.isArray(effectiveBookings) && effectiveBookings.length > 0,
     queryFn: async () => {
       const result: EnrichedBooking[] = []

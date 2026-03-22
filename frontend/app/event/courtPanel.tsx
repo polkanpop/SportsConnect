@@ -2106,17 +2106,33 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                       <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
                                         {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
                                       </Text>
-                                      {isBooked && isInSelectedGroup && !bookingBlinkOn && (
-                                        <Text style={{ fontSize: 11, color: '#fff', marginTop: 1 }} numberOfLines={1}>
-                                          {bookingUserNames[booking.userid] || `User ${booking.userid}`}
-                                        </Text>
-                                      )}
                                     </TouchableOpacity>
                                   </View>
                                 )
                               })}
                             </View>
                           )}
+                          {/* Expand card: booking details when a slot is selected */}
+                          {slotSelectedBooking && (() => {
+                            const uid = slotSelectedBooking.userid
+                            const displayName = bookingUserNames[uid] || `User ${uid}`
+                            const pfpUri = bookingUserPfps[uid] || null
+                            const statusRaw = String(slotSelectedBooking.status ?? slotSelectedBooking.bookingstatus ?? '')
+                            return (
+                              <View style={{ marginTop: 10, backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FED7AA', flexDirection: 'row', alignItems: 'center' }}>
+                                <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                  {pfpUri
+                                    ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
+                                    : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
+                                  <View style={{ marginLeft: 10, flex: 1 }}>
+                                    <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
+                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp)}</Text>
+                                    <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}><Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>{statusRaw || 'pending'}</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              </View>
+                            )
+                          })()}
                         </View>
                       )}
                       {bookingSelectedDate && !pcAvailRow && dateBookings.length === 0 && (

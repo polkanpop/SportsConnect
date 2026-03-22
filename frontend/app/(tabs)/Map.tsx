@@ -16,6 +16,8 @@
     type PlayingCourtRow,
     getDistanceMatrixCached,
     peekDistanceMatrixCached,
+    listCourtBookingsByCourtId,
+    type CourtBookingRow,
   } from '@/lib/backendApi';
   import { favouritesEvents } from '@/lib/favouritesEvents';
   import { getCache, setCache } from '@/lib/cache';
@@ -418,6 +420,14 @@
     // Fetch availability for selected marker
     const { data: availabilityRows, isLoading: availabilityLoading } = useCourtAvailability(selectedMarker?.courtid || null);
 
+    // Fetch bookings for selected court (view-only, for marking booked slots)
+    const { data: mapCourtBookings = [] } = useQuery<CourtBookingRow[]>({
+      queryKey: ['mapCourtBookings', selectedMarker?.courtid ?? null],
+      queryFn: () => listCourtBookingsByCourtId(selectedMarker!.courtid),
+      enabled: !!selectedMarker?.courtid,
+      staleTime: 30_000,
+    })
+
     // Lazy-load playing courts and their info images using TanStack Query (only fires when a court pin is tapped)
     const { data: rawPlayingCourts, isLoading: playingCourtsLoading } = usePlayingCourts(selectedMarker?.courtid ?? null);
     const playingCourtsForSelected = useMemo(
@@ -569,6 +579,31 @@
       }
       return slots
     }, [availability])
+
+    // Compute booked slots for the selected date (approved bookings only)
+    const mapBookedSlots = useMemo((): Set<string> => {
+      if (!selectedMapScheduleDate || !mapTimeSlots.length) return new Set()
+      const slotToMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
+      const tsToMin = (raw: string | null | undefined): number | null => {
+        const match = String(raw ?? '').match(/(?:T|\s)(\d{2}):(\d{2})/)
+        return match ? Number(match[1]) * 60 + Number(match[2]) : null
+      }
+      const booked = new Set<string>()
+      for (const b of mapCourtBookings) {
+        const bDate = typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null
+        if (bDate !== selectedMapScheduleDate) continue
+        const bStatus = String((b as any).status ?? '').toLowerCase()
+        if (bStatus === 'rejected' || bStatus === 'pending' || bStatus === 'waiting') continue
+        const bStart = tsToMin(b.start_timestamp)
+        const bEnd = tsToMin(b.end_timestamp)
+        if (bStart == null || bEnd == null) continue
+        for (const slot of mapTimeSlots) {
+          const sMin = slotToMin(slot)
+          if (sMin >= bStart && sMin + 30 <= bEnd) booked.add(slot)
+        }
+      }
+      return booked
+    }, [selectedMapScheduleDate, mapTimeSlots, mapCourtBookings])
 
     // Auto-expand BottomSheet to full height when a day is selected so all time slots are visible
     useEffect(() => {
@@ -1773,11 +1808,14 @@
                                   {`Open: ${String(availability!.start_time || '').slice(0, 5)} – ${String(availability!.end_time || '').slice(0, 5)}`}
                                 </Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                                  {mapTimeSlots.map((slot) => (
-                                    <View key={slot} style={{ backgroundColor: '#1e1e1e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
-                                      <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{slot}</Text>
-                                    </View>
-                                  ))}
+                                  {mapTimeSlots.map((slot) => {
+                                    const isBooked = mapBookedSlots.has(slot)
+                                    return (
+                                      <View key={slot} style={{ backgroundColor: isBooked ? '#f97316' : '#1e1e1e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
+                                        <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{slot}</Text>
+                                      </View>
+                                    )
+                                  })}
                                 </View>
                               </View>
                             )}
@@ -2324,7 +2362,7 @@
       alignItems: "flex-start",
       padding: 16,
       position: "relative",
-      paddingBottom: 12,
+      paddingBottom: 80,
     },
     bottomSheetContentImages: {
       paddingBottom: 6,
