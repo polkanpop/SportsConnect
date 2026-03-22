@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat, type SharedValue } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
@@ -214,6 +214,60 @@ function buildMainSnapshotFromRaw(args: {
     verified: null,
     services: normalizedServices,
   })
+}
+
+type SlotItemProps = {
+  slot: string
+  idx: number
+  pcTimeSlots: string[]
+  pcAvailEndTime: string
+  booking: CourtBookingRow | undefined
+  slotSelectedBooking: CourtBookingRow | null
+  connToPrev: boolean
+  connToNext: boolean
+  bookingBlinkOpacity: SharedValue<number>
+  onSelectSlot: (slot: string) => void
+}
+
+function SlotItem({ slot, idx, pcTimeSlots, pcAvailEndTime, booking, slotSelectedBooking, connToPrev, connToNext, bookingBlinkOpacity, onSelectSlot }: SlotItemProps) {
+  const isBooked = !!booking
+  const isInSelectedGroup = isBooked && !!slotSelectedBooking && booking!.courtbookingid === slotSelectedBooking.courtbookingid
+  const slotBg = isBooked ? '#9ca3af' : '#1e1e1e'
+  const animatedSlotStyle = useAnimatedStyle(() => ({
+    opacity: isInSelectedGroup ? bookingBlinkOpacity.value : 1,
+  }))
+  return (
+    <View style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ width: 22, alignSelf: 'stretch', position: 'relative' }}>
+        {isBooked && (
+          <>
+            <View style={{ position: 'absolute', left: 8, top: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: '#9ca3af', zIndex: 2 }} />
+            {connToPrev && <View style={{ position: 'absolute', left: 11, top: 0, width: 2, height: 16, backgroundColor: '#9ca3af' }} />}
+            {connToNext && <View style={{ position: 'absolute', left: 11, top: 24, width: 2, height: 16, backgroundColor: '#9ca3af' }} />}
+          </>
+        )}
+      </View>
+      <Animated.View style={[{ flex: 1, height: 40 }, animatedSlotStyle]}>
+        <TouchableOpacity
+          onPress={() => onSelectSlot(slot)}
+          disabled={!isBooked}
+          activeOpacity={isBooked ? 0.8 : 1}
+          style={{
+            flex: 1, height: 40, backgroundColor: slotBg,
+            borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
+            borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
+            paddingHorizontal: 10, justifyContent: 'center',
+            borderWidth: 0.5, borderColor: isBooked ? '#9ca3af' : '#e5e7eb',
+            borderTopWidth: connToPrev ? 0 : 0.5,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
+            {slot}{pcTimeSlots[idx + 1] ? ` \u2013 ${pcTimeSlots[idx + 1]}` : ` \u2013 ${pcAvailEndTime}`}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  )
 }
 
 export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null }) {
@@ -2061,53 +2115,29 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               {pcTimeSlotsList.map((slot, idx) => {
                                 const booking = slotToBookingMap.get(slot)
                                 const isBooked = !!booking
-                                const isInSelectedGroup = isBooked && !!slotSelectedBooking && booking.courtbookingid === slotSelectedBooking.courtbookingid
                                 const prevSlot = idx > 0 ? pcTimeSlotsList[idx - 1] : null
                                 const nextSlot = idx < pcTimeSlotsList.length - 1 ? pcTimeSlotsList[idx + 1] : null
                                 const prevBooking = prevSlot ? slotToBookingMap.get(prevSlot) : undefined
                                 const nextBooking = nextSlot ? slotToBookingMap.get(nextSlot) : undefined
-                                const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
-                                const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
-                                const slotBg = isBooked ? '#f97316' : '#1e1e1e'
-                                const animatedSlotStyle = useAnimatedStyle(() => ({
-                                  opacity: isInSelectedGroup ? bookingBlinkOpacity.value : 1,
-                                }))
+                                const connToPrev = isBooked && prevBooking?.courtbookingid === booking!.courtbookingid
+                                const connToNext = isBooked && nextBooking?.courtbookingid === booking!.courtbookingid
                                 return (
-                                  <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
-                                    {/* Left connector track with dot */}
-                                    <View style={{ width: 22, alignSelf: 'stretch', position: 'relative' }}>
-                                      {isBooked && (
-                                        <>
-                                          <View style={{ position: 'absolute', left: 8, top: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: '#f97316', zIndex: 2 }} />
-                                          {connToPrev && <View style={{ position: 'absolute', left: 11, top: 0, width: 2, height: 16, backgroundColor: '#f97316' }} />}
-                                          {connToNext && <View style={{ position: 'absolute', left: 11, top: 24, width: 2, height: 16, backgroundColor: '#f97316' }} />}
-                                        </>
-                                      )}
-                                    </View>
-                                    {/* Slot box */}
-                                    <Animated.View style={[{ flex: 1, height: 40 }, animatedSlotStyle]}>
-                                    <TouchableOpacity
-                                      onPress={() => {
-                                        if (!isBooked) { setBookingSelectedSlot(null); return }
-                                        setBookingSelectedSlot(prev => prev === slot ? null : slot)
-                                      }}
-                                      disabled={!isBooked}
-                                      activeOpacity={isBooked ? 0.8 : 1}
-                                      style={{
-                                        flex: 1, height: 40, backgroundColor: slotBg,
-                                        borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
-                                        borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
-                                        paddingHorizontal: 10, justifyContent: 'center',
-                                        borderWidth: 0.5, borderColor: isBooked ? '#f97316' : '#e5e7eb',
-                                        borderTopWidth: connToPrev ? 0 : 0.5,
-                                      }}
-                                    >
-                                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
-                                        {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
-                                      </Text>
-                                    </TouchableOpacity>
-                                    </Animated.View>
-                                  </View>
+                                  <SlotItem
+                                    key={slot}
+                                    slot={slot}
+                                    idx={idx}
+                                    pcTimeSlots={pcTimeSlotsList}
+                                    pcAvailEndTime={String(pcAvailRow.end_time || '').slice(0, 5)}
+                                    booking={booking}
+                                    slotSelectedBooking={slotSelectedBooking}
+                                    connToPrev={connToPrev}
+                                    connToNext={connToNext}
+                                    bookingBlinkOpacity={bookingBlinkOpacity}
+                                    onSelectSlot={(s) => {
+                                      if (!booking) { setBookingSelectedSlot(null); return }
+                                      setBookingSelectedSlot(prev => prev === s ? null : s)
+                                    }}
+                                  />
                                 )
                               })}
                             </View>
