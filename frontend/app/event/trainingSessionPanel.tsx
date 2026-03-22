@@ -32,6 +32,8 @@ import {
   getPayment,
   getTrainingSessionInfoBySessionId,
   getTrainingSessionBookingsBySessionId,
+  invalidateEventsCombinedCache,
+  invalidateTrainingSessionsCombinedCache,
   getUserInfoByUserIdCached,
   listBlockList,
   listTrainingSessionsCombinedByCoachId,
@@ -307,6 +309,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   }, [saveSuccessMessage])
 
   const invalidateMutationCaches = useCallback(async () => {
+    await Promise.allSettled([
+      invalidateEventsCombinedCache(),
+      invalidateTrainingSessionsCombinedCache(),
+    ])
     if (typeof coachId === 'number') {
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
     }
@@ -611,6 +617,21 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return [{ ...approvedApplicant, booking: { ...approvedApplicant.booking, status: 'joined' } as any }, ...prev]
           })
         }
+        setSessions((prev) => prev.map((s) => {
+          if (s.sessionid !== sessionId) return s
+          const cur = Number((s as any)?.numberofpeople)
+          const next = Number.isFinite(cur) ? cur + 1 : 1
+          return { ...s, numberofpeople: next }
+        }))
+        queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.sessionid !== sessionId) return row
+            const cur = Number(row?.numberofpeople)
+            const next = Number.isFinite(cur) ? cur + 1 : 1
+            return { ...row, numberofpeople: next }
+          })
+        })
         await Promise.all([loadSessions(sessionId), loadBookingsForSession(sessionId)])
         await invalidateMutationCaches()
       } catch (e: any) {
@@ -623,7 +644,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [applicants, invalidateMutationCaches, loadBookingsForSession, loadSessions],
+    [applicants, invalidateMutationCaches, loadBookingsForSession, loadSessions, queryClient],
   )
 
   const onRejectApplicant = useCallback(
@@ -767,12 +788,39 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     setInfoError(null)
     setSaveSuccessMessage(null)
     try {
+      const nextTitle = editTitle.trim()
+      const nextDescription = editDescription.trim()
+      const nextImages = dedupeStrings(editImages)
       await updateTrainingSessionInfo(infoMeta.sessioninfoid, {
-        title: editTitle.trim(),
-        description: editDescription.trim(),
+        title: nextTitle,
+        description: nextDescription,
         participants_cap: cap,
-        images: editImages,
+        images: nextImages,
       })
+
+      setSessions((prev) => prev.map((s) =>
+        s.sessionid === selectedSessionId
+          ? { ...s, title: nextTitle, description: nextDescription, participants_cap: cap, images: nextImages }
+          : s,
+      ))
+      queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+        if (!Array.isArray(prev)) return prev
+        return prev.map((row: any) =>
+          row?.sessionid === selectedSessionId
+            ? { ...row, title: nextTitle, description: nextDescription, participants_cap: cap, images: nextImages }
+            : row,
+        )
+      })
+      if (typeof coachId === 'number') {
+        queryClient.setQueryData(queryKeys.activityHostingSessions(coachId), (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) =>
+            row?.sessionid === selectedSessionId
+              ? { ...row, title: nextTitle, description: nextDescription, participants_cap: cap, images: nextImages }
+              : row,
+          )
+        })
+      }
 
 			const urlsToDelete = pendingCloudinaryDeletes.filter((u) => !editImages.includes(u))
 			if (urlsToDelete.length) {
@@ -808,6 +856,17 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     setSessionsError(null)
     try {
       await updateTrainingSession(selectedSessionId, { status: 'cancelled' } as any)
+      setSessions((prev) => prev.map((s) => s.sessionid === selectedSessionId ? { ...s, status: 'cancelled' } : s))
+      queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+        if (!Array.isArray(prev)) return prev
+        return prev.map((row: any) => row?.sessionid === selectedSessionId ? { ...row, status: 'cancelled' } : row)
+      })
+      if (typeof coachId === 'number') {
+        queryClient.setQueryData(queryKeys.activityHostingSessions(coachId), (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => row?.sessionid === selectedSessionId ? { ...row, status: 'cancelled' } : row)
+        })
+      }
       setConfirmCancelVisible(false)
       await loadSessions(selectedSessionId)
       await invalidateMutationCaches()
@@ -818,7 +877,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     } finally {
       setCancellingSession(false)
     }
-  }, [canCancelSelectedSession, invalidateMutationCaches, loadSessions, router, selectedSessionId])
+  }, [canCancelSelectedSession, coachId, invalidateMutationCaches, loadSessions, queryClient, router, selectedSessionId])
 
   const onRefresh = useCallback(async () => {
     setPullRefreshing(true)

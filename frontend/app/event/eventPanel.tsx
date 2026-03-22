@@ -10,6 +10,8 @@ import {
 	getEventInfoByEventId,
 	getPayment,
 	getUserInfoByUserIdCached,
+	invalidateEventsCombinedCache,
+	invalidateTrainingSessionsCombinedCache,
 	listBlockList,
 	listEventsCombinedByOrganizerId,
 	removeBlock,
@@ -297,6 +299,10 @@ export default function EventPanel({ organizerId }: Props) {
 	}, [saveSuccessMessage]);
 
 	const invalidateMutationCaches = useCallback(async () => {
+		await Promise.allSettled([
+			invalidateEventsCombinedCache(),
+			invalidateTrainingSessionsCombinedCache(),
+		])
 		if (typeof organizerId === "number") {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any });
 		}
@@ -757,6 +763,21 @@ export default function EventPanel({ organizerId }: Props) {
 						}, ...prev];
 					});
 				}
+				setHostEvents((prev) => prev.map((ev) => {
+					if (ev.eventid !== eventid) return ev
+					const cur = Number((ev as any)?.numberofpeople)
+					const next = Number.isFinite(cur) ? cur + 1 : 1
+					return { ...ev, numberofpeople: next }
+				}))
+				queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+					if (!Array.isArray(prev)) return prev
+					return prev.map((row: any) => {
+						if (row?.eventid !== eventid) return row
+						const cur = Number(row?.numberofpeople)
+						const next = Number.isFinite(cur) ? cur + 1 : 1
+						return { ...row, numberofpeople: next }
+					})
+				})
 				await Promise.all([loadHostEvents(), loadBookingsForEvent(eventid)]);
 				await invalidateMutationCaches();
 			} catch (e: any) {
@@ -769,7 +790,7 @@ export default function EventPanel({ organizerId }: Props) {
 				});
 			}
 		},
-		[applicants, invalidateMutationCaches, loadBookingsForEvent, loadHostEvents, mutatingBookingIds]
+		[applicants, invalidateMutationCaches, loadBookingsForEvent, loadHostEvents, mutatingBookingIds, queryClient]
 	);
 
 	const onRejectApplicant = useCallback(
@@ -805,12 +826,47 @@ export default function EventPanel({ organizerId }: Props) {
 			const meta = await getEventInfoByEventId(selectedHostEventId);
 			if (!meta?.eventinfoid) throw new Error("Missing event info");
 			const capNum = editCap.trim() ? Number(editCap) : null;
+			const nextTitle = editTitle.trim() || String(meta.title || '').trim() || `Event #${selectedHostEventId}`
+			const nextDescription = editDescription
+			const nextCap = capNum != null && Number.isFinite(capNum) ? capNum : (meta.participants_cap ?? null)
+			const nextImages = dedupeStrings(editImages)
 			await updateEventInfo(meta.eventinfoid, {
-				title: editTitle.trim() || meta.title,
-				description: editDescription,
-				participants_cap: capNum != null && Number.isFinite(capNum) ? capNum : meta.participants_cap,
-				images: editImages,
+				title: nextTitle,
+				description: nextDescription,
+				participants_cap: nextCap,
+				images: nextImages,
 			});
+			setHostEvents((prev) => prev.map((ev) =>
+				ev.eventid === selectedHostEventId
+					? { ...ev, title: nextTitle, description: nextDescription, participants_cap: nextCap, images: nextImages }
+					: ev,
+			))
+			queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+				if (!Array.isArray(prev)) return prev
+				return prev.map((row: any) =>
+					row?.eventid === selectedHostEventId
+						? { ...row, title: nextTitle, description: nextDescription, participants_cap: nextCap, images: nextImages }
+						: row,
+				)
+			})
+			if (typeof organizerId === 'number') {
+				queryClient.setQueryData(queryKeys.createdEventsCombined(organizerId), (prev: any) => {
+					if (!Array.isArray(prev)) return prev
+					return prev.map((row: any) =>
+						row?.eventid === selectedHostEventId
+							? { ...row, title: nextTitle, description: nextDescription, participants_cap: nextCap, images: nextImages }
+							: row,
+					)
+				})
+				queryClient.setQueryData(queryKeys.activityHostingEvents(organizerId), (prev: any) => {
+					if (!Array.isArray(prev)) return prev
+					return prev.map((row: any) =>
+						row?.eventid === selectedHostEventId
+							? { ...row, title: nextTitle, description: nextDescription, participants_cap: nextCap, images: nextImages }
+							: row,
+					)
+				})
+			}
 			const urlsToDelete = pendingCloudinaryDeletes.filter((u) => !editImages.includes(u));
 			if (urlsToDelete.length) {
 				try {
@@ -830,7 +886,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setSavingEvent(false);
 		}
-	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, invalidateMutationCaches, isDirty, loadHostEvents, pendingCloudinaryDeletes, selectedHostEventId]);
+	}, [currentEditSnapshot, deleteCloudinaryAssetsByUrl, editCap, editDescription, editImages, editTitle, invalidateMutationCaches, isDirty, loadHostEvents, organizerId, pendingCloudinaryDeletes, queryClient, selectedHostEventId]);
 
 	const canCancelSelectedEvent = useMemo(() => {
 		const s = String((selectedEvent as any)?.status ?? "").toLowerCase();
@@ -846,6 +902,21 @@ export default function EventPanel({ organizerId }: Props) {
 		setHostEventsError(null);
 		try {
 			await updateEvent(selectedHostEventId, { status: "cancelled" } as any);
+			setHostEvents((prev) => prev.map((ev) => ev.eventid === selectedHostEventId ? { ...ev, status: 'cancelled' } : ev))
+			queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+				if (!Array.isArray(prev)) return prev
+				return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+			})
+			if (typeof organizerId === 'number') {
+				queryClient.setQueryData(queryKeys.createdEventsCombined(organizerId), (prev: any) => {
+					if (!Array.isArray(prev)) return prev
+					return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+				})
+				queryClient.setQueryData(queryKeys.activityHostingEvents(organizerId), (prev: any) => {
+					if (!Array.isArray(prev)) return prev
+					return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+				})
+			}
 			setConfirmCancelVisible(false);
 			await loadHostEvents(selectedHostEventId);
 			await invalidateMutationCaches();
@@ -856,7 +927,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setCancellingEvent(false);
 		}
-	}, [canCancelSelectedEvent, invalidateMutationCaches, loadHostEvents, router, selectedHostEventId]);
+	}, [canCancelSelectedEvent, invalidateMutationCaches, loadHostEvents, organizerId, queryClient, router, selectedHostEventId]);
 
 	const isFree = (selectedEvent?.entry_fee ?? 0) <= 0;
 

@@ -107,7 +107,7 @@ const EventListScreen = () => {
     queryFn: () => listEventsCombinedCached(),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
   })
   // Push data into local state for existing code references.
   useEffect(() => { if (Array.isArray(eventsData)) setAllEvents(eventsData) }, [eventsData])
