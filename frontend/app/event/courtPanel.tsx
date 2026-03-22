@@ -270,6 +270,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [bookingSelectedPcId, setBookingSelectedPcId] = useState<number | null>(null)
   const [bookingSelectedDate, setBookingSelectedDate] = useState<string | null>(null)
   const [bookingWeekOffset, setBookingWeekOffset] = useState(0)
+  const [bookingSelectedSlot, setBookingSelectedSlot] = useState<string | null>(null)
+  const [bookingBlinkOn, setBookingBlinkOn] = useState(false)
+  const bookingBlinkRef = useRef<any>(null)
 
   const [selectedSubPart, setSelectedSubPart] = useState<PlayingCourtPart>('full')
   const [subEditName, setSubEditName] = useState('')
@@ -663,7 +666,24 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setBookingSelectedPcId(null)
     setBookingSelectedDate(null)
     setBookingWeekOffset(0)
+    setBookingSelectedSlot(null)
   }, [selectedCourtId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear selected slot when selected date changes
+  useEffect(() => {
+    setBookingSelectedSlot(null)
+  }, [bookingSelectedDate])
+
+  // Blink animation for selected booking slot group
+  useEffect(() => {
+    if (!bookingSelectedSlot) {
+      setBookingBlinkOn(false)
+      if (bookingBlinkRef.current) { clearInterval(bookingBlinkRef.current); bookingBlinkRef.current = null }
+      return
+    }
+    bookingBlinkRef.current = setInterval(() => setBookingBlinkOn(b => !b), 350)
+    return () => { if (bookingBlinkRef.current) { clearInterval(bookingBlinkRef.current); bookingBlinkRef.current = null } }
+  }, [bookingSelectedSlot])
 
   useEffect(() => {
     if (!selected) return
@@ -1878,6 +1898,35 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 return !s.includes('reject') && !bs.includes('cancel') && s !== 'pending' && s !== 'waiting'
               }) : []
 
+              // ---- Time slot visualization for selected date ----
+              const slotToMin = (raw: string | null | undefined): number | null => {
+                const m = String(raw ?? '').match(/(?:T|\s)(\d{2}):(\d{2})/)
+                return m ? Number(m[1]) * 60 + Number(m[2]) : null
+              }
+              const pcTimeSlotsList: string[] = (() => {
+                if (!pcAvailRow) return []
+                const [sh, sm] = String(pcAvailRow.start_time || '08:00').split(':').map(Number)
+                const [eh, em] = String(pcAvailRow.end_time || '22:00').split(':').map(Number)
+                if (!Number.isFinite(sh) || !Number.isFinite(eh)) return []
+                const slots: string[] = []
+                for (let mm = sh * 60 + sm; mm + 30 <= eh * 60 + em; mm += 30) {
+                  slots.push(`${String(Math.floor(mm / 60)).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`)
+                }
+                return slots
+              })()
+              const slotToBookingMap = new Map<string, CourtBookingRow>()
+              for (const b of dateBookings) {
+                const bStartMin = slotToMin(b.start_timestamp)
+                const bEndMin = slotToMin(b.end_timestamp)
+                if (bStartMin == null || bEndMin == null) continue
+                for (const slot of pcTimeSlotsList) {
+                  const [sh, sm] = slot.split(':').map(Number)
+                  const slotStart = sh * 60 + sm
+                  if (slotStart >= bStartMin && slotStart + 30 <= bEndMin) slotToBookingMap.set(slot, b)
+                }
+              }
+              const slotSelectedBooking = bookingSelectedSlot ? (slotToBookingMap.get(bookingSelectedSlot) ?? null) : null
+
               const renderBookingRow = (b: CourtBookingRow, showActions: boolean, overrideTime?: string) => {
                 const uid = b.userid
                 const displayName = bookingUserNames[uid] || `User ${uid}`
@@ -2000,29 +2049,79 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           )
                         })}
                       </View>
-                      {/* Bookings for selected date */}
-                      {bookingSelectedDate && (
+                      {/* Time slot visualization for selected date */}
+                      {bookingSelectedDate && pcAvailRow && (
                         <View style={{ marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 8 }}>Bookings on {formatYmdToDmy(bookingSelectedDate)}</Text>
-                          {dateBookings.length === 0 ? (
-                            <Text style={{ color: '#888', fontSize: 13 }}>No bookings for this date.</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 8 }}>
+                            {slotSelectedBooking
+                              ? `Booking: ${formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp)}`
+                              : `Open: ${String(pcAvailRow.start_time || '').slice(0, 5)} \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
+                          </Text>
+                          {pcTimeSlotsList.length === 0 ? (
+                            <Text style={{ color: '#888', fontSize: 13 }}>No time slots available.</Text>
                           ) : (
-                            dateBookings.map((b) => {
-                              const uid = b.userid
-                              const displayName = bookingUserNames[uid] || `User ${uid}`
-                              const pfpUri = bookingUserPfps[uid] || null
-                              return (
-                                <TouchableOpacity key={b.courtbookingid} activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#FED7AA' }}>
-                                  {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 34, height: 34, borderRadius: 17 }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 34, height: 34 }} resizeMode="contain" />}
-                                  <View style={{ flex: 1, marginLeft: 8 }}>
-                                    <Text style={{ fontWeight: '700', fontSize: 13 }}>{displayName}</Text>
-                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 1 }}>{formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
+                            <View>
+                              {pcTimeSlotsList.map((slot, idx) => {
+                                const booking = slotToBookingMap.get(slot)
+                                const isBooked = !!booking
+                                const isInSelectedGroup = isBooked && !!slotSelectedBooking && booking.courtbookingid === slotSelectedBooking.courtbookingid
+                                const prevSlot = idx > 0 ? pcTimeSlotsList[idx - 1] : null
+                                const nextSlot = idx < pcTimeSlotsList.length - 1 ? pcTimeSlotsList[idx + 1] : null
+                                const prevBooking = prevSlot ? slotToBookingMap.get(prevSlot) : undefined
+                                const nextBooking = nextSlot ? slotToBookingMap.get(nextSlot) : undefined
+                                const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
+                                const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
+                                const slotBg = isBooked
+                                  ? (isInSelectedGroup ? (bookingBlinkOn ? '#fed7aa' : '#f97316') : '#f97316')
+                                  : '#f9fafb'
+                                return (
+                                  <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
+                                    {/* Left connector track with dot */}
+                                    <View style={{ width: 22, alignSelf: 'stretch', position: 'relative' }}>
+                                      {isBooked && (
+                                        <>
+                                          <View style={{ position: 'absolute', left: 8, top: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: '#f97316', zIndex: 2 }} />
+                                          {connToPrev && <View style={{ position: 'absolute', left: 11, top: 0, width: 2, height: 16, backgroundColor: '#f97316' }} />}
+                                          {connToNext && <View style={{ position: 'absolute', left: 11, top: 24, width: 2, height: 16, backgroundColor: '#f97316' }} />}
+                                        </>
+                                      )}
+                                    </View>
+                                    {/* Slot box */}
+                                    <TouchableOpacity
+                                      onPress={() => {
+                                        if (!isBooked) { setBookingSelectedSlot(null); return }
+                                        setBookingSelectedSlot(prev => prev === slot ? null : slot)
+                                      }}
+                                      disabled={!isBooked}
+                                      activeOpacity={isBooked ? 0.8 : 1}
+                                      style={{
+                                        flex: 1, height: 40, backgroundColor: slotBg,
+                                        borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
+                                        borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
+                                        paddingHorizontal: 10, justifyContent: 'center',
+                                        borderWidth: 0.5, borderColor: isBooked ? '#f97316' : '#e5e7eb',
+                                        borderTopWidth: connToPrev ? 0 : 0.5,
+                                      }}
+                                    >
+                                      <Text style={{ fontSize: 12, fontWeight: '700', color: isBooked ? '#7c2d12' : '#9ca3af' }}>
+                                        {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
+                                      </Text>
+                                      {isBooked && isInSelectedGroup && !bookingBlinkOn && (
+                                        <Text style={{ fontSize: 11, color: '#7c2d12', marginTop: 1 }} numberOfLines={1}>
+                                          {bookingUserNames[booking.userid] || `User ${booking.userid}`}
+                                        </Text>
+                                      )}
+                                    </TouchableOpacity>
                                   </View>
-                                  <Text style={{ fontSize: 12, color: '#9a3412' }}>{String(b.status ?? b.bookingstatus ?? 'pending')}</Text>
-                                </TouchableOpacity>
-                              )
-                            })
+                                )
+                              })}
+                            </View>
                           )}
+                        </View>
+                      )}
+                      {bookingSelectedDate && !pcAvailRow && dateBookings.length === 0 && (
+                        <View style={{ marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
+                          <Text style={{ color: '#888', fontSize: 13 }}>No bookings for this date.</Text>
                         </View>
                       )}
                     </View>

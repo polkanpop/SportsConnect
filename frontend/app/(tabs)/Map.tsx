@@ -354,6 +354,7 @@
     const [activeSheetTab, setActiveSheetTab] = useState<'Schedule' | 'Transport' | 'Images' | 'Reviews'>('Schedule');
 
     const [selectedSchedulePlayingCourtId, setSelectedSchedulePlayingCourtId] = useState<number | null>(null);
+    const [selectedMapScheduleDate, setSelectedMapScheduleDate] = useState<string | null>(null);
 
 
     type DistanceMatrixStatus = 'loading' | 'loaded' | 'error';
@@ -408,6 +409,7 @@
       if (!selectedMarker) return;
       setActiveSheetTab('Schedule');
       setWeekOffset(0);
+      setSelectedMapScheduleDate(null);
     }, [selectedMarker?.id]);
 
     // Auth context (backend login OR supabase anonymous/social)
@@ -554,6 +556,19 @@
         return { ...wd, date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
       })
     }, [weekOffset])
+
+    // 30-min time slots derived from availability window (view-only in Map)
+    const mapTimeSlots = useMemo((): string[] => {
+      if (!availability) return []
+      const [sh, sm] = String(availability.start_time || '08:00').split(':').map(Number)
+      const [eh, em] = String(availability.end_time || '22:00').split(':').map(Number)
+      if (!Number.isFinite(sh) || !Number.isFinite(eh)) return []
+      const slots: string[] = []
+      for (let m = sh * 60 + sm; m + 30 <= eh * 60 + em; m += 30) {
+        slots.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`)
+      }
+      return slots
+    }, [availability])
 
     // Reset week offset when modal opens
     useEffect(() => {
@@ -1722,24 +1737,43 @@
                                 const isPast = weekOffset === 0 && day.date < todayOnly;
                                 const isDayAvailable = availability?.booking_date?.includes(day.key);
                                 const isAvailable = isDayAvailable && !isPast;
+                                const isSelected = selectedMapScheduleDate === day.dateStr;
 
                                 return (
-                                  <View
+                                  <TouchableOpacity
                                     key={index}
+                                    onPress={() => isAvailable && setSelectedMapScheduleDate(prev => prev === day.dateStr ? null : day.dateStr)}
+                                    activeOpacity={0.85}
                                     style={[
                                       styles.dayCell,
-                                      isAvailable && { backgroundColor: '#fb923c' },
+                                      isSelected && { backgroundColor: '#f97316' },
+                                      isAvailable && !isSelected && { backgroundColor: '#fb923c' },
                                       !isAvailable && styles.dayCellDisabled,
                                     ]}
                                   >
-                                    <Text style={styles.dayLabel}>{day.label}</Text>
-                                    <Text style={[styles.dayDate, day.isToday && styles.todayUnderline]}>
+                                    <Text style={[styles.dayLabel, (isSelected || isAvailable) && { color: '#7c2d12' }]}>{day.label}</Text>
+                                    <Text style={[styles.dayDate, day.isToday && styles.todayUnderline, isSelected && { color: '#fff' }]}>
                                       {day.date.getDate()}
                                     </Text>
-                                  </View>
+                                  </TouchableOpacity>
                                 )
                               })}
                             </View>
+                            {/* Time slot expansion for selected date (view-only) */}
+                            {selectedMapScheduleDate && mapTimeSlots.length > 0 && (
+                              <View style={{ marginTop: 10, backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#9a3412', marginBottom: 6 }}>
+                                  Open: {String(availability!.start_time || '').slice(0, 5)} \u2013 {String(availability!.end_time || '').slice(0, 5)}
+                                </Text>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                                  {mapTimeSlots.map((slot) => (
+                                    <View key={slot} style={{ backgroundColor: '#fb923c', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
+                                      <Text style={{ fontSize: 11, color: '#7c2d12', fontWeight: '600' }}>{slot}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            )}
                           </View>
                         ) : (
                           <View style={styles.placeholderSection}>

@@ -619,12 +619,6 @@ export default function TsCreate() {
   }
 
   useEffect(() => {
-    if (!bookingsLoading && Array.isArray(availableEnrichedBookings) && availableEnrichedBookings.length && selectedBookingId == null) {
-      setSelectedBookingId(availableEnrichedBookings[0].courtbookingid)
-    }
-  }, [bookingsLoading, availableEnrichedBookings, selectedBookingId])
-
-  useEffect(() => {
     if (selectedBookingId != null) {
       const stillAvailable = availableEnrichedBookings.some(b => b.courtbookingid === selectedBookingId)
       if (!stillAvailable) {
@@ -666,15 +660,18 @@ export default function TsCreate() {
             {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
               <Text style={styles.smallText}>No available courts for training session booking.</Text>
             )}
-            {selectedBookingId && (
+            {!bookingSelectionLoading && !bookingsError && availableEnrichedBookings.length > 0 && availableEnrichedBookings.every(b => String((b as any)?.status ?? '').toLowerCase() === 'pending') && (
+              <Text style={styles.smallText}>Your court booking is awaiting approval — no approved court available yet.</Text>
+            )}
+            {selectedBooking && (
               <View style={styles.selectedBookingBox}>
                 <View style={styles.bookingTitleRow}>
-                  <Text style={styles.selectedBookingTitle}>{enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.courtName || 'Selected Booking'}</Text>
-                  {usedSessionBookingIds.has(selectedBookingId) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>Training</Text></View>}
-                  {usedEventBookingIds.has(selectedBookingId) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>Event</Text></View>}
+                  <Text style={styles.selectedBookingTitle}>{selectedBooking.courtName || 'Selected Booking'}</Text>
+                  {usedSessionBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>Training</Text></View>}
+                  {usedEventBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>Event</Text></View>}
                 </View>
-                <Text style={styles.selectedBookingMeta}>{enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.address}</Text>
-                <Text style={styles.selectedBookingMeta}>{formatRange(enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.start_timestamp as any, enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.end_timestamp as any)}</Text>
+                {selectedBooking.address && <Text style={styles.selectedBookingMeta}>{selectedBooking.address}</Text>}
+                <Text style={styles.selectedBookingMeta}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
               </View>
             )}
             {expandedCourts && enrichedBookings && (
