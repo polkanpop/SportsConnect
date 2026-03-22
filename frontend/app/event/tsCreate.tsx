@@ -269,8 +269,8 @@ export default function TsCreate() {
   })
 
   const selectedBooking = useMemo(() => {
-    return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
-  }, [enrichedBookings, selectedBookingId])
+    return availableEnrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
+  }, [availableEnrichedBookings, selectedBookingId])
 
   const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
     queryKey: queryKeys.trainingSessionsCombined,
@@ -683,10 +683,10 @@ export default function TsCreate() {
                 <Text style={styles.selectedBookingMeta}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
               </View>
             )}
-            {expandedCourts && enrichedBookings && (
+            {expandedCourts && availableEnrichedBookings && (
               <View style={styles.bookingList}>
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:4 }}>
-                  {enrichedBookings.map(b => (
+                  {availableEnrichedBookings.map(b => (
                     <React.Fragment key={b.courtbookingid}>{renderBookingItem({ item: b })}</React.Fragment>
                   ))}
                 </ScrollView>

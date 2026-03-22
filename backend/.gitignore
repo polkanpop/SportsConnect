@@ -51,4 +51,3 @@ app-example
 
 # Python bytecode caches - canonical rule for all nested __pycache__ dirs
 **/__pycache__/**
-
