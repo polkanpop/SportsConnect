@@ -371,6 +371,19 @@ export default function TsCreate() {
         })
       }
 
+      // Preemptively mark the used courtbookingid so availableEnrichedBookings filters it out
+      // immediately, even if the sessionRow+infoRow retry loop below fails (server slow / race).
+      const knownCbid = typeof data?.session?.courtbookingid === 'number'
+        ? data.session.courtbookingid
+        : (typeof selectedBookingId === 'number' ? selectedBookingId : null)
+      if (typeof knownCbid === 'number') {
+        qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
+          return [{ courtbookingid: knownCbid, sessionid: typeof createdSessionId === 'number' ? createdSessionId : -1, status: 'upcoming' } as any, ...arr]
+        })
+      }
+
       // Only add to lists when the DB returns a complete session + sessioninfo row.
       if (typeof createdSessionId === 'number') {
         let sessionRow: any = null

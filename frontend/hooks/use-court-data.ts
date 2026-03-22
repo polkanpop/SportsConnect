@@ -60,9 +60,9 @@ export function useCreateCourtBooking() {
       queryClient.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'
       })
-      // Force dashboard + user booking list refresh so newly booked slots/records show immediately.
+      // Force user booking list refresh so newly booked slots/records show immediately.
+      // NOTE: do NOT invalidate dashboard here — it races with the Redis SWR cache and causes events to vanish.
       queryClient.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(variables.userid) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(variables.userid) })
     },
   })
 }
@@ -85,7 +85,7 @@ export function useDeleteCourtBooking() {
     },
     onSuccess: (_data, payload) => {
       qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(payload.userid) })
-      qc.invalidateQueries({ queryKey: queryKeys.dashboard(payload.userid) })
+      // NOTE: do NOT invalidate dashboard here — it races with the Redis SWR cache and causes events to vanish.
       // Invalidate availability to reflect freed slot
       qc.invalidateQueries({
         predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'courtavailability'

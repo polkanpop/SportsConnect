@@ -1,13 +1,22 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends, Request
 from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_update, rest_insert
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
 from ..notifications_service import create_notification
+from typing import Any
 
 router = APIRouter(prefix="/eventbookings", tags=["bookings"])  # Keep plural route, underlying table is singular 'eventbooking'
 
 PRIMARY_KEY = "eventbookingid"
+
+
+async def _invalidate_user_dashboard_cache(app: Any, userid: int) -> None:
+    """Delete the dashboard SWR cache entry so the next fetch returns fresh data."""
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+    await redis.delete(f"sportsconnect:me:dashboard:v2:userid={userid}")
 
 
 def _sync_event_participant_count(eventid: int) -> None:
@@ -61,7 +70,7 @@ def get_event_booking(eventbookingid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_event_booking(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def create_event_booking(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     try:
         userid_raw = body.get("userid") or current_user
         try:
@@ -155,6 +164,16 @@ def create_event_booking(body: dict, background_tasks: BackgroundTasks, current_
             print("[eventbookings] notification insert failed:", str(e))
 
         background_tasks.add_task(invalidate_namespace, "eventbookings", "eventinfo")
+        # Invalidate dashboard Redis cache for the booker (and organizer) so Activity/Home
+        # screens see the new booking without waiting for the 120s SWR window to expire.
+        background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, userid)
+        try:
+            _org_row = rest_select("events", "eventid,organizerid", filters={"eventid": eventid}, single=True)
+            _organizerid = int(_org_row.get("organizerid")) if isinstance(_org_row, dict) and _org_row.get("organizerid") is not None else None
+            if _organizerid is not None and _organizerid != userid:
+                background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, _organizerid)
+        except Exception:
+            pass
         return resp[0] if isinstance(resp, list) and resp else payload
     except HTTPException:
         raise

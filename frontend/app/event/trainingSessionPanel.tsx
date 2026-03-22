@@ -215,6 +215,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const preferredSelectedSessionIdRef = useRef<number | null>(null)
 
   const [sessions, setSessions] = useState<CombinedTrainingSession[]>([])
+  // Stable ref — avoids recreating loadBookingsForSession on every count bump
+  const sessionsRef = useRef<CombinedTrainingSession[]>([])
+  useEffect(() => { sessionsRef.current = sessions }, [sessions])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState<string | null>(null)
 
@@ -313,11 +316,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       invalidateEventsCombinedCache(),
       invalidateTrainingSessionsCombinedCache(),
     ])
-    if (typeof coachId === 'number') {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
-    }
+    // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that can wipe new data
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-  }, [coachId, queryClient])
+  }, [queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
@@ -530,7 +531,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           const d = new Date(s)
           return Number.isFinite(d.getTime()) ? d.getTime() : null
         }
-        const meta = sessions.find((s) => s.sessionid === sessionId)
+        const meta = sessionsRef.current.find((s) => s.sessionid === sessionId)
         const scopeStart = toMillis((meta as any)?.time ?? (meta as any)?.start_timestamp ?? null)
         const scopeEnd = toMillis((meta as any)?.end_timestamp ?? null)
         const inScope = (row: TrainingSessionBookingRow) => {
@@ -576,7 +577,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setBookingsLoading(false)
       }
     },
-    [enrichBookings, sessions],
+    [enrichBookings],
   )
 
   const loadBlockedForTarget = useCallback(
@@ -730,7 +731,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     if (coachId == null) return
     if (selectedSessionId == null) return
     void loadBookingsForSession(selectedSessionId)
-  }, [coachId, loadBookingsForSession, selectedSessionId])
+  // NOTE: loadBookingsForSession is stable (sessions read via ref), intentionally omitted from deps
+  // to prevent: setSessions (count bump) → recreate callback → fire this effect → reload applicants → buttons reappear
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachId, selectedSessionId])
 
   useEffect(() => {
     if (coachId == null) return

@@ -401,6 +401,19 @@ export default function EventCreateScreen() {
         })
       }
 
+      // Preemptively mark the used courtbookingid so availableEnrichedBookings filters it out
+      // immediately, even if the evRow+infoRow retry loop below fails (server slow / race).
+      const knownCbid = typeof data?.event?.courtbookingid === 'number'
+        ? data.event.courtbookingid
+        : (typeof selectedBookingId === 'number' ? selectedBookingId : null)
+      if (typeof knownCbid === 'number') {
+        qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          const arr = Array.isArray(prev) ? prev : []
+          if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
+          return [{ courtbookingid: knownCbid, eventid: typeof createdEventId === 'number' ? createdEventId : -1, status: 'upcoming' } as any, ...arr]
+        })
+      }
+
       // Only add to lists when the DB returns a complete event + eventinfo row.
       if (typeof createdEventId === 'number') {
         let evRow: any = null
