@@ -9,6 +9,7 @@ import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollVi
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   FavouriteCourt,
+  invalidateEventsCombinedCache,
   listCourtInfoByCourtIdsCached,
   listEventsCombinedCached,
   CourtInfoRow,
@@ -585,6 +586,7 @@ export default function Home() {
                 onRefresh={async () => {
                   setPullRefreshingFavs(true);
                   try {
+                    await invalidateEventsCombinedCache();
                     await Promise.all([
                       refetchDashboard(),
                       eventsQuery.refetch(),

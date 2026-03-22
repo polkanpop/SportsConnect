@@ -93,6 +93,11 @@ const TrainingSessionListScreen = () => {
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   })
+  // Clear AsyncStorage before refetch so pull-to-refresh always fetches from network.
+  const handleRefresh = useCallback(async () => {
+    await invalidateTrainingSessionsCombinedCache()
+    refetch()
+  }, [refetch])
   useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
   useEffect(() => { if (!loading && !sessionsData) setError('Failed to load sessions') }, [loading, sessionsData])
 
@@ -501,7 +506,7 @@ const TrainingSessionListScreen = () => {
           refreshControl={
             <RefreshControl
               refreshing={loading || isFetching}
-              onRefresh={() => refetch()}
+              onRefresh={handleRefresh}
             />
           }
         >

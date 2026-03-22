@@ -109,6 +109,11 @@ const EventListScreen = () => {
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   })
+  // Clear AsyncStorage before refetch so pull-to-refresh always fetches from network.
+  const handleRefresh = useCallback(async () => {
+    await invalidateEventsCombinedCache()
+    refetch()
+  }, [refetch])
   // Push data into local state for existing code references.
   useEffect(() => { if (Array.isArray(eventsData)) setAllEvents(eventsData) }, [eventsData])
   useEffect(() => { if (!loading && !eventsData) setError('Failed loading events') }, [loading, eventsData])
@@ -553,7 +558,7 @@ const EventListScreen = () => {
           refreshControl={
             <RefreshControl
               refreshing={loading || isFetching}
-              onRefresh={() => refetch()}
+              onRefresh={handleRefresh}
             />
           }
         >
