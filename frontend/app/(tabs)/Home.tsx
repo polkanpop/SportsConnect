@@ -2,7 +2,8 @@
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigation } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image'
 import * as Location from 'expo-location'
 import { Animated, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
@@ -51,6 +52,15 @@ export default function Home() {
       if (finished) setMenuVisible(false);
     });
   };
+
+  // Pressing the Home tab icon always navigates back to the home (user) view.
+  const navigation = useNavigation()
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener('tabPress', () => {
+      setActiveView('user')
+    })
+    return unsubscribe
+  }, [navigation])
 
   // Deep-link receiver: Notification tab can push panel=court to open court management directly.
   useEffect(() => {

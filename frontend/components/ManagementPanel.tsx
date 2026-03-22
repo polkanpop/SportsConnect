@@ -33,7 +33,6 @@ export default function ManagementPanel(props: {
   const items = useMemo(
     () =>
       [
-        { key: 'user', label: 'User' },
         { key: 'event', label: 'Event/Training Session' },
         { key: 'court', label: 'Venue & Court' },
         { key: 'reviews', label: 'My Reviews' },

@@ -789,8 +789,8 @@ export default function CourtRegisterPage() {
   const uploadOneToCloudinary = async (localUri: string, idx: number, prefix: string = 'court') => {
     const resized = await ImageManipulator.manipulateAsync(
       localUri,
-      [{ resize: { width: 1280 } }],
-      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      [{ resize: { width: 960 } }],
+      { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
     )
 
   const publicId = `${prefix}_${userid}_${Date.now()}_${idx}`

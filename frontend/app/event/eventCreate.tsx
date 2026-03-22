@@ -169,8 +169,8 @@ export default function EventCreateScreen() {
 
       const resized = await ImageManipulator.manipulateAsync(
         localUri,
-        [{ resize: { width: 1280 } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+        [{ resize: { width: 960 } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
       )
 
       const publicId = `event_${userId}_${Date.now()}_${idx}`
@@ -553,14 +553,19 @@ export default function EventCreateScreen() {
 
       // Invalidate events list cache so new event appears.
       await invalidateEventsCombinedCache()
+      // Trigger background refetch so Home tab gets lat/lon and courtbookingid from server.
+      qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-      // clear draft on success
+      // Clear draft and reset form state so draft-save debounce writes empty state on any subsequent tick.
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
+      setTitle(''); setParticipantsCap(''); setDescription(''); setRemoteImageUrls([])
+      setAddMeToParticipants(true); setAutoApprove(false); setMonetize(false); setEntryFee('')
+      setPayCash(false); setPayVnPay(false); setSelectedBookingId(null); setExpandedCourts(false)
 
       const detailsId = typeof createdEventId === 'number' ? `created_event_${createdEventId}` : undefined
       setTimeout(() => {
@@ -592,6 +597,7 @@ export default function EventCreateScreen() {
         if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
         if (typeof parsed.payVnPay === 'boolean') setPayVnPay(parsed.payVnPay)
         if (typeof parsed.selectedBookingId === 'number') setSelectedBookingId(parsed.selectedBookingId)
+        if (Array.isArray(parsed.remoteImageUrls)) setRemoteImageUrls(parsed.remoteImageUrls.filter((u: unknown) => typeof u === 'string'))
       } catch (e) {}
     }
     load()
@@ -602,12 +608,12 @@ export default function EventCreateScreen() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId
+        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls
       }
       try { AsyncStorage.setItem('@eventCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId])
+  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls])
 
   const onSubmit = () => {
     if (submitting) return

@@ -152,8 +152,8 @@ export default function TsCreate() {
 
       const resized = await ImageManipulator.manipulateAsync(
         localUri,
-        [{ resize: { width: 1280 } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+        [{ resize: { width: 960 } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
       )
 
       const publicId = `training_${userId}_${Date.now()}_${idx}`
@@ -516,14 +516,19 @@ export default function TsCreate() {
       }
 
       await invalidateTrainingSessionsCombinedCache()
+      // Trigger background refetch so lat/lon and courtbookingid are accurate in all caches.
+      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.createdTrainingSessionsCombined(typeof userId === 'number' ? userId : null) })
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-      // clear draft on success
+      // Clear draft and reset form state so draft-save debounce writes empty state on any subsequent tick.
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
+      setTitle(''); setParticipantsCap(''); setDescription(''); setRemoteImageUrls([])
+      setAddMeToParticipants(true); setAutoApprove(false); setMonetize(false); setEntryFee('')
+      setPayCash(false); setPayVnPay(false); setSelectedBookingId(null); setExpandedCourts(false)
 
       const detailsId = typeof createdSessionId === 'number' ? `created_session_${createdSessionId}` : undefined
       setTimeout(() => { router.replace({ pathname: '/event/CreationInfo', params: { type: 'training', detailsId } }) }, 900)
@@ -551,6 +556,7 @@ export default function TsCreate() {
         if (typeof parsed.payCash === 'boolean') setPayCash(parsed.payCash)
         if (typeof parsed.payVnPay === 'boolean') setPayVnPay(parsed.payVnPay)
         if (typeof parsed.selectedBookingId === 'number') setSelectedBookingId(parsed.selectedBookingId)
+        if (Array.isArray(parsed.remoteImageUrls)) setRemoteImageUrls(parsed.remoteImageUrls.filter((u: unknown) => typeof u === 'string'))
       } catch (e) {}
     }
     load()
@@ -561,12 +567,12 @@ export default function TsCreate() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId
+        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls
       }
       try { AsyncStorage.setItem('@tsCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId])
+  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls])
 
   const onSubmit = () => {
     if (submitting) return
