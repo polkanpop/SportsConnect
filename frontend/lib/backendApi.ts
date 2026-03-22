@@ -1478,7 +1478,9 @@ export async function updateCourtBooking(courtbookingid: number, data: Partial<C
 // ---- Event & Training Session Bookings (mirror court booking create pattern) ----
 export type EventBookingRow = { eventbookingid: number; eventid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createEventBooking(payload: Omit<EventBookingRow, 'eventbookingid'>) {
-	return request('/eventbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createEventBooking' }) as Promise<EventBookingRow>
+	const res = await request('/eventbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createEventBooking' }) as Promise<EventBookingRow>
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export async function getEventBooking(eventbookingid: number): Promise<EventBookingRow | null> {
@@ -1493,11 +1495,13 @@ export async function getEventBooking(eventbookingid: number): Promise<EventBook
 
 export async function updateEventBooking(eventbookingid: number, data: Partial<EventBookingRow>) {
 	if (eventbookingid == null) throw new Error('eventbookingid required')
-	return request(`/eventbookings/${encodeURIComponent(eventbookingid)}`, {
+	const res = await request(`/eventbookings/${encodeURIComponent(eventbookingid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateEventBooking'
 	}) as Promise<EventBookingRow>
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
@@ -1828,20 +1832,24 @@ export async function getEventInfoByEventId(eventid: number): Promise<EventInfoM
 
 export async function updateEventInfo(eventinfoid: number, data: Partial<EventInfoMeta>) {
 	if (eventinfoid == null) throw new Error('eventinfoid required')
-	return request(`/eventinfo/${encodeURIComponent(eventinfoid)}`, {
+	const res = await request(`/eventinfo/${encodeURIComponent(eventinfoid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateEventInfo'
 	}) as Promise<EventInfoMeta>
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export async function adjustEventParticipants(eventid: number, delta: number): Promise<EventInfoMeta> {
 	if (eventid == null) throw new Error('eventid required')
 	if (!Number.isFinite(delta)) throw new Error('delta must be a number')
-	return request(`/eventinfo/adjust/${encodeURIComponent(eventid)}?delta=${encodeURIComponent(delta)}`, {
+	const res = await request(`/eventinfo/adjust/${encodeURIComponent(eventid)}?delta=${encodeURIComponent(delta)}`, {
 		method: 'POST',
 		debugLabel: 'adjustEventParticipants'
 	}) as Promise<EventInfoMeta>
+	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	return res
 }
 
 export async function getTrainingSessionInfoBySessionId(sessionid: number): Promise<TrainingSessionInfoMeta | null> {
@@ -1853,20 +1861,24 @@ export async function getTrainingSessionInfoBySessionId(sessionid: number): Prom
 
 export async function updateTrainingSessionInfo(sessioninfoid: number, data: Partial<TrainingSessionInfoMeta>) {
 	if (sessioninfoid == null) throw new Error('sessioninfoid required')
-	return request(`/trainingsessioninfo/${encodeURIComponent(sessioninfoid)}`, {
+	const res = await request(`/trainingsessioninfo/${encodeURIComponent(sessioninfoid)}`, {
 		method: 'PATCH',
 		body: JSON.stringify(data),
 		debugLabel: 'updateTrainingSessionInfo'
 	}) as Promise<TrainingSessionInfoMeta>
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 
 export async function adjustTrainingSessionParticipants(sessionid: number, delta: number): Promise<TrainingSessionInfoMeta> {
 	if (sessionid == null) throw new Error('sessionid required')
 	if (!Number.isFinite(delta)) throw new Error('delta must be a number')
-	return request(`/trainingsessioninfo/adjust/${encodeURIComponent(sessionid)}?delta=${encodeURIComponent(delta)}`, {
+	const res = await request(`/trainingsessioninfo/adjust/${encodeURIComponent(sessionid)}?delta=${encodeURIComponent(delta)}`, {
 		method: 'POST',
 		debugLabel: 'adjustTrainingSessionParticipants'
 	}) as Promise<TrainingSessionInfoMeta>
+	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	return res
 }
 export type TrainingSessionInfoMeta = {
 	sessioninfoid: number
@@ -1890,6 +1902,7 @@ export type CombinedTrainingSession = {
 	coachName?: string | null
 	title?: string
 	description?: string | null
+	images?: string[]
 	numberofpeople?: number | null
 	start_timestamp?: string | null
 	end_timestamp?: string | null
@@ -2051,6 +2064,7 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			organizerName: null,
 			title: meta?.title,
 			description: meta?.description,
+			images: normalizeStringArrayLoose(meta?.images),
 			numberofpeople: meta?.numberofpeople ?? null,
 			start_timestamp: booking?.start_timestamp ?? null,
 			end_timestamp: booking?.end_timestamp ?? null,
@@ -2181,6 +2195,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			coachName: null,
 			title: meta?.title,
 			description: meta?.description,
+			images: normalizeStringArrayLoose(meta?.images),
 			numberofpeople: meta?.numberofpeople ?? null,
 			start_timestamp: booking?.start_timestamp ?? null,
 			end_timestamp: booking?.end_timestamp ?? null,

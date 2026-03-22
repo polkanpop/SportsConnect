@@ -91,7 +91,7 @@ const TrainingSessionListScreen = () => {
     queryFn: () => listTrainingSessionsCombinedCached(),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
   })
   useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
   useEffect(() => { if (!loading && !sessionsData) setError('Failed to load sessions') }, [loading, sessionsData])

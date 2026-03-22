@@ -148,6 +148,7 @@ export default function Home() {
     enabled: !!userId,
     staleTime: 60_000,
     gcTime: 5 * 60 * 1000,
+    refetchOnMount: true,
   })
 
   const eventsCombined = Array.isArray(eventsQuery.data) ? eventsQuery.data : []
