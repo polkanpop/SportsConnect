@@ -328,8 +328,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
       const resized = await ImageManipulator.manipulateAsync(
         localUri,
-        [{ resize: { width: 960 } }],
-        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
+        [{ resize: { width: 800 } }],
+        { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG },
       )
 
       const publicId = `session_${coachId}_${Date.now()}_${idx}`

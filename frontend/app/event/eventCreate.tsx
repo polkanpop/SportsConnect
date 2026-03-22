@@ -169,8 +169,8 @@ export default function EventCreateScreen() {
 
       const resized = await ImageManipulator.manipulateAsync(
         localUri,
-        [{ resize: { width: 960 } }],
-        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
+        [{ resize: { width: 800 } }],
+        { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG },
       )
 
       const publicId = `event_${userId}_${Date.now()}_${idx}`
@@ -553,8 +553,12 @@ export default function EventCreateScreen() {
 
       // Invalidate events list cache so new event appears.
       await invalidateEventsCombinedCache()
-      // Trigger background refetch so Home tab gets lat/lon and courtbookingid from server.
-      qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+      // NOTE: Do NOT call qc.invalidateQueries for eventsCombined here — it triggers an immediate
+      // background refetch that races with the server list endpoint. If the server hasn't indexed
+      // the new event yet, the refetch result gets written to AsyncStorage with a 60s TTL,
+      // poisoning every subsequent fetch (including app restart). setQueryData above is the sole
+      // source of truth for the new event; invalidateEventsCombinedCache() ensures the TTL cache
+      // is stale so the NEXT natural mount refetch (refetchOnMount) gets fresh server data.
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })

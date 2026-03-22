@@ -152,8 +152,8 @@ export default function TsCreate() {
 
       const resized = await ImageManipulator.manipulateAsync(
         localUri,
-        [{ resize: { width: 960 } }],
-        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
+        [{ resize: { width: 800 } }],
+        { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG },
       )
 
       const publicId = `training_${userId}_${Date.now()}_${idx}`
@@ -516,8 +516,8 @@ export default function TsCreate() {
       }
 
       await invalidateTrainingSessionsCombinedCache()
-      // Trigger background refetch so lat/lon and courtbookingid are accurate in all caches.
-      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      // NOTE: Do NOT call qc.invalidateQueries for trainingSessionsCombined here — same snapback
+      // risk as for eventsCombined (see eventCreate.tsx). setQueryData + invalidateCache is enough.
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.createdTrainingSessionsCombined(typeof userId === 'number' ? userId : null) })
