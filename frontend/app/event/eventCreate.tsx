@@ -546,28 +546,21 @@ export default function EventCreateScreen() {
 
             // Ensure AsyncStorage cached combined list doesn't stick at 0
             void invalidateEventsCombinedCache()
-            // Delay so the backend background-task cache bust completes before we refetch,
-            // otherwise the immediate refetch races with the backend and returns stale data.
-            setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.eventsCombined }), 2000)
+            void qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+            void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
-
-          setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) }), 2000)
         })()
       }
 
       // Invalidate events list cache so new event appears.
-      // Delayed 2 s so the backend background-task cache bust completes first;
-      // setQueryData above already makes the event visible immediately.
       void invalidateEventsCombinedCache()
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
-        if (typeof userId === 'number') {
-          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
-          qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
-          qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
-        }
-        qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-      }, 2000)
+      qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+      if (typeof userId === 'number') {
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
+        qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
+      }
+      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
 

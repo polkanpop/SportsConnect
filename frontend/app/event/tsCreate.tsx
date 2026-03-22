@@ -510,26 +510,20 @@ export default function TsCreate() {
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
             void invalidateTrainingSessionsCombinedCache()
-            // Delay so the backend background-task cache bust completes before we refetch.
-            setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }), 2000)
+            void qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+            void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
-
-          setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) }), 2000)
         })()
       }
 
       void invalidateTrainingSessionsCombinedCache()
-      // Delayed 2 s so the backend background-task cache bust completes first;
-      // setQueryData above already makes the session visible immediately.
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
-        if (typeof userId === 'number') {
-          qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
-          qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
-          qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
-        }
-        qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-      }, 2000)
+      qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      if (typeof userId === 'number') {
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        qc.invalidateQueries({ queryKey: ['createdTrainingSessionsCombined', userId] })
+        qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
+      }
+      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
       // clear draft on success
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
 

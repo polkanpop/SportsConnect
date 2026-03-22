@@ -317,8 +317,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(coachId) as any })
     }
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['eventsCombined'] }),
-      queryClient.invalidateQueries({ queryKey: ['trainingSessionsCombined'] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }),
       queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' }),
     ])
   }, [coachId, queryClient])

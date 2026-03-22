@@ -10,6 +10,7 @@ import {
   adjustEventParticipants,
   createEventBooking,
   createPayment,
+  invalidateEventsCombinedCache,
   listEventsCombined,
   listEventsCombinedCached,
   CombinedEvent,
@@ -195,6 +196,13 @@ export default function EventBooking() {
       }
       upsert(queryKeys.eventBookingsUser(userId))
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsUser(userId) })
+
+      // Invalidate combined events cache so eventList / Home reflect the new booking state
+      void invalidateEventsCombinedCache()
+      void queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+      if (typeof userId === 'number') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+      }
 
       // Best-effort participant increment
       const approvalStatus = String((booking as any)?.status ?? '').toLowerCase()

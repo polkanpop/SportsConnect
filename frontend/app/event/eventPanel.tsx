@@ -307,8 +307,8 @@ export default function EventPanel({ organizerId }: Props) {
 			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any });
 		}
 		await Promise.all([
-			queryClient.invalidateQueries({ queryKey: ["eventsCombined"] }),
-			queryClient.invalidateQueries({ queryKey: ["trainingSessionsCombined"] }),
+			queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined }),
+			queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined }),
 			queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === "details" }),
 		]);
 	}, [organizerId, queryClient]);
