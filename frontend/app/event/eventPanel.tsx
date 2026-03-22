@@ -303,11 +303,13 @@ export default function EventPanel({ organizerId }: Props) {
 			invalidateEventsCombinedCache(),
 			invalidateTrainingSessionsCombinedCache(),
 		])
-		if (typeof organizerId === 'number') {
-			await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(organizerId) as any })
-		}
+		// NOTE: Do NOT invalidateQueries for dashboard here — it triggers a background re-fetch that
+		// gets the backend's Redis-cached dashboard (fresh for up to 120s after last load), which has
+		// stale events_combined/training_sessions_combined. This overwrites the TQ cache with old data
+		// and causes events to vanish from the Home screen. setQueryData handles optimistic updates;
+		// the dashboard re-fetches naturally when its 5-min staleTime expires.
 		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-	}, [organizerId, queryClient]);
+	}, [queryClient]);
 
 	const uploadOneToCloudinary = useCallback(
 		async (localUri: string, idx: number) => {

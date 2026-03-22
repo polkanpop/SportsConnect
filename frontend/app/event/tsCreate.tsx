@@ -430,6 +430,14 @@ export default function TsCreate() {
               if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
               return [combinedRow, ...arr]
             })
+            // Patch dashboard TQ cache so Home screen sees the new session immediately
+            // (avoids triggering invalidateQueries which would race with the Redis SWR cache)
+            qc.setQueryData(queryKeys.dashboard(userId), (prev: any) => {
+              if (!prev) return prev
+              const arr = Array.isArray(prev.training_sessions_combined) ? prev.training_sessions_combined : []
+              if (arr.some((r: any) => r?.sessionid === createdSessionId)) return prev
+              return { ...prev, training_sessions_combined: [combinedRow, ...arr] }
+            })
           }
 
           qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
@@ -510,7 +518,7 @@ export default function TsCreate() {
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
             await invalidateTrainingSessionsCombinedCache()
-            void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+            // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new session
           } catch {}
         })()
       }
@@ -519,7 +527,7 @@ export default function TsCreate() {
       // NOTE: Do NOT call qc.invalidateQueries for trainingSessionsCombined here — same snapback
       // risk as for eventsCombined (see eventCreate.tsx). setQueryData + invalidateCache is enough.
       if (typeof userId === 'number') {
-        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new session
         qc.invalidateQueries({ queryKey: queryKeys.createdTrainingSessionsCombined(typeof userId === 'number' ? userId : null) })
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
       }

@@ -460,6 +460,14 @@ export default function EventCreateScreen() {
               if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
               return [combinedRow, ...arr]
             })
+            // Patch dashboard TQ cache so Home screen sees the new event immediately
+            // (avoids triggering invalidateQueries which would race with the Redis SWR cache)
+            qc.setQueryData(queryKeys.dashboard(userId), (prev: any) => {
+              if (!prev) return prev
+              const arr = Array.isArray(prev.events_combined) ? prev.events_combined : []
+              if (arr.some((r: any) => r?.eventid === createdEventId)) return prev
+              return { ...prev, events_combined: [combinedRow, ...arr] }
+            })
           }
 
           qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)
@@ -546,7 +554,7 @@ export default function EventCreateScreen() {
 
             // Ensure AsyncStorage cached combined list doesn't stick at 0
             await invalidateEventsCombinedCache()
-            void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+            // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
           } catch {}
         })()
       }
@@ -560,7 +568,7 @@ export default function EventCreateScreen() {
       // source of truth for the new event; invalidateEventsCombinedCache() ensures the TTL cache
       // is stale so the NEXT natural mount refetch (refetchOnMount) gets fresh server data.
       if (typeof userId === 'number') {
-        qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+        // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
         qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
       }
