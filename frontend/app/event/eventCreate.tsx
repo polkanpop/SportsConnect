@@ -545,7 +545,7 @@ export default function EventCreateScreen() {
             try { await adjustEventParticipants(eventId, +1) } catch {}
 
             // Ensure AsyncStorage cached combined list doesn't stick at 0
-            void invalidateEventsCombinedCache()
+            await invalidateEventsCombinedCache()
             void qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
             void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
@@ -553,7 +553,7 @@ export default function EventCreateScreen() {
       }
 
       // Invalidate events list cache so new event appears.
-      void invalidateEventsCombinedCache()
+      await invalidateEventsCombinedCache()
       qc.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })

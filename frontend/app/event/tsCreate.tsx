@@ -509,14 +509,14 @@ export default function TsCreate() {
 
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
-            void invalidateTrainingSessionsCombinedCache()
+            await invalidateTrainingSessionsCombinedCache()
             void qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
             void qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
           } catch {}
         })()
       }
 
-      void invalidateTrainingSessionsCombinedCache()
+      await invalidateTrainingSessionsCombinedCache()
       qc.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       if (typeof userId === 'number') {
         qc.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })

@@ -63,6 +63,10 @@ export async function setCache<T = any>(key: string, value: T, ttlMs?: number, s
 
 // Remove key
 export async function invalidateCache(key: string): Promise<void> {
+  // Cancel any in-flight runSingleFlight deduplication for this key so the next
+  // caller starts a fresh network request rather than piggy-backing on a stale
+  // in-flight fetch that was started before the mutation.
+  inFlightFetches.delete(key)
   try { await AsyncStorage.removeItem(key) } catch {}
 }
 

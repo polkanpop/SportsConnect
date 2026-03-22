@@ -198,7 +198,7 @@ export default function EventBooking() {
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsUser(userId) })
 
       // Invalidate combined events cache so eventList / Home reflect the new booking state
-      void invalidateEventsCombinedCache()
+      await invalidateEventsCombinedCache()
       void queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       if (typeof userId === 'number') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
