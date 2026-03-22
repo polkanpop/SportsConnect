@@ -2072,8 +2072,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 const connToPrev = isBooked && prevBooking?.courtbookingid === booking.courtbookingid
                                 const connToNext = isBooked && nextBooking?.courtbookingid === booking.courtbookingid
                                 const slotBg = isBooked
-                                  ? (isInSelectedGroup ? (bookingBlinkOn ? '#fed7aa' : '#f97316') : '#f97316')
-                                  : '#f9fafb'
+                                  ? (isInSelectedGroup ? (bookingBlinkOn ? '#fb923c' : '#f97316') : '#f97316')
+                                  : '#1e1e1e'
                                 return (
                                   <View key={slot} style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
                                     {/* Left connector track with dot */}
@@ -2103,11 +2103,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                         borderTopWidth: connToPrev ? 0 : 0.5,
                                       }}
                                     >
-                                      <Text style={{ fontSize: 12, fontWeight: '700', color: isBooked ? '#7c2d12' : '#9ca3af' }}>
+                                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
                                         {slot}{pcTimeSlotsList[idx + 1] ? ` \u2013 ${pcTimeSlotsList[idx + 1]}` : ` \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
                                       </Text>
                                       {isBooked && isInSelectedGroup && !bookingBlinkOn && (
-                                        <Text style={{ fontSize: 11, color: '#7c2d12', marginTop: 1 }} numberOfLines={1}>
+                                        <Text style={{ fontSize: 11, color: '#fff', marginTop: 1 }} numberOfLines={1}>
                                           {bookingUserNames[booking.userid] || `User ${booking.userid}`}
                                         </Text>
                                       )}

@@ -78,21 +78,21 @@ export default function TsCreate() {
   const bookingsLoading = dashboard.isLoading
   const bookingsError = dashboard.error
   const bookingsRaw = dashboardRaw?.court_bookings ?? []
-  // Fallback query: fetches directly from /courtbookings when the dashboard cache is stale
-  // (e.g. immediately after creating a booking before the Redis cache is busted).
+  // Always fetch fresh bookings directly — dashboard cache can be stale after approval/rejection by court owner.
   const { data: bookingsAllRaw = [] } = useQuery<CourtBookingRow[]>({
     queryKey: queryKeys.courtBookingsUser(typeof userId === 'number' ? userId : null),
     queryFn: () => listCourtBookings({ userid: userId as number }),
-    enabled: typeof userId === 'number' && (!Array.isArray(bookingsRaw) || bookingsRaw.length === 0),
-    staleTime: 60_000,
+    enabled: typeof userId === 'number',
+    staleTime: 0,
   })
 
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {
     let base: CourtBookingRow[] = []
-    if (Array.isArray(bookingsRaw) && bookingsRaw.length) {
+    // Prefer the always-fresh direct query; fall back to dashboard cache while it loads
+    if (Array.isArray(bookingsAllRaw) && bookingsAllRaw.length) {
+      base = bookingsAllRaw
+    } else if (Array.isArray(bookingsRaw) && bookingsRaw.length) {
       base = bookingsRaw
-    } else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') {
-      base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
     }
     const isUsable = (b: CourtBookingRow) => {
       const approvalStatus = String((b as any)?.status ?? '').toLowerCase()
@@ -632,8 +632,9 @@ export default function TsCreate() {
       if (typeof userId === 'number') {
         try { refetchSessionsCombined() } catch {}
         try { refetchEventsCombined() } catch {}
+        try { qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(userId) }) } catch {}
       }
-    }, [userId, refetchSessionsCombined, refetchEventsCombined])
+    }, [userId, refetchSessionsCombined, refetchEventsCombined, qc])
   )
 
   return (

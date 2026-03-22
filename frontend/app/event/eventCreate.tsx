@@ -81,22 +81,21 @@ export default function EventCreateScreen() {
   const bookingsLoading = dashboard.isLoading
   const bookingsError = dashboard.error
   const bookingsRaw = dashboardRaw?.court_bookings ?? []
-  // Fallback query: fetches directly from /courtbookings when the dashboard cache is stale
-  // (e.g. immediately after creating a booking before the Redis cache is busted).
+  // Always fetch fresh bookings directly — dashboard cache can be stale after approval/rejection by court owner.
   const { data: bookingsAllRaw = [] } = useQuery<CourtBookingRow[]>({
     queryKey: queryKeys.courtBookingsUser(typeof userId === 'number' ? userId : null),
     queryFn: () => listCourtBookings({ userid: userId as number }),
-    enabled: typeof userId === 'number' && (!Array.isArray(bookingsRaw) || bookingsRaw.length === 0),
-    staleTime: 60_000,
+    enabled: typeof userId === 'number',
+    staleTime: 0,
   })
 
-  // Effective bookings list combining filtered result or client-side filtered fallback
+  // Effective bookings list: prefer always-fresh direct query, fall back to dashboard cache while loading
   const effectiveBookings: CourtBookingRow[] = useMemo(() => {
     let base: CourtBookingRow[] = []
-    if (Array.isArray(bookingsRaw) && bookingsRaw.length) {
+    if (Array.isArray(bookingsAllRaw) && bookingsAllRaw.length) {
+      base = bookingsAllRaw
+    } else if (Array.isArray(bookingsRaw) && bookingsRaw.length) {
       base = bookingsRaw
-    } else if (Array.isArray(bookingsAllRaw) && typeof userId === 'number') {
-      base = bookingsAllRaw.filter(b => String(b.userid) === String(userId))
     }
     // Show usable bookings: approved/pending approval (upcoming lifecycle), exclude rejected/cancelled/completed.
     const isUsable = (b: CourtBookingRow) => {
@@ -688,8 +687,9 @@ export default function EventCreateScreen() {
       if (typeof userId === 'number') {
         try { refetchEventsCombined() } catch {}
         try { refetchSessionsCombined() } catch {}
+        try { qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(userId) }) } catch {}
       }
-    }, [userId, refetchEventsCombined, refetchSessionsCombined])
+    }, [userId, refetchEventsCombined, refetchSessionsCombined, qc])
   )
 
   return (

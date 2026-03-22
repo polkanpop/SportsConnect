@@ -570,6 +570,13 @@
       return slots
     }, [availability])
 
+    // Auto-expand BottomSheet to full height when a day is selected so all time slots are visible
+    useEffect(() => {
+      if (selectedMapScheduleDate) {
+        bottomSheetRef.current?.snapToIndex(2)
+      }
+    }, [selectedMapScheduleDate])
+
     // Reset week offset when modal opens
     useEffect(() => {
       if (calendarModalVisible) {
@@ -1747,11 +1754,11 @@
                                     style={[
                                       styles.dayCell,
                                       isSelected && { backgroundColor: '#f97316' },
-                                      isAvailable && !isSelected && { backgroundColor: '#fb923c' },
+                                      isAvailable && !isSelected && { backgroundColor: '#fef9c3' },
                                       !isAvailable && styles.dayCellDisabled,
                                     ]}
                                   >
-                                    <Text style={[styles.dayLabel, (isSelected || isAvailable) && { color: '#7c2d12' }]}>{day.label}</Text>
+                                    <Text style={[styles.dayLabel, isSelected && { color: '#fff' }, isAvailable && !isSelected && { color: '#78350f' }]}>{day.label}</Text>
                                     <Text style={[styles.dayDate, day.isToday && styles.todayUnderline, isSelected && { color: '#fff' }]}>
                                       {day.date.getDate()}
                                     </Text>
@@ -1763,12 +1770,12 @@
                             {selectedMapScheduleDate && mapTimeSlots.length > 0 && (
                               <View style={{ marginTop: 10, backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
                                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#9a3412', marginBottom: 6 }}>
-                                  Open: {String(availability!.start_time || '').slice(0, 5)} \u2013 {String(availability!.end_time || '').slice(0, 5)}
+                                  {`Open: ${String(availability!.start_time || '').slice(0, 5)} – ${String(availability!.end_time || '').slice(0, 5)}`}
                                 </Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                                   {mapTimeSlots.map((slot) => (
-                                    <View key={slot} style={{ backgroundColor: '#fb923c', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
-                                      <Text style={{ fontSize: 11, color: '#7c2d12', fontWeight: '600' }}>{slot}</Text>
+                                    <View key={slot} style={{ backgroundColor: '#1e1e1e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
+                                      <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{slot}</Text>
                                     </View>
                                   ))}
                                 </View>
