@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends, Request
 from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_update, rest_insert, rest_delete
 from ..auth import get_current_user
@@ -9,6 +9,14 @@ import json
 from typing import Any
 
 router = APIRouter(prefix="/trainingsessions", tags=["training"])
+
+
+async def _invalidate_user_dashboard_cache(app: Any, userid: int) -> None:
+    """Delete the dashboard SWR cache entry so the next request fetches fresh data."""
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+    await redis.delete(f"sportsconnect:me:dashboard:v2:userid={userid}")
 
 PRIMARY_KEY = "sessionid"
 
@@ -80,7 +88,7 @@ def get_training_session(sessionid: int):
 
 
 @router.post("/create_with_info", response_model=dict)
-def create_training_session_with_info(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def create_training_session_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a training session plus its trainingsessioninfo metadata.
 
     Body keys expected:
@@ -245,6 +253,7 @@ def create_training_session_with_info(body: dict, background_tasks: BackgroundTa
         except Exception:
             pass
         background_tasks.add_task(invalidate_namespace, "trainingsessions", "trainingsessioninfo")
+        background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, coachid)
         return {"session": session_row, "sessioninfo": info_resp[0]}
     except HTTPException:
         raise

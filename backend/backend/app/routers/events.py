@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends, Request
 from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_delete, rest_insert, rest_update
 from ..auth import get_current_user
@@ -25,6 +25,14 @@ def _ascii_safe(obj: Any) -> str:
             return "<unprintable>"
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+async def _invalidate_user_dashboard_cache(app: Any, userid: int) -> None:
+    """Delete the dashboard SWR cache entry so the next request fetches fresh data."""
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+    await redis.delete(f"sportsconnect:me:dashboard:v2:userid={userid}")
 
 PRIMARY_KEY = "eventid"
 
@@ -150,7 +158,7 @@ def create_event(body: dict, background_tasks: BackgroundTasks, current_user: st
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/create_with_info", response_model=dict)
-def create_event_with_info(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def create_event_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create an event plus its eventinfo metadata atomically (best-effort rollback).
 
     Expected body keys:
@@ -319,6 +327,7 @@ def create_event_with_info(body: dict, background_tasks: BackgroundTasks, curren
     except Exception:
         pass
     background_tasks.add_task(invalidate_namespace, "events", "eventinfo")
+    background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, organizerid)
     return {"event": event_row, "eventinfo": info_resp[0]}
 
 
