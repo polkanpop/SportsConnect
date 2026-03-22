@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useFocusEffect } from '@react-navigation/native'
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, withRepeat, type SharedValue } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
@@ -225,28 +225,29 @@ type SlotItemProps = {
   slotSelectedBooking: CourtBookingRow | null
   connToPrev: boolean
   connToNext: boolean
-  bookedUserLabel?: string
+  bookingBlinkOpacity: SharedValue<number>
   onSelectSlot: (slot: string) => void
 }
 
-function SlotItem({ slot, idx, pcTimeSlots, pcAvailEndTime, booking, slotSelectedBooking, connToPrev, connToNext, bookedUserLabel, onSelectSlot }: SlotItemProps) {
+function SlotItem({ slot, idx, pcTimeSlots, pcAvailEndTime, booking, slotSelectedBooking, connToPrev, connToNext, bookingBlinkOpacity, onSelectSlot }: SlotItemProps) {
   const isBooked = !!booking
   const isInSelectedGroup = isBooked && !!slotSelectedBooking && booking!.courtbookingid === slotSelectedBooking.courtbookingid
-  const slotBg = isBooked ? (isInSelectedGroup ? '#EA580C' : '#F97316') : '#1e1e1e'
-  const slotBorder = isBooked ? '#FB923C' : '#e5e7eb'
-  const lineColor = isBooked ? '#F97316' : '#9ca3af'
+  const slotBg = isBooked ? '#9ca3af' : '#1e1e1e'
+  const animatedSlotStyle = useAnimatedStyle(() => ({
+    opacity: isInSelectedGroup ? bookingBlinkOpacity.value : 1,
+  }))
   return (
     <View style={{ height: 40, marginBottom: connToNext ? 0 : 4, flexDirection: 'row', alignItems: 'center' }}>
       <View style={{ width: 22, alignSelf: 'stretch', position: 'relative' }}>
         {isBooked && (
           <>
-            <View style={{ position: 'absolute', left: 8, top: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: lineColor, zIndex: 2 }} />
-            {connToPrev && <View style={{ position: 'absolute', left: 11, top: 0, width: 2, height: 16, backgroundColor: lineColor }} />}
-            {connToNext && <View style={{ position: 'absolute', left: 11, top: 24, width: 2, height: 16, backgroundColor: lineColor }} />}
+            <View style={{ position: 'absolute', left: 8, top: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: '#9ca3af', zIndex: 2 }} />
+            {connToPrev && <View style={{ position: 'absolute', left: 11, top: 0, width: 2, height: 16, backgroundColor: '#9ca3af' }} />}
+            {connToNext && <View style={{ position: 'absolute', left: 11, top: 24, width: 2, height: 16, backgroundColor: '#9ca3af' }} />}
           </>
         )}
       </View>
-      <View style={{ flex: 1, height: 40 }}>
+      <Animated.View style={[{ flex: 1, height: 40 }, animatedSlotStyle]}>
         <TouchableOpacity
           onPress={() => onSelectSlot(slot)}
           disabled={!isBooked}
@@ -256,28 +257,21 @@ function SlotItem({ slot, idx, pcTimeSlots, pcAvailEndTime, booking, slotSelecte
             borderTopLeftRadius: connToPrev ? 0 : 8, borderTopRightRadius: connToPrev ? 0 : 8,
             borderBottomLeftRadius: connToNext ? 0 : 8, borderBottomRightRadius: connToNext ? 0 : 8,
             paddingHorizontal: 10, justifyContent: 'center',
-            borderWidth: 0.5, borderColor: slotBorder,
+            borderWidth: 0.5, borderColor: isBooked ? '#9ca3af' : '#e5e7eb',
             borderTopWidth: connToPrev ? 0 : 0.5,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: '#fff' }} numberOfLines={1}>
-              {slot}{pcTimeSlots[idx + 1] ? ` \u2013 ${pcTimeSlots[idx + 1]}` : ` \u2013 ${pcAvailEndTime}`}
-            </Text>
-            {isBooked && (
-              <Text style={{ maxWidth: '45%', fontSize: 11, fontWeight: '700', color: '#fff' }} numberOfLines={1}>
-                {bookedUserLabel || 'Booked'}
-              </Text>
-            )}
-          </View>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>
+            {slot}{pcTimeSlots[idx + 1] ? ` \u2013 ${pcTimeSlots[idx + 1]}` : ` \u2013 ${pcAvailEndTime}`}
+          </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   )
 }
 
-export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null; deeplinkBookingDate?: string | null; deeplinkJumpKey?: string | null }) {
-  const { ownerId, deeplinkCourtId, deeplinkCourtBookingId, deeplinkBookingDate, deeplinkJumpKey } = props
+export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null }) {
+  const { ownerId, deeplinkCourtId, deeplinkCourtBookingId } = props
   const router = useRouter()
 
   const [rows, setRows] = useState<Array<{ court: CourtRow; info: CourtInfoRow | null }>>([])
@@ -652,7 +646,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   }, [])
 
   const bookingsLoadedForCourtRef = useRef<number | null>(null)
-  const deeplinkHandledForRef = useRef<string | null>(null)
+  const deeplinkHandledForRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!selected || editMode !== 'booking') return
@@ -664,34 +658,19 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   // Deep-link: court owner taps "View booking" in Notification → auto-select court → booking tab → date + playing court
   useEffect(() => {
     if (!deeplinkCourtId || !deeplinkCourtBookingId) return
-    const intentKey = `${deeplinkCourtBookingId}:${String(deeplinkJumpKey || '')}`
-    if (deeplinkHandledForRef.current === intentKey) return
+    if (deeplinkHandledForRef.current === deeplinkCourtBookingId) return
     if (loading) return
     if (!rows.some(r => r.court.courtid === deeplinkCourtId)) return
     if (selectedCourtId !== deeplinkCourtId) { setSelectedCourtId(deeplinkCourtId); return }
     if (editMode !== 'booking') { setEditMode('booking'); return }
     if (bookingsLoadedForCourtRef.current !== deeplinkCourtId || bookingLoading) return
     const booking = courtBookings.find(b => b.courtbookingid === deeplinkCourtBookingId)
-    if (!booking) {
-      const dateMatch = String(deeplinkBookingDate || '').match(/^(\d{4}-\d{2}-\d{2})/)
-      const fallbackDate = dateMatch ? dateMatch[1] : null
-      if (fallbackDate) {
-        const todayOnly = new Date(); todayOnly.setHours(0, 0, 0, 0)
-        const bDate = new Date(`${fallbackDate}T00:00:00`)
-        const weekOffset = Math.max(0, Math.min(4, Math.floor((bDate.getTime() - todayOnly.getTime()) / (7 * 24 * 60 * 60 * 1000))))
-        setBookingSelectedDate(fallbackDate)
-        setBookingWeekOffset(weekOffset)
-      }
-      deeplinkHandledForRef.current = intentKey
-      return
-    }
+    if (!booking) { deeplinkHandledForRef.current = deeplinkCourtBookingId; return }
     const avail = (availability || []).find(a => a.availabilityid === booking.availabilityid)
     const pcId: number | null = avail ? (Number((avail as any).playingcourtid) || null) : null
     const pc = pcId != null ? playingCourts.find(p => Number((p as any).playingcourtid) === pcId) : null
     const baseName = pc ? String((pc as any).base_name || (pc as any).name || '').trim() || null : null
-    const bookingDate =
-      (typeof booking.bookingdate === 'string' ? booking.bookingdate.slice(0, 10) : null) ||
-      (String(deeplinkBookingDate || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || null)
+    const bookingDate = typeof booking.bookingdate === 'string' ? booking.bookingdate.slice(0, 10) : null
     let weekOffset = 0
     if (bookingDate) {
       const todayOnly = new Date(); todayOnly.setHours(0, 0, 0, 0)
@@ -702,8 +681,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (pcId != null) setBookingSelectedPcId(pcId)
     if (bookingDate) setBookingSelectedDate(bookingDate)
     setBookingWeekOffset(weekOffset)
-    deeplinkHandledForRef.current = intentKey
-  }, [deeplinkCourtId, deeplinkCourtBookingId, deeplinkBookingDate, deeplinkJumpKey, loading, rows, selectedCourtId, editMode, bookingLoading, courtBookings, availability, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
+    deeplinkHandledForRef.current = deeplinkCourtBookingId
+  }, [deeplinkCourtId, deeplinkCourtBookingId, loading, rows, selectedCourtId, editMode, bookingLoading, courtBookings, availability, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -748,10 +727,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setBookingSelectedSlot(null)
   }, [bookingSelectedDate])
 
-  // Keep slot animation state stable; no blink for selected booking rows.
+  // Smooth blink animation for selected booking slot group
   useEffect(() => {
-    bookingBlinkOpacity.value = withTiming(1, { duration: 120 })
-  }, [bookingSelectedSlot, bookingBlinkOpacity])
+    if (!bookingSelectedSlot) {
+      bookingBlinkOpacity.value = withTiming(1, { duration: 150 })
+      return
+    }
+    bookingBlinkOpacity.value = withRepeat(withTiming(0.35, { duration: 500 }), -1, true)
+  }, [bookingSelectedSlot])
 
   useEffect(() => {
     if (!selected) return
@@ -1909,20 +1892,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 if (typeof bd === 'string') { try { const p = JSON.parse(bd); return Array.isArray(p) ? p : [] } catch { return [] } }
                 return Array.isArray(bd) ? bd : []
               })()
-              const bookedDates = new Set(pcBookings.filter((b) => {
-                const s = String(b.status ?? '').toLowerCase()
-                const bs = String(b.bookingstatus ?? '').toLowerCase()
-                if (s.includes('reject') || s === 'cancelled' || s === 'completed' || s === 'missed') return false
-                if (bs.includes('cancel') || bs.includes('complete') || bs.includes('miss')) return false
-                return true
-              }).map((b) => typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null).filter(Boolean) as string[])
+              const bookedDates = new Set(pcBookings.map((b) => typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null).filter(Boolean) as string[])
               const bookingApplicants = pcBookings.filter((b) => {
-                if (bookingSelectedDate && (typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) !== bookingSelectedDate) return false
                 const s = String(b.status ?? '').toLowerCase()
                 return !s || s === 'pending' || s === 'waiting'
               })
               const bookingParticipants = pcBookings.filter((b) => {
-                if (bookingSelectedDate && (typeof b.bookingdate === 'string' ? b.bookingdate.slice(0, 10) : null) !== bookingSelectedDate) return false
                 const s = String(b.status ?? '').toLowerCase()
                 return s === 'approved' || s === 'joined'
               })
@@ -2102,7 +2077,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           const isAvailable = availableWeekdays.length === 0 || availableWeekdays.includes(d.label)
                           const today = new Date()
                           const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-                          const isToday = d.d.getFullYear() === todayOnly.getFullYear() && d.d.getMonth() === todayOnly.getMonth() && d.d.getDate() === todayOnly.getDate()
+                          const isPast = bookingWeekOffset === 0 && d.d < todayOnly
                           return (
                             <TouchableOpacity
                               key={d.dateStr}
@@ -2120,7 +2095,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               activeOpacity={0.8}
                             >
                               <Text style={[styles.dayLabel, (isSelected || hasBookings) && { color: '#7c2d12' }]} numberOfLines={1}>{d.label}</Text>
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? '#fff' : '#111', marginTop: 4, textDecorationLine: (isSelected || isToday) ? 'underline' : 'none' }}>{d.d.getDate()}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? '#fff' : '#111', marginTop: 4 }}>{d.d.getDate()}</Text>
                             </TouchableOpacity>
                           )
                         })}
@@ -2157,7 +2132,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                     slotSelectedBooking={slotSelectedBooking}
                                     connToPrev={connToPrev}
                                     connToNext={connToNext}
-                                    bookedUserLabel={booking ? (bookingUserNames[booking.userid] || `User ${booking.userid}`) : undefined}
+                                    bookingBlinkOpacity={bookingBlinkOpacity}
                                     onSelectSlot={(s) => {
                                       if (!booking) { setBookingSelectedSlot(null); return }
                                       setBookingSelectedSlot(prev => prev === s ? null : s)

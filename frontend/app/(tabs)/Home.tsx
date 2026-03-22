@@ -27,17 +27,9 @@ import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
   const router = useRouter();
-  const {
-    panel: panelParam,
-    courtid: deeplinkCourtIdParam,
-    courtbookingid: deeplinkCourtBookingIdParam,
-    bookingdate: deeplinkBookingDateParam,
-    jump: deeplinkJumpParam,
-  } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; bookingdate?: string; jump?: string }>();
+  const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null
-  const deeplinkBookingDate = typeof deeplinkBookingDateParam === 'string' ? deeplinkBookingDateParam : null
-  const deeplinkJump = typeof deeplinkJumpParam === 'string' ? deeplinkJumpParam : null
 
   const [activeView, setActiveView] = useState<ManagementPanelKey>('user');
   const [eventPanelMounted, setEventPanelMounted] = useState(false);
@@ -1057,13 +1049,7 @@ export default function Home() {
 
         <View style={{ flex: 1, display: activeView === 'court' ? 'flex' : 'none' }}>
           {courtPanelMounted ? (
-            <CourtPanel
-              ownerId={userId}
-              deeplinkCourtId={deeplinkCourtId}
-              deeplinkCourtBookingId={deeplinkCourtBookingId}
-              deeplinkBookingDate={deeplinkBookingDate}
-              deeplinkJumpKey={deeplinkJump}
-            />
+            <CourtPanel ownerId={userId} deeplinkCourtId={deeplinkCourtId} deeplinkCourtBookingId={deeplinkCourtBookingId} />
           ) : (
             <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>

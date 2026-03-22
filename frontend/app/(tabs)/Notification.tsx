@@ -347,31 +347,6 @@ export default function NotificationsPage() {
     return row.message
   }
 
-  const getDeepLinkBookingDate = useCallback((row: NotificationRow): string | null => {
-    const data = (row.data || {}) as Record<string, any>
-    const directCandidates = [
-      data?.bookingdate,
-      data?.booking_date,
-      data?.date,
-      data?.start_date,
-      data?.start_timestamp,
-      data?.time,
-    ]
-    for (const value of directCandidates) {
-      const match = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})/)
-      if (match) return match[1]
-    }
-
-    const bookingIdCandidates = [Number(data?.courtbookingid), Number(row.notificationtypeid)]
-      .filter((value) => Number.isFinite(value)) as number[]
-    for (const bookingId of bookingIdCandidates) {
-      const booking = courtBookingById.get(bookingId)
-      const match = String((booking as any)?.bookingdate ?? '').match(/^(\d{4}-\d{2}-\d{2})/)
-      if (match) return match[1]
-    }
-    return null
-  }, [courtBookingById])
-
   const getSectionTitle = (iso: string) => {
     const d = parseNotificationDate(iso)
     if (!d) return 'Earlier'
@@ -558,23 +533,7 @@ export default function NotificationsPage() {
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
             style={{ alignSelf: 'flex-start' }}
-            onPress={(e: any) => {
-              e?.stopPropagation?.()
-              const data = (item.data || {}) as Record<string, any>
-              const courtId = Number(data?.courtid)
-              const bookingId = Number(data?.courtbookingid ?? item.notificationtypeid)
-              const bookingDate = getDeepLinkBookingDate(item)
-              router.push({
-                pathname: '/(tabs)/Home' as any,
-                params: {
-                  panel: 'court',
-                  courtid: Number.isFinite(courtId) ? String(courtId) : '',
-                  courtbookingid: Number.isFinite(bookingId) ? String(bookingId) : '',
-                  bookingdate: bookingDate || '',
-                  jump: String(Date.now()),
-                },
-              })
-            }}
+            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: String(item.data?.courtid ?? ''), courtbookingid: String(item.data?.courtbookingid ?? '') } })}
           >
             <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
           </TouchableOpacity>
