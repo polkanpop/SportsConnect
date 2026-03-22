@@ -1954,7 +1954,7 @@ const styles = StyleSheet.create({
 
   page: { flex: 1, backgroundColor: '#fff' },
   content: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 220 },
-  label: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginTop: 12, marginBottom: 8 },
+  label: { fontSize: 14, fontWeight: '400', color: '#0f172a', marginTop: 12, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inputWrap: { position: 'relative' },
   inputWithIcon: { paddingRight: 40 },
@@ -2006,7 +2006,7 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff' },
   segmentActive: { backgroundColor: COLORS.orange200 },
-  segmentText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  segmentText: { fontSize: 14, fontWeight: '400', color: '#0f172a' },
   segmentTextActive: { color: COLORS.brown900 },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -2067,7 +2067,7 @@ const styles = StyleSheet.create({
   courtDetailDesc: { color: COLORS.neutral800, fontSize: 13, marginTop: 6, lineHeight: 18 },
   addCourtCover: { borderStyle: 'dashed' },
   addCourtCoverText: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
-  myCourtName: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
+  myCourtName: { color: COLORS.neutral925, fontWeight: '400', fontSize: 14 },
   myCourtMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
 
   servicesBox: {

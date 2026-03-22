@@ -774,8 +774,7 @@ export default function EventPanel({ organizerId }: Props) {
 						return { ...row, numberofpeople: next }
 					})
 				})
-await loadBookingsForEvent(eventid);
-			await invalidateMutationCaches();
+				await invalidateMutationCaches();
 		} catch (e: any) {
 			setBookingsError(e?.message || String(e));
 		} finally {
@@ -786,7 +785,7 @@ await loadBookingsForEvent(eventid);
 			});
 		}
 		},
-		[applicants, invalidateMutationCaches, loadBookingsForEvent, mutatingBookingIds, queryClient]
+		[applicants, invalidateMutationCaches, mutatingBookingIds, queryClient]
 	);
 
 	const onRejectApplicant = useCallback(
@@ -798,7 +797,6 @@ await loadBookingsForEvent(eventid);
 			try {
 				await rejectEventBooking(booking.eventbookingid);
 				setApplicants((prev) => prev.filter((x) => x.booking.eventbookingid !== bookingId));
-				await loadBookingsForEvent(eventid);
 				await invalidateMutationCaches();
 			} catch (e: any) {
 				setBookingsError(e?.message || String(e));
@@ -810,7 +808,7 @@ await loadBookingsForEvent(eventid);
 				});
 			}
 		},
-		[invalidateMutationCaches, loadBookingsForEvent, mutatingBookingIds]
+		[invalidateMutationCaches, mutatingBookingIds]
 	);
 
 	const onSaveEventInfo = useCallback(async () => {

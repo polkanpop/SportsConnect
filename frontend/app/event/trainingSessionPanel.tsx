@@ -650,7 +650,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       try {
         await rejectTrainingSessionBooking(booking.tsbookingid)
         setApplicants((prev) => prev.filter((x) => x.booking.tsbookingid !== booking.tsbookingid))
-        await loadBookingsForSession(sessionId)
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
@@ -662,7 +661,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         })
       }
     },
-    [invalidateMutationCaches, loadBookingsForSession],
+    [invalidateMutationCaches],
   )
 
   useEffect(() => {

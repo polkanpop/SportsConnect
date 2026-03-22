@@ -29,7 +29,7 @@ import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 
 export default function Home() {
   const router = useRouter();
-  const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string }>();
+  const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null
 
@@ -68,7 +68,7 @@ export default function Home() {
       setActiveView('court');
       setManagementPanelExpanded(true);
     }
-  }, [panelParam]);
+  }, [panelParam, deeplinkToken]);
 
   // Time logic
   const [now, setNow] = useState(new Date());

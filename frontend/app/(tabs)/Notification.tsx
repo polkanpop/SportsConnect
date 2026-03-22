@@ -533,7 +533,7 @@ export default function NotificationsPage() {
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
             style={{ alignSelf: 'flex-start' }}
-            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: String(item.data?.courtid ?? ''), courtbookingid: String(item.data?.courtbookingid ?? '') } })}
+            onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: String(item.data?.courtid ?? ''), courtbookingid: String(item.data?.courtbookingid ?? ''), _t: String(Date.now()) } })}
           >
             <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
           </TouchableOpacity>
