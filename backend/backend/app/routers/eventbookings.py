@@ -181,7 +181,7 @@ def create_event_booking(body: dict, request: Request, background_tasks: Backgro
 
 
 @router.patch("/{eventbookingid}", response_model=dict)
-def update_event_booking(eventbookingid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def update_event_booking(eventbookingid: int, body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on an event booking.
 
     Used by the mobile app to cancel an upcoming event booking by setting bookingstatus/status.
@@ -270,6 +270,11 @@ def update_event_booking(eventbookingid: int, body: dict, background_tasks: Back
         except Exception as e:
             print("[eventbookings] notification update failed:", str(e))
         background_tasks.add_task(invalidate_namespace, "eventbookings", "eventinfo")
+        # Bust the booker's dashboard Redis cache so Activity reflects status change (joined/cancelled) immediately.
+        try:
+            background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, int(existing.get("userid")))
+        except Exception:
+            pass
         if isinstance(resp, list) and resp:
             return resp[0]
         return payload

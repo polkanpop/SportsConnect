@@ -1,13 +1,22 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends, Request
 from fastapi_cache.decorator import cache
 from ..db import rest_select, rest_upsert, rest_update, rest_insert
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
 from ..notifications_service import create_notification
+from typing import Any
 
 router = APIRouter(prefix="/tsbookings", tags=["training"])
 
 PRIMARY_KEY = "tsbookingid"
+
+
+async def _invalidate_user_dashboard_cache(app: Any, userid: int) -> None:
+    """Delete the dashboard Redis cache so the next fetch returns fresh data."""
+    redis = getattr(app.state, "redis", None)
+    if redis is None:
+        return
+    await redis.delete(f"sportsconnect:me:dashboard:v2:userid={userid}")
 
 
 def _sync_ts_participant_count(sessionid: int) -> None:
@@ -51,7 +60,7 @@ def get_ts_booking(tsbookingid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_ts_booking(body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def create_ts_booking(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a training session booking. Inject userid from auth if not provided."""
     try:
         userid_raw = body.get("userid") or current_user
@@ -137,13 +146,22 @@ def create_ts_booking(body: dict, background_tasks: BackgroundTasks, current_use
             print("[tsbookings] notification insert failed:", str(e))
 
         background_tasks.add_task(invalidate_namespace, "tsbookings", "trainingsessioninfo")
+        # Bust the booker's dashboard Redis cache so Activity shows the booking immediately on pull-to-refresh.
+        background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, userid)
+        try:
+            _sess = rest_select("trainingsessions", "sessionid,coachid", filters={"sessionid": sessionid}, single=True)
+            _coachid = int(_sess.get("coachid")) if isinstance(_sess, dict) and _sess.get("coachid") is not None else None
+            if _coachid is not None and _coachid != userid:
+                background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, _coachid)
+        except Exception:
+            pass
         return resp[0] if isinstance(resp, list) and resp else payload
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{tsbookingid}", response_model=dict)
-def update_ts_booking(tsbookingid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+def update_ts_booking(tsbookingid: int, body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Patch fields on a training session booking.
 
     Used by the mobile app to cancel an upcoming training booking by setting bookingstatus/status.
@@ -224,6 +242,11 @@ def update_ts_booking(tsbookingid: int, body: dict, background_tasks: Background
             print("[tsbookings] notification update failed:", str(e))
 
         background_tasks.add_task(invalidate_namespace, "tsbookings", "trainingsessioninfo")
+        # Bust the booker's dashboard Redis cache so Activity reflects status change (joined/cancelled) immediately.
+        try:
+            background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, int(existing.get("userid")))
+        except Exception:
+            pass
         if isinstance(resp, list) and resp:
             return resp[0]
         return payload
