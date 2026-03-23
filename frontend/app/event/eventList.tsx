@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listEventsCombinedCached, invalidateEventsCombinedCache, CombinedEvent, CourtInfoRow } from '@/lib/backendApi'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
@@ -102,6 +102,7 @@ const EventListScreen = () => {
   const [, setDistanceMatrixTick] = useState(0)
 
   // React Query fetch with cache key; create/update screens invalidate this key.
+  const qc = useQueryClient()
   const { data: eventsData, isLoading: loading, isFetching, refetch } = useQuery({
     queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
@@ -109,11 +110,21 @@ const EventListScreen = () => {
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   })
-  // Clear AsyncStorage before refetch so pull-to-refresh always fetches from network.
+  // Snapshot TQ data before clearing AsyncStorage so we can merge back any
+  // optimistically-added events still missing from a warm backend Redis cache.
   const handleRefresh = useCallback(async () => {
+    const snapshot = qc.getQueryData<any[]>(queryKeys.eventsCombined)
     await invalidateEventsCombinedCache()
-    refetch()
-  }, [refetch])
+    await refetch()
+    if (Array.isArray(snapshot) && snapshot.length > 0) {
+      qc.setQueryData(queryKeys.eventsCombined, (current: any) => {
+        if (!Array.isArray(current)) return current
+        const serverIds = new Set(current.map((r: any) => r?.eventid).filter(Boolean))
+        const missing = snapshot.filter((r: any) => r?.eventid && !serverIds.has(r.eventid))
+        return missing.length > 0 ? [...missing, ...current] : current
+      })
+    }
+  }, [refetch, qc])
   // Push data into local state for existing code references.
   useEffect(() => { if (Array.isArray(eventsData)) setAllEvents(eventsData) }, [eventsData])
   useEffect(() => { if (!loading && !eventsData) setError('Failed loading events') }, [loading, eventsData])

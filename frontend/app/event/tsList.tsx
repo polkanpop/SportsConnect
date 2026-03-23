@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, invalidateTrainingSessionsCombinedCache, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
@@ -86,6 +86,7 @@ const TrainingSessionListScreen = () => {
   const autoPrefetchedKeysRef = React.useRef<Set<string>>(new Set())
   const [, setDistanceMatrixTick] = useState(0)
 
+  const qc = useQueryClient()
   const { data: sessionsData, isLoading: loading, isFetching, refetch, error: queryError } = useQuery({
     queryKey: queryKeys.trainingSessionsCombined,
     queryFn: () => listTrainingSessionsCombinedCached(),
@@ -93,11 +94,21 @@ const TrainingSessionListScreen = () => {
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   })
-  // Clear AsyncStorage before refetch so pull-to-refresh always fetches from network.
+  // Snapshot TQ data before clearing AsyncStorage so we can merge back any
+  // optimistically-added sessions still missing from a warm backend Redis cache.
   const handleRefresh = useCallback(async () => {
+    const snapshot = qc.getQueryData<any[]>(queryKeys.trainingSessionsCombined)
     await invalidateTrainingSessionsCombinedCache()
-    refetch()
-  }, [refetch])
+    await refetch()
+    if (Array.isArray(snapshot) && snapshot.length > 0) {
+      qc.setQueryData(queryKeys.trainingSessionsCombined, (current: any) => {
+        if (!Array.isArray(current)) return current
+        const serverIds = new Set(current.map((r: any) => r?.sessionid).filter(Boolean))
+        const missing = snapshot.filter((r: any) => r?.sessionid && !serverIds.has(r.sessionid))
+        return missing.length > 0 ? [...missing, ...current] : current
+      })
+    }
+  }, [refetch, qc])
   useEffect(() => { if (Array.isArray(sessionsData)) setAllSessions(sessionsData) }, [sessionsData])
   useEffect(() => { if (!loading && !sessionsData) setError('Failed to load sessions') }, [loading, sessionsData])
 
