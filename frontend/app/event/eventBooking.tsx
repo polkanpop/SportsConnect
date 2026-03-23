@@ -10,7 +10,6 @@ import {
   adjustEventParticipants,
   createEventBooking,
   createPayment,
-  invalidateEventsCombinedCache,
   listEventsCombined,
   listEventsCombinedCached,
   CombinedEvent,
@@ -200,8 +199,10 @@ export default function EventBooking() {
       // Signal the organizer's EventPanel to refresh its applicants list
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(event.eventid) })
 
-      // Invalidate combined events cache so eventList / Home reflect the new booking state
-      await invalidateEventsCombinedCache()
+      // Background-refresh combined events list so eventList / Home reflect the new booking state.
+      // Do NOT call invalidateEventsCombinedCache() here — clearing the AsyncStorage cache forces
+      // a cold parallel network fetch (events + eventinfo + courtbookings + courtavailability +
+      // courtinfo) right when Home refetches, which can fail/race and wipe the event list.
       void queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
       if (typeof userId === 'number') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })

@@ -10,7 +10,6 @@ import {
   adjustTrainingSessionParticipants,
   createPayment,
   createTrainingSessionBooking,
-  invalidateTrainingSessionsCombinedCache,
   listTrainingSessionsCombined,
   listTrainingSessionsCombinedCached,
   CombinedTrainingSession,
@@ -176,7 +175,8 @@ export default function TrainingSessionBooking() {
         })
       }
 
-      try { await invalidateTrainingSessionsCombinedCache() } catch {}
+      // Background-refresh sessions list — do NOT clear AsyncStorage cache first (same reason
+      // as eventBooking: cold fetch races can wipe the list visible on Home/tsList).
       queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
       // Signal the organizer's TrainingSessionPanel to refresh its applicants list
