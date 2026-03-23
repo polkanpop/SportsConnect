@@ -215,7 +215,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const preferredSelectedSessionIdRef = useRef<number | null>(null)
 
   const [sessions, setSessions] = useState<CombinedTrainingSession[]>([])
-  // Stable ref — avoids recreating loadBookingsForSession on every count bump
   const sessionsRef = useRef<CombinedTrainingSession[]>([])
   useEffect(() => { sessionsRef.current = sessions }, [sessions])
   const [sessionsLoading, setSessionsLoading] = useState(false)
@@ -316,7 +315,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       invalidateEventsCombinedCache(),
       invalidateTrainingSessionsCombinedCache(),
     ])
-    // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that can wipe new data
+    // NOTE: Do NOT invalidateQueries for dashboard here — it triggers a stale Redis re-fetch that
+    // overwrites the TQ dashboard cache with old data and causes sessions to vanish.
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
   }, [queryClient])
 
@@ -731,9 +731,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     if (coachId == null) return
     if (selectedSessionId == null) return
     void loadBookingsForSession(selectedSessionId)
-  // NOTE: loadBookingsForSession is stable (sessions read via ref), intentionally omitted from deps
-  // to prevent: setSessions (count bump) → recreate callback → fire this effect → reload applicants → buttons reappear
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachId, selectedSessionId])
 
   useEffect(() => {

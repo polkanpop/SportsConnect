@@ -401,8 +401,8 @@ export default function EventCreateScreen() {
         })
       }
 
-      // Preemptively mark the used courtbookingid so availableEnrichedBookings filters it out
-      // immediately, even if the evRow+infoRow retry loop below fails (server slow / race).
+      // Preemptively mark the courtbookingid as used so availableEnrichedBookings
+      // filters it out immediately — even if the evRow+infoRow retry loop below fails.
       const knownCbid = typeof data?.event?.courtbookingid === 'number'
         ? data.event.courtbookingid
         : (typeof selectedBookingId === 'number' ? selectedBookingId : null)

@@ -164,8 +164,7 @@ def create_event_booking(body: dict, request: Request, background_tasks: Backgro
             print("[eventbookings] notification insert failed:", str(e))
 
         background_tasks.add_task(invalidate_namespace, "eventbookings", "eventinfo")
-        # Invalidate dashboard Redis cache for the booker (and organizer) so Activity/Home
-        # screens see the new booking without waiting for the 120s SWR window to expire.
+        # Invalidate dashboard Redis cache so Activity/Home screens see the new booking immediately.
         background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, userid)
         try:
             _org_row = rest_select("events", "eventid,organizerid", filters={"eventid": eventid}, single=True)

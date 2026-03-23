@@ -213,8 +213,8 @@ export default function EventPanel({ organizerId }: Props) {
 	const preferredSelectedEventIdRef = useRef<number | null>(null);
 
 	const [hostEvents, setHostEvents] = useState<CombinedEvent[]>([]);
-	// Keep ref in sync so loadBookingsForEvent can read latest without being a dep
-	useEffect(() => { hostEventsRef.current = hostEvents }, [hostEvents]);
+	const hostEventsRef = useRef<CombinedEvent[]>([]);
+	useEffect(() => { hostEventsRef.current = hostEvents; }, [hostEvents]);
 	const [hostEventsLoading, setHostEventsLoading] = useState(false);
 	const [hostEventsError, setHostEventsError] = useState<string | null>(null);
 	const [selectedHostEventId, setSelectedHostEventId] = useState<number | null>(null);
@@ -264,8 +264,6 @@ export default function EventPanel({ organizerId }: Props) {
 	const initialEditSnapshotRef = useRef<string>("");
 	const isDirtyRef = useRef<boolean>(false);
 	const saveSuccessTimerRef = useRef<any>(null);
-	// Stable ref to the latest hostEvents array — avoids recreating loadBookingsForEvent on every count bump
-	const hostEventsRef = useRef<CombinedEvent[]>([]);
 
 	const makeEditSnapshot = useCallback(
 		(payload: { title: string; description: string; cap: string; images: string[] }) => {
@@ -504,8 +502,6 @@ export default function EventPanel({ organizerId }: Props) {
 					const d = parseTimestampLoose(s);
 					return d && Number.isFinite(d.getTime()) ? d.getTime() : null;
 				};
-				// Read via ref so this callback doesn't need hostEvents in its deps
-				// (avoids the hostEvents change → loadBookingsForEvent recreated → useEffect fires cycle)
 				const meta = hostEventsRef.current.find((e) => e.eventid === eventid);
 				const scopeStart = toMillis((meta as any)?.start_timestamp ?? (meta as any)?.time ?? null);
 				const scopeEnd = toMillis((meta as any)?.end_timestamp ?? null);
@@ -627,10 +623,7 @@ export default function EventPanel({ organizerId }: Props) {
 		return () => {
 			cancelled = true;
 		};
-	// NOTE: loadBookingsForEvent and loadBlockedForTarget are stable (empty/ref-only deps),
-	// and makeEditSnapshot / hostEvents are intentionally omitted to avoid the cycle:
-	// setHostEvents (count bump) → useEffect fires → reload applicants → buttons reappear
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedHostEventId]);
 
 	const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {

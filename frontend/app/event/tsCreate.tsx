@@ -371,8 +371,8 @@ export default function TsCreate() {
         })
       }
 
-      // Preemptively mark the used courtbookingid so availableEnrichedBookings filters it out
-      // immediately, even if the sessionRow+infoRow retry loop below fails (server slow / race).
+      // Preemptively mark the courtbookingid as used so availableEnrichedBookings
+      // filters it out immediately — even if the sessionRow+infoRow retry loop below fails.
       const knownCbid = typeof data?.session?.courtbookingid === 'number'
         ? data.session.courtbookingid
         : (typeof selectedBookingId === 'number' ? selectedBookingId : null)
