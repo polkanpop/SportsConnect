@@ -801,7 +801,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     },
     enabled: selectedSessionId != null && coachId != null,
     staleTime: 60_000,
-    refetchOnMount: false,      // lazy: only fires when explicitly invalidated (e.g. from tsBooking.tsx)
+    refetchOnMount: true,       // refetch on remount so returning to the panel after a booking
+    // shows the new applicant immediately (staleTime prevents over-fetching)
     refetchOnWindowFocus: false, // not triggered by tab focus changes
   })
 

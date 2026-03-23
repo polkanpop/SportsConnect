@@ -2023,25 +2023,28 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 
 // Aggregate events created by a specific organizer.
 export async function listEventsCombinedByOrganizerId(organizerid: number): Promise<CombinedEvent[]> {
-	const eventsData = await request(`/events?organizerid=${encodeURIComponent(organizerid)}`, { debugLabel: 'listEventsByOrganizerId' })
+	// Fetch all independent sources in parallel — eliminates the sequential waterfall that caused
+	// ~15 second load times in the EventPanel when each request was awaited one by one.
+	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
+		request(`/events?organizerid=${encodeURIComponent(organizerid)}`, { debugLabel: 'listEventsByOrganizerId' }),
+		request('/eventinfo', { debugLabel: 'listEventInfoAll' }),
+		safeGet('/courtbookings', 'listCourtBookingsAll'),
+		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+	])
 	if (!Array.isArray(eventsData)) return []
 	const events: EventRow[] = eventsData as EventRow[]
 
-	// Fetch event info in one call & map
-	const infoRowsRaw = await request('/eventinfo', { debugLabel: 'listEventInfoAll' })
 	const infoByEventId = new Map<number, EventInfoMeta>()
 	if (Array.isArray(infoRowsRaw)) for (const r of infoRowsRaw as EventInfoMeta[]) infoByEventId.set(r.eventid, r)
 
-	const allCourtBookings = await safeGet('/courtbookings', 'listCourtBookingsAll')
 	const bookingById = new Map<number, any>()
 	if (Array.isArray(allCourtBookings))
 		for (const b of allCourtBookings) if (typeof b.courtbookingid === 'number') bookingById.set(b.courtbookingid, b)
 
-	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
-	const allAvailability = await safeGet('/courtavailability', 'listCourtAvailabilityAll')
 	const availabilityById = new Map<number, any>()
 	if (Array.isArray(allAvailability)) for (const av of allAvailability) if (typeof av.availabilityid === 'number') availabilityById.set(av.availabilityid, av)
 
+	const neededAvailabilityIds = [...new Set(events.map(e => bookingById.get(e.courtbookingid)?.availabilityid).filter(Boolean))] as number[]
 	const courtIds = [...new Set(neededAvailabilityIds.map(id => availabilityById.get(id)?.courtid).filter(Boolean))] as number[]
 	let courtInfoRows: CourtInfoRow[] = []
 	if (courtIds.length) {
