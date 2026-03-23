@@ -10,8 +10,6 @@ import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  adjustTrainingSessionParticipants,
-  createTrainingSessionBooking,
   createTrainingSessionWithInfo,
   CreateTrainingSessionWithInfoPayload,
   cloudinarySignUpload,
@@ -465,45 +463,6 @@ export default function TsCreate() {
           qc.setQueryData(['details', 'createdSession', createdSessionId], sessionRow)
           qc.setQueryData(['details', 'createdSessionInfo', createdSessionId], infoRow)
         }
-      }
-
-      const bumpParticipantsInSessionsCombined = (sessionId: number, delta: number) => {
-        qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
-          if (!Array.isArray(prev)) return prev
-          return prev.map((row: any) => {
-            if (row?.sessionid !== sessionId) return row
-            const cur = Number(row?.numberofpeople)
-            const curN = Number.isFinite(cur) ? cur : 0
-            return { ...row, numberofpeople: Math.max(0, curN + delta) }
-          })
-        })
-      }
-
-      const bumpParticipantsInCreatedSessionsCombined = (sessionId: number, delta: number) => {
-        if (typeof userId !== 'number') return
-        qc.setQueryData(['createdTrainingSessionsCombined', userId], (prev: any) => {
-          if (!Array.isArray(prev)) return prev
-          return prev.map((row: any) => {
-            if (row?.sessionid !== sessionId) return row
-            const cur = Number(row?.numberofpeople)
-            const curN = Number.isFinite(cur) ? cur : 0
-            return { ...row, numberofpeople: Math.max(0, curN + delta) }
-          })
-        })
-      }
-
-      const upsertUserBookingCache = (booking: any) => {
-        if (typeof userId !== 'number') return
-        qc.setQueryData(['trainingSessionBookingsByUserId', userId], (prev: any) => {
-          const arr = Array.isArray(prev) ? prev : []
-          const exists = arr.some((b: any) => {
-            if (typeof b?.sessionid !== 'number') return false
-            if (b.sessionid !== booking?.sessionid) return false
-            const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
-            return !s.includes('cancel')
-          })
-          return exists ? arr : [booking, ...arr]
-        })
       }
 
       // Write the authoritative combined list (including the new session) directly to AsyncStorage

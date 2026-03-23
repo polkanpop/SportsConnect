@@ -668,6 +668,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             ),
           }
         })
+        // Also patch the details-screen query cache so it shows "Joined" immediately
+        queryClient.setQueryData(['details', 'sessionBooking', Number(booking.tsbookingid)], (prev: any) => {
+          if (!prev) return prev
+          return { ...prev, status: 'joined' }
+        })
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
@@ -701,6 +706,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 : tb
             ),
           }
+        })
+        // Also patch the details-screen query cache so it shows "Rejected" immediately
+        queryClient.setQueryData(['details', 'sessionBooking', Number(booking.tsbookingid)], (prev: any) => {
+          if (!prev) return prev
+          return { ...prev, status: 'cancelled' }
         })
         await invalidateMutationCaches()
       } catch (e: any) {

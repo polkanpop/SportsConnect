@@ -818,6 +818,11 @@ export default function EventPanel({ organizerId }: Props) {
 						),
 					}
 				})
+				// Also patch the details-screen query cache so it shows "Joined" immediately
+				queryClient.setQueryData(['details', 'eventBooking', Number(booking.eventbookingid)], (prev: any) => {
+					if (!prev) return prev
+					return { ...prev, status: 'joined' }
+				})
 				await invalidateMutationCaches();
 		} catch (e: any) {
 			setBookingsError(e?.message || String(e));
@@ -852,6 +857,11 @@ export default function EventPanel({ organizerId }: Props) {
 								: eb
 						),
 					}
+				})
+				// Also patch the details-screen query cache so it shows "Rejected" immediately
+				queryClient.setQueryData(['details', 'eventBooking', Number(booking.eventbookingid)], (prev: any) => {
+					if (!prev) return prev
+					return { ...prev, status: 'cancelled' }
 				})
 				await invalidateMutationCaches();
 			} catch (e: any) {
