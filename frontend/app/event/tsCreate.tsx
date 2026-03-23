@@ -17,6 +17,7 @@ import {
   cloudinarySignUpload,
   getTrainingSession,
   getTrainingSessionInfoBySessionId,
+  hydrateTrainingSessionsCombinedCache,
   invalidateTrainingSessionsCombinedCache,
   CourtBookingRow,
   listCourtBookings,
@@ -540,15 +541,23 @@ export default function TsCreate() {
 
             try { await adjustTrainingSessionParticipants(sessionId, +1) } catch {}
 
-            await invalidateTrainingSessionsCombinedCache()
             // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new session
+            // NOTE: Do NOT invalidateTrainingSessionsCombinedCache here — main onSuccess writes the
+            // correct list to AsyncStorage at the end; clearing here would race that write.
           } catch {}
         })()
       }
 
-      await invalidateTrainingSessionsCombinedCache()
-      // NOTE: Do NOT call qc.invalidateQueries for trainingSessionsCombined here — same snapback
-      // risk as for eventsCombined (see eventCreate.tsx). setQueryData + invalidateCache is enough.
+      // Write the authoritative combined list (including the new session) directly to AsyncStorage
+      // so pull-to-refresh reads from AsyncStorage instead of the network (avoids warm Redis race).
+      // NOTE: Do NOT call qc.invalidateQueries for trainingSessionsCombined — same snapback
+      // risk as for eventsCombined (see eventCreate.tsx). setQueryData + hydrate is the correct pattern.
+      const latestSessionsList = qc.getQueryData<any[]>(queryKeys.trainingSessionsCombined)
+      if (Array.isArray(latestSessionsList) && latestSessionsList.length > 0) {
+        await hydrateTrainingSessionsCombinedCache(latestSessionsList)
+      } else {
+        await invalidateTrainingSessionsCombinedCache()
+      }
       if (typeof userId === 'number') {
         // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new session
         qc.invalidateQueries({ queryKey: queryKeys.createdTrainingSessionsCombined(typeof userId === 'number' ? userId : null) })

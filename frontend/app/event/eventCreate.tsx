@@ -15,6 +15,7 @@ import {
   createEventWithInfo,
   CreateEventWithInfoPayload,
   cloudinarySignUpload,
+  hydrateEventsCombinedCache,
   invalidateEventsCombinedCache,
   getEvent,
   getEventInfoByEventId,
@@ -578,21 +579,24 @@ export default function EventCreateScreen() {
             // Best-effort participant increment
             try { await adjustEventParticipants(eventId, +1) } catch {}
 
-            // Ensure AsyncStorage cached combined list doesn't stick at 0
-            await invalidateEventsCombinedCache()
             // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
+            // NOTE: Do NOT invalidateEventsCombinedCache here — the main onSuccess path writes the
+            // correct list to AsyncStorage at the end; clearing it here would race that write.
           } catch {}
         })()
       }
 
-      // Invalidate events list cache so new event appears.
-      await invalidateEventsCombinedCache()
-      // NOTE: Do NOT call qc.invalidateQueries for eventsCombined here — it triggers an immediate
-      // background refetch that races with the server list endpoint. If the server hasn't indexed
-      // the new event yet, the refetch result gets written to AsyncStorage with a 60s TTL,
-      // poisoning every subsequent fetch (including app restart). setQueryData above is the sole
-      // source of truth for the new event; invalidateEventsCombinedCache() ensures the TTL cache
-      // is stale so the NEXT natural mount refetch (refetchOnMount) gets fresh server data.
+      // Write the authoritative combined list (including the new event) directly to AsyncStorage
+      // so that the next listEventsCombinedCached() call — triggered by pull-to-refresh or
+      // refetchOnMount — reads from AsyncStorage instead of going to the network. This prevents
+      // a warm server-side Redis cache from overwriting the optimistic setQueryData result.
+      // NOTE: Do NOT call qc.invalidateQueries for eventsCombined — see above.
+      const latestEventsList = qc.getQueryData<any[]>(queryKeys.eventsCombined)
+      if (Array.isArray(latestEventsList) && latestEventsList.length > 0) {
+        await hydrateEventsCombinedCache(latestEventsList)
+      } else {
+        await invalidateEventsCombinedCache()
+      }
       if (typeof userId === 'number') {
         // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
         qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })

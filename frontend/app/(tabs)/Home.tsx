@@ -20,7 +20,7 @@ import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { favouritesEvents } from "@/lib/favouritesEvents";
 import { useAppBootstrap } from "@/providers/app-bootstrap-provider";
 import ManagementPanel, { type ManagementPanelKey } from "@/components/ManagementPanel";
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
 import EventPanel from "@/app/event/eventPanel";
 import CourtPanel from "@/app/event/courtPanel";
@@ -133,6 +133,7 @@ export default function Home() {
     availability: string; // used only for color, no labels/sorting
     imageUri?: string | null;
   };
+  const qc = useQueryClient()
   const [pullRefreshingFavs, setPullRefreshingFavs] = useState(false);
 
   const { userId: bootstrapUserId, dashboard, userInfo: bootstrapUserInfo, favouriteCourts } = useAppBootstrap()
@@ -587,6 +588,11 @@ export default function Home() {
                 refreshing={pullRefreshingFavs}
                 onRefresh={async () => {
                   setPullRefreshingFavs(true);
+                  // Snapshot the current TQ list BEFORE clearing AsyncStorage.
+                  // After the network refetch we merge back any events that were
+                  // optimistically added via setQueryData but haven't been indexed
+                  // by the server yet (i.e., backend Redis still warm after creation).
+                  const preRefetchEvents = qc.getQueryData<any[]>(queryKeys.eventsCombined)
                   try {
                     await invalidateEventsCombinedCache();
                     await Promise.all([
@@ -594,6 +600,15 @@ export default function Home() {
                       eventsQuery.refetch(),
                       refetchFavoriteLocations(),
                     ]);
+                    // Restore any events that the server response is missing.
+                    if (Array.isArray(preRefetchEvents) && preRefetchEvents.length > 0) {
+                      qc.setQueryData(queryKeys.eventsCombined, (current: any) => {
+                        if (!Array.isArray(current)) return current
+                        const serverIds = new Set(current.map((r: any) => r?.eventid).filter(Boolean))
+                        const missing = preRefetchEvents.filter((r: any) => r?.eventid && !serverIds.has(r.eventid))
+                        return missing.length > 0 ? [...missing, ...current] : current
+                      })
+                    }
                   } finally {
                     setPullRefreshingFavs(false);
                   }

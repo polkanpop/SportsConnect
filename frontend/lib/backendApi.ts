@@ -2097,6 +2097,14 @@ export async function invalidateEventsCombinedCache(): Promise<void> {
 	try { await invalidateCache('cache:events:combined:v1') } catch {}
 }
 
+// Write a known-good events list directly to AsyncStorage so subsequent
+// listEventsCombinedCached() calls return it immediately without hitting the
+// network. This prevents pull-to-refresh from overwriting the optimistic
+// setQueryData result with stale server data while Redis is still warm.
+export async function hydrateEventsCombinedCache(list: CombinedEvent[]): Promise<void> {
+	try { await setCache('cache:events:combined:v1', list, 60_000) } catch {}
+}
+
 // ---- Event Creation Helpers ----
 export type CreateEventWithInfoPayload = {
 	courtbookingid: number
@@ -2293,6 +2301,11 @@ export async function listTrainingSessionsCombinedCached(): Promise<CombinedTrai
 // Force refresh of the cached combined training sessions list.
 export async function invalidateTrainingSessionsCombinedCache(): Promise<void> {
 	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+}
+
+// Write a known-good training sessions list directly to AsyncStorage.
+export async function hydrateTrainingSessionsCombinedCache(list: CombinedTrainingSession[]): Promise<void> {
+	try { await setCache('cache:trainingsessions:combined:v1', list, 60_000) } catch {}
 }
 
 // ---- Dashboard ----
