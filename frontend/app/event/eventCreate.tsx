@@ -407,10 +407,18 @@ export default function EventCreateScreen() {
         ? data.event.courtbookingid
         : (typeof selectedBookingId === 'number' ? selectedBookingId : null)
       if (typeof knownCbid === 'number') {
+        // Include title and court_name in the preemptive stub so Home's
+        // eventTitleFallbackQuery (missingEventTitleIds) never fires for this
+        // event. Without these, the fallback query would call listEventsCombinedCached()
+        // with empty AsyncStorage RIGHT NOW, racing the backend's Redis invalidation
+        // background task and potentially writing a stale (no-new-event) list to
+        // AsyncStorage — causing the event to vanish on the next natural refetch.
+        const stubTitle = String(data?.eventinfo?.title ?? (data?.event as any)?.title ?? title ?? '').trim() || undefined
+        const stubCourtName = (selectedBooking as any)?.courtName ?? null
         qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
           const arr = Array.isArray(prev) ? prev : []
           if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
-          return [{ courtbookingid: knownCbid, eventid: typeof createdEventId === 'number' ? createdEventId : -1, status: 'upcoming' } as any, ...arr]
+          return [{ courtbookingid: knownCbid, eventid: typeof createdEventId === 'number' ? createdEventId : -1, status: 'upcoming', title: stubTitle, court_name: stubCourtName } as any, ...arr]
         })
       }
 

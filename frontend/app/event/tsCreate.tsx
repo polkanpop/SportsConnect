@@ -377,10 +377,15 @@ export default function TsCreate() {
         ? data.session.courtbookingid
         : (typeof selectedBookingId === 'number' ? selectedBookingId : null)
       if (typeof knownCbid === 'number') {
+        // Include title and court_name in the preemptive stub so tsList's
+        // fallback query never fires for this session, preventing the same
+        // AsyncStorage poisoning race as in eventCreate (see eventCreate.tsx).
+        const stubTitle = String(data?.sessioninfo?.title ?? data?.session?.title ?? title ?? '').trim() || undefined
+        const stubCourtName = (selectedBooking as any)?.courtName ?? null
         qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
           const arr = Array.isArray(prev) ? prev : []
           if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
-          return [{ courtbookingid: knownCbid, sessionid: typeof createdSessionId === 'number' ? createdSessionId : -1, status: 'upcoming' } as any, ...arr]
+          return [{ courtbookingid: knownCbid, sessionid: typeof createdSessionId === 'number' ? createdSessionId : -1, status: 'upcoming', title: stubTitle, court_name: stubCourtName } as any, ...arr]
         })
       }
 
