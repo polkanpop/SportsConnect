@@ -428,7 +428,12 @@ export default function TsCreate() {
 
           qc.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
             const arr = Array.isArray(prev) ? prev : []
-            if (arr.some((r: any) => r?.sessionid === createdSessionId)) return arr
+            // Upsert: if the preemptive titleless stub is already in the array (matched by
+            // sessionid), replace it with the full combined row (which has title, etc.).
+            // Without this, the dedup-only check would keep the stub and the session
+            // would render as "session {id}" fallback on tsList.
+            const idx = arr.findIndex((r: any) => r?.sessionid === createdSessionId)
+            if (idx >= 0) { const next = [...arr]; next[idx] = combinedRow; return next }
             return [combinedRow, ...arr]
           })
           if (typeof userId === 'number') {

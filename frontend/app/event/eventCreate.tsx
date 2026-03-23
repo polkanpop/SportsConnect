@@ -458,7 +458,12 @@ export default function EventCreateScreen() {
 
           qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
             const arr = Array.isArray(prev) ? prev : []
-            if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+            // Upsert: if the preemptive titleless stub is already in the array (matched by
+            // eventid), replace it with the full combined row (which has title, description,
+            // etc.). Without this, the dedup-only check would keep the stub and the event
+            // would render as "event 49" fallback on Home/eventList.
+            const idx = arr.findIndex((r: any) => r?.eventid === createdEventId)
+            if (idx >= 0) { const next = [...arr]; next[idx] = combinedRow; return next }
             return [combinedRow, ...arr]
           })
           if (typeof userId === 'number') {
