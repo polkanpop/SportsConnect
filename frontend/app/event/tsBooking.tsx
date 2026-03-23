@@ -165,6 +165,15 @@ export default function TrainingSessionBooking() {
       if (typeof userId === 'number') {
         upsert(queryKeys.trainingBookingsUser(userId))
         queryClient.invalidateQueries({ queryKey: queryKeys.trainingBookingsUser(userId) })
+        // Activity reads dashboard.data?.training_bookings, not trainingBookingsUser — patch it directly
+        // so the booking appears immediately before the invalidate-triggered refetch completes.
+        queryClient.setQueryData(queryKeys.dashboard(userId), (prev: any) => {
+          if (!prev) return prev
+          const arr: any[] = Array.isArray(prev.training_bookings) ? prev.training_bookings : []
+          const exists = arr.some((b: any) => Number(b?.tsbookingid) === Number(booking.tsbookingid))
+          if (exists) return prev
+          return { ...prev, training_bookings: [booking, ...arr] }
+        })
       }
 
       try { await invalidateTrainingSessionsCombinedCache() } catch {}
