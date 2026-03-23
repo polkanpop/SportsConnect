@@ -22,7 +22,6 @@ import {
   CourtBookingRow,
   listCourtBookings,
   listCourtInfoCached,
-  listTrainingSessionsCombined,
   listTrainingSessionsCombinedCached,
   listEventsCombinedCached,
 } from '@/lib/backendApi'
@@ -273,12 +272,12 @@ export default function TsCreate() {
     return enrichedBookings?.find(b => b.courtbookingid === selectedBookingId) || null
   }, [enrichedBookings, selectedBookingId])
 
-  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading } = useQuery({
     queryKey: queryKeys.trainingSessionsCombined,
-    queryFn: () => listTrainingSessionsCombined(),
+    queryFn: () => listTrainingSessionsCombinedCached(),
     staleTime: 60_000,
   })
-  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({
+  const { data: eventsCombined, isLoading: eventsCombinedLoading } = useQuery({
     queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
     staleTime: 60_000,
@@ -673,14 +672,15 @@ export default function TsCreate() {
     }
   }, [availableEnrichedBookings, selectedBookingId, bookingSelectionLoading])
 
+  // Refresh court bookings on focus so approval status and usage tags stay current.
+  // NOTE: Do NOT refetch sessionsCombined or eventsCombined here — same snap-back race
+  // as in eventCreate: in-flight requests overwrite optimistic setQueryData stubs.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId === 'number') {
-        try { refetchSessionsCombined() } catch {}
-        try { refetchEventsCombined() } catch {}
         try { qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(userId) }) } catch {}
       }
-    }, [userId, refetchSessionsCombined, refetchEventsCombined, qc])
+    }, [userId, qc])
   )
 
   return (

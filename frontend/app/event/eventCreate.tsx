@@ -24,7 +24,7 @@ import {
   listCourtInfoCached,
   CourtInfoRow,
   listEventsCombinedCached,
-  listTrainingSessionsCombined,
+  listTrainingSessionsCombinedCached,
   CombinedEvent,
   CombinedTrainingSession,
 } from '@/lib/backendApi'
@@ -289,14 +289,14 @@ export default function EventCreateScreen() {
   })
 
   // Fetch events and training sessions to mark used bookings
-  const { data: eventsCombined, isLoading: eventsCombinedLoading, refetch: refetchEventsCombined } = useQuery({
+  const { data: eventsCombined, isLoading: eventsCombinedLoading } = useQuery({
     queryKey: queryKeys.eventsCombined,
     queryFn: () => listEventsCombinedCached(),
     staleTime: 60_000,
   })
-  const { data: sessionsCombined, isLoading: sessionsCombinedLoading, refetch: refetchSessionsCombined } = useQuery({
+  const { data: sessionsCombined, isLoading: sessionsCombinedLoading } = useQuery({
     queryKey: queryKeys.trainingSessionsCombined,
-    queryFn: () => listTrainingSessionsCombined(),
+    queryFn: () => listTrainingSessionsCombinedCached(),
     staleTime: 60_000,
   })
   const usedEventBookingIds = useMemo(() => new Set<number>((eventsCombined||[]).map((e:CombinedEvent)=>Number((e as any)?.courtbookingid)).filter((n:any)=>Number.isFinite(n))), [eventsCombined])
@@ -727,15 +727,17 @@ export default function EventCreateScreen() {
     }
   }, [availableEnrichedBookings, selectedBookingId, bookingSelectionLoading])
 
-  // Refresh combined feeds on focus so booking usage tags stay current.
+  // Refresh court bookings on focus so approval status and usage tags stay current.
+  // NOTE: Do NOT refetch eventsCombined or sessionsCombined here — those in-flight
+  // requests race with the optimistic setQueryData stub set in mutation.onSuccess,
+  // overwriting the new event/session entry and causing the banner to snap back.
+  // TQ's staleTime + refetchOnMount handles background refresh automatically.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId === 'number') {
-        try { refetchEventsCombined() } catch {}
-        try { refetchSessionsCombined() } catch {}
         try { qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(userId) }) } catch {}
       }
-    }, [userId, refetchEventsCombined, refetchSessionsCombined, qc])
+    }, [userId, qc])
   )
 
   return (

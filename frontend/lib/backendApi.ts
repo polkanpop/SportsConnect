@@ -2127,7 +2127,10 @@ export async function createEventWithInfo(payload: CreateEventWithInfoPayload) {
 		body: JSON.stringify(payload),
 		debugLabel: 'createEventWithInfo'
 	}) as Promise<{ event: EventRow; eventinfo: EventInfoMeta & { entry_fee?: number | null; support_payment_method?: string | null; participants_cap: number; join_status: boolean } }>
-	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — onSuccess calls hydrateEventsCombinedCache with the
+	// complete list after polling. Clearing here creates a gap where any in-flight
+	// listEventsCombinedCached() (e.g. from useFocusEffect) writes a stale network result
+	// to both TQ and AsyncStorage, overwriting the optimistic setQueryData stub.
 	return res
 }
 
@@ -2151,7 +2154,7 @@ export async function createTrainingSessionWithInfo(payload: CreateTrainingSessi
 		body: JSON.stringify(payload),
 		debugLabel: 'createTrainingSessionWithInfo'
 	}) as Promise<{ session: any; sessioninfo: any }>
-	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — same race as createEventWithInfo above.
 	return res
 }
 
