@@ -32,8 +32,6 @@ import {
   getPayment,
   getTrainingSessionInfoBySessionId,
   getTrainingSessionBookingsBySessionId,
-  invalidateEventsCombinedCache,
-  invalidateTrainingSessionsCombinedCache,
   getUserInfoByUserIdCached,
   listBlockList,
   listTrainingSessionsCombinedByCoachId,
@@ -338,17 +336,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   }, [saveSuccessMessage])
 
   const invalidateMutationCaches = useCallback(async () => {
-    await Promise.allSettled([
-      invalidateEventsCombinedCache(),
-      invalidateTrainingSessionsCombinedCache(),
-    ])
-    // NOTE: Do NOT invalidateQueries for dashboard here — it triggers a stale Redis re-fetch that
-    // overwrites the TQ dashboard cache with old data and causes sessions to vanish.
+    // Do NOT call invalidateEventsCombinedCache / invalidateTrainingSessionsCombinedCache here.
+    // Approve/reject/save-edit mutations update TQ in-memory via setQueryData — no need to bust
+    // the AsyncStorage cache.  Clearing it races with any in-flight listTrainingSessionsCombinedCached
+    // fetch, and if that fetch returns an unexpected value the session list vanishes from the screen.
+    //
+    // Details-page queries need invalidation so they reflect status changes immediately.
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-    // NOTE: Do NOT invalidate rawSessionBookingsQuery here — approve/reject already update local state
-    // directly. Triggering the booking subscription from here creates a burst of enrichment API calls
-    // at the same time as invalidateTrainingSessionsCombinedCache(), overloading network and causing
-    // the sessionsCombined refetch to stall or return empty data.
   }, [queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)

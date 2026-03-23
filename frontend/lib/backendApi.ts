@@ -1957,7 +1957,9 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 		safeGet('/courtavailability?limit=500', 'listCourtAvailabilityAll'),
 	])
 
-	if (!Array.isArray(eventsData)) return []
+	// Throw rather than silently returning [] so React Query preserves its previously-cached data
+	// instead of overwriting it with an empty list when the server returns an unexpected payload.
+	if (!Array.isArray(eventsData)) throw new Error(`listEventsCombined: unexpected /events response (${eventsData === null ? 'null' : typeof eventsData})`)
 	const events: EventRow[] = eventsData as EventRow[]
 
 	// Map event info by event id
@@ -2168,7 +2170,9 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
 	])
 
-	if (!Array.isArray(tsData)) return []
+	// Throw rather than silently returning [] so React Query preserves its previously-cached data
+	// instead of overwriting it with an empty list when the server returns an unexpected payload.
+	if (!Array.isArray(tsData)) throw new Error(`listTrainingSessionsCombined: unexpected /trainingsessions response (${tsData === null ? 'null' : typeof tsData})`)
 	const sessions: TrainingSessionRow[] = tsData as TrainingSessionRow[]
 
 	const infoBySessionId = new Map<number, TrainingSessionInfoMeta>()

@@ -10,8 +10,6 @@ import {
 	getEventInfoByEventId,
 	getPayment,
 	getUserInfoByUserIdCached,
-	invalidateEventsCombinedCache,
-	invalidateTrainingSessionsCombinedCache,
 	listBlockList,
 	listEventsCombinedByOrganizerId,
 	removeBlock,
@@ -328,20 +326,14 @@ export default function EventPanel({ organizerId }: Props) {
 	}, [saveSuccessMessage]);
 
 	const invalidateMutationCaches = useCallback(async () => {
-		await Promise.allSettled([
-			invalidateEventsCombinedCache(),
-			invalidateTrainingSessionsCombinedCache(),
-		])
-		// NOTE: Do NOT invalidateQueries for dashboard here — it triggers a background re-fetch that
-		// gets the backend's Redis-cached dashboard (fresh for up to 120s after last load), which has
-		// stale events_combined/training_sessions_combined. This overwrites the TQ cache with old data
-		// and causes events to vanish from the Home screen. setQueryData handles optimistic updates;
-		// the dashboard re-fetches naturally when its 5-min staleTime expires.
+		// Do NOT call invalidateEventsCombinedCache / invalidateTrainingSessionsCombinedCache here.
+		// Approve/reject/save-edit mutations update TQ in-memory via setQueryData — there is no need
+		// to bust the AsyncStorage cache.  Clearing it races with any in-flight listEventsCombinedCached
+		// fetch, and if that fetch returns an unexpected value the event list on Home vanishes.
+		//
+		// Details-page queries (booking/event info cards) do need invalidation so they reflect the new
+		// approval status immediately.
 		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-		// NOTE: Do NOT invalidate rawEventBookingsQuery here — approve/reject already update local state
-		// directly. Triggering the booking subscription from here creates a burst of enrichment API calls
-		// at the same time as invalidateEventsCombinedCache(), overloading the network and causing
-		// the eventsCombined refetch to fail, making events vanish from the home/list screens.
 	}, [queryClient]);
 
 	const uploadOneToCloudinary = useCallback(
