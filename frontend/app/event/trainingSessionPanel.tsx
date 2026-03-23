@@ -345,10 +345,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     // NOTE: Do NOT invalidateQueries for dashboard here — it triggers a stale Redis re-fetch that
     // overwrites the TQ dashboard cache with old data and causes sessions to vanish.
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-    if (selectedSessionId != null) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(selectedSessionId) })
-    }
-  }, [queryClient, selectedSessionId])
+    // NOTE: Do NOT invalidate rawSessionBookingsQuery here — approve/reject already update local state
+    // directly. Triggering the booking subscription from here creates a burst of enrichment API calls
+    // at the same time as invalidateTrainingSessionsCombinedCache(), overloading network and causing
+    // the sessionsCombined refetch to stall or return empty data.
+  }, [queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
@@ -806,10 +807,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     },
     enabled: selectedSessionId != null && coachId != null,
     staleTime: 60_000,
-    refetchOnWindowFocus: false, // only re-fetched via explicit invalidateQueries from booking screens
+    refetchOnMount: false,      // lazy: only fires when explicitly invalidated (e.g. from tsBooking.tsx)
+    refetchOnWindowFocus: false, // not triggered by tab focus changes
   })
 
   const lastRawBookingSigRef = useRef('')
+  // Reset sig when session changes so incoming subscription data for a new session is never skipped.
+  useEffect(() => { lastRawBookingSigRef.current = '' }, [selectedSessionId])
   useEffect(() => {
     const d = rawSessionBookingsQuery.data
     if (!d) return
@@ -820,7 +824,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     if (sig === lastRawBookingSigRef.current) return
     lastRawBookingSigRef.current = sig
     let cancelled = false
-    setBookingsLoading(true)
+    // Silent background update — no loading spinner to avoid racing with loadBookingsForSession
     void (async () => {
       try {
         const [ep, ej] = await Promise.all([enrichBookings(d.pending), enrichBookings(d.joined)])
@@ -833,7 +837,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           )
         }
       } catch {}
-      finally { if (!cancelled && mountedRef.current) setBookingsLoading(false) }
     })()
     return () => { cancelled = true }
   }, [rawSessionBookingsQuery.data, enrichBookings, selectedSessionId])

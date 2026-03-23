@@ -338,10 +338,11 @@ export default function EventPanel({ organizerId }: Props) {
 		// and causes events to vanish from the Home screen. setQueryData handles optimistic updates;
 		// the dashboard re-fetches naturally when its 5-min staleTime expires.
 		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-		if (selectedHostEventId != null) {
-			queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(selectedHostEventId) })
-		}
-	}, [queryClient, selectedHostEventId]);
+		// NOTE: Do NOT invalidate rawEventBookingsQuery here — approve/reject already update local state
+		// directly. Triggering the booking subscription from here creates a burst of enrichment API calls
+		// at the same time as invalidateEventsCombinedCache(), overloading the network and causing
+		// the eventsCombined refetch to fail, making events vanish from the home/list screens.
+	}, [queryClient]);
 
 	const uploadOneToCloudinary = useCallback(
 		async (localUri: string, idx: number) => {
@@ -674,10 +675,13 @@ export default function EventPanel({ organizerId }: Props) {
 		},
 		enabled: selectedHostEventId != null && organizerId != null,
 		staleTime: 60_000,
-		refetchOnWindowFocus: false, // only re-fetched via explicit invalidateQueries from booking screens
+		refetchOnMount: false,      // lazy: only fires when explicitly invalidated (e.g. from eventBooking.tsx)
+		refetchOnWindowFocus: false, // not triggered by tab focus changes
 	})
 
 	const lastRawEventBookingSigRef = useRef('')
+	// Reset sig when event changes so incoming subscription data for a new event is never skipped.
+	useEffect(() => { lastRawEventBookingSigRef.current = '' }, [selectedHostEventId])
 	useEffect(() => {
 		const d = rawEventBookingsQuery.data
 		if (!d) return
@@ -688,7 +692,7 @@ export default function EventPanel({ organizerId }: Props) {
 		if (sig === lastRawEventBookingSigRef.current) return
 		lastRawEventBookingSigRef.current = sig
 		let cancelled = false
-		setBookingsLoading(true)
+		// Silent background update — no loading spinner to avoid racing with loadBookingsForEvent
 		void (async () => {
 			try {
 				const meta = hostEventsRef.current.find((e) => e.eventid === selectedHostEventId)
@@ -697,7 +701,6 @@ export default function EventPanel({ organizerId }: Props) {
 				setApplicants(ep)
 				setParticipants(ej)
 			} catch {}
-			finally { if (!cancelled) setBookingsLoading(false) }
 		})()
 		return () => { cancelled = true }
 	}, [rawEventBookingsQuery.data, enrichBookings, selectedHostEventId])
