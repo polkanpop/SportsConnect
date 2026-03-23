@@ -151,7 +151,6 @@ export default function EventCreateScreen() {
   const [imageUploading, setImageUploading] = useState(false)
   const [removeImageConfirmVisible, setRemoveImageConfirmVisible] = useState(false)
   const [removeImageCandidateUri, setRemoveImageCandidateUri] = useState<string | null>(null)
-  const [addMeToParticipants, setAddMeToParticipants] = useState(true)
   const [autoApprove, setAutoApprove] = useState<boolean>(false)
   const [monetize, setMonetize] = useState<boolean>(false)
   const [entryFee, setEntryFee] = useState<string>('')
@@ -544,48 +543,6 @@ export default function EventCreateScreen() {
         })
       }
 
-      // Optional: automatically join as a participant so the creator doesn't need to book again.
-      if (addMeToParticipants && typeof userId === 'number' && typeof createdEventId === 'number') {
-        const eventId = createdEventId
-        void (async () => {
-          try {
-            const booking = await createEventBooking({
-              eventid: eventId,
-              userid: userId,
-              status: autoApprove ? 'joined' : 'pending',
-              bookingstatus: 'upcoming',
-              note: null,
-            } as any)
-
-            void appendHistory(userId, {
-              kind: 'event_booking',
-              title: `Joined your event: ${title.trim() || `Event ${eventId}`}`,
-              subtitle: null,
-              fromStatus: 'pending',
-              toStatus: String(booking?.status ?? 'pending'),
-              meta: {
-                eventid: eventId,
-                eventbookingid: booking?.eventbookingid,
-                payment_method: 'free',
-                start_timestamp: (selectedBooking as any)?.start_timestamp ?? null,
-                end_timestamp: (selectedBooking as any)?.end_timestamp ?? null,
-              },
-            })
-
-            upsertUserBookingCache(booking)
-            bumpParticipantsInEventsCombined(eventId, +1)
-            bumpParticipantsInCreatedEventsCombined(eventId, +1)
-
-            // Best-effort participant increment
-            try { await adjustEventParticipants(eventId, +1) } catch {}
-
-            // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
-            // NOTE: Do NOT invalidateEventsCombinedCache here — the main onSuccess path writes the
-            // correct list to AsyncStorage at the end; clearing it here would race that write.
-          } catch {}
-        })()
-      }
-
       // Write the authoritative combined list (including the new event) directly to AsyncStorage
       // so that the next listEventsCombinedCached() call — triggered by pull-to-refresh or
       // refetchOnMount — reads from AsyncStorage instead of going to the network. This prevents
@@ -606,7 +563,7 @@ export default function EventCreateScreen() {
       // Clear draft and reset form state so draft-save debounce writes empty state on any subsequent tick.
       try { AsyncStorage.removeItem('@eventCreate:draft') } catch {}
       setTitle(''); setParticipantsCap(''); setDescription(''); setRemoteImageUrls([])
-      setAddMeToParticipants(true); setAutoApprove(false); setMonetize(false); setEntryFee('')
+      setAutoApprove(false); setMonetize(false); setEntryFee('')
       setPayCash(false); setPayVnPay(false); setSelectedBookingId(null); setExpandedCourts(false)
 
       const detailsId = typeof createdEventId === 'number' ? `created_event_${createdEventId}` : undefined
@@ -632,7 +589,6 @@ export default function EventCreateScreen() {
         if (typeof parsed.title === 'string') setTitle(parsed.title)
         if (typeof parsed.participantsCap === 'string') setParticipantsCap(parsed.participantsCap)
         if (typeof parsed.description === 'string') setDescription(parsed.description)
-        if (typeof parsed.addMeToParticipants === 'boolean') setAddMeToParticipants(parsed.addMeToParticipants)
         if (typeof parsed.autoApprove === 'boolean') setAutoApprove(parsed.autoApprove)
         if (typeof parsed.monetize === 'boolean') setMonetize(parsed.monetize)
         if (typeof parsed.entryFee === 'string') setEntryFee(parsed.entryFee)
@@ -650,12 +606,12 @@ export default function EventCreateScreen() {
   useEffect(() => {
     const t = setTimeout(() => {
       const payload = {
-        title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls
+        title, participantsCap, description, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls
       }
       try { AsyncStorage.setItem('@eventCreate:draft', JSON.stringify(payload)) } catch (e) {}
     }, 400)
     return () => clearTimeout(t)
-  }, [title, participantsCap, description, addMeToParticipants, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls])
+  }, [title, participantsCap, description, autoApprove, monetize, entryFee, payCash, payVnPay, selectedBookingId, remoteImageUrls])
 
   const onSubmit = () => {
     if (submitting) return
@@ -850,17 +806,6 @@ export default function EventCreateScreen() {
                 </View>
               )}
             </ScrollView>
-
-            <TouchableOpacity
-              style={styles.checkboxRow}
-              activeOpacity={0.85}
-              onPress={() => setAddMeToParticipants(v => !v)}
-            >
-              <View style={[styles.checkboxBox, addMeToParticipants && styles.checkboxBoxChecked]}>
-                {addMeToParticipants && <Text style={styles.checkboxTick}>✓</Text>}
-              </View>
-              <Text style={styles.checkboxLabel}>Add me to participants list</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.checkboxRow}

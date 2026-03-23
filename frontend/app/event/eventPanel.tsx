@@ -25,7 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
@@ -209,6 +209,15 @@ function FreeBadge() {
 export default function EventPanel({ organizerId }: Props) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+
+	// Subscribe to TQ so new events created via eventCreate.tsx appear immediately
+	const hostEventsQuery = useQuery({
+		queryKey: queryKeys.createdEventsCombined(organizerId),
+		queryFn: () => listEventsCombinedByOrganizerId(organizerId!),
+		enabled: organizerId != null,
+		staleTime: 30_000,
+	});
+
 	const [managementMode, setManagementMode] = useState<'event' | 'trainingSession'>('event');
 	const preferredSelectedEventIdRef = useRef<number | null>(null);
 
@@ -218,6 +227,24 @@ export default function EventPanel({ organizerId }: Props) {
 	const [hostEventsLoading, setHostEventsLoading] = useState(false);
 	const [hostEventsError, setHostEventsError] = useState<string | null>(null);
 	const [selectedHostEventId, setSelectedHostEventId] = useState<number | null>(null);
+
+	// When TQ invalidates createdEventsCombined (e.g. after eventCreate), sync state
+	useEffect(() => {
+		if (!Array.isArray(hostEventsQuery.data)) return;
+		const filtered = hostEventsQuery.data.filter((ev: any) => {
+			if (isHiddenEventStatus((ev as any)?.status)) return false;
+			if (isPastEventLoose(ev)) return false;
+			return true;
+		});
+		setHostEvents(filtered);
+		setSelectedHostEventId((prev) => {
+			const has = (id: number | null) => id != null && filtered.some((e: any) => e.eventid === id);
+			const preferred = preferredSelectedEventIdRef.current;
+			if (preferred != null && has(preferred)) return preferred;
+			if (has(prev)) return prev;
+			return filtered.length ? filtered[0].eventid : null;
+		});
+	}, [hostEventsQuery.data]);
 
 	const selectedEvent = useMemo(
 		() => (selectedHostEventId != null ? hostEvents.find((e) => e.eventid === selectedHostEventId) : undefined),
@@ -779,6 +806,18 @@ export default function EventPanel({ organizerId }: Props) {
 						return { ...row, numberofpeople: next }
 					})
 				})
+				// Update the booker's dashboard cache so Activity tab shows approved status immediately
+				queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
+					if (!prev?.event_bookings) return prev
+					return {
+						...prev,
+						event_bookings: prev.event_bookings.map((eb: any) =>
+							Number(eb.eventbookingid) === Number(booking.eventbookingid)
+								? { ...eb, status: 'joined' }
+								: eb
+						),
+					}
+				})
 				await invalidateMutationCaches();
 		} catch (e: any) {
 			setBookingsError(e?.message || String(e));
@@ -802,6 +841,18 @@ export default function EventPanel({ organizerId }: Props) {
 			try {
 				await rejectEventBooking(booking.eventbookingid);
 				setApplicants((prev) => prev.filter((x) => x.booking.eventbookingid !== bookingId));
+				// Update the booker's dashboard cache so Activity tab shows rejected status immediately
+				queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
+					if (!prev?.event_bookings) return prev
+					return {
+						...prev,
+						event_bookings: prev.event_bookings.map((eb: any) =>
+							Number(eb.eventbookingid) === Number(booking.eventbookingid)
+								? { ...eb, status: 'cancelled' }
+								: eb
+						),
+					}
+				})
 				await invalidateMutationCaches();
 			} catch (e: any) {
 				setBookingsError(e?.message || String(e));

@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     padding: 20,
-    paddingBottom: 70,
+    paddingBottom: 130,
   },
   icon: {
     width: 120,

@@ -77,6 +77,17 @@ const formatStatusTitleCase = (raw: any) => {
   return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : 'Unknown'
 }
 
+// For booking-level approval status: cancelled/rejected → "Rejected", joined → "Joined", missed → "Missed"
+const formatBookingStatusTitleCase = (raw: any) => {
+  const s = String(raw ?? '').trim().toLowerCase()
+  if (!s) return 'Pending'
+  if (s.includes('join')) return 'Joined'
+  if (s.includes('pend')) return 'Pending'
+  if (s.includes('cancel') || s.includes('reject')) return 'Rejected'
+  if (s.includes('miss')) return 'Missed'
+  return s.charAt(0).toUpperCase() + s.slice(1) || 'Unknown'
+}
+
 const formatTimeHHMM = (dt: Date) => {
   if (Number.isNaN(dt.getTime())) return ''
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
@@ -180,6 +191,8 @@ const resolveVenueNameOnly = (row: any): string | null => {
     (firstAvailability as any)?.venue,
     (firstBooking as any)?.venue?.name,
     (firstBooking as any)?.venue,
+    // court_name in CombinedEvent/CombinedTrainingSession is courtinfo.name (venue/facility name)
+    (row as any)?.court_name,
   )
 }
 
@@ -1439,6 +1452,8 @@ export default function DetailsPage() {
         resolveVenueNameOnly(ev) ||
         resolveVenueNameOnly(eventBookingInfoQuery.data) ||
         resolveVenueNameOnly(eventCourtBooking) ||
+        (eventCourtBooking as any)?.selected_court_name ||
+        (eventCourtBooking as any)?.selected_base_name ||
         null
       )
     }
@@ -1452,6 +1467,8 @@ export default function DetailsPage() {
         resolveVenueNameOnly(s) ||
         resolveVenueNameOnly(sessionBookingInfoQuery.data) ||
         resolveVenueNameOnly(sessionCourtBooking) ||
+        (sessionCourtBooking as any)?.selected_court_name ||
+        (sessionCourtBooking as any)?.selected_base_name ||
         null
       )
     }
@@ -1694,8 +1711,9 @@ export default function DetailsPage() {
               <>
                 <Section title="Event">
                   <Row label="Title" value={resolveTitle({ ...(ev || {}), eventinfo: evMeta ? [evMeta] : [] }, 'Event')} />
-                  <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
+                  <Row label="Booking Status" value={formatBookingStatusTitleCase((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
                   <Row label="Event Status" value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
+                  <Row label="Venue" value={summaryVenueName || '—'} />
                   <Row label="Court Name" value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
@@ -1717,8 +1735,9 @@ export default function DetailsPage() {
               <>
                 <Section title="Training Session">
                   <Row label="Title" value={resolveTitle({ ...(s || {}), trainingsessioninfo: sMeta ? [sMeta] : [] }, 'Training Session')} />
-                  <Row label="Booking Status" value={formatStatusTitleCase((b as any)?.bookingstatus ?? (b as any)?.status ?? 'pending')} />
+                  <Row label="Booking Status" value={formatBookingStatusTitleCase((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
                   <Row label="Training Session Status" value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
+                  <Row label="Venue" value={summaryVenueName || '—'} />
                   <Row label="Court Name" value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || '—'} />
                   <Row label="Date" value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label="Time" value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />

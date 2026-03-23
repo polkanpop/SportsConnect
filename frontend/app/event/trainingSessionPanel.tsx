@@ -22,7 +22,7 @@ import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { queryKeys } from '@/hooks/query-keys'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   approveTrainingSessionBooking,
   type CombinedTrainingSession,
@@ -209,6 +209,15 @@ function FreeBadge() {
 export default function TrainingSessionPanel({ coachId }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
+
+  // Subscribe to TQ so new sessions created via tsCreate.tsx appear immediately
+  const sessionsQuery = useQuery({
+    queryKey: queryKeys.createdTrainingSessionsCombined(coachId),
+    queryFn: () => listTrainingSessionsCombinedByCoachId(coachId!),
+    enabled: coachId != null,
+    staleTime: 30_000,
+  })
+
   const mountedRef = useRef(true)
   const sessionsLoadIdRef = useRef(0)
   const bookingsLoadIdRef = useRef(0)
@@ -227,6 +236,24 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   )
 
   const isFree = useMemo(() => ((selectedSession?.entry_fee ?? 0) <= 0), [selectedSession?.entry_fee])
+
+  // When TQ invalidates createdTrainingSessionsCombined (e.g. after tsCreate), sync state
+  useEffect(() => {
+    if (!Array.isArray(sessionsQuery.data)) return
+    const filtered = sessionsQuery.data.filter((s: any) => {
+      if (isHiddenSessionStatus((s as any)?.status)) return false
+      if (isPastSessionLoose(s)) return false
+      return true
+    })
+    setSessions(filtered)
+    setSelectedSessionId((prev) => {
+      const has = (id: number | null) => id != null && filtered.some((s: any) => s.sessionid === id)
+      const preferred = preferredSelectedSessionIdRef.current
+      if (preferred != null && has(preferred)) return preferred
+      if (has(prev)) return prev
+      return filtered.length ? filtered[0].sessionid : null
+    })
+  }, [sessionsQuery.data])
 
   const [applicants, setApplicants] = useState<EnrichedBooking[]>([])
   const [participants, setParticipants] = useState<EnrichedBooking[]>([])
@@ -629,6 +656,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return { ...row, numberofpeople: next }
           })
         })
+        // Update the booker's dashboard cache so Activity tab shows approved status immediately
+        queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
+          if (!prev?.training_bookings) return prev
+          return {
+            ...prev,
+            training_bookings: prev.training_bookings.map((tb: any) =>
+              Number(tb.tsbookingid) === Number(booking.tsbookingid)
+                ? { ...tb, status: 'joined' }
+                : tb
+            ),
+          }
+        })
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
@@ -651,6 +690,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       try {
         await rejectTrainingSessionBooking(booking.tsbookingid)
         setApplicants((prev) => prev.filter((x) => x.booking.tsbookingid !== booking.tsbookingid))
+        // Update the booker's dashboard cache so Activity tab shows rejected status immediately
+        queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
+          if (!prev?.training_bookings) return prev
+          return {
+            ...prev,
+            training_bookings: prev.training_bookings.map((tb: any) =>
+              Number(tb.tsbookingid) === Number(booking.tsbookingid)
+                ? { ...tb, status: 'cancelled' }
+                : tb
+            ),
+          }
+        })
         await invalidateMutationCaches()
       } catch (e: any) {
         setBookingsError(e?.message || String(e))
