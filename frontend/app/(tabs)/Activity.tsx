@@ -410,19 +410,16 @@ export default function ActivityPage() {
   // spamming the backend every time the user switches tabs.
   const lastFocusInvalidateRef = useRef<number>(0)
 
-  // Invalidate dashboard + hosting queries when the user focuses this tab.
-  // Use invalidateQueries (not refetchQueries) for dashboard so optimistic setQueryData
-  // updates written by booking mutations are not overwritten by a forced server round-trip.
-  // invalidateQueries marks the query stale so TQ re-fetches it naturally on next render,
-  // but only after any in-flight updates have settled.
-  // Throttled to 5 s to avoid spamming the backend on rapid tab switches.
+  // Refresh dashboard whenever the user focuses this tab.
+  // Throttled to 5 s to avoid spamming the backend on rapid tab switches,
+  // but short enough that coming back right after a booking creation gets fresh data.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId !== 'number') return;
       const now = Date.now()
       if (now - lastFocusInvalidateRef.current < 5_000) return
       lastFocusInvalidateRef.current = now
-      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId), refetchType: 'active' })
+      void queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId), type: 'active' })
       // Also keep hosting queries fresh so Hosting tab is fast and reflects new events
       void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingEvents(userId), type: 'all' })
       void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingSessions(userId), type: 'all' })

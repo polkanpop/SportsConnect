@@ -10,6 +10,8 @@ import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  adjustEventParticipants,
+  createEventBooking,
   createEventWithInfo,
   CreateEventWithInfoPayload,
   cloudinarySignUpload,
@@ -497,6 +499,48 @@ export default function EventCreateScreen() {
           qc.setQueryData(['details', 'createdEvent', createdEventId], evRow)
           qc.setQueryData(['details', 'createdEventInfo', createdEventId], infoRow)
         }
+      }
+
+      const bumpParticipantsInEventsCombined = (eventId: number, delta: number) => {
+        qc.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.eventid !== eventId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
+      }
+
+      const upsertUserBookingCache = (booking: any) => {
+        if (typeof userId !== 'number') return
+        const upsert = (key: readonly unknown[]) => {
+          qc.setQueryData(key, (prev: any) => {
+            const arr = Array.isArray(prev) ? prev : []
+            const exists = arr.some((b: any) => {
+              if (typeof b?.eventid !== 'number') return false
+              if (b.eventid !== booking?.eventid) return false
+              const s = String(b?.bookingstatus ?? b?.status ?? '').toLowerCase()
+              return !s.includes('cancel')
+            })
+            return exists ? arr : [booking, ...arr]
+          })
+        }
+        upsert(queryKeys.eventBookingsUser(userId))
+      }
+
+      const bumpParticipantsInCreatedEventsCombined = (eventId: number, delta: number) => {
+        if (typeof userId !== 'number') return
+        qc.setQueryData(queryKeys.createdEventsCombined(userId), (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.map((row: any) => {
+            if (row?.eventid !== eventId) return row
+            const cur = Number(row?.numberofpeople)
+            const curN = Number.isFinite(cur) ? cur : 0
+            return { ...row, numberofpeople: Math.max(0, curN + delta) }
+          })
+        })
       }
 
       // Write the authoritative combined list (including the new event) directly to AsyncStorage
