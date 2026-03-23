@@ -179,6 +179,8 @@ export default function TrainingSessionBooking() {
       try { await invalidateTrainingSessionsCombinedCache() } catch {}
       queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
+      // Signal the organizer's TrainingSessionPanel to refresh its applicants list
+      queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(session.sessionid) })
 
       if (typeof userId === 'number') {
         void appendHistory(userId, {

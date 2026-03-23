@@ -21,6 +21,8 @@ export const queryKeys = {
   activityHostingEvents: (userid: number | null) => ['activity', 'hosting', 'events', userid ?? -1] as const,
   activityHostingSessions: (userid: number | null) => ['activity', 'hosting', 'sessions', userid ?? -1] as const,
   dashboard: (userid: number | null) => ['dashboard', userid ?? -1] as const,
+  tsBookingsBySession: (sessionid: number | null) => ['bookings', 'by-session', sessionid ?? -1] as const,
+  eventBookingsByEvent: (eventid: number | null) => ['bookings', 'by-event', eventid ?? -1] as const,
   reviews: (params?: { userid?: number | null; targettype?: string; targetid?: number | null }) =>
     ['reviews', params?.userid ?? null, params?.targettype ?? null, params?.targetid ?? null] as const,
 }

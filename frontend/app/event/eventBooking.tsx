@@ -197,6 +197,9 @@ export default function EventBooking() {
       upsert(queryKeys.eventBookingsUser(userId))
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsUser(userId) })
 
+      // Signal the organizer's EventPanel to refresh its applicants list
+      queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(event.eventid) })
+
       // Invalidate combined events cache so eventList / Home reflect the new booking state
       await invalidateEventsCombinedCache()
       void queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })

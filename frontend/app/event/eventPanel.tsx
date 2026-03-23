@@ -338,7 +338,10 @@ export default function EventPanel({ organizerId }: Props) {
 		// and causes events to vanish from the Home screen. setQueryData handles optimistic updates;
 		// the dashboard re-fetches naturally when its 5-min staleTime expires.
 		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-	}, [queryClient]);
+		if (selectedHostEventId != null) {
+			queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(selectedHostEventId) })
+		}
+	}, [queryClient, selectedHostEventId]);
 
 	const uploadOneToCloudinary = useCallback(
 		async (localUri: string, idx: number) => {
@@ -652,6 +655,52 @@ export default function EventPanel({ organizerId }: Props) {
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedHostEventId]);
+
+	// TQ subscription — when a participant books via eventBooking.tsx, that screen
+	// calls invalidateQueries for this key, causing a background re-fetch here that
+	// updates the applicants list without requiring manual pull-to-refresh.
+	const rawEventBookingsQuery = useQuery({
+		queryKey: queryKeys.eventBookingsByEvent(selectedHostEventId ?? -1),
+		queryFn: async () => {
+			if (selectedHostEventId == null) return { pending: [] as EventBookingRow[], joined: [] as EventBookingRow[] }
+			const [p, j] = await Promise.all([
+				getEventBookingsByEventId(selectedHostEventId, { status: 'pending' }),
+				getEventBookingsByEventId(selectedHostEventId, { status: 'joined' }),
+			])
+			return {
+				pending: Array.isArray(p) ? (p as EventBookingRow[]) : [],
+				joined: Array.isArray(j) ? (j as EventBookingRow[]) : [],
+			}
+		},
+		enabled: selectedHostEventId != null && organizerId != null,
+		staleTime: 60_000,
+		refetchOnWindowFocus: false, // only re-fetched via explicit invalidateQueries from booking screens
+	})
+
+	const lastRawEventBookingSigRef = useRef('')
+	useEffect(() => {
+		const d = rawEventBookingsQuery.data
+		if (!d) return
+		const sig = [...d.pending, ...d.joined]
+			.map((b) => `${b.eventbookingid}:${b.status}`)
+			.sort()
+			.join(',')
+		if (sig === lastRawEventBookingSigRef.current) return
+		lastRawEventBookingSigRef.current = sig
+		let cancelled = false
+		setBookingsLoading(true)
+		void (async () => {
+			try {
+				const meta = hostEventsRef.current.find((e) => e.eventid === selectedHostEventId)
+				const [ep, ej] = await Promise.all([enrichBookings(meta, d.pending), enrichBookings(meta, d.joined)])
+				if (cancelled) return
+				setApplicants(ep)
+				setParticipants(ej)
+			} catch {}
+			finally { if (!cancelled) setBookingsLoading(false) }
+		})()
+		return () => { cancelled = true }
+	}, [rawEventBookingsQuery.data, enrichBookings, selectedHostEventId])
 
 	const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {
 		setActionUser({ userid, name });
@@ -1109,7 +1158,7 @@ export default function EventPanel({ organizerId }: Props) {
 				>
 						{hostEvents.map((ev, idx) => {
 						const selected = ev.eventid === selectedHostEventId;
-						const accent = "#16a34a";
+						const accent = COLORS.brandOrangeDeep;
 						const silhouette = fallbackSilhouetteByEventId(ev.eventid);
 						return (
 								<View

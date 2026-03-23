@@ -191,7 +191,7 @@ function FreeBadge() {
       style={{
         alignSelf: 'flex-start',
         marginTop: 6,
-        backgroundColor: '#16a34a',
+        backgroundColor: COLORS.brandOrangeDeep,
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 999,
@@ -345,7 +345,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     // NOTE: Do NOT invalidateQueries for dashboard here — it triggers a stale Redis re-fetch that
     // overwrites the TQ dashboard cache with old data and causes sessions to vanish.
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
-  }, [queryClient])
+    if (selectedSessionId != null) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(selectedSessionId) })
+    }
+  }, [queryClient, selectedSessionId])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)
   const [cancellingSession, setCancellingSession] = useState(false)
@@ -600,7 +603,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setParticipants([])
         setBookingsError(e?.message || String(e))
       } finally {
-        if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
+        if (!mountedRef.current) return
         setBookingsLoading(false)
       }
     },
@@ -784,6 +787,56 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     void loadBookingsForSession(selectedSessionId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachId, selectedSessionId])
+
+  // TQ subscription — when a participant books via tsBooking.tsx, that screen
+  // calls invalidateQueries for this key, causing a background re-fetch here that
+  // updates the applicants list without requiring manual pull-to-refresh.
+  const rawSessionBookingsQuery = useQuery({
+    queryKey: queryKeys.tsBookingsBySession(selectedSessionId ?? -1),
+    queryFn: async () => {
+      if (selectedSessionId == null) return { pending: [] as TrainingSessionBookingRow[], joined: [] as TrainingSessionBookingRow[] }
+      const [p, j] = await Promise.all([
+        getTrainingSessionBookingsBySessionId(selectedSessionId, { status: 'pending' }),
+        getTrainingSessionBookingsBySessionId(selectedSessionId, { status: 'joined' }),
+      ])
+      return {
+        pending: Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [],
+        joined: Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [],
+      }
+    },
+    enabled: selectedSessionId != null && coachId != null,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false, // only re-fetched via explicit invalidateQueries from booking screens
+  })
+
+  const lastRawBookingSigRef = useRef('')
+  useEffect(() => {
+    const d = rawSessionBookingsQuery.data
+    if (!d) return
+    const sig = [...d.pending, ...d.joined]
+      .map((b) => `${b.tsbookingid}:${b.status}`)
+      .sort()
+      .join(',')
+    if (sig === lastRawBookingSigRef.current) return
+    lastRawBookingSigRef.current = sig
+    let cancelled = false
+    setBookingsLoading(true)
+    void (async () => {
+      try {
+        const [ep, ej] = await Promise.all([enrichBookings(d.pending), enrichBookings(d.joined)])
+        if (cancelled || !mountedRef.current) return
+        setApplicants(ep)
+        setParticipants(ej)
+        if (selectedSessionId != null) {
+          setSessions((prev) =>
+            prev.map((s) => (s.sessionid === selectedSessionId ? { ...s, numberofpeople: ej.length } : s)),
+          )
+        }
+      } catch {}
+      finally { if (!cancelled && mountedRef.current) setBookingsLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [rawSessionBookingsQuery.data, enrichBookings, selectedSessionId])
 
   useEffect(() => {
     if (coachId == null) return
@@ -1083,7 +1136,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         >
           {sessions.map((s, idx) => {
             const selected = s.sessionid === selectedSessionId
-            const accent = '#16a34a'
+            const accent = COLORS.brandOrangeDeep
             const silhouette = fallbackSilhouetteBySessionId(s.sessionid)
             return (
               <View key={s.sessionid} style={{ width: 288, marginRight: idx < sessions.length - 1 ? 18 : 0, overflow: 'visible' }}>
@@ -1702,7 +1755,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   disabled={saving || !isDirty}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving || !isDirty ? '#F4C9A6' : '#16a34a',
+                    backgroundColor: saving || !isDirty ? '#F4C9A6' : COLORS.brandOrangeDeep,
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',
