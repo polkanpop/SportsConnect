@@ -1479,7 +1479,9 @@ export async function updateCourtBooking(courtbookingid: number, data: Partial<C
 export type EventBookingRow = { eventbookingid: number; eventid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createEventBooking(payload: Omit<EventBookingRow, 'eventbookingid'>) {
 	const res = await request('/eventbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createEventBooking' }) as Promise<EventBookingRow>
-	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — callers that need freshness use setQueryData/invalidateQueries.
+	// Clearing AsyncStorage races with hydrateEventsCombinedCache in the creation onSuccess flow,
+	// causing the new event to vanish on the very next listEventsCombinedCached() call.
 	return res
 }
 
@@ -1507,9 +1509,7 @@ export async function updateEventBooking(eventbookingid: number, data: Partial<E
 export type TrainingSessionBookingRow = { tsbookingid: number; sessionid: number; userid: number; status: string; paymentid?: number | null; note?: string | null; bookingstatus?: string }
 export async function createTrainingSessionBooking(payload: Omit<TrainingSessionBookingRow, 'tsbookingid'>) {
 	const res = await request('/tsbookings', { method: 'POST', body: JSON.stringify(payload), debugLabel: 'createTrainingSessionBooking' }) as Promise<TrainingSessionBookingRow>
-	// Training session lists are rendered via listTrainingSessionsCombinedCached() (fetchWithCache),
-	// so bust that cache whenever bookings change to avoid stale UI.
-	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — races with hydrateTrainingSessionsCombinedCache in tsCreate onSuccess.
 	return res
 }
 
@@ -1848,7 +1848,7 @@ export async function adjustEventParticipants(eventid: number, delta: number): P
 		method: 'POST',
 		debugLabel: 'adjustEventParticipants'
 	}) as Promise<EventInfoMeta>
-	try { await invalidateCache('cache:events:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — races with hydrateEventsCombinedCache in eventCreate onSuccess.
 	return res
 }
 
@@ -1877,7 +1877,7 @@ export async function adjustTrainingSessionParticipants(sessionid: number, delta
 		method: 'POST',
 		debugLabel: 'adjustTrainingSessionParticipants'
 	}) as Promise<TrainingSessionInfoMeta>
-	try { await invalidateCache('cache:trainingsessions:combined:v1') } catch {}
+	// NOTE: Do NOT invalidateCache here — races with hydrateTrainingSessionsCombinedCache in tsCreate onSuccess.
 	return res
 }
 export type TrainingSessionInfoMeta = {
