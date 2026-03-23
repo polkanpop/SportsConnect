@@ -78,7 +78,7 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
             filters["status"] = status
         if courtbookingid is not None:
             filters["courtbookingid"] = courtbookingid
-        data = rest_select("events", "eventid,organizerid,courtbookingid,status,time", filters=filters or None, order={"column": PRIMARY_KEY})
+        data = rest_select("events", "eventid,organizerid,courtbookingid,status,time", filters=filters or None, order={"column": PRIMARY_KEY, "desc": True})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []
@@ -158,7 +158,7 @@ def create_event(body: dict, background_tasks: BackgroundTasks, current_user: st
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/create_with_info", response_model=dict)
-def create_event_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def create_event_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create an event plus its eventinfo metadata atomically (best-effort rollback).
 
     Expected body keys:
@@ -326,8 +326,13 @@ def create_event_with_info(body: dict, request: Request, background_tasks: Backg
         )
     except Exception:
         pass
-    background_tasks.add_task(invalidate_namespace, "events", "eventinfo")
-    background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, organizerid)
+    # Invalidate server-side Redis list cache BEFORE returning the response so
+    # any client pull-to-refresh that follows immediately gets a cache miss and
+    # fetches fresh DB data (includes the new event).  This avoids the race where
+    # a background-task-based invalidation on Upstash Redis (SCAN + N deletes at
+    # ~100ms/round-trip) finishes AFTER the client already pulled fresh data.
+    await invalidate_namespace("events", "eventinfo")
+    await _invalidate_user_dashboard_cache(request.app, organizerid)
     return {"event": event_row, "eventinfo": info_resp[0]}
 
 

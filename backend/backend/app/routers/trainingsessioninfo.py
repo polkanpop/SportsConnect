@@ -15,7 +15,7 @@ def list_training_session_info(sessionid: int | None = Query(None), limit: int =
         filters: dict[str, int] = {}
         if sessionid is not None:
             filters["sessionid"] = sessionid
-        data = rest_select("trainingsessioninfo", "*", filters=filters or None, order={"column": PRIMARY_KEY})
+        data = rest_select("trainingsessioninfo", "*", filters=filters or None, order={"column": PRIMARY_KEY, "desc": True})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []

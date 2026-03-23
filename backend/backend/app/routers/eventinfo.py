@@ -15,7 +15,7 @@ def list_event_info(eventid: int | None = Query(None), limit: int = Query(100, g
         filters: dict[str, int] = {}
         if eventid is not None:
             filters["eventid"] = eventid
-        data = rest_select("eventinfo", "*", filters=filters or None, order={"column": PRIMARY_KEY})
+        data = rest_select("eventinfo", "*", filters=filters or None, order={"column": PRIMARY_KEY, "desc": True})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []

@@ -68,7 +68,7 @@ def list_training_sessions(
             filters["status"] = status
         if courtbookingid is not None:
             filters["courtbookingid"] = courtbookingid
-        data = rest_select("trainingsessions", "*", filters=filters or None, order={"column": PRIMARY_KEY})
+        data = rest_select("trainingsessions", "*", filters=filters or None, order={"column": PRIMARY_KEY, "desc": True})
         if isinstance(data, list):
             data = data[offset: offset + limit]
         return data if isinstance(data, list) else []
@@ -88,7 +88,7 @@ def get_training_session(sessionid: int):
 
 
 @router.post("/create_with_info", response_model=dict)
-def create_training_session_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def create_training_session_with_info(body: dict, request: Request, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     """Create a training session plus its trainingsessioninfo metadata.
 
     Body keys expected:
@@ -252,8 +252,10 @@ def create_training_session_with_info(body: dict, request: Request, background_t
             )
         except Exception:
             pass
-        background_tasks.add_task(invalidate_namespace, "trainingsessions", "trainingsessioninfo")
-        background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, coachid)
+        # Invalidate server-side Redis list cache BEFORE returning the response
+        # (same fix as events.create_event_with_info — Upstash latency race).
+        await invalidate_namespace("trainingsessions", "trainingsessioninfo")
+        await _invalidate_user_dashboard_cache(request.app, coachid)
         return {"session": session_row, "sessioninfo": info_resp[0]}
     except HTTPException:
         raise

@@ -89,6 +89,11 @@ async def invalidate_namespace(*namespaces: str) -> int:
     Supports multiple namespaces in a single call::
 
         await invalidate_namespace("events", "eventinfo")
+
+    Uses a Redis pipeline to batch all DELETEs into a single round-trip,
+    eliminating the ~100ms-per-key Upstash latency that caused a race condition
+    where the client pull-to-refresh would read stale data before the sequential
+    delete loop completed.
     """
     from fastapi_cache import FastAPICache
 
@@ -101,13 +106,15 @@ async def invalidate_namespace(*namespaces: str) -> int:
         prefix = FastAPICache.get_prefix()
         for ns in namespaces:
             pattern = f"{prefix}:{ns}:*"
-            deleted = 0
-            async for key in redis.scan_iter(match=pattern, count=100):
-                await redis.delete(key)
-                deleted += 1
-            if deleted:
-                logger.info("Cache invalidated %d keys namespace=%s", deleted, ns)
-            total += deleted
+            # Collect all matching keys first, then delete in one pipeline batch.
+            keys = [key async for key in redis.scan_iter(match=pattern, count=200)]
+            if keys:
+                async with redis.pipeline(transaction=False) as pipe:
+                    for key in keys:
+                        pipe.delete(key)
+                    await pipe.execute()
+                logger.info("Cache invalidated %d keys namespace=%s", len(keys), ns)
+            total += len(keys)
     except Exception as exc:
         logger.warning("Cache invalidation error namespaces=%s: %s", namespaces, exc)
     return total
