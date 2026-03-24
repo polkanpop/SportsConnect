@@ -250,6 +250,29 @@ export default function EventPanel({ organizerId }: Props) {
 		// has events, the empty result is almost certainly from a stale backend cache race.
 		// Keep the existing panel state rather than wiping it with a ghost empty response.
 		if (hostEventsQuery.data.length === 0 && hostEventsRef.current.length > 0) return;
+		// Guard: if TQ background refetch returned FEWER events than currently displayed,
+		// merge in the missing ones instead of pruning the list (stale partial Redis cache).
+		const incomingVisible = (hostEventsQuery.data as CombinedEvent[]).filter(
+			(ev: any) => !isHiddenEventStatus((ev as any)?.status)
+		);
+		if (incomingVisible.length > 0 && incomingVisible.length < hostEventsRef.current.length) {
+			const incomingIds = new Set(incomingVisible.map((e) => Number(e.eventid)));
+			const extras = hostEventsRef.current.filter(
+				(e) => !incomingIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
+			);
+			if (extras.length > 0) {
+				const merged = applyEventInfoOverrides([...incomingVisible, ...extras]);
+				setHostEvents(merged);
+				setSelectedHostEventId((prev) => {
+					const has = (id: number | null) => id != null && merged.some((e) => e.eventid === id);
+					const preferred = preferredSelectedEventIdRef.current;
+					if (preferred != null && has(preferred)) return preferred;
+					if (has(prev)) return prev;
+					return merged.length ? merged[0].eventid : null;
+				});
+				return;
+			}
+		}
 		const filtered = applyEventInfoOverrides(hostEventsQuery.data.filter((ev: any) => {
 			// Only hide cancelled events — never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
@@ -460,16 +483,26 @@ export default function EventPanel({ organizerId }: Props) {
 		setHostEventsError(null);
 		try {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
-			const normalized = Array.isArray(rows) ? rows : [];
+			let normalized = Array.isArray(rows) ? rows : [];
+			const tqSnapshot = queryClient.getQueryData<CombinedEvent[]>(queryKeys.createdEventsCombined(organizerId));
 			// Guard: if the backend returned zero rows, check whether TQ already holds
 			// valid events. An empty backend response here most likely comes from a Redis
 			// cache race (the cache was just invalidated and re-populated by a different
 			// in-flight request before this one returned). Prefer the TQ data in that case
 			// rather than wiping the panel.
 			if (normalized.length === 0) {
-				const tqData = queryClient.getQueryData<CombinedEvent[]>(queryKeys.createdEventsCombined(organizerId));
-				const hasTqVisible = Array.isArray(tqData) && tqData.some(ev => !isHiddenEventStatus((ev as any)?.status));
+				const hasTqVisible = Array.isArray(tqSnapshot) && tqSnapshot.some(ev => !isHiddenEventStatus((ev as any)?.status));
 				if (hasTqVisible) return; // trust TQ over stale empty backend response
+			}
+			// Guard: if the backend returned fewer events than TQ currently holds, it is
+			// likely a partial/stale Redis cache (e.g. a just-created event not yet indexed).
+			// Merge in the TQ-known events so recently-created events don't vanish on refresh.
+			if (normalized.length > 0 && Array.isArray(tqSnapshot) && tqSnapshot.length > normalized.length) {
+				const normalizedIds = new Set(normalized.map((e: any) => Number(e.eventid)));
+				const extras = tqSnapshot.filter(
+					(e) => !normalizedIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
+				);
+				if (extras.length > 0) normalized = [...normalized, ...extras];
 			}
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.

@@ -237,6 +237,29 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   useEffect(() => {
     if (!Array.isArray(sessionsQuery.data)) return
     if (sessionsQuery.data.length === 0 && sessionsRef.current.length > 0) return
+    // Guard: if TQ background refetch returned fewer sessions than currently displayed,
+    // merge in the missing ones to prevent recently-created sessions disappearing.
+    const incomingVisible = (sessionsQuery.data as CombinedTrainingSession[]).filter(
+      (s: any) => !isHiddenSessionStatus((s as any)?.status)
+    )
+    if (incomingVisible.length > 0 && incomingVisible.length < sessionsRef.current.length) {
+      const incomingIds = new Set(incomingVisible.map((s) => Number(s.sessionid)))
+      const extras = sessionsRef.current.filter(
+        (s) => !incomingIds.has(Number(s.sessionid)) && !isHiddenSessionStatus((s as any)?.status)
+      )
+      if (extras.length > 0) {
+        const merged = [...incomingVisible, ...extras]
+        setSessions(merged)
+        setSelectedSessionId((prev) => {
+          const has = (id: number | null) => id != null && merged.some((s: any) => s.sessionid === id)
+          const preferred = preferredSelectedSessionIdRef.current
+          if (preferred != null && has(preferred)) return preferred
+          if (has(prev)) return prev
+          return merged.length ? merged[0].sessionid : null
+        })
+        return
+      }
+    }
     const filtered = sessionsQuery.data.filter((s: any) => {
       // Only hide cancelled sessions — never filter by timestamp in the coach panel.
       if (isHiddenSessionStatus((s as any)?.status)) return false
@@ -459,7 +482,17 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       try {
         const rows = await listTrainingSessionsCombinedByCoachId(coachId)
         if (!mountedRef.current || loadId !== sessionsLoadIdRef.current) return
-        const normalized = Array.isArray(rows) ? rows : []
+        let normalized = Array.isArray(rows) ? rows : []
+        // Guard: if backend returned fewer sessions than current state, it's likely a
+        // stale partial Redis cache. Merge in the missing sessions to prevent them
+        // from vanishing on pull-to-refresh.
+        if (normalized.length > 0 && normalized.length < sessionsRef.current.length) {
+          const normalizedIds = new Set(normalized.map((s: any) => Number(s.sessionid)))
+          const extras = sessionsRef.current.filter(
+            (s) => !normalizedIds.has(Number(s.sessionid)) && !isHiddenSessionStatus((s as any)?.status)
+          )
+          if (extras.length > 0) normalized = [...normalized, ...extras]
+        }
         const filtered = normalized.filter((s) => {
           // Only hide cancelled sessions — never filter by timestamp in the coach panel.
           if (isHiddenSessionStatus((s as any)?.status)) return false

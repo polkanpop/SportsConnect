@@ -220,6 +220,15 @@ export default function EventBooking() {
         return prev.map((row: any) => row?.eventid !== event.eventid ? row : { ...row, join_status: newJoinStatus })
       })
       if (typeof userId === 'number') {
+        // Activity reads dashboard.data?.event_bookings, not eventBookingsUser — patch it
+        // directly so the booking appears immediately before the invalidate refetch completes.
+        queryClient.setQueryData(queryKeys.dashboard(userId), (prev: any) => {
+          if (!prev) return prev
+          const arr: any[] = Array.isArray(prev.event_bookings) ? prev.event_bookings : []
+          const exists = arr.some((b: any) => Number(b?.eventbookingid) === Number((booking as any)?.eventbookingid))
+          if (exists) return prev
+          return { ...prev, event_bookings: [booking, ...arr] }
+        })
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
       }
 
