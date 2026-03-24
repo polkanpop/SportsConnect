@@ -1177,7 +1177,7 @@ export default function EventPanel({ organizerId }: Props) {
 				</View>
 			)}
 
-			{!!(hostEventsError || hostEventsQuery.isError) && (
+			{hostEvents.length === 0 && !!(hostEventsError || hostEventsQuery.isError) && (
 				<Text style={{ color: "red", marginBottom: 8 }}>Failed to load your events: {hostEventsError ?? String(hostEventsQuery.error ?? '')}</Text>
 			)}
 

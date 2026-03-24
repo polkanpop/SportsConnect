@@ -10,7 +10,9 @@ let refreshTokenPromise: Promise<boolean> | null = null
 const inflightGetRequestMap = new Map<string, Promise<any>>()
 
 function shouldDedupeGetPath(path: string): boolean {
-	return /^\/(?:me\/dashboard|courtinfo(?:\?|$)|favouritecourts(?:\?|$))/.test(path)
+	// Deduplicate high-frequency GET paths so concurrent callers (e.g. TQ background
+	// refetch + loadHostEvents pull-to-refresh) share the same in-flight promise.
+	return /^\/(?:me\/dashboard|courtinfo(?:\?|$)|favouritecourts(?:\?|$)|events(?:\?|$)|eventinfo(?:\?|$))/.test(path)
 }
 
 async function refreshAccessTokenRequest(): Promise<boolean> {

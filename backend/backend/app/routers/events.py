@@ -376,7 +376,10 @@ def update_event(eventid: int, body: dict, background_tasks: BackgroundTasks, cu
             except Exception:
                 pass
 
-        background_tasks.add_task(invalidate_namespace, "events", "eventinfo")
+        background_tasks.add_task(invalidate_namespace, "events")
+        if isinstance(new_status, str) and "cancel" in new_status.lower():
+            # cancel also zeroes eventinfo.numberofpeople — bust that cache too
+            background_tasks.add_task(invalidate_namespace, "eventinfo")
         return out
     except HTTPException:
         raise

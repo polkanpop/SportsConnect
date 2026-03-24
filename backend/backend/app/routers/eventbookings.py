@@ -163,7 +163,10 @@ def create_event_booking(body: dict, request: Request, background_tasks: Backgro
         except Exception as e:
             print("[eventbookings] notification insert failed:", str(e))
 
-        background_tasks.add_task(invalidate_namespace, "eventbookings", "eventinfo")
+        background_tasks.add_task(invalidate_namespace, "eventbookings")
+        if desired_status == "joined":
+            # auto_approve path: _sync_event_participant_count modified eventinfo.numberofpeople
+            background_tasks.add_task(invalidate_namespace, "eventinfo")
         # Invalidate dashboard Redis cache so Activity/Home screens see the new booking immediately.
         background_tasks.add_task(_invalidate_user_dashboard_cache, request.app, userid)
         try:
