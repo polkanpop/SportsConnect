@@ -125,12 +125,16 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	}
 
 	const doFetch = async (): Promise<any> => {
-		// Prevent fetch from hanging indefinitely on flaky mobile connections.
-		// Without a timeout a single stalled TCP connection blocks the entire Promise.all
-		// in listEventsCombinedByOrganizerId / listTrainingSessionsCombinedByCoachId,
-		// which makes the panel spinner freeze until the app is killed.
+		// Apply a timeout only to GET requests to prevent stalled TCP connections from
+		// blocking the Promise.all inside listEventsCombinedByOrganizerId.
+		// Mutations (POST/PATCH/DELETE) must NOT be cut short — they may have already
+		// succeeded on the server, and aborting the client-side fetch causes silent ghost
+		// failures (e.g. booking succeeds DB-side but client gets a 409 "Already booked"
+		// on the retry because the original POST technically won).
+		const isGet = method === 'GET'
 		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 15_000)
+		const timeoutMs = isGet ? 15_000 : 45_000   // generous for slow mobile POST
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 		if (options.signal) {
 			if (options.signal.aborted) {
 				clearTimeout(timeoutId)

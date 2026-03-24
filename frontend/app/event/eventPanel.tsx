@@ -225,14 +225,32 @@ export default function EventPanel({ organizerId }: Props) {
 	const [hostEventsError, setHostEventsError] = useState<string | null>(null);
 	const [selectedHostEventId, setSelectedHostEventId] = useState<number | null>(null);
 
+	// Client-side overlay for fields that were saved locally but may still be stale in the server
+	// Redis cache (expire=120s). When onSaveEventInfo succeeds we write here; loadHostEvents and
+	// the TQ useEffect both apply these overrides so the panel never reverts to the old title.
+	// An entry is cleared once the server returns data that already matches the saved value.
+	const savedEventInfoOverridesRef = useRef<Map<number, Partial<CombinedEvent>>>(new Map());
+
+	const applyEventInfoOverrides = useCallback((rows: CombinedEvent[]): CombinedEvent[] => {
+		const overrides = savedEventInfoOverridesRef.current;
+		if (overrides.size === 0) return rows;
+		return rows.map((ev) => {
+			const o = overrides.get(ev.eventid);
+			if (!o) return ev;
+			// If the server already returned the saved title, clear the override.
+			if (o.title != null && ev.title === o.title) { overrides.delete(ev.eventid); return ev; }
+			return { ...ev, ...o };
+		});
+	}, []);
+
 	// When TQ invalidates createdEventsCombined (e.g. after eventCreate), sync state
 	useEffect(() => {
 		if (!Array.isArray(hostEventsQuery.data)) return;
-		const filtered = hostEventsQuery.data.filter((ev: any) => {
+		const filtered = applyEventInfoOverrides(hostEventsQuery.data.filter((ev: any) => {
 			// Only hide cancelled events — never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
 			return true;
-		});
+		}));
 		setHostEvents(filtered);
 		setSelectedHostEventId((prev) => {
 			const has = (id: number | null) => id != null && filtered.some((e: any) => e.eventid === id);
@@ -439,11 +457,11 @@ export default function EventPanel({ organizerId }: Props) {
 		try {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			const normalized = Array.isArray(rows) ? rows : [];
-			const filtered = normalized.filter((ev) => {
+			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
 				return true;
-			});
+			}));
 			setHostEvents(filtered);
 			if (filtered.length === 0) {
 				setSelectedHostEventId(null);
@@ -466,7 +484,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setHostEventsLoading(false);
 		}
-	}, [organizerId]);
+	}, [organizerId, applyEventInfoOverrides]);
 
 	const enrichBookings = useCallback(async (eventMeta: CombinedEvent | undefined, rows: EventBookingRow[]) => {
 		const isFree = (eventMeta?.entry_fee ?? 0) <= 0;
@@ -552,9 +570,20 @@ export default function EventPanel({ organizerId }: Props) {
 					return out;
 				};
 				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
+				// Merge any TQ-pre-populated rows (from eventBooking.tsx setQueryData) that
+				// aren't yet visible in the backend response. The backend /eventbookings endpoint
+				// has a 30s Redis cache, so a booking made seconds ago may not appear yet.
+				const tqCached: { pending: EventBookingRow[]; joined: EventBookingRow[] } | undefined =
+					queryClient.getQueryData(queryKeys.eventBookingsByEvent(eventid));
+				const mergeWithTQ = (networkRows: EventBookingRow[], bucket: 'pending' | 'joined'): EventBookingRow[] => {
+					const tqRows = tqCached?.[bucket] ?? [];
+					const networkIds = new Set(networkRows.map((r) => Number(r.eventbookingid)));
+					const extraRows = tqRows.filter((r) => !networkIds.has(Number(r.eventbookingid)));
+					return extraRows.length ? [...extraRows, ...networkRows] : networkRows;
+				};
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
-					enrichBookings(meta, dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
-					enrichBookings(meta, dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
+					enrichBookings(meta, dedupeByUser(mergeWithTQ(Array.isArray(pendingRows) ? pendingRows : [], 'pending'))),
+					enrichBookings(meta, dedupeByUser(mergeWithTQ(Array.isArray(joinedRows) ? joinedRows : [], 'joined'))),
 				]);
 				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				setApplicants(pendingEnriched);
@@ -569,7 +598,7 @@ export default function EventPanel({ organizerId }: Props) {
 				setBookingsLoading(false);
 			}
 		},
-		[enrichBookings]
+		[enrichBookings, queryClient]
 	);
 
 	const loadBlockedForTarget = useCallback(async (eventid: number) => {
@@ -979,6 +1008,18 @@ export default function EventPanel({ organizerId }: Props) {
 				} catch (e: any) {
 					console.warn('[eventPanel] cloudinary delete failed', e?.message || String(e));
 				}
+			}
+			// Record the saved values in the client-side overlay so that any subsequent
+			// loadHostEvents() call (e.g. pull-to-refresh while server cache is still warm)
+			// applies these values on top of the stale backend response, preventing the
+			// title/description from snapping back to the old value.
+			if (selectedHostEventId != null) {
+				savedEventInfoOverridesRef.current.set(selectedHostEventId, {
+					title: nextTitle,
+					description: nextDescription,
+					participants_cap: nextCap ?? undefined,
+					images: nextImages,
+				});
 			}
 			await invalidateMutationCaches();
 			initialEditSnapshotRef.current = currentEditSnapshot;
