@@ -216,8 +216,8 @@ function buildMainSnapshotFromRaw(args: {
   })
 }
 
-export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null }) {
-  const { ownerId, deeplinkCourtId, deeplinkCourtBookingId } = props
+export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null; deeplinkToken?: string | null }) {
+  const { ownerId, deeplinkCourtId, deeplinkCourtBookingId, deeplinkToken } = props
   const router = useRouter()
 
   const [rows, setRows] = useState<Array<{ court: CourtRow; info: CourtInfoRow | null }>>([])
@@ -591,7 +591,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   }, [])
 
   const bookingsLoadedForCourtRef = useRef<number | null>(null)
-  const deeplinkHandledForRef = useRef<number | null>(null)
+  const deeplinkHandledForRef = useRef<string | null>(null)
+  const deeplinkFetchedForRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!selected || editMode !== 'booking') return
@@ -603,14 +604,22 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   // Deep-link: court owner taps "View booking" in Notification → auto-select court → booking tab → date + playing court
   useEffect(() => {
     if (!deeplinkCourtId || !deeplinkCourtBookingId) return
-    if (deeplinkHandledForRef.current === deeplinkCourtBookingId) return
+    const handledKey = deeplinkToken || String(deeplinkCourtBookingId)
+    if (deeplinkHandledForRef.current === handledKey) return
     if (loading) return
     if (!rows.some(r => r.court.courtid === deeplinkCourtId)) return
     if (selectedCourtId !== deeplinkCourtId) { setSelectedCourtId(deeplinkCourtId); return }
     if (editMode !== 'booking') { setEditMode('booking'); return }
+    // Force fresh booking data on each new deeplink click
+    if (deeplinkFetchedForRef.current !== handledKey) {
+      deeplinkFetchedForRef.current = handledKey
+      bookingsLoadedForCourtRef.current = deeplinkCourtId
+      loadCourtBookings(deeplinkCourtId)
+      return
+    }
     if (bookingsLoadedForCourtRef.current !== deeplinkCourtId || bookingLoading) return
     const booking = courtBookings.find(b => b.courtbookingid === deeplinkCourtBookingId)
-    if (!booking) { deeplinkHandledForRef.current = deeplinkCourtBookingId; return }
+    if (!booking) { deeplinkHandledForRef.current = handledKey; return }
     const avail = (availability || []).find(a => a.availabilityid === booking.availabilityid)
     const pcId: number | null = avail ? (Number((avail as any).playingcourtid) || null) : null
     const pc = pcId != null ? playingCourts.find(p => Number((p as any).playingcourtid) === pcId) : null
@@ -626,8 +635,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (pcId != null) setBookingSelectedPcId(pcId)
     if (bookingDate) setBookingSelectedDate(bookingDate)
     setBookingWeekOffset(weekOffset)
-    deeplinkHandledForRef.current = deeplinkCourtBookingId
-  }, [deeplinkCourtId, deeplinkCourtBookingId, loading, rows, selectedCourtId, editMode, bookingLoading, courtBookings, availability, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
+    deeplinkHandledForRef.current = handledKey
+  }, [deeplinkCourtId, deeplinkCourtBookingId, deeplinkToken, loading, rows, selectedCourtId, editMode, bookingLoading, courtBookings, availability, playingCourts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -2837,7 +2846,7 @@ const styles = StyleSheet.create({
   },
   label: {
     marginTop: 10,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: '#111',
   },
