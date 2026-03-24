@@ -144,6 +144,9 @@ export const ICONS = {
   successfulNotification: require('../assets/icons/successful_notification.png'),
   failedNotification: require('../assets/icons/failed_notification.png'),
   deleteAll: require('../assets/icons/delete_all.png'),
+  attended: require('../assets/icons/attended.png'),
+  notAttended: require('../assets/icons/not_attended.png'),
+  userNote: require('../assets/icons/user_note.png'),
 }; 
 
 

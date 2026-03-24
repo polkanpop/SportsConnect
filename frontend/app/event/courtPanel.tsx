@@ -265,6 +265,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [bookingUserPfps, setBookingUserPfps] = useState<Record<number, string | null>>({})
   const [bookingOwner, setBookingOwner] = useState<{ userid: number; name: string; pfp: string | null } | null>(null)
   const [mutatingBookingIds, setMutatingBookingIds] = useState<Record<number, string>>({})
+  const [mutatingAttendanceIds, setMutatingAttendanceIds] = useState<Record<number, string>>({})
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<number>>(new Set())
   const [bookingSelectedBaseName, setBookingSelectedBaseName] = useState<string | null>(null)
   const [bookingSelectedPcId, setBookingSelectedPcId] = useState<number | null>(null)
@@ -1923,12 +1924,27 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               }
               const slotSelectedBooking = bookingSelectedSlot ? (slotToBookingMap.get(bookingSelectedSlot) ?? null) : null
 
-              const renderBookingRow = (b: CourtBookingRow, showActions: boolean, overrideTime?: string) => {
+              const renderBookingRow = (b: CourtBookingRow, showActions: boolean, overrideTime?: string, showAttendance?: boolean) => {
                 const uid = b.userid
                 const displayName = bookingUserNames[uid] || `User ${uid}`
                 const pfpUri = bookingUserPfps[uid] || null
                 const noteExp = expandedNoteIds.has(b.courtbookingid)
                 const statusRaw = String(b.status ?? b.bookingstatus ?? '')
+                // Attendance window computation
+                const now = new Date()
+                const parseTs = (raw: string | null | undefined): Date | null => {
+                  if (!raw) return null
+                  const s = String(raw)
+                  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'))
+                  return Number.isFinite(d.getTime()) ? d : null
+                }
+                const startDt = parseTs(b.start_timestamp)
+                const endDt = parseTs(b.end_timestamp)
+                const endPlus1h = endDt ? new Date(endDt.getTime() + 60 * 60 * 1000) : null
+                const isInWindow = startDt != null && endPlus1h != null && now >= startDt && now <= endPlus1h
+                const isAttendedEnabled = isInWindow
+                const isNotAttendedEnabled = endDt != null && now > endDt
+                const showAttendanceBtns = showAttendance && isInWindow
                 return (
                   <View key={`${b.courtbookingid}-${overrideTime ?? ''}`} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1954,8 +1970,40 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             </TouchableOpacity>
                           </>
                         )}
+                        {showAttendanceBtns && (
+                          <>
+                            <TouchableOpacity
+                              disabled={!isAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]}
+                              onPress={async () => {
+                                setMutatingAttendanceIds(prev => ({ ...prev, [b.courtbookingid]: 'attended' }))
+                                try {
+                                  await updateCourtBooking(b.courtbookingid, { status: 'completed', bookingstatus: 'completed' })
+                                  setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'completed', bookingstatus: 'completed' } : x))
+                                } catch (e: any) { Alert.alert('Error', e?.message || 'Failed') }
+                                finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
+                              }}
+                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
+                            >
+                              {mutatingAttendanceIds[b.courtbookingid] === 'attended' ? <ActivityIndicator size={14} /> : <Image source={ICONS.attended} style={{ width: 18, height: 18 }} resizeMode="contain" />}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              disabled={!isNotAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]}
+                              onPress={async () => {
+                                setMutatingAttendanceIds(prev => ({ ...prev, [b.courtbookingid]: 'missed' }))
+                                try {
+                                  await updateCourtBooking(b.courtbookingid, { status: 'missed', bookingstatus: 'missed' })
+                                  setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'missed', bookingstatus: 'missed' } : x))
+                                } catch (e: any) { Alert.alert('Error', e?.message || 'Failed') }
+                                finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
+                              }}
+                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isNotAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
+                            >
+                              {mutatingAttendanceIds[b.courtbookingid] === 'missed' ? <ActivityIndicator size={14} /> : <Image source={ICONS.notAttended} style={{ width: 18, height: 18 }} resizeMode="contain" />}
+                            </TouchableOpacity>
+                          </>
+                        )}
                         <TouchableOpacity activeOpacity={0.75} onPress={() => setExpandedNoteIds(prev => { const n = new Set(prev); if (n.has(b.courtbookingid)) n.delete(b.courtbookingid); else n.add(b.courtbookingid); return n })} style={{ padding: 6 }}>
-                          <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
+                          <Image source={ICONS.userNote} style={{ width: 16, height: 16 }} resizeMode="contain" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2162,7 +2210,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
                   {mergedParticipants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
-                  ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay))}
+                  ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay, true))}
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>
@@ -2847,7 +2895,7 @@ const styles = StyleSheet.create({
   label: {
     marginTop: 10,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
     color: '#111',
   },
   input: {
@@ -2859,7 +2907,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     color: '#111',
   },
   addressRow: {

@@ -1594,7 +1594,7 @@ export default function EventPanel({ organizerId }: Props) {
 											})}
 											style={{ padding: 6, alignItems: "center", justifyContent: "center", marginLeft: 2 }}
 										>
-												<Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
+												<Image source={ICONS.userNote} style={{ width: 16, height: 16 }} resizeMode="contain" />
 										</TouchableOpacity>
 										<TouchableOpacity
 											activeOpacity={0.7}

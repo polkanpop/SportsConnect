@@ -1483,7 +1483,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       })}
                       style={{ padding: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 2 }}
                     >
-                        <Image source={ICONS.noteIcon} style={{ width: 16, height: 16 }} resizeMode="contain" />
+                        <Image source={ICONS.userNote} style={{ width: 16, height: 16 }} resizeMode="contain" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
