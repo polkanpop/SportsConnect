@@ -625,9 +625,21 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         const tqCached = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
           queryKeys.tsBookingsBySession(sessionId)
         )
+        // Promote network-pending rows that are locally known as joined (stale Redis returns
+        // approved bookings in 'pending' until the 30 s TTL expires).
+        const knownJoinedIds = new Set((tqCached?.joined ?? []).map((r) => Number(r.tsbookingid)))
+        const networkPending = (Array.isArray(pendingRows) ? pendingRows : []) as TrainingSessionBookingRow[]
+        const networkJoined = (Array.isArray(joinedRows) ? joinedRows : []) as TrainingSessionBookingRow[]
+        const adjustedPending = networkPending.filter((r) => !knownJoinedIds.has(Number(r.tsbookingid)))
+        const adjustedJoined = [
+          ...networkJoined,
+          ...networkPending
+            .filter((r) => knownJoinedIds.has(Number(r.tsbookingid)))
+            .map((r) => ({ ...r, status: 'joined' } as TrainingSessionBookingRow)),
+        ]
         const allMergeIds = new Set([
-          ...(Array.isArray(pendingRows) ? pendingRows : []).map((r) => Number(r.tsbookingid)),
-          ...(Array.isArray(joinedRows) ? joinedRows : []).map((r) => Number(r.tsbookingid)),
+          ...adjustedPending.map((r) => Number(r.tsbookingid)),
+          ...adjustedJoined.map((r) => Number(r.tsbookingid)),
         ])
         const mergeWithTQ = (networkRows: TrainingSessionBookingRow[], bucket: 'pending' | 'joined'): TrainingSessionBookingRow[] => {
           const tqRows = tqCached?.[bucket] ?? []
@@ -635,8 +647,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           return extraRows.length ? [...extraRows, ...networkRows] : networkRows
         }
         const [pending, joined] = await Promise.all([
-          enrichBookings(dedupeByUser(mergeWithTQ(Array.isArray(pendingRows) ? pendingRows : [], 'pending'))),
-          enrichBookings(dedupeByUser(mergeWithTQ(Array.isArray(joinedRows) ? joinedRows : [], 'joined'))),
+          enrichBookings(dedupeByUser(mergeWithTQ(adjustedPending, 'pending'))),
+          enrichBookings(dedupeByUser(mergeWithTQ(adjustedJoined, 'joined'))),
         ])
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
         setApplicants(pending)
@@ -718,6 +730,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return { ...row, numberofpeople: next }
           })
         })
+        // Also keep the coach's hosted-sessions TQ in sync so sessionsQuery background
+        // refetch never overwrites the incremented count with stale data.
+        if (typeof coachId === 'number') {
+          queryClient.setQueryData(queryKeys.createdTrainingSessionsCombined(coachId), (prev: any) => {
+            if (!Array.isArray(prev)) return prev
+            return prev.map((row: any) => {
+              if (row?.sessionid !== sessionId) return row
+              const cur = Number(row?.numberofpeople)
+              const next = Number.isFinite(cur) ? cur + 1 : 1
+              return { ...row, numberofpeople: next }
+            })
+          })
+        }
         // Update the booker's dashboard cache so Activity tab shows approved status immediately
         queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
           if (!prev?.training_bookings) return prev
@@ -1049,19 +1074,26 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     setSessionsError(null)
     try {
       await updateTrainingSession(selectedSessionId, { status: 'cancelled' } as any)
-      setSessions((prev) => prev.map((s) => s.sessionid === selectedSessionId ? { ...s, status: 'cancelled' } : s))
+      // Remove immediately so stale Redis (30 s TTL) cannot restore the session on the
+      // next /createdTrainingSessionsCombined fetch before the cache expires.
+      setSessions((prev) => prev.filter((s) => s.sessionid !== selectedSessionId))
       queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
         if (!Array.isArray(prev)) return prev
-        return prev.map((row: any) => row?.sessionid === selectedSessionId ? { ...row, status: 'cancelled' } : row)
+        return prev.filter((row: any) => row?.sessionid !== selectedSessionId)
       })
       if (typeof coachId === 'number') {
+        queryClient.setQueryData(queryKeys.createdTrainingSessionsCombined(coachId), (prev: any) => {
+          if (!Array.isArray(prev)) return prev
+          return prev.filter((row: any) => row?.sessionid !== selectedSessionId)
+        })
         queryClient.setQueryData(queryKeys.activityHostingSessions(coachId), (prev: any) => {
           if (!Array.isArray(prev)) return prev
-          return prev.map((row: any) => row?.sessionid === selectedSessionId ? { ...row, status: 'cancelled' } : row)
+          return prev.filter((row: any) => row?.sessionid !== selectedSessionId)
         })
       }
       setConfirmCancelVisible(false)
-      await loadSessions(selectedSessionId)
+      // Do NOT call loadSessions here — stale Redis may restore the cancelled session.
+      // The TQ updates above keep all caches clean; navigation handles the rest.
       await invalidateMutationCaches()
       const detailsId = `created_session_${selectedSessionId}`
       router.replace({ pathname: '/event/statusTransition', params: { anim: 'cancel', detailsId } } as any)

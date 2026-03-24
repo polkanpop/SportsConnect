@@ -630,10 +630,21 @@ export default function EventPanel({ organizerId }: Props) {
 				// has a 30s Redis cache, so a booking made seconds ago may not appear yet.
 				const tqCached: { pending: EventBookingRow[]; joined: EventBookingRow[] } | undefined =
 					queryClient.getQueryData(queryKeys.eventBookingsByEvent(eventid));
-				// Use ALL network ids so a pending→joined move isn't kept as a duplicate in pending.
+				// Promote network-pending rows that are locally known as joined (stale Redis returns
+				// approved bookings in 'pending' until the 30 s TTL expires).
+				const knownJoinedIds = new Set((tqCached?.joined ?? []).map((r) => Number(r.eventbookingid)));
+				const networkPending = (Array.isArray(pendingRows) ? pendingRows : []) as EventBookingRow[];
+				const networkJoined = (Array.isArray(joinedRows) ? joinedRows : []) as EventBookingRow[];
+				const adjustedPending = networkPending.filter((r) => !knownJoinedIds.has(Number(r.eventbookingid)));
+				const adjustedJoined = [
+					...networkJoined,
+					...networkPending
+						.filter((r) => knownJoinedIds.has(Number(r.eventbookingid)))
+						.map((r) => ({ ...r, status: 'joined' } as EventBookingRow)),
+				];
 				const allMergeIds = new Set([
-					...(Array.isArray(pendingRows) ? pendingRows : []).map((r) => Number(r.eventbookingid)),
-					...(Array.isArray(joinedRows) ? joinedRows : []).map((r) => Number(r.eventbookingid)),
+					...adjustedPending.map((r) => Number(r.eventbookingid)),
+					...adjustedJoined.map((r) => Number(r.eventbookingid)),
 				]);
 				const mergeWithTQ = (networkRows: EventBookingRow[], bucket: 'pending' | 'joined'): EventBookingRow[] => {
 					const tqRows = tqCached?.[bucket] ?? [];
@@ -641,8 +652,8 @@ export default function EventPanel({ organizerId }: Props) {
 					return extraRows.length ? [...extraRows, ...networkRows] : networkRows;
 				};
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
-					enrichBookings(meta, dedupeByUser(mergeWithTQ(Array.isArray(pendingRows) ? pendingRows : [], 'pending'))),
-					enrichBookings(meta, dedupeByUser(mergeWithTQ(Array.isArray(joinedRows) ? joinedRows : [], 'joined'))),
+					enrichBookings(meta, dedupeByUser(mergeWithTQ(adjustedPending, 'pending'))),
+					enrichBookings(meta, dedupeByUser(mergeWithTQ(adjustedJoined, 'joined'))),
 				]);
 				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				setApplicants(pendingEnriched);
@@ -987,6 +998,19 @@ export default function EventPanel({ organizerId }: Props) {
 						return { ...row, numberofpeople: next }
 					})
 				})
+				// Also keep the organizer's hosted-events TQ in sync so hostEventsQuery background
+				// refetch never overwrites the incremented count with stale data.
+				if (typeof organizerId === 'number') {
+					queryClient.setQueryData(queryKeys.createdEventsCombined(organizerId), (prev: any) => {
+						if (!Array.isArray(prev)) return prev
+						return prev.map((row: any) => {
+							if (Number(row?.eventid) !== Number(eventid)) return row
+							const cur = Number(row?.numberofpeople)
+							const next = Number.isFinite(cur) ? cur + 1 : 1
+							return { ...row, numberofpeople: next }
+						})
+					})
+				}
 				// Update the booker's dashboard cache so Activity tab shows approved status immediately
 				queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
 					if (!prev?.event_bookings) return prev
@@ -1010,7 +1034,7 @@ export default function EventPanel({ organizerId }: Props) {
 			});
 		}
 		},
-		[applicants, invalidateMutationCaches, mutatingBookingIds, queryClient]
+		[applicants, invalidateMutationCaches, mutatingBookingIds, organizerId, queryClient]
 	);
 
 	const onRejectApplicant = useCallback(
@@ -1153,23 +1177,26 @@ export default function EventPanel({ organizerId }: Props) {
 		setHostEventsError(null);
 		try {
 			await updateEvent(selectedHostEventId, { status: "cancelled" } as any);
-			setHostEvents((prev) => prev.map((ev) => ev.eventid === selectedHostEventId ? { ...ev, status: 'cancelled' } : ev))
+			// Remove immediately so stale Redis (30 s TTL) cannot restore the event on the
+			// next /createdEventsCombined fetch before the cache expires.
+			setHostEvents((prev) => prev.filter((ev) => ev.eventid !== selectedHostEventId))
 			queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
 				if (!Array.isArray(prev)) return prev
-				return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+				return prev.filter((row: any) => row?.eventid !== selectedHostEventId)
 			})
 			if (typeof organizerId === 'number') {
 				queryClient.setQueryData(queryKeys.createdEventsCombined(organizerId), (prev: any) => {
 					if (!Array.isArray(prev)) return prev
-					return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+					return prev.filter((row: any) => row?.eventid !== selectedHostEventId)
 				})
 				queryClient.setQueryData(queryKeys.activityHostingEvents(organizerId), (prev: any) => {
 					if (!Array.isArray(prev)) return prev
-					return prev.map((row: any) => row?.eventid === selectedHostEventId ? { ...row, status: 'cancelled' } : row)
+					return prev.filter((row: any) => row?.eventid !== selectedHostEventId)
 				})
 			}
 			setConfirmCancelVisible(false);
-			await loadHostEvents(selectedHostEventId);
+			// Do NOT call loadHostEvents here — stale Redis may restore the cancelled event.
+			// The TQ updates above keep all caches clean; navigation handles the rest.
 			await invalidateMutationCaches();
 			const detailsId = `created_event_${selectedHostEventId}`;
 			router.replace({ pathname: "/event/statusTransition", params: { anim: "cancel", detailsId } } as any);
