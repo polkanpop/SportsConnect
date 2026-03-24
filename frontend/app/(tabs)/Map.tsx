@@ -1812,7 +1812,7 @@
                                   {mapTimeSlots.map((slot) => {
                                     const isBooked = mapBookedSlots.has(slot)
                                     return (
-                                      <View key={slot} style={{ backgroundColor: isBooked ? '#f97316' : '#1e1e1e', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, margin: 2 }}>
+                                      <View key={slot} style={{ width: 52, backgroundColor: isBooked ? '#f97316' : '#1e1e1e', borderRadius: 6, paddingVertical: 4, margin: 2, alignItems: 'center', justifyContent: 'center' }}>
                                         <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{slot}</Text>
                                       </View>
                                     )

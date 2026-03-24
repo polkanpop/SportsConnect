@@ -252,6 +252,15 @@ export default function EventPanel({ organizerId }: Props) {
 		if (hostEventsQuery.data.length === 0 && hostEventsRef.current.length > 0) return;
 		// Guard: if TQ background refetch returned FEWER events than currently displayed,
 		// merge in the missing ones instead of pruning the list (stale partial Redis cache).
+		// Preserve locally incremented participant counts that have not yet been confirmed
+		// by the server — Redis cache (30 s TTL) may return a stale lower value after approval.
+		const preserveCounts = (rows: CombinedEvent[]): CombinedEvent[] => rows.map((ev: any) => {
+			const local = hostEventsRef.current.find((e: any) => Number(e.eventid) === Number(ev.eventid));
+			if (!local) return ev;
+			const localNop = Number((local as any).numberofpeople ?? 0);
+			const serverNop = Number(ev.numberofpeople ?? 0);
+			return localNop > serverNop ? { ...ev, numberofpeople: localNop } : ev;
+		});
 		const incomingVisible = (hostEventsQuery.data as CombinedEvent[]).filter(
 			(ev: any) => !isHiddenEventStatus((ev as any)?.status)
 		);
@@ -262,7 +271,7 @@ export default function EventPanel({ organizerId }: Props) {
 			);
 			if (extras.length > 0) {
 				const merged = applyEventInfoOverrides(
-					[...incomingVisible, ...extras].sort((a, b) => Number(b.eventid) - Number(a.eventid))
+					preserveCounts([...incomingVisible, ...extras]).sort((a, b) => Number(b.eventid) - Number(a.eventid))
 				);
 				setHostEvents(merged);
 				setSelectedHostEventId((prev) => {
@@ -275,11 +284,11 @@ export default function EventPanel({ organizerId }: Props) {
 				return;
 			}
 		}
-		const filtered = applyEventInfoOverrides(hostEventsQuery.data.filter((ev: any) => {
+		const filtered = applyEventInfoOverrides(preserveCounts(hostEventsQuery.data.filter((ev: any) => {
 			// Only hide cancelled events — never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
 			return true;
-		}));
+		})));
 		setHostEvents(filtered);
 		setSelectedHostEventId((prev) => {
 			const has = (id: number | null) => id != null && filtered.some((e: any) => e.eventid === id);
@@ -505,6 +514,15 @@ export default function EventPanel({ organizerId }: Props) {
 				normalized = [...normalized, ...missingFromNetwork]
 					.sort((a: any, b: any) => Number(b.eventid) - Number(a.eventid));
 			}
+			// Preserve locally incremented participant counts — Redis (30 s TTL) may return
+			// a stale lower numberofpeople after a recent organizer approval.
+			normalized = normalized.map((ev: any) => {
+				const local = hostEventsRef.current.find((e: any) => Number(e.eventid) === Number(ev.eventid));
+				if (!local) return ev;
+				const localNop = Number((local as any).numberofpeople ?? 0);
+				const serverNop = Number(ev.numberofpeople ?? 0);
+				return localNop > serverNop ? { ...ev, numberofpeople: localNop } : ev;
+			});
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
@@ -984,7 +1002,7 @@ export default function EventPanel({ organizerId }: Props) {
 					}
 				})
 				setHostEvents((prev) => prev.map((ev) => {
-					if (ev.eventid !== eventid) return ev
+					if (Number(ev.eventid) !== Number(eventid)) return ev
 					const cur = Number((ev as any)?.numberofpeople)
 					const next = Number.isFinite(cur) ? cur + 1 : 1
 					return { ...ev, numberofpeople: next }

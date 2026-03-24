@@ -1361,7 +1361,7 @@ const styles = StyleSheet.create({
   subHeading: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   smallText: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 4 },
   slotRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  slotBtn: { width: 62, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
+  slotBtn: { width: '18%', marginRight: '2%', height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
   slotBtnActive: { backgroundColor: COLORS.brandOrangeDeep },
   slotBtnDisabled: { backgroundColor: '#D1D5DB', borderWidth: 1, borderColor: '#D1D5DB' },
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },

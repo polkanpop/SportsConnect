@@ -2838,7 +2838,7 @@ const styles = StyleSheet.create({
   label: {
     marginTop: 10,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '500',
     color: '#111',
   },
   input: {
