@@ -464,12 +464,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           if (isHiddenSessionStatus((s as any)?.status)) return false
           return true
         })
-        // Safety guard: if the backend returned rows but the filter removed ALL of them,
-        // keep the existing list instead of wiping the panel.
-        if (normalized.length > 0 && filtered.length === 0) {
-          console.warn('[trainingSessionPanel] loadSessions: all', normalized.length, 'rows removed by filter — keeping previous list')
-          return
-        }
         setSessions(filtered)
         if (filtered.length === 0) {
           setSelectedSessionId(null)

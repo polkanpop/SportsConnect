@@ -444,14 +444,6 @@ export default function EventPanel({ organizerId }: Props) {
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
 				return true;
 			});
-			// Safety guard: if the backend returned rows but the filter removed ALL of them,
-			// something is wrong with the filter logic — keep the existing list rather than
-			// wipe the panel. This should not happen with the current filter (only hides
-			// 'cancelled'), but acts as a last-resort safety net.
-			if (normalized.length > 0 && filtered.length === 0) {
-				console.warn('[eventPanel] loadHostEvents: all', normalized.length, 'rows removed by filter — keeping previous list');
-				return;
-			}
 			setHostEvents(filtered);
 			if (filtered.length === 0) {
 				setSelectedHostEventId(null);
