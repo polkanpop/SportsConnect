@@ -69,6 +69,10 @@ function parseTimestampLoose(raw: unknown): Date | null {
 }
 
 function isPastEventLoose(ev: any): boolean {
+	// Respect backend status: 'upcoming'/'active' events should never be filtered out by
+	// timestamp alone — they may be recently created with historical court booking slots.
+	const status = String(ev?.status ?? "").trim().toLowerCase();
+	if (status === "upcoming" || status === "active") return false;
 	const end = parseTimestampLoose(ev?.end_timestamp ?? null);
 	const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null);
 	const now = Date.now();
@@ -286,6 +290,8 @@ export default function EventPanel({ organizerId }: Props) {
 	const [expandedNoteEventIds, setExpandedNoteEventIds] = useState<Set<number>>(new Set());
 
 	const lastHydratedEventIdRef = useRef<number | null>(null);
+	const bookingsLoadIdRef = useRef(0);
+	const mountedRef = useRef(true);
 	const initialEditSnapshotRef = useRef<string>("");
 	const isDirtyRef = useRef<boolean>(false);
 	const saveSuccessTimerRef = useRef<any>(null);
@@ -511,6 +517,7 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const loadBookingsForEvent = useCallback(
 		async (eventid: number) => {
+			const loadId = ++bookingsLoadIdRef.current;
 			setBookingsLoading(true);
 			setBookingsError(null);
 			try {
@@ -549,15 +556,21 @@ export default function EventPanel({ organizerId }: Props) {
 					}
 					return out;
 				};
+				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
 					enrichBookings(meta, dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
 					enrichBookings(meta, dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
 				]);
+				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				setApplicants(pendingEnriched);
 				setParticipants(joinedEnriched);
 			} catch (e: any) {
+				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
+				setApplicants([]);
+				setParticipants([]);
 				setBookingsError(e?.message || String(e));
 			} finally {
+				if (!mountedRef.current) return;
 				setBookingsLoading(false);
 			}
 		},
@@ -579,9 +592,14 @@ export default function EventPanel({ organizerId }: Props) {
 	}, []);
 
 	useEffect(() => {
+		mountedRef.current = true;
+		return () => { mountedRef.current = false; };
+	}, []);
+
+	useEffect(() => {
 		if (organizerId == null) return;
 		let cancelled = false;
-		(async () => {
+		void (async () => {
 			try {
 				const raw = await AsyncStorage.getItem(selectedEventStorageKey(organizerId));
 				const parsed = raw && /^\d+$/.test(raw) ? parseInt(raw, 10) : null;
@@ -589,12 +607,9 @@ export default function EventPanel({ organizerId }: Props) {
 			} catch {
 				// ignore
 			}
-			if (!cancelled) await loadHostEvents(preferredSelectedEventIdRef.current);
 		})();
-		return () => {
-			cancelled = true;
-		};
-	}, [loadHostEvents, organizerId]);
+		return () => { cancelled = true; };
+	}, [organizerId]);
 
 	useEffect(() => {
 		if (organizerId == null || selectedHostEventId == null) return;
@@ -1109,11 +1124,11 @@ export default function EventPanel({ organizerId }: Props) {
 				</View>
 			)}
 
-			{hostEventsError && (
-				<Text style={{ color: "red", marginBottom: 8 }}>Failed to load your events: {hostEventsError}</Text>
+			{!!(hostEventsError || hostEventsQuery.isError) && (
+				<Text style={{ color: "red", marginBottom: 8 }}>Failed to load your events: {hostEventsError ?? String(hostEventsQuery.error ?? '')}</Text>
 			)}
 
-			{hostEventsLoading ? (
+			{(hostEventsQuery.isLoading || hostEventsLoading) ? (
 				<SkeletonPulse>
 					<ScrollView
 						horizontal

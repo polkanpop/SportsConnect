@@ -77,6 +77,10 @@ function isHiddenSessionStatus(statusRaw: unknown): boolean {
 }
 
 function isPastSessionLoose(s: any): boolean {
+  // Respect backend status: 'upcoming'/'active'/'scheduled' should never be filtered out
+  // by timestamp alone — they may be recently created with historical court booking slots.
+  const status = String(s?.status ?? '').trim().toLowerCase()
+  if (status === 'upcoming' || status === 'active' || status === 'scheduled') return false
   const end = parseTimestampLoose(s?.end_timestamp ?? null)
   const start = parseTimestampLoose(s?.time ?? s?.start_timestamp ?? null)
   const now = Date.now()
@@ -730,12 +734,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         const parsed = stored ? Number(stored) : NaN
         const preferred = Number.isFinite(parsed) ? parsed : null
         if (preferred != null) preferredSelectedSessionIdRef.current = preferred
-        await loadSessions(preferred)
       } catch {
-        await loadSessions(null)
+        // ignore
       }
     })()
-  }, [coachId, loadSessions])
+  }, [coachId])
 
   useEffect(() => {
     if (coachId == null) return
@@ -1092,14 +1095,14 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         </View>
       )}
 
-      {!!sessionsError && (
+      {!!(sessionsError || sessionsQuery.isError) && (
         <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#FECACA', marginBottom: 12 }}>
           <Text style={{ color: '#B91C1C', fontWeight: '700' }}>Failed loading sessions</Text>
-          <Text style={{ color: '#991B1B', marginTop: 6 }}>{sessionsError}</Text>
+          <Text style={{ color: '#991B1B', marginTop: 6 }}>{sessionsError ?? String(sessionsQuery.error ?? '')}</Text>
         </View>
       )}
 
-      {sessionsLoading ? (
+      {(sessionsQuery.isLoading || sessionsLoading) ? (
         <SkeletonPulse>
           <ScrollView
             horizontal
