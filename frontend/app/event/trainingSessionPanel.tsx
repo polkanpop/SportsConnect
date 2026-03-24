@@ -250,6 +250,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       )
       if (extras.length > 0) {
         const merged = [...incomingVisible, ...extras]
+          .sort((a, b) => Number(b.sessionid) - Number(a.sessionid))
         setSessions(merged)
         setSelectedSessionId((prev) => {
           const has = (id: number | null) => id != null && merged.some((s: any) => s.sessionid === id)
@@ -493,6 +494,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             (s) => !normalizedIds.has(Number(s.sessionid)) && !isHiddenSessionStatus((s as any)?.status)
           )
           if (extras.length > 0) normalized = [...normalized, ...extras]
+            .sort((a: any, b: any) => Number(b.sessionid) - Number(a.sessionid))
         }
         const filtered = normalized.filter((s) => {
           // Only hide cancelled sessions — never filter by timestamp in the coach panel.
@@ -691,6 +693,15 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             return [{ ...approvedApplicant, booking: { ...approvedApplicant.booking, status: 'joined' } as any }, ...prev]
           })
         }
+        // Keep tsBookingsBySession TQ in sync so the rawSessionBookingsQuery merge
+        // never resurrects this booking from the stale pending bucket.
+        queryClient.setQueryData(queryKeys.tsBookingsBySession(sessionId), (prev: any) => {
+          if (!prev) return prev
+          return {
+            pending: (prev.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== bookingId),
+            joined: [...(prev.joined ?? []), { ...booking, status: 'joined' }],
+          }
+        })
         setSessions((prev) => prev.map((s) => {
           if (s.sessionid !== sessionId) return s
           const cur = Number((s as any)?.numberofpeople)
@@ -740,6 +751,15 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       try {
         await rejectTrainingSessionBooking(booking.tsbookingid)
         setApplicants((prev) => prev.filter((x) => x.booking.tsbookingid !== booking.tsbookingid))
+        // Keep tsBookingsBySession TQ in sync so the rawSessionBookingsQuery merge
+        // never resurrects this booking from the stale pending bucket.
+        queryClient.setQueryData(queryKeys.tsBookingsBySession(sessionId), (prev: any) => {
+          if (!prev) return prev
+          return {
+            pending: (prev.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== booking.tsbookingid),
+            joined: prev.joined ?? [],
+          }
+        })
         // Update the booker's dashboard cache so Activity tab shows rejected status immediately
         queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
           if (!prev?.training_bookings) return prev
@@ -1042,18 +1062,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     setPullRefreshing(true)
     try {
       if (selectedSessionId != null) {
-        await Promise.all([
-          loadSessions(selectedSessionId),
-          loadBookingsForSession(selectedSessionId),
-          loadBlockedForTarget(selectedSessionId),
-        ])
+        await loadSessions(selectedSessionId)
+        // Invalidate booking TQ so rawSessionBookingsQuery silently refreshes in the bg.
+        // Not awaited — bookings update quietly without blocking the spinner.
+        queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(selectedSessionId) })
+        void loadBlockedForTarget(selectedSessionId)
         return
       }
       await loadSessions(null)
     } finally {
       setPullRefreshing(false)
     }
-  }, [loadBlockedForTarget, loadBookingsForSession, loadSessions, selectedSessionId])
+  }, [loadBlockedForTarget, loadSessions, queryClient, selectedSessionId])
 
   const openActionMenuForUser = useCallback((userid: number, name: string, pos?: { x: number; y: number } | null) => {
     setActionUser({ userid, name })

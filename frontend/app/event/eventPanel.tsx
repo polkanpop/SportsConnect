@@ -261,7 +261,9 @@ export default function EventPanel({ organizerId }: Props) {
 				(e) => !incomingIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
 			);
 			if (extras.length > 0) {
-				const merged = applyEventInfoOverrides([...incomingVisible, ...extras]);
+				const merged = applyEventInfoOverrides(
+					[...incomingVisible, ...extras].sort((a, b) => Number(b.eventid) - Number(a.eventid))
+				);
 				setHostEvents(merged);
 				setSelectedHostEventId((prev) => {
 					const has = (id: number | null) => id != null && merged.some((e) => e.eventid === id);
@@ -499,7 +501,10 @@ export default function EventPanel({ organizerId }: Props) {
 			const missingFromNetwork = hostEventsRef.current.filter(
 				(e) => !normalizedIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
 			);
-			if (missingFromNetwork.length > 0) normalized = [...normalized, ...missingFromNetwork];
+			if (missingFromNetwork.length > 0) {
+				normalized = [...normalized, ...missingFromNetwork]
+					.sort((a: any, b: any) => Number(b.eventid) - Number(a.eventid));
+			}
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
@@ -946,6 +951,15 @@ export default function EventPanel({ organizerId }: Props) {
 						}, ...prev];
 					});
 				}
+				// Keep eventBookingsByEvent TQ in sync so the rawEventBookingsQuery merge
+				// never resurrects this booking from the stale pending bucket.
+				queryClient.setQueryData(queryKeys.eventBookingsByEvent(eventid), (prev: any) => {
+					if (!prev) return prev
+					return {
+						pending: (prev.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
+						joined: [...(prev.joined ?? []), { ...booking, status: 'joined' }],
+					}
+				})
 				setHostEvents((prev) => prev.map((ev) => {
 					if (ev.eventid !== eventid) return ev
 					const cur = Number((ev as any)?.numberofpeople)
@@ -996,6 +1010,15 @@ export default function EventPanel({ organizerId }: Props) {
 			try {
 				await rejectEventBooking(booking.eventbookingid);
 				setApplicants((prev) => prev.filter((x) => x.booking.eventbookingid !== bookingId));
+				// Keep eventBookingsByEvent TQ in sync so the rawEventBookingsQuery merge
+				// never resurrects this booking from the stale pending bucket.
+				queryClient.setQueryData(queryKeys.eventBookingsByEvent(eventid), (prev: any) => {
+					if (!prev) return prev
+					return {
+						pending: (prev.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
+						joined: prev.joined ?? [],
+					}
+				})
 				// Update the booker's dashboard cache so Activity tab shows rejected status immediately
 				queryClient.setQueryData(queryKeys.dashboard(booking.userid), (prev: any) => {
 					if (!prev?.event_bookings) return prev
@@ -1211,10 +1234,10 @@ export default function EventPanel({ organizerId }: Props) {
 					try {
 						await loadHostEvents();
 						if (selectedHostEventId != null) {
-							await Promise.all([
-								loadBookingsForEvent(selectedHostEventId),
-								loadBlockedForTarget(selectedHostEventId),
-							]);
+							// Invalidate booking TQ so rawEventBookingsQuery silently refreshes in the bg.
+							// Not awaited — bookings update quietly without blocking the spinner.
+							queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(selectedHostEventId) });
+							void loadBlockedForTarget(selectedHostEventId);
 						}
 					} finally {
 						setPullRefreshing(false);
