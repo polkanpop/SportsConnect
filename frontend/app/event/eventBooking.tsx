@@ -69,7 +69,7 @@ export default function EventBooking() {
     queryKey: ['eventsCombinedFresh', eventid],
     queryFn: () => listEventsCombined(),
     enabled: needFresh && !isNaN(eventid),
-    staleTime: 0,
+    staleTime: 30_000,
   })
   const allEvents: CombinedEvent[] = useMemo(() => {
     if (needFresh && Array.isArray(eventsFresh)) return eventsFresh
@@ -199,11 +199,15 @@ export default function EventBooking() {
       // Signal the organizer's EventPanel to refresh its applicants list
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(event.eventid) })
 
-      // Background-refresh combined events list so eventList / Home reflect the new booking state.
-      // Do NOT call invalidateEventsCombinedCache() here — clearing the AsyncStorage cache forces
-      // a cold parallel network fetch (events + eventinfo + courtbookings + courtavailability +
-      // courtinfo) right when Home refetches, which can fail/race and wipe the event list.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.eventsCombined })
+      // Patch join_status immediately so Home/eventList reflect the booking without a full refetch.
+      // Invalidating eventsCombined here would trigger a background cold-fetch on Home's persistent
+      // tab observer which can race/fail and wipe the entire event list while the user navigates.
+      const bookingStatusStr = String((booking as any)?.status ?? 'pending').toLowerCase()
+      const newJoinStatus = bookingStatusStr.includes('approve') || bookingStatusStr.includes('join') ? 'joined' : 'pending'
+      queryClient.setQueryData(queryKeys.eventsCombined, (prev: any) => {
+        if (!Array.isArray(prev)) return prev
+        return prev.map((row: any) => row?.eventid !== event.eventid ? row : { ...row, join_status: newJoinStatus })
+      })
       if (typeof userId === 'number') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
       }

@@ -69,7 +69,7 @@ export default function TrainingSessionBooking() {
     queryKey: ['trainingSessionsCombinedFresh', sessionid],
     queryFn: () => listTrainingSessionsCombined(),
     enabled: needFresh && !isNaN(sessionid),
-    staleTime: 0,
+    staleTime: 30_000,
   })
   const allSessions: CombinedTrainingSession[] = useMemo(() => {
     if (needFresh && Array.isArray(sessionsFresh)) return sessionsFresh
@@ -175,9 +175,15 @@ export default function TrainingSessionBooking() {
         })
       }
 
-      // Background-refresh sessions list — do NOT clear AsyncStorage cache first (same reason
-      // as eventBooking: cold fetch races can wipe the list visible on Home/tsList).
-      queryClient.invalidateQueries({ queryKey: queryKeys.trainingSessionsCombined })
+      // Patch join_status immediately so Home/tsList reflect the booking without a full refetch.
+      // Invalidating trainingSessionsCombined here would trigger a background cold-fetch on
+      // Home's persistent tab observer which can race/fail and wipe the sessions list.
+      const tsBookingStatusStr = String((booking as any)?.status ?? 'pending').toLowerCase()
+      const newTsJoinStatus = tsBookingStatusStr.includes('approve') || tsBookingStatusStr.includes('join') ? 'joined' : 'pending'
+      queryClient.setQueryData(queryKeys.trainingSessionsCombined, (prev: any) => {
+        if (!Array.isArray(prev)) return prev
+        return prev.map((row: any) => row?.sessionid !== session.sessionid ? row : { ...row, join_status: newTsJoinStatus })
+      })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
       // Signal the organizer's TrainingSessionPanel to refresh its applicants list
       queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(session.sessionid) })
