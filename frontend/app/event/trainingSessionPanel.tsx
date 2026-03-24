@@ -217,6 +217,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const mountedRef = useRef(true)
   const sessionsLoadIdRef = useRef(0)
   const bookingsLoadIdRef = useRef(0)
+  const displayedBookingsSessionIdRef = useRef<number | null>(null)
   const preferredSelectedSessionIdRef = useRef<number | null>(null)
 
   const [sessions, setSessions] = useState<CombinedTrainingSession[]>([])
@@ -574,27 +575,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const loadBookingsForSession = useCallback(
     async (sessionId: number) => {
       const loadId = ++bookingsLoadIdRef.current
-      setBookingsLoading(true)
+      // Show skeleton only when switching to a different session.
+      // Pull-to-refresh on the same session updates bookings silently — no disruptive flash.
+      if (displayedBookingsSessionIdRef.current !== sessionId) {
+        setBookingsLoading(true)
+      }
       setBookingsError(null)
       try {
-        // Fast-path: if TQ already has data, render immediately so the skeleton
-        // disappears before the full network round-trip completes.
-        const tqFast = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
-          queryKeys.tsBookingsBySession(sessionId)
-        )
-        if (tqFast && (tqFast.pending.length > 0 || tqFast.joined.length > 0)) {
-          try {
-            const [epFast, ejFast] = await Promise.all([
-              enrichBookings(tqFast.pending),
-              enrichBookings(tqFast.joined),
-            ])
-            if (mountedRef.current && loadId === bookingsLoadIdRef.current) {
-              setApplicants(epFast)
-              setParticipants(ejFast)
-              setBookingsLoading(false)
-            }
-          } catch {}
-        }
         const [pendingRows, joinedRows] = await Promise.all([
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'pending' }),
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'joined' }),
@@ -631,14 +618,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           return out
         }
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
-        // Merge any TQ-pre-populated rows that aren't yet in the backend response (30 s Redis cache).
+        // Merge any TQ-pre-populated rows not yet in the backend response (30 s Redis cache).
+        // Use ALL network ids so a pending→joined move isn't kept as a duplicate in pending.
         const tqCached = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
           queryKeys.tsBookingsBySession(sessionId)
         )
+        const allMergeIds = new Set([
+          ...(Array.isArray(pendingRows) ? pendingRows : []).map((r) => Number(r.tsbookingid)),
+          ...(Array.isArray(joinedRows) ? joinedRows : []).map((r) => Number(r.tsbookingid)),
+        ])
         const mergeWithTQ = (networkRows: TrainingSessionBookingRow[], bucket: 'pending' | 'joined'): TrainingSessionBookingRow[] => {
           const tqRows = tqCached?.[bucket] ?? []
-          const networkIds = new Set(networkRows.map((r) => Number(r.tsbookingid)))
-          const extraRows = tqRows.filter((r) => !networkIds.has(Number(r.tsbookingid)))
+          const extraRows = tqRows.filter((r) => !allMergeIds.has(Number(r.tsbookingid)))
           return extraRows.length ? [...extraRows, ...networkRows] : networkRows
         }
         const [pending, joined] = await Promise.all([
@@ -648,6 +639,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
         setApplicants(pending)
         setParticipants(joined)
+        displayedBookingsSessionIdRef.current = sessionId
         // Keep the participants count feeling "live" for the selected session.
         setSessions((prev) =>
           prev.map((s) => (s.sessionid === sessionId ? { ...s, numberofpeople: joined.length } : s)),
@@ -858,15 +850,17 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       const prev = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
         queryKeys.tsBookingsBySession(selectedSessionId)
       )
-      const mergeRows = (networkRows: TrainingSessionBookingRow[], bucket: 'pending' | 'joined'): TrainingSessionBookingRow[] => {
-        const prevRows = prev?.[bucket] ?? []
-        const networkIds = new Set(networkRows.map((r) => Number(r.tsbookingid)))
-        const extras = prevRows.filter((r) => !networkIds.has(Number(r.tsbookingid)))
+      const allNetworkIds = new Set([
+        ...(Array.isArray(p) ? p as TrainingSessionBookingRow[] : []).map((r) => Number(r.tsbookingid)),
+        ...(Array.isArray(j) ? j as TrainingSessionBookingRow[] : []).map((r) => Number(r.tsbookingid)),
+      ])
+      const mergeRows = (networkRows: TrainingSessionBookingRow[], prevRows: TrainingSessionBookingRow[]): TrainingSessionBookingRow[] => {
+        const extras = prevRows.filter((r) => !allNetworkIds.has(Number(r.tsbookingid)))
         return extras.length ? [...extras, ...networkRows] : networkRows
       }
       return {
-        pending: mergeRows(Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [], 'pending'),
-        joined: mergeRows(Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [], 'joined'),
+        pending: mergeRows(Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [], prev?.pending ?? []),
+        joined: mergeRows(Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [], prev?.joined ?? []),
       }
     },
     enabled: selectedSessionId != null && coachId != null,

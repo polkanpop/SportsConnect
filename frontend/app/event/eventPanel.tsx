@@ -331,6 +331,7 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const lastHydratedEventIdRef = useRef<number | null>(null);
 	const bookingsLoadIdRef = useRef(0);
+	const displayedBookingsEventIdRef = useRef<number | null>(null);
 	const mountedRef = useRef(true);
 	const initialEditSnapshotRef = useRef<string>("");
 	const isDirtyRef = useRef<boolean>(false);
@@ -484,26 +485,21 @@ export default function EventPanel({ organizerId }: Props) {
 		try {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			let normalized = Array.isArray(rows) ? rows : [];
-			const tqSnapshot = queryClient.getQueryData<CombinedEvent[]>(queryKeys.createdEventsCombined(organizerId));
-			// Guard: if the backend returned zero rows, check whether TQ already holds
-			// valid events. An empty backend response here most likely comes from a Redis
-			// cache race (the cache was just invalidated and re-populated by a different
-			// in-flight request before this one returned). Prefer the TQ data in that case
-			// rather than wiping the panel.
+			// Guard: if backend returned zero rows but we currently display events,
+			// this is almost certainly a Redis cache race — keep existing state.
+			// Use hostEventsRef (currently displayed) not a TQ snapshot because TQ can be
+			// overwritten by a concurrent background refetch while the await above runs.
 			if (normalized.length === 0) {
-				const hasTqVisible = Array.isArray(tqSnapshot) && tqSnapshot.some(ev => !isHiddenEventStatus((ev as any)?.status));
-				if (hasTqVisible) return; // trust TQ over stale empty backend response
+				const hasDisplayedVisible = hostEventsRef.current.some(e => !isHiddenEventStatus((e as any)?.status));
+				if (hasDisplayedVisible) return;
 			}
-			// Guard: if the backend returned fewer events than TQ currently holds, it is
-			// likely a partial/stale Redis cache (e.g. a just-created event not yet indexed).
-			// Merge in the TQ-known events so recently-created events don't vanish on refresh.
-			if (normalized.length > 0 && Array.isArray(tqSnapshot) && tqSnapshot.length > normalized.length) {
-				const normalizedIds = new Set(normalized.map((e: any) => Number(e.eventid)));
-				const extras = tqSnapshot.filter(
-					(e) => !normalizedIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
-				);
-				if (extras.length > 0) normalized = [...normalized, ...extras];
-			}
+			// Guard: if backend returned fewer visible events than currently displayed,
+			// merge in the missing ones instead of pruning the list.
+			const normalizedIds = new Set(normalized.map((e: any) => Number(e.eventid)));
+			const missingFromNetwork = hostEventsRef.current.filter(
+				(e) => !normalizedIds.has(Number(e.eventid)) && !isHiddenEventStatus((e as any)?.status)
+			);
+			if (missingFromNetwork.length > 0) normalized = [...normalized, ...missingFromNetwork];
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
@@ -581,28 +577,13 @@ export default function EventPanel({ organizerId }: Props) {
 	const loadBookingsForEvent = useCallback(
 		async (eventid: number) => {
 			const loadId = ++bookingsLoadIdRef.current;
-			setBookingsLoading(true);
+			// Show skeleton only when switching to a different event.
+			// Pull-to-refresh on the same event updates bookings silently — no disruptive flash.
+			if (displayedBookingsEventIdRef.current !== eventid) {
+				setBookingsLoading(true);
+			}
 			setBookingsError(null);
 			try {
-				// Fast-path: if TQ already has data, render immediately so the skeleton
-				// disappears before the full network round-trip completes.
-				const tqFast = queryClient.getQueryData<{ pending: EventBookingRow[]; joined: EventBookingRow[] }>(
-					queryKeys.eventBookingsByEvent(eventid)
-				)
-				if (tqFast && (tqFast.pending.length > 0 || tqFast.joined.length > 0)) {
-					const metaFast = hostEventsRef.current.find((e) => e.eventid === eventid)
-					try {
-						const [epFast, ejFast] = await Promise.all([
-							enrichBookings(metaFast, tqFast.pending),
-							enrichBookings(metaFast, tqFast.joined),
-						])
-						if (mountedRef.current && loadId === bookingsLoadIdRef.current) {
-							setApplicants(epFast)
-							setParticipants(ejFast)
-							setBookingsLoading(false)
-						}
-					} catch {}
-				}
 				const [pendingRows, joinedRows] = await Promise.all([
 					getEventBookingsByEventId(eventid, { status: "pending" }),
 					getEventBookingsByEventId(eventid, { status: "joined" }),
@@ -644,10 +625,14 @@ export default function EventPanel({ organizerId }: Props) {
 				// has a 30s Redis cache, so a booking made seconds ago may not appear yet.
 				const tqCached: { pending: EventBookingRow[]; joined: EventBookingRow[] } | undefined =
 					queryClient.getQueryData(queryKeys.eventBookingsByEvent(eventid));
+				// Use ALL network ids so a pending→joined move isn't kept as a duplicate in pending.
+				const allMergeIds = new Set([
+					...(Array.isArray(pendingRows) ? pendingRows : []).map((r) => Number(r.eventbookingid)),
+					...(Array.isArray(joinedRows) ? joinedRows : []).map((r) => Number(r.eventbookingid)),
+				]);
 				const mergeWithTQ = (networkRows: EventBookingRow[], bucket: 'pending' | 'joined'): EventBookingRow[] => {
 					const tqRows = tqCached?.[bucket] ?? [];
-					const networkIds = new Set(networkRows.map((r) => Number(r.eventbookingid)));
-					const extraRows = tqRows.filter((r) => !networkIds.has(Number(r.eventbookingid)));
+					const extraRows = tqRows.filter((r) => !allMergeIds.has(Number(r.eventbookingid)));
 					return extraRows.length ? [...extraRows, ...networkRows] : networkRows;
 				};
 				const [pendingEnriched, joinedEnriched] = await Promise.all([
@@ -657,6 +642,7 @@ export default function EventPanel({ organizerId }: Props) {
 				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				setApplicants(pendingEnriched);
 				setParticipants(joinedEnriched);
+				displayedBookingsEventIdRef.current = eventid;
 			} catch (e: any) {
 				if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return;
 				setApplicants([]);
@@ -773,15 +759,20 @@ export default function EventPanel({ organizerId }: Props) {
 			const prev = queryClient.getQueryData<{ pending: EventBookingRow[]; joined: EventBookingRow[] }>(
 				queryKeys.eventBookingsByEvent(selectedHostEventId)
 			)
-			const mergeRows = (networkRows: EventBookingRow[], bucket: 'pending' | 'joined'): EventBookingRow[] => {
-				const prevRows = prev?.[bucket] ?? []
-				const networkIds = new Set(networkRows.map((r) => Number(r.eventbookingid)))
-				const extras = prevRows.filter((r) => !networkIds.has(Number(r.eventbookingid)))
+			// A row is only "extra" (worth preserving) if absent from BOTH network buckets.
+			// A booking in prev.pending but now in network.joined simply got approved —
+			// using per-bucket ids would keep it in pending too, showing a duplicate.
+			const allNetworkIds = new Set([
+				...(Array.isArray(p) ? p as EventBookingRow[] : []).map((r) => Number(r.eventbookingid)),
+				...(Array.isArray(j) ? j as EventBookingRow[] : []).map((r) => Number(r.eventbookingid)),
+			])
+			const mergeRows = (networkRows: EventBookingRow[], prevRows: EventBookingRow[]): EventBookingRow[] => {
+				const extras = prevRows.filter((r) => !allNetworkIds.has(Number(r.eventbookingid)))
 				return extras.length ? [...extras, ...networkRows] : networkRows
 			}
 			return {
-				pending: mergeRows(Array.isArray(p) ? (p as EventBookingRow[]) : [], 'pending'),
-				joined: mergeRows(Array.isArray(j) ? (j as EventBookingRow[]) : [], 'joined'),
+				pending: mergeRows(Array.isArray(p) ? (p as EventBookingRow[]) : [], prev?.pending ?? []),
+				joined: mergeRows(Array.isArray(j) ? (j as EventBookingRow[]) : [], prev?.joined ?? []),
 			}
 		},
 		enabled: selectedHostEventId != null && organizerId != null,
