@@ -236,6 +236,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   // When TQ invalidates createdTrainingSessionsCombined (e.g. after tsCreate), sync state
   useEffect(() => {
     if (!Array.isArray(sessionsQuery.data)) return
+    if (sessionsQuery.data.length === 0 && sessionsRef.current.length > 0) return
     const filtered = sessionsQuery.data.filter((s: any) => {
       // Only hide cancelled sessions — never filter by timestamp in the coach panel.
       if (isHiddenSessionStatus((s as any)?.status)) return false
@@ -543,6 +544,24 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       setBookingsLoading(true)
       setBookingsError(null)
       try {
+        // Fast-path: if TQ already has data, render immediately so the skeleton
+        // disappears before the full network round-trip completes.
+        const tqFast = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
+          queryKeys.tsBookingsBySession(sessionId)
+        )
+        if (tqFast && (tqFast.pending.length > 0 || tqFast.joined.length > 0)) {
+          try {
+            const [epFast, ejFast] = await Promise.all([
+              enrichBookings(tqFast.pending),
+              enrichBookings(tqFast.joined),
+            ])
+            if (mountedRef.current && loadId === bookingsLoadIdRef.current) {
+              setApplicants(epFast)
+              setParticipants(ejFast)
+              setBookingsLoading(false)
+            }
+          } catch {}
+        }
         const [pendingRows, joinedRows] = await Promise.all([
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'pending' }),
           getTrainingSessionBookingsBySessionId(sessionId, { status: 'joined' }),
@@ -579,9 +598,19 @@ export default function TrainingSessionPanel({ coachId }: Props) {
           return out
         }
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
+        // Merge any TQ-pre-populated rows that aren't yet in the backend response (30 s Redis cache).
+        const tqCached = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
+          queryKeys.tsBookingsBySession(sessionId)
+        )
+        const mergeWithTQ = (networkRows: TrainingSessionBookingRow[], bucket: 'pending' | 'joined'): TrainingSessionBookingRow[] => {
+          const tqRows = tqCached?.[bucket] ?? []
+          const networkIds = new Set(networkRows.map((r) => Number(r.tsbookingid)))
+          const extraRows = tqRows.filter((r) => !networkIds.has(Number(r.tsbookingid)))
+          return extraRows.length ? [...extraRows, ...networkRows] : networkRows
+        }
         const [pending, joined] = await Promise.all([
-          enrichBookings(dedupeByUser(Array.isArray(pendingRows) ? pendingRows : [])),
-          enrichBookings(dedupeByUser(Array.isArray(joinedRows) ? joinedRows : [])),
+          enrichBookings(dedupeByUser(mergeWithTQ(Array.isArray(pendingRows) ? pendingRows : [], 'pending'))),
+          enrichBookings(dedupeByUser(mergeWithTQ(Array.isArray(joinedRows) ? joinedRows : [], 'joined'))),
         ])
         if (!mountedRef.current || loadId !== bookingsLoadIdRef.current) return
         setApplicants(pending)
@@ -600,7 +629,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         setBookingsLoading(false)
       }
     },
-    [enrichBookings],
+    [enrichBookings, queryClient],
   )
 
   const loadBlockedForTarget = useCallback(
@@ -791,9 +820,20 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         getTrainingSessionBookingsBySessionId(selectedSessionId, { status: 'pending' }),
         getTrainingSessionBookingsBySessionId(selectedSessionId, { status: 'joined' }),
       ])
+      // Preserve optimistic rows injected by tsBooking.tsx that the backend
+      // Redis cache may not yet reflect.
+      const prev = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
+        queryKeys.tsBookingsBySession(selectedSessionId)
+      )
+      const mergeRows = (networkRows: TrainingSessionBookingRow[], bucket: 'pending' | 'joined'): TrainingSessionBookingRow[] => {
+        const prevRows = prev?.[bucket] ?? []
+        const networkIds = new Set(networkRows.map((r) => Number(r.tsbookingid)))
+        const extras = prevRows.filter((r) => !networkIds.has(Number(r.tsbookingid)))
+        return extras.length ? [...extras, ...networkRows] : networkRows
+      }
       return {
-        pending: Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [],
-        joined: Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [],
+        pending: mergeRows(Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [], 'pending'),
+        joined: mergeRows(Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [], 'joined'),
       }
     },
     enabled: selectedSessionId != null && coachId != null,

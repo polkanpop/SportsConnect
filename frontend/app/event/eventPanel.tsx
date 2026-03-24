@@ -551,6 +551,25 @@ export default function EventPanel({ organizerId }: Props) {
 			setBookingsLoading(true);
 			setBookingsError(null);
 			try {
+				// Fast-path: if TQ already has data, render immediately so the skeleton
+				// disappears before the full network round-trip completes.
+				const tqFast = queryClient.getQueryData<{ pending: EventBookingRow[]; joined: EventBookingRow[] }>(
+					queryKeys.eventBookingsByEvent(eventid)
+				)
+				if (tqFast && (tqFast.pending.length > 0 || tqFast.joined.length > 0)) {
+					const metaFast = hostEventsRef.current.find((e) => e.eventid === eventid)
+					try {
+						const [epFast, ejFast] = await Promise.all([
+							enrichBookings(metaFast, tqFast.pending),
+							enrichBookings(metaFast, tqFast.joined),
+						])
+						if (mountedRef.current && loadId === bookingsLoadIdRef.current) {
+							setApplicants(epFast)
+							setParticipants(ejFast)
+							setBookingsLoading(false)
+						}
+					} catch {}
+				}
 				const [pendingRows, joinedRows] = await Promise.all([
 					getEventBookingsByEventId(eventid, { status: "pending" }),
 					getEventBookingsByEventId(eventid, { status: "joined" }),
@@ -716,9 +735,20 @@ export default function EventPanel({ organizerId }: Props) {
 				getEventBookingsByEventId(selectedHostEventId, { status: 'pending' }),
 				getEventBookingsByEventId(selectedHostEventId, { status: 'joined' }),
 			])
+			// Preserve optimistic rows injected by eventBooking.tsx that the backend
+			// Redis cache (30 s TTL) may not yet reflect.
+			const prev = queryClient.getQueryData<{ pending: EventBookingRow[]; joined: EventBookingRow[] }>(
+				queryKeys.eventBookingsByEvent(selectedHostEventId)
+			)
+			const mergeRows = (networkRows: EventBookingRow[], bucket: 'pending' | 'joined'): EventBookingRow[] => {
+				const prevRows = prev?.[bucket] ?? []
+				const networkIds = new Set(networkRows.map((r) => Number(r.eventbookingid)))
+				const extras = prevRows.filter((r) => !networkIds.has(Number(r.eventbookingid)))
+				return extras.length ? [...extras, ...networkRows] : networkRows
+			}
 			return {
-				pending: Array.isArray(p) ? (p as EventBookingRow[]) : [],
-				joined: Array.isArray(j) ? (j as EventBookingRow[]) : [],
+				pending: mergeRows(Array.isArray(p) ? (p as EventBookingRow[]) : [], 'pending'),
+				joined: mergeRows(Array.isArray(j) ? (j as EventBookingRow[]) : [], 'joined'),
 			}
 		},
 		enabled: selectedHostEventId != null && organizerId != null,
