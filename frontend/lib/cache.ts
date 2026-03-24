@@ -16,8 +16,26 @@ async function runSingleFlight<T>(key: string, fetcher: () => Promise<T>, ttlMs:
   const existing = inFlightFetches.get(key)
   if (existing) return existing as Promise<T>
 
+  // Record when this flight started so we can detect if fresher data was written
+  // (e.g. hydrateEventsCombinedCache) while the network fetch was in progress.
+  const flightStartTs = Date.now()
+
   const promise = (async () => {
     const fresh = await fetcher()
+    // Do not overwrite if someone else already stored fresher data while we were fetching.
+    // This prevents an in-flight listEventsCombinedCached() call from clobbering the
+    // optimistic hydrateEventsCombinedCache() write done in eventCreate.onSuccess.
+    try {
+      const stored = await AsyncStorage.getItem(key)
+      if (stored) {
+        const envelope: CacheEnvelope<T> = JSON.parse(stored)
+        // If the existing entry would expire AFTER what we'd write (i.e. it was stored
+        // more recently), skip our write so we don't replace it with stale data.
+        if (envelope.exp && envelope.exp > flightStartTs + (ttlMs ?? 0)) {
+          return fresh
+        }
+      }
+    } catch { /* ignore comparison errors, fall through to normal setCache */ }
     await setCache(key, fresh, ttlMs, swrMs)
     return fresh
   })()

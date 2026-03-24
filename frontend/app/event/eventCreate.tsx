@@ -569,7 +569,9 @@ export default function EventCreateScreen() {
       }
       if (typeof userId === 'number') {
         // NOTE: Do NOT invalidateQueries(dashboard) — triggers stale Redis re-fetch that wipes new event
-        qc.invalidateQueries({ queryKey: queryKeys.createdEventsCombined(userId) })
+        // NOTE: Do NOT invalidateQueries(createdEventsCombined) — the setQueryData calls above already
+        // injected the correct data. Invalidating triggers a TQ background refetch that races against the
+        // backend's Redis cache and can return a stale empty list, wiping the panel.
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingEvents(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })

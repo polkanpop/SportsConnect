@@ -246,6 +246,10 @@ export default function EventPanel({ organizerId }: Props) {
 	// When TQ invalidates createdEventsCombined (e.g. after eventCreate), sync state
 	useEffect(() => {
 		if (!Array.isArray(hostEventsQuery.data)) return;
+		// Guard: if TQ background refetch returned an empty list but the panel currently
+		// has events, the empty result is almost certainly from a stale backend cache race.
+		// Keep the existing panel state rather than wiping it with a ghost empty response.
+		if (hostEventsQuery.data.length === 0 && hostEventsRef.current.length > 0) return;
 		const filtered = applyEventInfoOverrides(hostEventsQuery.data.filter((ev: any) => {
 			// Only hide cancelled events — never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
@@ -457,12 +461,25 @@ export default function EventPanel({ organizerId }: Props) {
 		try {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			const normalized = Array.isArray(rows) ? rows : [];
+			// Guard: if the backend returned zero rows, check whether TQ already holds
+			// valid events. An empty backend response here most likely comes from a Redis
+			// cache race (the cache was just invalidated and re-populated by a different
+			// in-flight request before this one returned). Prefer the TQ data in that case
+			// rather than wiping the panel.
+			if (normalized.length === 0) {
+				const tqData = queryClient.getQueryData<CombinedEvent[]>(queryKeys.createdEventsCombined(organizerId));
+				const hasTqVisible = Array.isArray(tqData) && tqData.some(ev => !isHiddenEventStatus((ev as any)?.status));
+				if (hasTqVisible) return; // trust TQ over stale empty backend response
+			}
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
 				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
 				return true;
 			}));
 			setHostEvents(filtered);
+			// Sync the authoritative result back to TQ so the useEffect path and direct
+			// API path stay consistent (prevents stale TQ from overwriting fresh state).
+			queryClient.setQueryData(queryKeys.createdEventsCombined(organizerId), normalized);
 			if (filtered.length === 0) {
 				setSelectedHostEventId(null);
 				return;
@@ -484,7 +501,7 @@ export default function EventPanel({ organizerId }: Props) {
 		} finally {
 			setHostEventsLoading(false);
 		}
-	}, [organizerId, applyEventInfoOverrides]);
+	}, [organizerId, applyEventInfoOverrides, queryClient]);
 
 	const enrichBookings = useCallback(async (eventMeta: CombinedEvent | undefined, rows: EventBookingRow[]) => {
 		const isFree = (eventMeta?.entry_fee ?? 0) <= 0;
