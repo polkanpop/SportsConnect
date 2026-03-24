@@ -695,11 +695,12 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         }
         // Keep tsBookingsBySession TQ in sync so the rawSessionBookingsQuery merge
         // never resurrects this booking from the stale pending bucket.
+        // Use ?? {} so we initialize properly even if rawSessionBookingsQuery hasn't run yet.
         queryClient.setQueryData(queryKeys.tsBookingsBySession(sessionId), (prev: any) => {
-          if (!prev) return prev
+          const current = prev ?? { pending: [], joined: [] }
           return {
-            pending: (prev.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== bookingId),
-            joined: [...(prev.joined ?? []), { ...booking, status: 'joined' }],
+            pending: (current.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== bookingId),
+            joined: [...(current.joined ?? []), { ...booking, status: 'joined' }],
           }
         })
         setSessions((prev) => prev.map((s) => {
@@ -754,10 +755,10 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         // Keep tsBookingsBySession TQ in sync so the rawSessionBookingsQuery merge
         // never resurrects this booking from the stale pending bucket.
         queryClient.setQueryData(queryKeys.tsBookingsBySession(sessionId), (prev: any) => {
-          if (!prev) return prev
+          const current = prev ?? { pending: [], joined: [] }
           return {
-            pending: (prev.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== booking.tsbookingid),
-            joined: prev.joined ?? [],
+            pending: (current.pending ?? []).filter((b: any) => Number(b.tsbookingid) !== booking.tsbookingid),
+            joined: current.joined ?? [],
           }
         })
         // Update the booker's dashboard cache so Activity tab shows rejected status immediately
@@ -870,17 +871,30 @@ export default function TrainingSessionPanel({ coachId }: Props) {
       const prev = queryClient.getQueryData<{ pending: TrainingSessionBookingRow[]; joined: TrainingSessionBookingRow[] }>(
         queryKeys.tsBookingsBySession(selectedSessionId)
       )
+      const networkPendingRaw = Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : []
+      const networkJoinedRaw = Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : []
+      // If the coach approved a booking locally but Redis is still stale (30 s TTL),
+      // the network may return it in 'pending' again. Promote such rows to 'joined'
+      // so the stale cache never resurfaces an approved booking in the applicant list.
+      const knownJoinedIds = new Set((prev?.joined ?? []).map((r) => Number(r.tsbookingid)))
+      const adjustedPending = networkPendingRaw.filter((r) => !knownJoinedIds.has(Number(r.tsbookingid)))
+      const adjustedJoined = [
+        ...networkJoinedRaw,
+        ...networkPendingRaw
+          .filter((r) => knownJoinedIds.has(Number(r.tsbookingid)))
+          .map((r) => ({ ...r, status: 'joined' } as TrainingSessionBookingRow)),
+      ]
       const allNetworkIds = new Set([
-        ...(Array.isArray(p) ? p as TrainingSessionBookingRow[] : []).map((r) => Number(r.tsbookingid)),
-        ...(Array.isArray(j) ? j as TrainingSessionBookingRow[] : []).map((r) => Number(r.tsbookingid)),
+        ...adjustedPending.map((r) => Number(r.tsbookingid)),
+        ...adjustedJoined.map((r) => Number(r.tsbookingid)),
       ])
       const mergeRows = (networkRows: TrainingSessionBookingRow[], prevRows: TrainingSessionBookingRow[]): TrainingSessionBookingRow[] => {
         const extras = prevRows.filter((r) => !allNetworkIds.has(Number(r.tsbookingid)))
         return extras.length ? [...extras, ...networkRows] : networkRows
       }
       return {
-        pending: mergeRows(Array.isArray(p) ? (p as TrainingSessionBookingRow[]) : [], prev?.pending ?? []),
-        joined: mergeRows(Array.isArray(j) ? (j as TrainingSessionBookingRow[]) : [], prev?.joined ?? []),
+        pending: mergeRows(adjustedPending, prev?.pending ?? []),
+        joined: mergeRows(adjustedJoined, prev?.joined ?? []),
       }
     },
     enabled: selectedSessionId != null && coachId != null,

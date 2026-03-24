@@ -764,20 +764,31 @@ export default function EventPanel({ organizerId }: Props) {
 			const prev = queryClient.getQueryData<{ pending: EventBookingRow[]; joined: EventBookingRow[] }>(
 				queryKeys.eventBookingsByEvent(selectedHostEventId)
 			)
-			// A row is only "extra" (worth preserving) if absent from BOTH network buckets.
-			// A booking in prev.pending but now in network.joined simply got approved —
-			// using per-bucket ids would keep it in pending too, showing a duplicate.
+			const networkPendingRaw = Array.isArray(p) ? (p as EventBookingRow[]) : []
+			const networkJoinedRaw = Array.isArray(j) ? (j as EventBookingRow[]) : []
+			// If the organizer approved a booking locally but Redis is still stale (30 s TTL),
+			// the network may return it in 'pending' again. Promote such rows to 'joined'
+			// so the stale cache never resurfaces an approved booking in the applicant list.
+			const knownJoinedIds = new Set((prev?.joined ?? []).map((r) => Number(r.eventbookingid)))
+			const adjustedPending = networkPendingRaw.filter((r) => !knownJoinedIds.has(Number(r.eventbookingid)))
+			const adjustedJoined = [
+				...networkJoinedRaw,
+				...networkPendingRaw
+					.filter((r) => knownJoinedIds.has(Number(r.eventbookingid)))
+					.map((r) => ({ ...r, status: 'joined' } as EventBookingRow)),
+			]
+			// A row is only "extra" (worth preserving) if absent from BOTH adjusted network buckets.
 			const allNetworkIds = new Set([
-				...(Array.isArray(p) ? p as EventBookingRow[] : []).map((r) => Number(r.eventbookingid)),
-				...(Array.isArray(j) ? j as EventBookingRow[] : []).map((r) => Number(r.eventbookingid)),
+				...adjustedPending.map((r) => Number(r.eventbookingid)),
+				...adjustedJoined.map((r) => Number(r.eventbookingid)),
 			])
 			const mergeRows = (networkRows: EventBookingRow[], prevRows: EventBookingRow[]): EventBookingRow[] => {
 				const extras = prevRows.filter((r) => !allNetworkIds.has(Number(r.eventbookingid)))
 				return extras.length ? [...extras, ...networkRows] : networkRows
 			}
 			return {
-				pending: mergeRows(Array.isArray(p) ? (p as EventBookingRow[]) : [], prev?.pending ?? []),
-				joined: mergeRows(Array.isArray(j) ? (j as EventBookingRow[]) : [], prev?.joined ?? []),
+				pending: mergeRows(adjustedPending, prev?.pending ?? []),
+				joined: mergeRows(adjustedJoined, prev?.joined ?? []),
 			}
 		},
 		enabled: selectedHostEventId != null && organizerId != null,
@@ -953,11 +964,12 @@ export default function EventPanel({ organizerId }: Props) {
 				}
 				// Keep eventBookingsByEvent TQ in sync so the rawEventBookingsQuery merge
 				// never resurrects this booking from the stale pending bucket.
+				// Use ?? {} so we initialize properly even if rawEventBookingsQuery hasn't run yet.
 				queryClient.setQueryData(queryKeys.eventBookingsByEvent(eventid), (prev: any) => {
-					if (!prev) return prev
+					const current = prev ?? { pending: [], joined: [] }
 					return {
-						pending: (prev.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
-						joined: [...(prev.joined ?? []), { ...booking, status: 'joined' }],
+						pending: (current.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
+						joined: [...(current.joined ?? []), { ...booking, status: 'joined' }],
 					}
 				})
 				setHostEvents((prev) => prev.map((ev) => {
@@ -1013,10 +1025,10 @@ export default function EventPanel({ organizerId }: Props) {
 				// Keep eventBookingsByEvent TQ in sync so the rawEventBookingsQuery merge
 				// never resurrects this booking from the stale pending bucket.
 				queryClient.setQueryData(queryKeys.eventBookingsByEvent(eventid), (prev: any) => {
-					if (!prev) return prev
+					const current = prev ?? { pending: [], joined: [] }
 					return {
-						pending: (prev.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
-						joined: prev.joined ?? [],
+						pending: (current.pending ?? []).filter((b: any) => Number(b.eventbookingid) !== bookingId),
+						joined: current.joined ?? [],
 					}
 				})
 				// Update the booker's dashboard cache so Activity tab shows rejected status immediately
