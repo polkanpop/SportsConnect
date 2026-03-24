@@ -79,19 +79,9 @@ function isHiddenSessionStatus(statusRaw: unknown): boolean {
   return st === 'cancelled'
 }
 
-function isPastSessionLoose(s: any): boolean {
-  // Respect backend status — any session with an explicit meaningful status is never
-  // filtered out by timestamp alone.  'completed' in particular must stay visible
-  // in the coach panel so they can review participants after auto-completion.
-  const status = String(s?.status ?? '').trim().toLowerCase()
-  if (status === 'upcoming' || status === 'active' || status === 'scheduled' || status === 'completed') return false
-  const end = parseTimestampLoose(s?.end_timestamp ?? null)
-  const start = parseTimestampLoose(s?.time ?? s?.start_timestamp ?? null)
-  const now = Date.now()
-  if (end) return end.getTime() < now
-  if (start) return start.getTime() < now
-  return false
-}
+// isPastSessionLoose is intentionally NOT used in the coach panel filter.
+// The panel must show ALL sessions (past, present, completed) so the coach can
+// review participants at any time. Only cancelled sessions are hidden.
 
 function formatSessionDateLabel(session: { time?: string | null }) {
   const candidate = String(session.time || '').trim()
@@ -247,8 +237,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   useEffect(() => {
     if (!Array.isArray(sessionsQuery.data)) return
     const filtered = sessionsQuery.data.filter((s: any) => {
+      // Only hide cancelled sessions — never filter by timestamp in the coach panel.
       if (isHiddenSessionStatus((s as any)?.status)) return false
-      if (isPastSessionLoose(s)) return false
       return true
     })
     setSessions(filtered)
@@ -470,10 +460,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         if (!mountedRef.current || loadId !== sessionsLoadIdRef.current) return
         const normalized = Array.isArray(rows) ? rows : []
         const filtered = normalized.filter((s) => {
+          // Only hide cancelled sessions — never filter by timestamp in the coach panel.
           if (isHiddenSessionStatus((s as any)?.status)) return false
-          if (isPastSessionLoose(s)) return false
           return true
         })
+        // Safety guard: if the backend returned rows but the filter removed ALL of them,
+        // keep the existing list instead of wiping the panel.
+        if (normalized.length > 0 && filtered.length === 0) {
+          console.warn('[trainingSessionPanel] loadSessions: all', normalized.length, 'rows removed by filter — keeping previous list')
+          return
+        }
         setSessions(filtered)
         if (filtered.length === 0) {
           setSelectedSessionId(null)

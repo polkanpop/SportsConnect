@@ -68,20 +68,10 @@ function parseTimestampLoose(raw: unknown): Date | null {
 	return null;
 }
 
-function isPastEventLoose(ev: any): boolean {
-	// Respect backend status — any event with a meaningful explicit status is never
-	// filtered out by timestamp alone.  'completed' in particular must remain visible
-	// in the organizer panel so they can review participants even after
-	// autoCompletePastStatusesInBackground marks it done.
-	const status = String(ev?.status ?? "").trim().toLowerCase();
-	if (status === "upcoming" || status === "active" || status === "completed" || status === "scheduled") return false;
-	const end = parseTimestampLoose(ev?.end_timestamp ?? null);
-	const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null);
-	const now = Date.now();
-	if (end) return end.getTime() < now;
-	if (start) return start.getTime() < now;
-	return false;
-}
+// isPastEventLoose is intentionally NOT used in the organizer panel filter.
+// The panel must show ALL events (past, present, completed) so the organizer can
+// review participants at any time. Only cancelled events are hidden.
+// Timestamp-based filtering belongs only in the public event list, not here.
 
 function isHiddenEventStatus(statusRaw: unknown): boolean {
 	// Only hide cancelled events from the organizer panel.
@@ -239,8 +229,8 @@ export default function EventPanel({ organizerId }: Props) {
 	useEffect(() => {
 		if (!Array.isArray(hostEventsQuery.data)) return;
 		const filtered = hostEventsQuery.data.filter((ev: any) => {
+			// Only hide cancelled events — never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
-			if (isPastEventLoose(ev)) return false;
 			return true;
 		});
 		setHostEvents(filtered);
@@ -450,10 +440,18 @@ export default function EventPanel({ organizerId }: Props) {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			const normalized = Array.isArray(rows) ? rows : [];
 			const filtered = normalized.filter((ev) => {
+				// Only hide cancelled events — never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
-				if (isPastEventLoose(ev)) return false;
 				return true;
 			});
+			// Safety guard: if the backend returned rows but the filter removed ALL of them,
+			// something is wrong with the filter logic — keep the existing list rather than
+			// wipe the panel. This should not happen with the current filter (only hides
+			// 'cancelled'), but acts as a last-resort safety net.
+			if (normalized.length > 0 && filtered.length === 0) {
+				console.warn('[eventPanel] loadHostEvents: all', normalized.length, 'rows removed by filter — keeping previous list');
+				return;
+			}
 			setHostEvents(filtered);
 			if (filtered.length === 0) {
 				setSelectedHostEventId(null);

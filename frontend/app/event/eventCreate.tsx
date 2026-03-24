@@ -486,7 +486,11 @@ export default function EventCreateScreen() {
           if (typeof userId === 'number') {
             qc.setQueryData(queryKeys.createdEventsCombined(userId), (prev: any) => {
               const arr = Array.isArray(prev) ? prev : []
-              if (arr.some((r: any) => r?.eventid === createdEventId)) return arr
+              // Upsert: replace the placeholder stub (matched by eventid) with the full
+              // combined row that has timestamps, description, images, etc.
+              // The earlier stub injection uses a no-date placeholder — this replaces it.
+              const idx = arr.findIndex((r: any) => r?.eventid === createdEventId)
+              if (idx >= 0) { const next = [...arr]; next[idx] = combinedRow; return next }
               return [combinedRow, ...arr]
             })
             // Inject into the Hosting tab cache so it appears immediately without waiting for a refetch
