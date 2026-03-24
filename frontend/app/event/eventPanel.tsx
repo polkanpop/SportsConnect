@@ -69,10 +69,12 @@ function parseTimestampLoose(raw: unknown): Date | null {
 }
 
 function isPastEventLoose(ev: any): boolean {
-	// Respect backend status: 'upcoming'/'active' events should never be filtered out by
-	// timestamp alone — they may be recently created with historical court booking slots.
+	// Respect backend status — any event with a meaningful explicit status is never
+	// filtered out by timestamp alone.  'completed' in particular must remain visible
+	// in the organizer panel so they can review participants even after
+	// autoCompletePastStatusesInBackground marks it done.
 	const status = String(ev?.status ?? "").trim().toLowerCase();
-	if (status === "upcoming" || status === "active") return false;
+	if (status === "upcoming" || status === "active" || status === "completed" || status === "scheduled") return false;
 	const end = parseTimestampLoose(ev?.end_timestamp ?? null);
 	const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? null);
 	const now = Date.now();
@@ -82,8 +84,11 @@ function isPastEventLoose(ev: any): boolean {
 }
 
 function isHiddenEventStatus(statusRaw: unknown): boolean {
+	// Only hide cancelled events from the organizer panel.
+	// Completed events must remain visible so the organizer can review
+	// participants after autoCompletePastStatusesInBackground finalises them.
 	const st = String(statusRaw ?? "").trim().toLowerCase();
-	return st === "completed" || st === "cancelled";
+	return st === "cancelled";
 }
 
 function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: string | null }) {

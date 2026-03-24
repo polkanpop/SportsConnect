@@ -72,15 +72,19 @@ function parseTimestampLoose(raw: unknown): Date | null {
 }
 
 function isHiddenSessionStatus(statusRaw: unknown): boolean {
+  // Only hide cancelled sessions from the organizer panel.
+  // Completed sessions must remain visible so the coach can review participants
+  // even after autoCompletePastStatusesInBackground finalises them.
   const st = String(statusRaw ?? '').trim().toLowerCase()
-  return st === 'completed' || st === 'cancelled'
+  return st === 'cancelled'
 }
 
 function isPastSessionLoose(s: any): boolean {
-  // Respect backend status: 'upcoming'/'active'/'scheduled' should never be filtered out
-  // by timestamp alone — they may be recently created with historical court booking slots.
+  // Respect backend status — any session with an explicit meaningful status is never
+  // filtered out by timestamp alone.  'completed' in particular must stay visible
+  // in the coach panel so they can review participants after auto-completion.
   const status = String(s?.status ?? '').trim().toLowerCase()
-  if (status === 'upcoming' || status === 'active' || status === 'scheduled') return false
+  if (status === 'upcoming' || status === 'active' || status === 'scheduled' || status === 'completed') return false
   const end = parseTimestampLoose(s?.end_timestamp ?? null)
   const start = parseTimestampLoose(s?.time ?? s?.start_timestamp ?? null)
   const now = Date.now()
