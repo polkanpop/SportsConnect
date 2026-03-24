@@ -1954,7 +1954,7 @@ const styles = StyleSheet.create({
 
   page: { flex: 1, backgroundColor: '#fff' },
   content: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 220 },
-  label: { fontSize: 14, fontWeight: '400', color: '#0f172a', marginTop: 12, marginBottom: 8 },
+  label: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 12, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inputWrap: { position: 'relative' },
   inputWithIcon: { paddingRight: 40 },
@@ -2006,7 +2006,7 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff' },
   segmentActive: { backgroundColor: COLORS.orange200 },
-  segmentText: { fontSize: 14, fontWeight: '400', color: '#0f172a' },
+  segmentText: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
   segmentTextActive: { color: COLORS.brown900 },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -2063,11 +2063,11 @@ const styles = StyleSheet.create({
   courtCardArrowOpen: { transform: [{ rotate: '180deg' }] },
   courtCardBody: { marginTop: 10 },
   courtDetailLine: { color: COLORS.neutral800, fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  courtDetailLabel: { color: COLORS.neutral800, fontSize: 13, fontWeight: '900', marginTop: 4 },
+  courtDetailLabel: { color: COLORS.neutral800, fontSize: 13, fontWeight: '700', marginTop: 4 },
   courtDetailDesc: { color: COLORS.neutral800, fontSize: 13, marginTop: 6, lineHeight: 18 },
   addCourtCover: { borderStyle: 'dashed' },
-  addCourtCoverText: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
-  myCourtName: { color: COLORS.neutral925, fontWeight: '400', fontSize: 14 },
+  addCourtCoverText: { color: COLORS.neutral925, fontWeight: '700', fontSize: 13 },
+  myCourtName: { color: COLORS.neutral925, fontWeight: '400', fontSize: 13 },
   myCourtMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
 
   servicesBox: {
@@ -2085,7 +2085,7 @@ const styles = StyleSheet.create({
   servicesHint: { color: COLORS.neutral600, fontWeight: '700', fontSize: 13, marginBottom: 10 },
   servicesList: { gap: 10, marginBottom: 12 },
   servicesRow: { flexDirection: 'row', alignItems: 'center' },
-  servicesName: { color: COLORS.neutral925, fontWeight: '900', fontSize: 14 },
+  servicesName: { color: COLORS.neutral925, fontWeight: '700', fontSize: 13 },
   servicesMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
   serviceDraftBox: { marginTop: 12 },
   serviceDraftBtnsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
@@ -2101,7 +2101,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#fff',
   },
-  dropdownBtnText: { color: '#0f172a', fontWeight: '800', fontSize: 14 },
+  dropdownBtnText: { color: '#0f172a', fontWeight: '700', fontSize: 13 },
   dropdownArrow: { width: 18, height: 18, tintColor: COLORS.neutral600 },
   dropdownArrowOpen: { transform: [{ rotate: '180deg' }] },
   dropdownOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.2)' },
@@ -2116,7 +2116,7 @@ const styles = StyleSheet.create({
   },
   dropdownModalItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   dropdownCheck: { width: 18, height: 18, tintColor: COLORS.neutral800 },
-  dropdownItemText: { color: COLORS.neutral925, fontWeight: '800', fontSize: 13 },
+  dropdownItemText: { color: COLORS.neutral925, fontWeight: '500', fontSize: 13 },
 
   coverFrame: {
     width: IMAGE_TILE_WIDTH,
@@ -2135,7 +2135,7 @@ const styles = StyleSheet.create({
   coverPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   addPlus: { fontSize: 28, fontWeight: '700', color: COLORS.neutral800, marginTop: -1 },
-  coverHint: { marginTop: 6, color: COLORS.neutral600, fontWeight: '800', fontSize: 12 },
+  coverHint: { marginTop: 6, color: COLORS.neutral600, fontWeight: '500', fontSize: 12 },
   removeXBtn: {
     position: 'absolute',
     top: 8,
@@ -2182,7 +2182,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.brandOrangeDeep,
   },
-  submitText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  submitText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   btnDisabled: { opacity: 0.45 },
 
   helpText: { marginTop: 12, textAlign: 'center', color: '#64748b', fontWeight: '700' },
@@ -2236,7 +2236,7 @@ const styles = StyleSheet.create({
   },
   modalCloseXText: { fontSize: 22, lineHeight: 22, fontWeight: '900', color: COLORS.neutral925, marginTop: -1 },
   modalScrollContent: { paddingBottom: 14 },
-  modalTitle: { fontSize: 16, fontWeight: '900', color: COLORS.neutral975, marginBottom: 6 },
+  modalTitle: { fontSize: 15, fontWeight: '700', color: COLORS.neutral975, marginBottom: 6 },
   modalTitleCentered: { flex: 1, textAlign: 'center' },
 
   priceInputWrap: { position: 'relative' },
@@ -2260,7 +2260,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   surfacePillActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
-  surfacePillText: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  surfacePillText: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
   surfacePillTextActive: { color: '#1d4ed8' },
 
   halfTabsRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 8 },
@@ -2274,6 +2274,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.neutral350,
   },
   halfTabActive: { backgroundColor: COLORS.brandOrangeDeep, borderColor: COLORS.brandOrangeDeep },
-  halfTabText: { fontSize: 13, fontWeight: '900', color: COLORS.neutral800 },
+  halfTabText: { fontSize: 13, fontWeight: '700', color: COLORS.neutral800 },
   halfTabTextActive: { color: COLORS.neutral0 },
 })

@@ -198,7 +198,7 @@ function FreeBadge() {
 				elevation: 2,
 			}}
 		>
-			<Text style={{ color: "#fff", fontWeight: "900", fontSize: 11, letterSpacing: 0.8 }}>FREE</Text>
+			<Text style={{ color: "#fff", fontWeight: "700", fontSize: 11, letterSpacing: 0.8 }}>FREE</Text>
 		</View>
 	);
 }
@@ -1258,7 +1258,7 @@ export default function EventPanel({ organizerId }: Props) {
 						backgroundColor: managementMode === 'event' ? COLORS.brandOrangeYellow : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'event' ? COLORS.white : COLORS.brandOrangeYellow }}>Event</Text>
+					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'event' ? COLORS.white : COLORS.brandOrangeYellow }}>Event</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
 					activeOpacity={0.85}
@@ -1272,7 +1272,7 @@ export default function EventPanel({ organizerId }: Props) {
 						backgroundColor: managementMode === 'trainingSession' ? COLORS.purple : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '900', fontSize: 14, color: managementMode === 'trainingSession' ? COLORS.white : COLORS.purple }}>Training Session</Text>
+					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'trainingSession' ? COLORS.white : COLORS.purple }}>Training Session</Text>
 				</TouchableOpacity>
 			</View>
 		</View>
@@ -1302,7 +1302,7 @@ export default function EventPanel({ organizerId }: Props) {
 				}} />}
 				keyboardShouldPersistTaps="handled"
 					>
-				<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>My Event</Text>
+				<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>My Event</Text>
 
 			{organizerId == null && (
 				<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
@@ -1450,7 +1450,7 @@ export default function EventPanel({ organizerId }: Props) {
 										<Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
 									</View>
 									<View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
-										<Text numberOfLines={2} style={{ fontWeight: "900", fontSize: 16, lineHeight: 18, color: selected ? "#fff" : "#111" }}>
+										<Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, lineHeight: 18, color: selected ? "#fff" : "#111" }}>
 											{ev.title || `Event #${ev.eventid}`}
 										</Text>
 										<Text
@@ -1471,9 +1471,9 @@ export default function EventPanel({ organizerId }: Props) {
 												marginTop: "auto",
 												paddingBottom: 2,
 												fontSize: 12,
-												fontWeight: "900",
-												letterSpacing: 0.6,
-											}}
+																						fontWeight: "700",
+																						letterSpacing: 0.6,
+																						}}
 										>
 											PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
 										</Text>
@@ -1487,7 +1487,7 @@ export default function EventPanel({ organizerId }: Props) {
 
 			{selectedHostEventId != null && (
 				<>
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>Applicant List</Text>
+					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>Applicant List</Text>
 					{bookingsError && (
 						<Text style={{ color: "red", marginBottom: 8 }}>Failed to load applicants: {bookingsError}</Text>
 					)}
@@ -1540,7 +1540,7 @@ export default function EventPanel({ organizerId }: Props) {
 											)}
 
 											<View style={{ flex: 1, marginLeft: 10 }}>
-												<Text style={{ fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+												<Text style={{ fontWeight: "700", fontSize: 14 }} numberOfLines={1}>
 													{a.name}
 												</Text>
 												{!isFree && (
@@ -1626,7 +1626,7 @@ export default function EventPanel({ organizerId }: Props) {
 						</View>
 					)}
 
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Participant List</Text>
+					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Participant List</Text>
 					{bookingsLoading ? (
 						<SkeletonPulse>
 							<View style={{ paddingVertical: 12 }}>
@@ -1674,7 +1674,7 @@ export default function EventPanel({ organizerId }: Props) {
 												<Image source={ICONS.accountCircle} style={{ width: 40, height: 40 }} resizeMode="contain" />
 											)}
 											<View style={{ flex: 1, marginLeft: 10 }}>
-												<Text style={{ fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+												<Text style={{ fontWeight: "700", fontSize: 14 }} numberOfLines={1}>
 													{p.name}
 												</Text>
 												{!isFree ? (
@@ -1704,7 +1704,7 @@ export default function EventPanel({ organizerId }: Props) {
 						</View>
 					)}
 
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Host List</Text>
+					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Host List</Text>
 					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
 						{hostsError ? (
 							<Text style={{ color: "#B91C1C", fontWeight: "700" }}>{hostsError}</Text>
@@ -1739,7 +1739,7 @@ export default function EventPanel({ organizerId }: Props) {
 											<Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
 										)}
 										<View style={{ marginLeft: 10, flex: 1 }}>
-											<Text style={{ fontWeight: "800", fontSize: 14 }} numberOfLines={1}>
+											<Text style={{ fontWeight: "700", fontSize: 14 }} numberOfLines={1}>
 												{h.name}
 											</Text>
 											<Text style={{ color: "#555", marginTop: 2 }} numberOfLines={1}>
@@ -1752,17 +1752,17 @@ export default function EventPanel({ organizerId }: Props) {
 						)}
 					</View>
 
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Administrator List</Text>
+					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Administrator List</Text>
 					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
 						<Text style={{ color: "#555" }}>No administrators yet.</Text>
 					</View>
 
-					<Text style={{ fontSize: 18, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Block List</Text>
+					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 14, marginBottom: 8 }}>Block List</Text>
 					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
 						<View style={{ flexDirection: "row", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e5e7eb" }}>
-							<Text style={{ flex: 1.2, fontWeight: "800", color: "#111827" }}>User</Text>
-							<Text style={{ flex: 1.4, fontWeight: "800", color: "#111827" }}>Blocked At</Text>
-							<Text style={{ flex: 1.0, fontWeight: "800", color: "#111827", textAlign: "right" }} />
+							<Text style={{ flex: 1.2, fontWeight: "700", color: "#111827" }}>User</Text>
+							<Text style={{ flex: 1.4, fontWeight: "700", color: "#111827" }}>Blocked At</Text>
+							<Text style={{ flex: 1.0, fontWeight: "700", color: "#111827", textAlign: "right" }} />
 						</View>
 
 						{!!blockedError && <Text style={{ color: "#B91C1C", fontWeight: "700", marginTop: 10 }}>{blockedError}</Text>}
@@ -1795,11 +1795,11 @@ export default function EventPanel({ organizerId }: Props) {
 											onPress={() => router.push({ pathname: "/event/profileSpectate", params: { userid: String(b.blocked_userid) } } as any)}
 											style={{ flex: 1.2 }}
 										>
-											<Text style={{ fontSize: 14, fontWeight: "800", color: "#111827" }} numberOfLines={1}>
+											<Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
 												{blockedNameByUserId[b.blocked_userid] || `User ${b.blocked_userid}`}
 											</Text>
 										</TouchableOpacity>
-										<Text style={{ flex: 1.4, fontSize: 14, fontWeight: "800", color: "#111827" }} numberOfLines={1}>
+										<Text style={{ flex: 1.4, fontSize: 14, fontWeight: "700", color: "#111827" }} numberOfLines={1}>
 											{b.blocked_at ? String(b.blocked_at).slice(0, 10) : "-"}
 										</Text>
 										<TouchableOpacity
@@ -1807,7 +1807,7 @@ export default function EventPanel({ organizerId }: Props) {
 											onPress={() => onRequestRemoveBlockedUser(b.blocked_userid)}
 											style={{ flex: 1.0, alignItems: "flex-end" }}
 										>
-											<Text style={{ color: "#2563eb", fontWeight: "900", textDecorationLine: "underline" }}>Remove</Text>
+											<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>Remove</Text>
 										</TouchableOpacity>
 									</View>
 								))}
@@ -1824,7 +1824,7 @@ export default function EventPanel({ organizerId }: Props) {
 							marginBottom: 8,
 						}}
 					>
-						<Text style={{ fontSize: 18, fontWeight: "700" }}>Event Modify</Text>
+						<Text style={{ fontSize: 15, fontWeight: "700" }}>Event Modify</Text>
 						<TouchableOpacity
 							activeOpacity={0.75}
 							onPress={() =>
@@ -1832,7 +1832,7 @@ export default function EventPanel({ organizerId }: Props) {
 							}
 							style={{ paddingHorizontal: 6, paddingVertical: 4 }}
 						>
-							<Text style={{ color: "#2563eb", fontWeight: "800", textDecorationLine: "underline" }}>Details</Text>
+							<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>Details</Text>
 						</TouchableOpacity>
 					</View>
 					<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 12 }}>
@@ -1904,7 +1904,7 @@ export default function EventPanel({ organizerId }: Props) {
 											justifyContent: "center",
 										}}
 									>
-										<Text style={{ fontSize: 20, lineHeight: 20, fontWeight: "900", color: COLORS.neutral925, marginTop: -1 }}>×</Text>
+										<Text style={{ fontSize: 18, lineHeight: 20, fontWeight: "700", color: COLORS.neutral925, marginTop: -1 }}>×</Text>
 									</TouchableOpacity>
 								</View>
 							))}
@@ -1960,7 +1960,7 @@ export default function EventPanel({ organizerId }: Props) {
 								alignItems: "center",
 							}}
 						>
-							<Text style={{ color: "#fff", fontWeight: "800" }}>{savingEvent ? "Saving..." : "Save changes"}</Text>
+							<Text style={{ color: "#fff", fontWeight: "700" }}>{savingEvent ? "Saving..." : "Save changes"}</Text>
 						</TouchableOpacity>
 
 						{saveSuccessMessage ? <Text style={{ marginTop: 8, color: "#15803d", fontWeight: "700", textAlign: "center" }}>{saveSuccessMessage}</Text> : null}
@@ -1976,7 +1976,7 @@ export default function EventPanel({ organizerId }: Props) {
 								alignItems: "center",
 							}}
 						>
-							<Text style={{ color: "#fff", fontWeight: "900" }}>{cancellingEvent ? "Cancelling..." : "Cancel Event"}</Text>
+							<Text style={{ color: "#fff", fontWeight: "700" }}>{cancellingEvent ? "Cancelling..." : "Cancel Event"}</Text>
 						</TouchableOpacity>
 					</View>
 				</>
@@ -2016,7 +2016,7 @@ export default function EventPanel({ organizerId }: Props) {
 								onPress={() => {}}
 							>
 								<TouchableOpacity activeOpacity={0.75} onPress={() => setActionMenuVisible(false)} style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
-									<Text style={{ fontWeight: "800", color: "#111827" }}>Report</Text>
+									<Text style={{ fontWeight: "700", color: "#111827" }}>Report</Text>
 								</TouchableOpacity>
 								<View style={{ height: 1, backgroundColor: "#e5e7eb" }} />
 								<TouchableOpacity
@@ -2027,7 +2027,7 @@ export default function EventPanel({ organizerId }: Props) {
 									}}
 									style={{ paddingVertical: 10, paddingHorizontal: 12 }}
 								>
-									<Text style={{ fontWeight: "900", color: "#B91C1C" }}>Block</Text>
+									<Text style={{ fontWeight: "700", color: "#B91C1C" }}>Block</Text>
 								</TouchableOpacity>
 							</Pressable>
 						);
@@ -2038,7 +2038,7 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmBlockVisible} animationType="fade" onRequestClose={() => setConfirmBlockVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Block</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>Confirm Block</Text>
 						<Text style={{ marginTop: 8, color: "#374151" }}>Are you sure you want to block this user ?</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
@@ -2047,7 +2047,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 								disabled={blocking}
 							>
-								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: "#111827" }}>Cancel</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2055,7 +2055,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: blocking ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={blocking}
 							>
-								<Text style={{ fontWeight: "900", color: "#fff" }}>{blocking ? "Blocking..." : "Block"}</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{blocking ? "Blocking..." : "Block"}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2065,7 +2065,7 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmCancelVisible} animationType="fade" onRequestClose={() => setConfirmCancelVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Cancel</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>Confirm Cancel</Text>
 						<Text style={{ marginTop: 8, color: "#374151" }}>Are you sure you want to cancel this event?</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
@@ -2074,7 +2074,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 								disabled={cancellingEvent}
 							>
-								<Text style={{ fontWeight: "800", color: "#111827" }}>No</Text>
+								<Text style={{ fontWeight: "700", color: "#111827" }}>No</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2082,7 +2082,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: cancellingEvent ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={cancellingEvent || !canCancelSelectedEvent}
 							>
-								<Text style={{ fontWeight: "900", color: "#fff" }}>{cancellingEvent ? "Cancelling..." : "Yes"}</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{cancellingEvent ? "Cancelling..." : "Yes"}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2092,7 +2092,7 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmRemoveVisible} animationType="fade" onRequestClose={() => setConfirmRemoveVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Confirm Remove</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>Confirm Remove</Text>
 						<Text style={{ marginTop: 8, color: "#374151" }}>Remove this user from block list ?</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
@@ -2103,7 +2103,7 @@ export default function EventPanel({ organizerId }: Props) {
 								}}
 								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 							>
-								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: "#111827" }}>Cancel</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2111,7 +2111,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={removeCandidate == null}
 							>
-								<Text style={{ fontWeight: "900", color: "#fff" }}>Remove</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>Remove</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2129,7 +2129,7 @@ export default function EventPanel({ organizerId }: Props) {
 			>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: "#fff", borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 16, fontWeight: "800", color: "#111827" }}>Remove image</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: "#111827" }}>Remove image</Text>
 						<Text style={{ marginTop: 8, color: "#374151" }}>Do you want to remove this image?</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
@@ -2140,7 +2140,7 @@ export default function EventPanel({ organizerId }: Props) {
 								}}
 								style={{ flex: 1, backgroundColor: "#f3f4f6", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 							>
-								<Text style={{ fontWeight: "800", color: "#111827" }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: "#111827" }}>Cancel</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2148,7 +2148,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: removeImageCandidateUri ? "#2563eb" : "#9ca3af", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={!removeImageCandidateUri}
 							>
-								<Text style={{ fontWeight: "900", color: "#fff" }}>Remove</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>Remove</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2157,3 +2157,5 @@ export default function EventPanel({ organizerId }: Props) {
 		</View>
 	);
 }
+
+

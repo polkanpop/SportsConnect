@@ -1016,8 +1016,8 @@ const styles = StyleSheet.create({
     width: 78,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   divider: {
@@ -1097,12 +1097,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   subHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: '700',
   },
   monthHeader: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   viewAllText: {
@@ -1128,15 +1128,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eventTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.neutral975,
     flex: 1,
     flexShrink: 1,
     alignSelf: 'stretch',
   },
   eventTitlePrefix: {
-    fontWeight: '900',
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   titleRow: {
@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   eventMetaLabel: {
-    fontWeight: '900',
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   statusPill: {
@@ -1367,8 +1367,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   tickText: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   expandFilterHeader: {
@@ -1382,7 +1382,7 @@ const styles = StyleSheet.create({
   },
   expandFilterLabel: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   expandFilterRight: {
@@ -1481,8 +1481,8 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   cancelModalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.neutral975,
     marginBottom: 8,
   },

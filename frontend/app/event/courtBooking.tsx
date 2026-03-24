@@ -925,11 +925,11 @@ export default function CourtBooking() {
                       style={{ minWidth: 116, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: active ? COLORS.brandOrangeDeep : '#E5E7EB', backgroundColor: active ? COLORS.brandOrangeDeep : '#fff' }}
                       activeOpacity={0.8}
                     >
-                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: active ? '#fff' : '#222' }}>{bn}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : '#222' }}>{bn}</Text>
                       {!!meta?.surfaceText && (
                         <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 11, fontWeight: '700', color: active ? '#ffe7d1' : '#666', textTransform: 'capitalize' }}>{meta.surfaceText}</Text>
                       )}
-                      <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, fontWeight: '800', color: active ? '#fff' : '#111' }}>{meta?.priceText || '0đ'}</Text>
+                      <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, fontWeight: '700', color: active ? '#fff' : '#111' }}>{meta?.priceText || '0đ'}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -1343,8 +1343,8 @@ const styles = StyleSheet.create({
   backIcon: { width: 20, height: 20, tintColor: '#333', marginTop: 2 },
   headerTitle: { fontSize: 18, fontWeight: '600', marginLeft: 12 },
   sectionCard: { backgroundColor: '#fafafa', marginHorizontal: 16, marginBottom: 20, padding: 16, borderRadius: 14, elevation: 2 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  courtName: { fontSize: 18, fontWeight: '700', color: '#222', flexShrink: 1 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  courtName: { fontSize: 16, fontWeight: '700', color: '#222', flexShrink: 1 },
   courtAddress: { flex: 1, fontSize: 14, color: '#555', marginTop: 6, lineHeight: 20, flexWrap: 'wrap' },
   availabilityMeta: { flex: 1, fontSize: 12, color: '#777', marginTop: 10, lineHeight: 18, flexWrap: 'wrap' },
   statusText: { fontSize: 13, color: '#666' },
@@ -1369,7 +1369,7 @@ const styles = StyleSheet.create({
   paymentRow: { flexDirection: 'row', marginTop: 20 },
   payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', marginRight: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
-  servicesHeaderText: { fontSize: 16, fontWeight: '700', color: '#222' },
+  servicesHeaderText: { fontSize: 14, fontWeight: '700', color: '#222' },
   servicesWrapper: { marginTop: 10 },
   servicesScrollContent: { paddingVertical: 8, paddingRight: 8 },
   serviceCard: { width: 130, marginRight: 14 },
@@ -1381,8 +1381,8 @@ const styles = StyleSheet.create({
   qtyRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   qtyBox: { width: 36, height: 32, borderRadius: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#d9d9d9', alignItems: 'center', justifyContent: 'center' },
   qtyBoxMid: { flex: 1, height: 32, marginHorizontal: 8, borderRadius: 8, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e2e2e2', alignItems: 'center', justifyContent: 'center' },
-  qtyBoxText: { fontSize: 18, fontWeight: '800', color: '#111', lineHeight: 18 },
-  qtyMidText: { fontSize: 14, fontWeight: '800', color: '#111' },
+  qtyBoxText: { fontSize: 16, fontWeight: '700', color: '#111', lineHeight: 18 },
+  qtyMidText: { fontSize: 14, fontWeight: '700', color: '#111' },
   payMethodActive: { backgroundColor: COLORS.brandOrangeLight },
   payIcon: { width: 28, height: 28, marginRight: 10, resizeMode: 'contain' },
   payText: { fontSize: 15, fontWeight: '700', color: '#222' },
@@ -1391,7 +1391,7 @@ const styles = StyleSheet.create({
   bottomSafeArea: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#ffffff' },
   bottomBar: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#eee', alignItems: 'center' },
   confirmUnifiedBtn: { width: '90%', backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 18, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
-  confirmUnifiedText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  confirmUnifiedText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   successBox: { marginTop: 16, backgroundColor: '#e9ffe9', padding: 12, borderRadius: 10 },
   successTitle: { fontSize: 14, fontWeight: '700', color: '#0a7a0a' },
   successLine: { fontSize: 12, color: '#0a7a0a', marginTop: 4 },
@@ -1438,8 +1438,8 @@ const styles = StyleSheet.create({
   selectCourtImage: { width: '100%', height: '100%' },
   selectCourtImagePlaceholder: { width: '100%', height: '100%', backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
   selectCourtInfoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 9, columnGap: 8 },
-  selectCourtName: { flex: 1, fontSize: 13, fontWeight: '800', color: '#111' },
-  selectCourtPriceInline: { fontSize: 13, fontWeight: '900', color: '#111' },
+  selectCourtName: { flex: 1, fontSize: 13, fontWeight: '700', color: '#111' },
+  selectCourtPriceInline: { fontSize: 13, fontWeight: '700', color: '#111' },
   // Playing court selector
   pcCard: { width: 110, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f2f2f2', borderWidth: 2, borderColor: 'transparent', marginRight: 4 },
   pcCardSelected: { borderColor: COLORS.brandOrangeYellow },

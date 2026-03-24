@@ -640,7 +640,7 @@ export default CourtListScreen
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.neutral0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6, marginBottom: 13 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 20, fontWeight: '700', color: COLORS.neutral925 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: COLORS.neutral925 },
   headerSpacer: { width: 40 },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 4 },
   backButton: { padding: 8, marginRight: 8, borderRadius: 28, backgroundColor: COLORS.neutral175 },
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
   // More space below filters
   filterRow: { marginBottom: 12 },
   filtersInner: { flexDirection: 'row', gap: 10, paddingRight: 4 },
-  sectionTitle: { fontSize: 22, fontWeight: '500', color: COLORS.neutral950, marginBottom: 12, marginLeft: 4, marginTop: 15 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.neutral950, marginBottom: 12, marginLeft: 4, marginTop: 15 },
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
   bookmarkIcon: { width: 32, height: 32, left: -8, tintColor: COLORS.gold, resizeMode: 'contain' },
   cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
   cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
-  cardTitle: { color: COLORS.neutral950, fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  cardTitle: { color: COLORS.neutral950, fontSize: 14, fontWeight: '700', marginBottom: 4 },
   cardAddress: { color: COLORS.neutral800, fontSize: 13, fontWeight: '500' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
   tag: { backgroundColor: COLORS.neutral125, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },

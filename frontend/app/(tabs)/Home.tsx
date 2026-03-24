@@ -781,7 +781,7 @@ export default function Home() {
                               style={{
                                 color: '#fff',
                                 fontSize: 13,
-                                fontWeight: '800',
+                                fontWeight: '700',
                               }}
                             >
                               {fav.name || 'Unnamed'}
@@ -824,7 +824,7 @@ export default function Home() {
                               style={{
                                 color: '#fff',
                                 fontSize: 13,
-                                fontWeight: '800',
+                                fontWeight: '700',
                               }}
                             >
                               {fav.name || 'Unnamed'}
@@ -962,7 +962,7 @@ export default function Home() {
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text
                             numberOfLines={3}
-                            style={{ fontSize: 16, lineHeight: 19, fontWeight: '900', color: COLORS.neutral975 }}
+                            style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: COLORS.neutral975 }}
                           >
                             {title}
                           </Text>
@@ -1005,8 +1005,8 @@ export default function Home() {
                               position: 'absolute',
                               right: 12,
                               bottom: 10,
-                              fontSize: 14,
-                              fontWeight: '900',
+                              fontSize: 13,
+                              fontWeight: '700',
                               color: COLORS.brandOrangeDeep,
                             }}
                           >
@@ -1163,7 +1163,7 @@ export default function Home() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
-                <Text style={{ fontSize: 20, lineHeight: 32, fontWeight: '800', color: '#111' }}>Menu</Text>
+                <Text style={{ fontSize: 18, lineHeight: 32, fontWeight: '700', color: '#111' }}>Menu</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={closeMenu}

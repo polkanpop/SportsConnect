@@ -1856,8 +1856,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EAEAEA',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#111',
   },
   headerSide: {
@@ -1893,8 +1893,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   errorTitle: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#DC3545',
   },
   section: {
@@ -1906,8 +1906,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#111',
     marginBottom: 10,
     textTransform: 'uppercase',
@@ -1924,7 +1924,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     flexShrink: 0,
     color: '#444',
-    fontWeight: '800',
+    fontWeight: '700',
     maxWidth: '45%',
   },
   rowValueWrap: {
@@ -1950,8 +1950,8 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     color: '#FFF',
-    fontWeight: '900',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 14,
   },
   cancelNote: {
     color: COLORS.danger,
@@ -1989,8 +1989,8 @@ const styles = StyleSheet.create({
   },
   reviewBtnText: {
     color: '#FFF',
-    fontWeight: '900',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 14,
   },
 
   // Modal (synced with Settings sign-out modal)
@@ -2016,8 +2016,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#111',
     textAlign: 'center',
     marginBottom: 18,
@@ -2049,11 +2049,11 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   modalButtonCancelText: {
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#111',
   },
   modalButtonConfirmText: {
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#fff',
   },
 })

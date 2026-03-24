@@ -2118,8 +2118,8 @@
     },
     otaProofText: {
       color: '#ffffff',
-      fontSize: 18,
-      fontWeight: '900',
+      fontSize: 15,
+      fontWeight: '700',
       letterSpacing: 0.6,
       textAlign: 'center',
     },
@@ -2406,8 +2406,8 @@
     },
     sheetCoverTitle: {
       flex: 1,
-      fontSize: 20,
-      fontWeight: '800',
+      fontSize: 16,
+      fontWeight: '700',
       color: COLORS.neutral975,
       marginRight: 10,
     },
@@ -2803,6 +2803,6 @@
     dayLabel: { fontSize: 12, fontWeight: '600', color: '#222' },
     todayUnderline: { textDecorationLine: 'underline' },
     dayDate: { fontSize: 14, fontWeight: '700', color: '#111', marginTop: 4 },
-    sectionHeader: { fontSize: 18, fontWeight: 'bold', marginTop: 16, marginBottom: 8, color: '#333' },
+    sectionHeader: { fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 8, color: '#333' },
     placeholderSection: { padding: 20, backgroundColor: '#f9f9f9', borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 10 },
   });

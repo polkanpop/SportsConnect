@@ -1951,7 +1951,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
                         {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{displayName}</Text>
                           <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
                           <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>
                             <Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>
@@ -2053,7 +2053,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   {bookingSelectedPcId != null && (
                     <View style={{ marginTop: 14 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111' }}>Schedule</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#111' }}>Schedule</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <TouchableOpacity disabled={bookingWeekOffset === 0} onPress={() => setBookingWeekOffset((w) => w - 1)} style={{ padding: 6, borderRadius: 8, backgroundColor: '#e0e0e0', opacity: bookingWeekOffset === 0 ? 0.35 : 1 }}>
                             <Image source={ICONS.arrowright} style={{ width: 18, height: 18, tintColor: '#333', transform: [{ rotate: '180deg' }] }} resizeMode="contain" />
@@ -2178,7 +2178,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                     ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                                     : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                                   <View style={{ marginLeft: 10, flex: 1 }}>
-                                    <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{displayName}</Text>
+                                    <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{displayName}</Text>
                                     <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp)}</Text>
                                     <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}><Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>{statusRaw || 'pending'}</Text>
                                   </View>
@@ -2201,19 +2201,19 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   {bookingLoading && <View style={{ paddingVertical: 16, alignItems: 'center' }}><ActivityIndicator size="small" color={COLORS.neutral800} /></View>}
 
                   {/* Applicant List */}
-                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 6, color: '#111' }}>Applicant List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 16, marginBottom: 6, color: '#111' }}>Applicant List</Text>
                   {bookingApplicants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No applicants.</Text></View>
                   ) : bookingApplicants.map((b) => renderBookingRow(b, true))}
 
                   {/* Owner List */}
-                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
                   {mergedParticipants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
                   ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay, true))}
 
                   {/* Owner List */}
-                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>
                   {!bookingOwner ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No owner profile found.</Text></View>
                   ) : (
@@ -2229,7 +2229,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                         )}
                         <View style={{ marginLeft: 10, flex: 1 }}>
-                          <Text style={{ fontWeight: '800', fontSize: 14 }} numberOfLines={1}>{bookingOwner.name}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{bookingOwner.name}</Text>
                           <Text style={{ color: '#555', marginTop: 2 }} numberOfLines={1}>Owner</Text>
                         </View>
                       </TouchableOpacity>
@@ -2237,7 +2237,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   )}
 
                   {/* Administrator List */}
-                  <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Administrator List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Administrator List</Text>
                   <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No administrators yet.</Text></View>
 
 
@@ -2837,8 +2837,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#111',
     marginBottom: 8,
   },
@@ -2881,15 +2881,15 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#111',
     lineHeight: 20,
   },
   cardSub: {
     marginTop: 4,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '400',
     color: COLORS.neutral700,
   },
   label: {
@@ -2960,7 +2960,7 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.slate900,
   },
   segmentTextActive: {
@@ -2994,7 +2994,7 @@ const styles = StyleSheet.create({
   },
   subCourtPillText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.slate900,
   },
   subCourtPillTextActive: {
@@ -3015,7 +3015,7 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#111',
   },
   dayLabelSelected: {
@@ -3042,8 +3042,8 @@ const styles = StyleSheet.create({
   },
   serviceCardTitle: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#111',
     paddingRight: 10,
   },
@@ -3055,12 +3055,12 @@ const styles = StyleSheet.create({
   },
   serviceDeleteText: {
     color: COLORS.danger500,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 12,
   },
   serviceHeaderBtnText: {
     color: COLORS.neutral700,
-    fontWeight: '900',
+    fontWeight: '700',
     fontSize: 12,
   },
   timeRow: {
@@ -3091,8 +3091,8 @@ const styles = StyleSheet.create({
   },
   smallBtnText: {
     color: '#fff',
-    fontWeight: '900',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 13,
   },
   verifyErrorText: {
     marginTop: 6,
@@ -3217,8 +3217,8 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     color: '#fff',
-    fontWeight: '900',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 14,
   },
   saveBtnDisabled: {
     backgroundColor: '#F4C9A6',
@@ -3264,7 +3264,7 @@ const styles = StyleSheet.create({
   },
   autoApproveTitle: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#111',
   },
   autoApproveHint: {

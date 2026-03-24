@@ -694,8 +694,8 @@ const styles = StyleSheet.create({
     width: 78,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: '700',
     color: COLORS.neutral975,
   },
   toolbar: {
@@ -856,8 +856,8 @@ const styles = StyleSheet.create({
     tintColor: COLORS.neutral925,
   },
   sectionHeaderText: {
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.neutral925,
     lineHeight: 24,
   },
@@ -955,8 +955,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.neutral900,
   },
   modalText: {
@@ -987,6 +987,6 @@ const styles = StyleSheet.create({
   },
   modalBtnDeleteText: {
     color: '#fff',
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });
