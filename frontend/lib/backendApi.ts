@@ -125,36 +125,54 @@ async function request(path: string, options: RequestInit & { debugLabel?: strin
 	}
 
 	const doFetch = async (): Promise<any> => {
-	const res = await fetch(url, {
-		method,
-		signal: options.signal,
-		headers: {
-			'Content-Type': 'application/json; charset=utf-8',
-			...authHeader,
-			...(options.headers || {})
-		},
-		body: options.body,
-	})
-	const text = await res.text()
-	let data: any = null
-	try { data = text ? JSON.parse(text) : null } catch (e) { /* non-json */ }
-	const elapsed = Date.now() - t0
-	// Extremely detailed debug logs as requested
-	console.log('[backendApi]', debugLabel, { url, status: res.status, elapsedMs: elapsed, raw: text?.slice(0,500) })
-	if (!res.ok) {
-		const detailRaw = (data && (data.detail || data.error)) || `HTTP ${res.status}`
-		const detail = typeof detailRaw === 'string' ? detailRaw : (() => {
-			try { return JSON.stringify(detailRaw) } catch { return String(detailRaw) }
-		})()
-		if (res.status === 401 && attempt === 0 && protectedEndpoint && !isRefreshEndpoint(path)) {
-			const refreshed = await refreshAccessToken()
-			if (refreshed) {
-				return request(path, options, 1)
+		// Prevent fetch from hanging indefinitely on flaky mobile connections.
+		// Without a timeout a single stalled TCP connection blocks the entire Promise.all
+		// in listEventsCombinedByOrganizerId / listTrainingSessionsCombinedByCoachId,
+		// which makes the panel spinner freeze until the app is killed.
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), 15_000)
+		if (options.signal) {
+			if (options.signal.aborted) {
+				clearTimeout(timeoutId)
+				controller.abort()
+			} else {
+				options.signal.addEventListener('abort', () => controller.abort(), { once: true })
 			}
 		}
-		throw new Error(detail)
-	}
-	return data
+		try {
+		const res = await fetch(url, {
+			method,
+			signal: controller.signal,
+			headers: {
+				'Content-Type': 'application/json; charset=utf-8',
+				...authHeader,
+				...(options.headers || {})
+			},
+			body: options.body,
+		})
+		const text = await res.text()
+		let data: any = null
+		try { data = text ? JSON.parse(text) : null } catch (e) { /* non-json */ }
+		const elapsed = Date.now() - t0
+		// Extremely detailed debug logs as requested
+		console.log('[backendApi]', debugLabel, { url, status: res.status, elapsedMs: elapsed, raw: text?.slice(0,500) })
+		if (!res.ok) {
+			const detailRaw = (data && (data.detail || data.error)) || `HTTP ${res.status}`
+			const detail = typeof detailRaw === 'string' ? detailRaw : (() => {
+				try { return JSON.stringify(detailRaw) } catch { return String(detailRaw) }
+			})()
+			if (res.status === 401 && attempt === 0 && protectedEndpoint && !isRefreshEndpoint(path)) {
+				const refreshed = await refreshAccessToken()
+				if (refreshed) {
+					return request(path, options, 1)
+				}
+			}
+			throw new Error(detail)
+		}
+		return data
+		} finally {
+			clearTimeout(timeoutId)
+		}
 	}
 
 	if (dedupeKey) {

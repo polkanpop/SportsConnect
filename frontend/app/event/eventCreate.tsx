@@ -420,6 +420,15 @@ export default function EventCreateScreen() {
           if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
           return [{ courtbookingid: knownCbid, eventid: typeof createdEventId === 'number' ? createdEventId : -1, status: 'upcoming', title: stubTitle, court_name: stubCourtName } as any, ...arr]
         })
+        // Also inject the stub into the panel's host-events TQ key so EventPanel renders
+        // the event card immediately — even before the full evRow+infoRow retry loop below.
+        if (typeof userId === 'number') {
+          qc.setQueryData(queryKeys.createdEventsCombined(userId), (prev: any) => {
+            const arr = Array.isArray(prev) ? prev : []
+            if (arr.some((r: any) => Number(r?.courtbookingid) === knownCbid)) return arr
+            return [{ courtbookingid: knownCbid, eventid: typeof createdEventId === 'number' ? createdEventId : -1, status: 'upcoming', title: stubTitle, court_name: stubCourtName } as any, ...arr]
+          })
+        }
       }
 
       // Only add to lists when the DB returns a complete event + eventinfo row.

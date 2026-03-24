@@ -187,6 +187,16 @@ export default function TrainingSessionBooking() {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userId) })
       // Signal the organizer's TrainingSessionPanel to refresh its applicants list
       queryClient.invalidateQueries({ queryKey: queryKeys.tsBookingsBySession(session.sessionid) })
+      // Pre-populate the panel's rawSessionBookingsQuery cache so the organizer sees this participant
+      // immediately when switching to this session — before the invalidation refetch completes.
+      const tsPanelBucket = String((booking as any)?.status ?? '').toLowerCase().includes('join') || String((booking as any)?.status ?? '').toLowerCase().includes('approve') ? 'joined' : 'pending'
+      queryClient.setQueryData(queryKeys.tsBookingsBySession(session.sessionid), (prev: any) => {
+        const existing = prev ?? { pending: [], joined: [] }
+        const bucket = Array.isArray(existing[tsPanelBucket]) ? existing[tsPanelBucket] : []
+        const alreadyIn = bucket.some((b: any) => Number(b?.tsbookingid) === Number((booking as any)?.tsbookingid))
+        if (alreadyIn) return existing
+        return { ...existing, [tsPanelBucket]: [booking, ...bucket] }
+      })
 
       if (typeof userId === 'number') {
         void appendHistory(userId, {

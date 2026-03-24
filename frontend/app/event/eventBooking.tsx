@@ -198,6 +198,17 @@ export default function EventBooking() {
 
       // Signal the organizer's EventPanel to refresh its applicants list
       queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(event.eventid) })
+      // Pre-populate the panel's rawEventBookingsQuery cache with this booking row so the organizer
+      // sees the participant immediately when switching to this event — even before the invalidation
+      // triggers a refetch (which only fires while that event is the selected one in the panel).
+      const panelBucket = String((booking as any)?.status ?? '').toLowerCase().includes('join') || String((booking as any)?.status ?? '').toLowerCase().includes('approve') ? 'joined' : 'pending'
+      queryClient.setQueryData(queryKeys.eventBookingsByEvent(event.eventid), (prev: any) => {
+        const existing = prev ?? { pending: [], joined: [] }
+        const bucket = Array.isArray(existing[panelBucket]) ? existing[panelBucket] : []
+        const alreadyIn = bucket.some((b: any) => Number(b?.eventbookingid) === Number((booking as any)?.eventbookingid))
+        if (alreadyIn) return existing
+        return { ...existing, [panelBucket]: [booking, ...bucket] }
+      })
 
       // Patch join_status immediately so Home/eventList reflect the booking without a full refetch.
       // Invalidating eventsCombined here would trigger a background cold-fetch on Home's persistent
