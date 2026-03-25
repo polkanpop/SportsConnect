@@ -58,9 +58,15 @@ import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboardi
               })
               console.log('[signup] success', res)
               await requestLocationPermissionOnceAfterSignup()
-              setSuccessMessage('Account created. Please verify your email to continue.')
               setPassword('')
               setConfirmPassword('')
+              if (res?.merged) {
+                // Email already verified via Google — skip waiting screen, go straight to login.
+                setSuccessMessage('Google account linked! You can now sign in with your email and password.')
+                setTimeout(() => router.replace('/(auth)/login'), 1800)
+                return
+              }
+              setSuccessMessage('Account created. Please verify your email to continue.')
               if (!AUTO_EMAIL_LOGIN) {
                 setTimeout(() => {
                   router.replace(`/(auth)/waiting?email=${encodeURIComponent(email.trim())}` as any)

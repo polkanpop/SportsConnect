@@ -192,7 +192,39 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Password is required for local accounts")
 
     # Check duplicates (email OR username)
-    if find_user_by_email(email):
+    existing_by_email = find_user_by_email(email)
+    if existing_by_email:
+        existing_userid = existing_by_email.get("userid")
+        existing_login = rest_select("userlogin", "loginid, logintype, username", {"userid": existing_userid}, single=True)
+        existing_logintype = ((existing_login.get("logintype") or "") if existing_login else "").strip().lower()
+        if existing_login and existing_logintype and existing_logintype != "local":
+            # --- Account merge: attach local credentials to an existing OAuth account ---
+            # username must not be claimed by a DIFFERENT user already.
+            taken = find_userlogin_by_username(username)
+            if taken and taken.get("userid") != existing_userid:
+                raise HTTPException(status_code=409, detail="Username already taken by another account")
+            pepper = _get_password_pepper()
+            bcrypt_hash = pwd_context.hash(password + pepper)
+            try:
+                rest_update(
+                    "userlogin",
+                    {"loginid": existing_login.get("loginid")},
+                    {"username": username, "passwordhash": bcrypt_hash, "logintype": "Local"},
+                )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Account merge failed: {e}")
+            elapsed = _now_ms() - t0
+            logger.info(f"/signup MERGE userid={existing_userid} email={email} username={username}")
+            return {
+                "status": "ok",
+                "merged": True,
+                "userid": existing_userid,
+                "username": username,
+                "email": email,
+                "elapsedMs": elapsed,
+                "verificationEmailSent": False,
+                "emailVerified": True,
+            }
         raise HTTPException(status_code=409, detail="Email already exists")
     if find_userlogin_by_username(username):
         raise HTTPException(status_code=409, detail="Username already exists")
