@@ -213,8 +213,14 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
                 )
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Account merge failed: {e}")
+            # Overwrite the display name with what the user typed in the signup form.
+            if account_name:
+                try:
+                    rest_update("userinfo", {"userid": existing_userid}, {"name": account_name})
+                except Exception as e:
+                    logger.warning(f"/signup MERGE name update failed userid={existing_userid} err={e}")
             elapsed = _now_ms() - t0
-            logger.info(f"/signup MERGE userid={existing_userid} email={email} username={username}")
+            logger.info(f"/signup MERGE userid={existing_userid} email={email} username={username} name={account_name}")
             return {
                 "status": "ok",
                 "merged": True,

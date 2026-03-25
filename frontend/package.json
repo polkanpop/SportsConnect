@@ -82,6 +82,7 @@
     "xml2js": "^0.5.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^13.2.0",
     "@types/lodash.debounce": "^4.0.9",

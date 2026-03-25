@@ -8,8 +8,10 @@ const { Text } = require('@react-navigation/elements');
 import { Image } from 'expo-image';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/env';
+import { persistAuthSession } from '@/lib/backendApi';
+import { queryClient } from '@/providers/query-provider';
+import { queryKeys } from '@/hooks/query-keys';
 
 // Helper: parse the fragment returned from /authorize redirect (#access_token=...)
 function parseFragment(url: string) {
@@ -116,22 +118,8 @@ export default function GoogleSignInButton() {
                 Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
                 return;
               }
-              await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-                userid: syncJson.userid,
-                username: syncJson.username,
-                email: syncJson.email,
-                name: syncJson.name,
-                logintype: syncJson.logintype || 'Google',
-              }));
-              if (syncJson.accessToken && syncJson.refreshToken) {
-                await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-                  accessToken: syncJson.accessToken,
-                  accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
-                  refreshToken: syncJson.refreshToken,
-                  refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
-                }));
-                await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
-              }
+              await persistAuthSession(syncJson, { rememberMe: true });
+              queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
             } catch (e) {
               console.error('[GoogleSignIn] backend sync (exchange) exception', e);
               setLoading(false);
@@ -193,25 +181,8 @@ export default function GoogleSignInButton() {
           Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
           return;
         }
-        await AsyncStorage.setItem(
-          '@backendProfile',
-          JSON.stringify({
-            userid: syncJson.userid,
-            username: syncJson.username,
-            email: syncJson.email,
-            name: syncJson.name,
-            logintype: syncJson.logintype || 'Google',
-          }),
-        );
-        if (syncJson.accessToken && syncJson.refreshToken) {
-          await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-            accessToken: syncJson.accessToken,
-            accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
-            refreshToken: syncJson.refreshToken,
-            refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
-          }));
-          await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
-        }
+        await persistAuthSession(syncJson, { rememberMe: true });
+        queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
       } catch (e) {
         console.error('[GoogleSignIn] backend sync exception', e);
         setLoading(false);
