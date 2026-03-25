@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto'; // Ensure URL & URLSearchParams exist in RN environment
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import { TouchableOpacity, ActivityIndicator } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useState, useCallback } from 'react';
 import { expo } from '@/app.json';
 const { Text } = require('@react-navigation/elements');
@@ -102,34 +102,41 @@ export default function GoogleSignInButton() {
           console.debug('[GoogleSignIn] exchangeCodeForSession success', { user: data.session?.user?.id });
           // Attempt backend sync using access token from established session
           const token = data.session?.access_token;
-          if (token && process.env.EXPO_PUBLIC_BACKEND_URL) {
+          if (token && backendUrl) {
             try {
-              const syncResp = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/auth/sync`, {
+              const syncResp = await fetch(`${backendUrl}/api/auth/sync`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
               });
               const syncJson = await syncResp.json().catch(() => ({}));
               console.debug('[GoogleSignIn] backend sync (exchange)', { status: syncResp.status, body: syncJson });
-              if (syncResp.ok && syncJson?.userid) {
-                await AsyncStorage.setItem('@backendProfile', JSON.stringify({
-                  userid: syncJson.userid,
-                  username: syncJson.username,
-                  email: syncJson.email,
-                  name: syncJson.name,
-                  logintype: syncJson.logintype || 'Google',
+              if (!syncResp.ok || !syncJson?.userid) {
+                console.error('[GoogleSignIn] backend sync (exchange) failed', syncResp.status, syncJson);
+                setLoading(false);
+                Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
+                return;
+              }
+              await AsyncStorage.setItem('@backendProfile', JSON.stringify({
+                userid: syncJson.userid,
+                username: syncJson.username,
+                email: syncJson.email,
+                name: syncJson.name,
+                logintype: syncJson.logintype || 'Google',
+              }));
+              if (syncJson.accessToken && syncJson.refreshToken) {
+                await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+                  accessToken: syncJson.accessToken,
+                  accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
+                  refreshToken: syncJson.refreshToken,
+                  refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
                 }));
-                if (syncJson.accessToken && syncJson.refreshToken) {
-                  await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-                    accessToken: syncJson.accessToken,
-                    accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
-                    refreshToken: syncJson.refreshToken,
-                    refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
-                  }));
-                  await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
-                }
+                await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
               }
             } catch (e) {
-              console.error('[GoogleSignIn] backend sync (exchange) failed', e);
+              console.error('[GoogleSignIn] backend sync (exchange) exception', e);
+              setLoading(false);
+              Alert.alert('Sign-in error', 'Could not connect to backend. Please try again.');
+              return;
             }
           }
           setLoading(false);
@@ -170,40 +177,47 @@ export default function GoogleSignInButton() {
     }
 
     // Sync / provision user in backend (creates numeric userid) & persist locally
-    try {
-      if (!backendUrl) {
-        console.warn('[GoogleSignIn] EXPO_PUBLIC_BACKEND_URL not set; skipping sync');
-      } else {
+    if (!backendUrl) {
+      console.warn('[GoogleSignIn] EXPO_PUBLIC_BACKEND_URL not set; skipping sync');
+    } else {
+      try {
         const syncResp = await fetch(`${backendUrl}/api/auth/sync`, {
           method: 'POST',
-            headers: { Authorization: `Bearer ${frag.access_token}` },
+          headers: { Authorization: `Bearer ${frag.access_token}` },
         });
         const syncJson = await syncResp.json().catch(() => ({}));
         console.debug('[GoogleSignIn] backend sync', { status: syncResp.status, body: syncJson });
-        if (syncResp.ok && syncJson?.userid) {
-          await AsyncStorage.setItem(
-            '@backendProfile',
-            JSON.stringify({
-              userid: syncJson.userid,
-              username: syncJson.username,
-              email: syncJson.email,
-              name: syncJson.name,
-              logintype: syncJson.logintype || 'Google',
-            }),
-          );
-          if (syncJson.accessToken && syncJson.refreshToken) {
-            await AsyncStorage.setItem('@backendAuth', JSON.stringify({
-              accessToken: syncJson.accessToken,
-              accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
-              refreshToken: syncJson.refreshToken,
-              refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
-            }));
-            await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
-          }
+        if (!syncResp.ok || !syncJson?.userid) {
+          console.error('[GoogleSignIn] backend sync failed', syncResp.status, syncJson);
+          setLoading(false);
+          Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
+          return;
         }
+        await AsyncStorage.setItem(
+          '@backendProfile',
+          JSON.stringify({
+            userid: syncJson.userid,
+            username: syncJson.username,
+            email: syncJson.email,
+            name: syncJson.name,
+            logintype: syncJson.logintype || 'Google',
+          }),
+        );
+        if (syncJson.accessToken && syncJson.refreshToken) {
+          await AsyncStorage.setItem('@backendAuth', JSON.stringify({
+            accessToken: syncJson.accessToken,
+            accessTokenExpiresAt: syncJson.accessTokenExpiresAt,
+            refreshToken: syncJson.refreshToken,
+            refreshTokenExpiresAt: syncJson.refreshTokenExpiresAt,
+          }));
+          await AsyncStorage.setItem('@localAuthToken', syncJson.accessToken);
+        }
+      } catch (e) {
+        console.error('[GoogleSignIn] backend sync exception', e);
+        setLoading(false);
+        Alert.alert('Sign-in error', 'Could not connect to backend. Please try again.');
+        return;
       }
-    } catch (e) {
-      console.error('[GoogleSignIn] backend sync failed', e);
     }
 
     setLoading(false);
