@@ -708,7 +708,7 @@ export default function EventCreateScreen() {
       if (typeof userId === 'number') {
         try { qc.invalidateQueries({ queryKey: queryKeys.courtBookingsUser(userId) }) } catch {}
       }
-    }, [userId, qc])
+    }, [userId, qc])  
   )
 
   return (
@@ -1095,3 +1095,4 @@ const styles = StyleSheet.create({
   modalConfirm: { backgroundColor:'#FF5733' },
   modalBtnText: { fontSize:14, fontWeight:'600', color:'#222' },
 })
+  

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persistAuthSession } from '@/lib/backendApi';
@@ -26,35 +26,55 @@ export default function EmailVerifiedAutoLoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const bootstrap = async () => {
-      try {
-        if (params.status !== 'ok') {
-          setError('Invalid verification response');
-          return;
-        }
-        // Consolidated persistence helper (sets profile, tokens, remember flag)
-        const authData = {
-          userid: params.userid ? Number(params.userid) : undefined,
-          username: params.username,
-          name: params.name,
-          email: params.email,
-          accessToken: params.accessToken,
-          accessTokenExpiresAt: params.accessTokenExpiresAt,
-          refreshToken: params.refreshToken,
-          refreshTokenExpiresAt: params.refreshTokenExpiresAt,
-        }
-        await persistAuthSession(authData, { rememberMe: true })
-        await requestLocationPermissionOnceAfterSignup()
-        // Clear pending signup profile (if any)
-        await AsyncStorage.removeItem('@backendProfilePending');
-        setDone(true);
-        // Route into main app (tabs) after short delay
-        setTimeout(() => router.replace('/(tabs)/Home'), 600);
-      } catch (e: any) {
-        setError(e.message || 'Auto login failed');
+    let cancelled = false;
+
+    const run = async () => {
+      // --- Cold-start / killed-app guard ---
+      // Linking.getInitialURL() returns the URL that launched the app IF it was killed
+      // (cold start). If the app was already running in the background, it returns null.
+      // We intentionally do NOT process the deep link in killed state: the user must
+      // open the app normally and click the link while it is alive.
+      const initialUrl = await Linking.getInitialURL();
+      if (cancelled) return;
+      if (initialUrl) {
+        // App was opened from a killed state via this deep link — silently redirect to login.
+        router.replace('/(auth)/login');
+        return;
       }
+
+      // App was already running (foreground/background) — proceed with auto-login.
+      const bootstrap = async () => {
+        try {
+          if (params.status !== 'ok') {
+            setError('Invalid verification response');
+            return;
+          }
+          const authData = {
+            userid: params.userid ? Number(params.userid) : undefined,
+            username: params.username,
+            name: params.name,
+            email: params.email,
+            accessToken: params.accessToken,
+            accessTokenExpiresAt: params.accessTokenExpiresAt,
+            refreshToken: params.refreshToken,
+            refreshTokenExpiresAt: params.refreshTokenExpiresAt,
+          }
+          await persistAuthSession(authData, { rememberMe: true })
+          await requestLocationPermissionOnceAfterSignup()
+          await AsyncStorage.removeItem('@backendProfilePending');
+          if (!cancelled) {
+            setDone(true);
+            setTimeout(() => router.replace('/(tabs)/Home'), 600);
+          }
+        } catch (e: any) {
+          if (!cancelled) setError(e.message || 'Auto login failed');
+        }
+      };
+      bootstrap();
     };
-    bootstrap();
+
+    run();
+    return () => { cancelled = true; };
   }, [params]);
 
   return (

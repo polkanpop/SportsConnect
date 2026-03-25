@@ -55,7 +55,7 @@ def find_user_by_email(email: str) -> Optional[dict]:
 
 def find_userlogin_by_username(username: str) -> Optional[dict]:
     start = _now_ms()
-    row = rest_select("userlogin", "loginid, userid, username, passwordhash", {"username": username}, single=True)
+    row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"username": username}, single=True)
     logger.debug(f"find_userlogin_by_username username={username} ms={_now_ms()-start} row={row}")
     return row
 
@@ -176,11 +176,20 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
     password = payload.get('password') or ''
     account_name = (payload.get('accountName') or '').strip()
     role = (payload.get('role') or 'player').strip()
+    logintype = (payload.get('logintype') or 'local').strip().lower()
 
-    logger.debug(f"/signup START username={username} email={email} role={role} accountName={account_name}")
+    logger.debug(f"/signup START username={username} email={email} role={role} accountName={account_name} logintype={logintype}")
 
-    if not username or not email or not password:
-        raise HTTPException(status_code=400, detail="Missing username/email/password")
+    # /signup is strictly for local (email+password) accounts.
+    # Google/Apple users must use /auth/sync — reject anything else here.
+    if logintype != 'local':
+        raise HTTPException(status_code=400, detail="Social/OAuth accounts must register via the /auth/sync endpoint")
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required for local accounts")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if not password:
+        raise HTTPException(status_code=400, detail="Password is required for local accounts")
 
     # Check duplicates (email OR username)
     if find_user_by_email(email):
@@ -321,7 +330,7 @@ def login(payload: dict):
         if not info_row:
             raise HTTPException(status_code=404, detail="Account not found")
         userid = info_row.get('userid')
-        login_row = rest_select("userlogin", "loginid, userid, username, passwordhash", {"userid": userid}, single=True)
+        login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
         # Enforce email verification
         unver = find_unverified_by_email(identifier)
         if unver and not unver.get('email_verified'):
@@ -343,6 +352,16 @@ def login(payload: dict):
 
     if not login_row:
         raise HTTPException(status_code=404, detail="Login record not found")
+
+    # Reject OAuth (Google/Apple/etc.) accounts from using password-based login.
+    # These accounts have NULL passwords and must use /auth/sync.
+    _logintype = (login_row.get('logintype') or 'local').strip().lower()
+    if _logintype != 'local':
+        provider_display = login_row.get('logintype') or 'social'
+        raise HTTPException(
+            status_code=400,
+            detail=f"This account uses {provider_display} sign-in. Please use the corresponding sign-in method.",
+        )
 
     stored_pw = login_row.get('passwordhash')
 
@@ -860,17 +879,15 @@ def sync_social_user(
         else:
             raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
 
-    # Derive a unique username from the email prefix
-    base_username = email.split("@")[0]
-    username = base_username
-    if find_userlogin_by_username(username):
-        username = f"{base_username}_{userid}"
+    # For OAuth users: username and passwordhash are NULL in the DB.
+    # We derive a display name for the JWT claim only — it is NOT stored.
+    username_for_token = email.split("@")[0]
 
     try:
         login_rows = rest_upsert("userlogin", {
             "userid": userid,
-            "username": username,
-            "passwordhash": "",  # Social users have no password
+            "username": None,       # NULL — Google users have no username
+            "passwordhash": None,   # NULL — Google users have no password
             "logintype": provider,
         })
     except Exception as e:
@@ -885,8 +902,8 @@ def sync_social_user(
                 login_rows = rest_upsert("userlogin", {
                     "loginid": next_loginid,
                     "userid": userid,
-                    "username": username,
-                    "passwordhash": "",
+                    "username": None,
+                    "passwordhash": None,
                     "logintype": provider,
                 })
             except Exception as e3:
@@ -894,7 +911,8 @@ def sync_social_user(
         else:
             raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
 
-    # Mark the email as pre-verified (OAuth providers already verify email ownership)
+    # Mark email as pre-verified — OAuth providers already confirm email ownership.
+    # This is critical: /login checks unverified_users.email_verified before allowing access.
     try:
         ver_rec = _create_or_update_unverified(userid, email)
         rest_update(
@@ -902,11 +920,14 @@ def sync_social_user(
             {"unverifiedid": ver_rec.get("unverifiedid")},
             {"email_verified": True, "token_hash": f"SOCIAL:{provider}:{userid}"},
         )
-    except Exception:
-        pass  # Non-critical; verification check uses email lookup so this row is optional
+        logger.debug(f"/auth/sync pre-verified email for userid={userid}")
+    except Exception as e:
+        # Log clearly — a failure here won't block /auth/sync (OAuth bypasses /login),
+        # but it would affect /verification-status and any future local login attempts.
+        logger.error(f"/auth/sync FAILED to write unverified_users pre-verification userid={userid} err={e}")
 
     try:
-        tokens = create_user_tokens(userid, username, email, False)
+        tokens = create_user_tokens(userid, username_for_token, email, False)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed issuing tokens: {e}")
 
@@ -914,7 +935,7 @@ def sync_social_user(
     return {
         "status": "ok",
         "userid": userid,
-        "username": username,
+        "username": username_for_token,
         "email": email,
         "name": name,
         "logintype": provider,
