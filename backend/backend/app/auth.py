@@ -57,7 +57,7 @@ def decode_with_jwks(token: str) -> Optional[dict]:
         if kid and k.get("kid") != kid:
             continue
         try:
-            return jwt.decode(token, k, algorithms=RS_ALGORITHMS)
+            return jwt.decode(token, k, algorithms=RS_ALGORITHMS, options={"verify_aud": False})
         except Exception:
             continue
     return None
@@ -94,7 +94,7 @@ def _decode_hs_token(token: str) -> dict:
     if not secret:
         raise HTTPException(status_code=500, detail="JWT secret not configured; set SUPABASE_JWT_SECRET or SUPABASE_ANON_KEY")
     try:
-        return jwt.decode(token, secret, algorithms=[HS_ALGORITHM])
+        return jwt.decode(token, secret, algorithms=[HS_ALGORITHM], options={"verify_aud": False})
     except JWTError as e:
         # Log first & last 12 chars of token to correlate without exposing full secret
         snippet = f"{token[:12]}..{token[-12:]}" if len(token) > 30 else token
