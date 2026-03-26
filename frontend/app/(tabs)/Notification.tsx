@@ -460,6 +460,10 @@ export default function NotificationsPage() {
     })
   }
 
+  const handleSelectAll = () => {
+    setSelectedIds(new Set(rows.map(r => r.notificationid)))
+  }
+
   const handleMarkAllRead = async () => {
     const unreadCount = rows.reduce((acc, r) => acc + ((r.status || '').toLowerCase() === 'unread' ? 1 : 0), 0)
     if (unreadCount === 0) return
@@ -628,9 +632,15 @@ export default function NotificationsPage() {
                     </TouchableOpacity>
                   </>
                 ) : null}
-                <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
-                  <Text style={styles.markAllText}>Mark all as read</Text>
-                </TouchableOpacity>
+                {deleteMode ? (
+                  <TouchableOpacity style={styles.markAllWrap} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
+                    <Text style={styles.markAllText}>Select all</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
+                    <Text style={styles.markAllText}>Mark all as read</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <View style={styles.sectionHeaderActionSpacer} />

@@ -1,4 +1,4 @@
-import { ICONS } from "@/constants/icons";
+﻿import { ICONS } from "@/constants/icons";
 import { queryKeys } from "@/hooks/query-keys";
 import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {
@@ -90,6 +90,16 @@ function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: stri
 	const dd = String(d.getDate()).padStart(2, "0");
 	const yyyy = String(d.getFullYear());
 	return `Date: ${weekday}, ${mm}-${dd}-${yyyy}`;
+}
+
+function formatEventTimeLabel(ev: { start_timestamp?: string | null; end_timestamp?: string | null; time?: string | null }): string | null {
+	const candidate = (ev.start_timestamp || ev.time || "").trim();
+	const s = candidate ? parseTimestampLoose(candidate) : null;
+	if (!s || Number.isNaN(s.getTime())) return null;
+	const fmt = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+	const e = ev.end_timestamp ? parseTimestampLoose(ev.end_timestamp) : null;
+	if (e && !Number.isNaN(e.getTime())) return `Time: ${fmt(s)} - ${fmt(e)}`;
+	return `Time: ${fmt(s)}`;
 }
 
 function asStringArray(v: unknown): string[] {
@@ -1465,6 +1475,34 @@ export default function EventPanel({ organizerId }: Props) {
 										>
 											{formatEventDateLabel(ev)}
 										</Text>
+										{!!formatEventTimeLabel(ev) && (
+											<Text
+												numberOfLines={1}
+												style={{
+													color: selected ? "#f0fdf4" : "#555",
+													marginTop: 2,
+													fontSize: 12,
+													fontWeight: "700",
+													lineHeight: 16,
+												}}
+											>
+												{formatEventTimeLabel(ev)}
+											</Text>
+										)}
+										{!!(Array.isArray(ev.venue) ? ev.venue[0] : ev.venue) && (
+											<Text
+												numberOfLines={1}
+												style={{
+													color: selected ? "#f0fdf4" : "#555",
+													marginTop: 2,
+													fontSize: 12,
+													fontWeight: "700",
+													lineHeight: 16,
+												}}
+											>
+												Venue: {Array.isArray(ev.venue) ? ev.venue[0] : ev.venue}
+											</Text>
+										)}
 										<Text
 											style={{
 												color: selected ? "#ecfdf5" : "#374151",

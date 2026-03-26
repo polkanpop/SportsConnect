@@ -284,12 +284,12 @@ function shouldAutoCompleteStatus(statusRaw: unknown): boolean {
 	return st === 'upcoming'
 }
 
-function isPastEnd(endRaw: unknown, fallbackStartRaw: unknown): boolean {
+function isPastEnd(endRaw: unknown, fallbackStartRaw: unknown, graceMs = 0): boolean {
 	const end = parseTimestampLoose(endRaw)
 	const start = parseTimestampLoose(fallbackStartRaw)
 	const now = Date.now()
-	if (end && !Number.isNaN(end.getTime())) return end.getTime() < now
-	if (start && !Number.isNaN(start.getTime())) return start.getTime() < now
+	if (end && !Number.isNaN(end.getTime())) return end.getTime() + graceMs < now
+	if (start && !Number.isNaN(start.getTime())) return start.getTime() + graceMs < now
 	return false
 }
 
@@ -318,13 +318,13 @@ async function autoCompletePastStatusesInBackground(payload: {
 
 		for (const ev of payload.events || []) {
 			if (!shouldAutoCompleteStatus((ev as any).status)) continue
-			if (isPastEnd((ev as any).end_timestamp, (ev as any).start_timestamp ?? (ev as any).time)) {
+			if (isPastEnd((ev as any).end_timestamp, (ev as any).start_timestamp ?? (ev as any).time, 3_600_000)) {
 				if (typeof (ev as any).eventid === 'number') eventIdsToComplete.push((ev as any).eventid)
 			}
 		}
 		for (const s of payload.sessions || []) {
 			if (!shouldAutoCompleteStatus((s as any).status)) continue
-			if (isPastEnd((s as any).end_timestamp, (s as any).start_timestamp ?? (s as any).time)) {
+			if (isPastEnd((s as any).end_timestamp, (s as any).start_timestamp ?? (s as any).time, 3_600_000)) {
 				if (typeof (s as any).sessionid === 'number') sessionIdsToComplete.push((s as any).sessionid)
 			}
 		}
@@ -346,7 +346,7 @@ async function autoCompletePastStatusesInBackground(payload: {
 			const related = Array.isArray((b as any).events) ? (b as any).events[0] : (b as any).events
 			const start = (b as any).start_timestamp ?? (related as any)?.start_timestamp ?? (related as any)?.time
 			const end = (b as any).end_timestamp ?? (related as any)?.end_timestamp
-			if (isPastEnd(end, start) && typeof (b as any).eventbookingid === 'number') {
+			if (isPastEnd(end, start, 3_600_000) && typeof (b as any).eventbookingid === 'number') {
 				const approval = String((b as any).status ?? '').trim().toLowerCase()
 				if (approval === 'pending') eventBookingIdsToMissed.push((b as any).eventbookingid)
 				else eventBookingIdsToComplete.push((b as any).eventbookingid)
@@ -359,7 +359,7 @@ async function autoCompletePastStatusesInBackground(payload: {
 			const related = Array.isArray((b as any).trainingsessions) ? (b as any).trainingsessions[0] : (b as any).trainingsessions
 			const start = (b as any).start_timestamp ?? (related as any)?.start_timestamp ?? (related as any)?.time
 			const end = (b as any).end_timestamp ?? (related as any)?.end_timestamp
-			if (isPastEnd(end, start) && typeof (b as any).tsbookingid === 'number') {
+			if (isPastEnd(end, start, 3_600_000) && typeof (b as any).tsbookingid === 'number') {
 				const approval = String((b as any).status ?? '').trim().toLowerCase()
 				if (approval === 'pending') tsBookingIdsToMissed.push((b as any).tsbookingid)
 				else tsBookingIdsToComplete.push((b as any).tsbookingid)

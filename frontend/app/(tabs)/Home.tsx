@@ -235,7 +235,7 @@ export default function Home() {
     const end = parseMaybeTimestamp(endRaw)
     const nowTs = Date.now()
 
-    if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
+    if (end && !Number.isNaN(end.getTime())) return end.getTime() + 3_600_000 >= nowTs
     if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
     return true
   }
@@ -972,6 +972,14 @@ export default function Home() {
                               style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: COLORS.neutral800 }}
                             >
                               {dateTimeLine}
+                            </Text>
+                          )}
+                          {!!(Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue) && (
+                            <Text
+                              numberOfLines={1}
+                              style={{ marginTop: 2, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '600', color: COLORS.neutral600 }}
+                            >
+                              {Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue}
                             </Text>
                           )}
                         </View>

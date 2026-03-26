@@ -626,7 +626,7 @@ export default function ActivityPage() {
         } else if (bs === 'approved') {
           if (ss !== 'cancelled') {
             const approvedBadge = { label: 'Approved', bg: '#22C55E' }
-            if (ss === 'completed') badges = [approvedBadge, { label: 'Completed', bg: '#6B7280' }]
+            if (ss === 'completed') badges = [approvedBadge, { label: 'Completed', bg: '#22C55E' }]
             else if (ss === 'missed') badges = [approvedBadge, { label: 'Missed', bg: '#374151' }]
             else badges = [approvedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
           }
@@ -636,7 +636,7 @@ export default function ActivityPage() {
           badges = [{ label: 'Pending', bg: '#EAB308' }]
         } else if (bs === 'joined') {
           const joinedBadge = { label: 'Joined', bg: '#22C55E' }
-          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: 'Completed', bg: '#6B7280' }]
+          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: 'Completed', bg: '#22C55E' }]
           else if (ss.includes('missed') || item.status === 'Missed') badges = [joinedBadge, { label: 'Missed', bg: '#374151' }]
           else badges = [joinedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
         }

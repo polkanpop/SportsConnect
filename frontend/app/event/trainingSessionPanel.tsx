@@ -94,6 +94,16 @@ function formatSessionDateLabel(session: { time?: string | null }) {
   return `Date: ${weekday}, ${mm}-${dd}-${yyyy}`
 }
 
+function formatSessionTimeLabel(session: { start_timestamp?: string | null; end_timestamp?: string | null; time?: string | null }): string | null {
+  const candidate = String(session.start_timestamp || session.time || '').trim()
+  const s = candidate ? parseTimestampLoose(candidate) : null
+  if (!s || Number.isNaN(s.getTime())) return null
+  const fmt = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const e = session.end_timestamp ? parseTimestampLoose(session.end_timestamp) : null
+  if (e && !Number.isNaN(e.getTime())) return `Time: ${fmt(s)} - ${fmt(e)}`
+  return `Time: ${fmt(s)}`
+}
+
 function asStringArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean)
   if (typeof v !== 'string') return []
@@ -1362,6 +1372,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       <Text style={{ marginTop: 6, color: selected ? 'rgba(255,255,255,0.92)' : '#555', fontWeight: '700', fontSize: 12 }}>
                         {formatSessionDateLabel(s)}
                       </Text>
+                      {!!formatSessionTimeLabel(s) && (
+                        <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : '#555', fontWeight: '700', fontSize: 12 }}>
+                          {formatSessionTimeLabel(s)}
+                        </Text>
+                      )}
+                      {!!(Array.isArray(s.venue) ? s.venue[0] : s.venue) && (
+                        <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : '#555', fontWeight: '700', fontSize: 12 }}>
+                          Venue: {Array.isArray(s.venue) ? s.venue[0] : s.venue}
+                        </Text>
+                      )}
                       <Text
                         style={{
                           color: selected ? '#ecfdf5' : '#374151',
