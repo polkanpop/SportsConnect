@@ -14,11 +14,12 @@ import { COLORS } from '@/constants/colors'
 export default function ReviewForm() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { targettype, targetid, title, venueName } = useLocalSearchParams<{
+  const { targettype, targetid, title, venueName, contextLabel } = useLocalSearchParams<{
     targettype: string
     targetid: string
     title: string
     venueName?: string
+    contextLabel?: string
   }>()
 
   const [rating, setRating] = useState(0)
@@ -87,7 +88,7 @@ export default function ReviewForm() {
           {/* Target Info */}
           <View style={styles.card}>
             <Text style={styles.targetLabel}>{displayTitle}</Text>
-            <Text style={styles.targetType}>{String(targettype ?? '').replace('trainingsession', 'Training Session')}</Text>
+            <Text style={styles.targetType}>{contextLabel ? decodeURIComponent(String(contextLabel)) : String(targettype ?? '').replace('trainingsession', 'Training Session')}</Text>
           </View>
 
           {/* Star Rating */}

@@ -1273,14 +1273,49 @@ export default function DetailsPage() {
   ])
 
   const canReview = useMemo(() => {
+    if (isRecordCancelled) return false
+    if (bookingActionState?.reviewEnabled) return true
+    // Day-passed fallback: owner may have forgotten to mark attendance
+    let endTs: string | null = null
     if (parsed.kind === 'court_booking') {
-      return !!bookingActionState?.reviewEnabled && !isRecordCancelled
+      endTs = (courtBookingQuery.data as any)?.end_timestamp ?? null
+    } else if (parsed.kind === 'event_booking') {
+      const eventid = Number((eventBookingQuery.data as any)?.eventid)
+      const evCombined = Number.isFinite(eventid) ? eventsCombinedList.find((x) => x.eventid === eventid) : null
+      const ev: any = evCombined || eventBookingEventQuery.data
+      endTs = ev?.end_timestamp ?? (eventBookingQuery.data as any)?.end_timestamp ?? null
+    } else if (parsed.kind === 'session_booking') {
+      const sessionid = Number((sessionBookingQuery.data as any)?.sessionid)
+      const sCombined = Number.isFinite(sessionid) ? sessionsCombinedList.find((x) => x.sessionid === sessionid) : null
+      const s: any = sCombined || sessionBookingSessionQuery.data
+      endTs = s?.end_timestamp ?? (sessionBookingQuery.data as any)?.end_timestamp ?? null
+    } else {
+      return false
     }
-    if (parsed.kind === 'event_booking' || parsed.kind === 'session_booking') {
-      return !!bookingActionState?.reviewEnabled && !isRecordCancelled
-    }
-    return false
-  }, [parsed.kind, bookingActionState, isRecordCancelled])
+    if (!endTs) return false
+    const endDate = new Date(String(endTs).replace(' ', 'T'))
+    if (isNaN(endDate.getTime())) return false
+    const bookingDayEnd = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1)
+    if (Date.now() < bookingDayEnd.getTime()) return false
+    // Check not explicitly missed
+    const statusKey = parsed.kind === 'court_booking'
+      ? (courtBookingQuery.data as any)?.bookingstatus
+      : parsed.kind === 'event_booking'
+      ? (eventBookingQuery.data as any)?.bookingstatus
+      : (sessionBookingQuery.data as any)?.bookingstatus
+    return !String(statusKey ?? '').toLowerCase().includes('miss')
+  }, [
+    parsed.kind,
+    bookingActionState,
+    isRecordCancelled,
+    courtBookingQuery.data,
+    eventBookingQuery.data,
+    sessionBookingQuery.data,
+    eventsCombinedList,
+    eventBookingEventQuery.data,
+    sessionsCombinedList,
+    sessionBookingSessionQuery.data,
+  ])
 
   const isBookingKind = parsed.kind === 'court_booking' || parsed.kind === 'event_booking' || parsed.kind === 'session_booking'
 
@@ -1310,10 +1345,16 @@ export default function DetailsPage() {
       if (typeof eventid !== 'number') return null
       const ev = eventsCombinedList.find((x) => x.eventid === eventid) || eventBookingEventQuery.data
       const titleText = resolveTitle({ ...(ev || {}), eventinfo: eventBookingInfoQuery.data ? [eventBookingInfoQuery.data] : [] }, 'Event')
+      const courtid = eventSummaryCourtid
+      if (!Number.isFinite(courtid) || courtid == null) return null
+      const courtName = (eventSummaryVenueInfoQuery.data as any)?.name?.trim() || resolveVenueNameOnly(ev) || null
+      if (!courtName) return null
       return {
-        targettype: 'event',
-        targetid: String(eventid),
-        title: encodeURIComponent(titleText),
+        targettype: 'court',
+        targetid: String(courtid),
+        title: encodeURIComponent(courtName),
+        venueName: encodeURIComponent(courtName),
+        contextLabel: encodeURIComponent(`Event: ${titleText}`),
       }
     }
     if (parsed.kind === 'session_booking') {
@@ -1321,10 +1362,16 @@ export default function DetailsPage() {
       if (typeof sessionid !== 'number') return null
       const s = sessionsCombinedList.find((x) => x.sessionid === sessionid) || sessionBookingSessionQuery.data
       const titleText = resolveTitle({ ...(s || {}), trainingsessioninfo: sessionBookingInfoQuery.data ? [sessionBookingInfoQuery.data] : [] }, 'Training Session')
+      const courtid = sessionSummaryCourtid
+      if (!Number.isFinite(courtid) || courtid == null) return null
+      const courtName = (sessionSummaryVenueInfoQuery.data as any)?.name?.trim() || resolveVenueNameOnly(s) || null
+      if (!courtName) return null
       return {
-        targettype: 'trainingsession',
-        targetid: String(sessionid),
-        title: encodeURIComponent(titleText),
+        targettype: 'court',
+        targetid: String(courtid),
+        title: encodeURIComponent(courtName),
+        venueName: encodeURIComponent(courtName),
+        contextLabel: encodeURIComponent(`Training Session: ${titleText}`),
       }
     }
     return null
@@ -1343,6 +1390,10 @@ export default function DetailsPage() {
     sessionsCombinedList,
     sessionBookingSessionQuery.data,
     sessionBookingInfoQuery.data,
+    eventSummaryCourtid,
+    eventSummaryVenueInfoQuery.data,
+    sessionSummaryCourtid,
+    sessionSummaryVenueInfoQuery.data,
   ])
 
   const isLoading =

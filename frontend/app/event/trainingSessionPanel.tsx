@@ -1322,7 +1322,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     borderLeftWidth: 5,
                     borderLeftColor: accent,
                     padding: 14,
-                    minHeight: 118,
+                    minHeight: 140,
                     overflow: 'hidden',
                   }}
                 >
@@ -1385,7 +1385,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       <Text
                         style={{
                           color: selected ? '#ecfdf5' : '#374151',
-                          marginTop: 'auto',
+                          marginTop: 6,
                           paddingBottom: 2,
                           fontSize: 12,
                           fontWeight: '700',

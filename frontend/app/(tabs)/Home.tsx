@@ -235,7 +235,7 @@ export default function Home() {
     const end = parseMaybeTimestamp(endRaw)
     const nowTs = Date.now()
 
-    if (end && !Number.isNaN(end.getTime())) return end.getTime() + 3_600_000 >= nowTs
+    if (end && !Number.isNaN(end.getTime())) return end.getTime() >= nowTs
     if (start && !Number.isNaN(start.getTime())) return start.getTime() >= nowTs
     return true
   }

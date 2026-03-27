@@ -1419,7 +1419,7 @@ export default function EventPanel({ organizerId }: Props) {
 										borderLeftWidth: 5,
 										borderLeftColor: accent,
 										padding: 14,
-										minHeight: 118,
+										minHeight: 140,
 										overflow: "hidden",
 									}}
 								>
@@ -1506,12 +1506,12 @@ export default function EventPanel({ organizerId }: Props) {
 										<Text
 											style={{
 												color: selected ? "#ecfdf5" : "#374151",
-												marginTop: "auto",
+												marginTop: 6,
 												paddingBottom: 2,
 												fontSize: 12,
-																						fontWeight: "700",
-																						letterSpacing: 0.6,
-																						}}
+												fontWeight: "700",
+												letterSpacing: 0.6,
+											}}
 										>
 											PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
 										</Text>

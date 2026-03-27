@@ -601,6 +601,21 @@ export default function NotificationsPage() {
         <View style={styles.errorWrapper}><Text style={styles.errorText}>{error}</Text></View>
       )}
 
+      {/* Sticky delete bar — always visible at top when in delete mode */}
+      {deleteMode && (
+        <View style={styles.deleteModeBar}>
+          <TouchableOpacity style={styles.deleteWrap} onPress={exitDeleteMode} activeOpacity={0.85} disabled={actionLoading}>
+            <Image source={ICONS.closeMenu} style={styles.closeIcon} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteWrap} onPress={onPressDeleteSelected} activeOpacity={0.85} disabled={actionLoading}>
+            <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.markAllWrap, { flex: 1 }]} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
+            <Text style={styles.markAllText}>Select all</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 80 }}
@@ -610,38 +625,10 @@ export default function NotificationsPage() {
         renderSectionHeader={({ section }) => (
           <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : styles.sectionHeaderWrapAfterToday]}>
             <Text style={styles.sectionHeaderText}>{section.title}</Text>
-            {section.title === 'Today' ? (
-              <View style={styles.todayActionsRow}>
-                {deleteMode ? (
-                  <>
-                    <TouchableOpacity
-                      style={styles.deleteWrap}
-                      onPress={exitDeleteMode}
-                      activeOpacity={0.85}
-                      disabled={actionLoading}
-                    >
-                      <Image source={ICONS.closeMenu} style={styles.closeIcon} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteWrap}
-                      onPress={onPressDeleteSelected}
-                      activeOpacity={0.85}
-                      disabled={actionLoading}
-                    >
-                      <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
-                    </TouchableOpacity>
-                  </>
-                ) : null}
-                {deleteMode ? (
-                  <TouchableOpacity style={styles.markAllWrap} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
-                    <Text style={styles.markAllText}>Select all</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
-                    <Text style={styles.markAllText}>Mark all as read</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+            {section.title === 'Today' && !deleteMode ? (
+              <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
+                <Text style={styles.markAllText}>Mark all as read</Text>
+              </TouchableOpacity>
             ) : (
               <View style={styles.sectionHeaderActionSpacer} />
             )}
@@ -859,6 +846,16 @@ const styles = StyleSheet.create({
   deleteIcon: {
     width: 18,
     height: 18,
+  },
+  deleteModeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.neutral0,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.neutral200,
+    gap: 8,
   },
   closeIcon: {
     width: 16,

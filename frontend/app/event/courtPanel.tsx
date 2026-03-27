@@ -1942,9 +1942,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 const endDt = parseTs(b.end_timestamp)
                 const endPlus1h = endDt ? new Date(endDt.getTime() + 60 * 60 * 1000) : null
                 const isInWindow = startDt != null && endPlus1h != null && now >= startDt && now <= endPlus1h
-                const isAttendedEnabled = isInWindow
-                const isNotAttendedEnabled = endDt != null && now > endDt
-                const showAttendanceBtns = showAttendance && isInWindow
+                const hasStarted = startDt != null && now >= startDt
+                const isAlreadyMarked = ['completed', 'missed', 'cancelled'].some(s => statusRaw.toLowerCase().includes(s))
+                const isAttendedEnabled = hasStarted && !isAlreadyMarked
+                const isNotAttendedEnabled = hasStarted && !isAlreadyMarked
+                const showAttendanceBtns = showAttendance && hasStarted && !isAlreadyMarked
                 return (
                   <View key={`${b.courtbookingid}-${overrideTime ?? ''}`} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2165,27 +2167,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               })}
                             </View>
                           )}
-                          {/* Expand card: booking details when a slot is selected */}
-                          {slotSelectedBooking && (() => {
-                            const uid = slotSelectedBooking.userid
-                            const displayName = bookingUserNames[uid] || `User ${uid}`
-                            const pfpUri = bookingUserPfps[uid] || null
-                            const statusRaw = String(slotSelectedBooking.status ?? slotSelectedBooking.bookingstatus ?? '')
-                            return (
-                              <View style={{ marginTop: 10, backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FED7AA', flexDirection: 'row', alignItems: 'center' }}>
-                                <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                  {pfpUri
-                                    ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
-                                    : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
-                                  <View style={{ marginLeft: 10, flex: 1 }}>
-                                    <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{displayName}</Text>
-                                    <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }}>{formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp)}</Text>
-                                    <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}><Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>{statusRaw || 'pending'}</Text>
-                                  </View>
-                                </TouchableOpacity>
-                              </View>
-                            )
-                          })()}
+                          {/* Expand card: booking details when a slot is selected – uses renderBookingRow for full attendance support */}
+                          {slotSelectedBooking && (
+                            <View style={{ marginTop: 4 }}>
+                              {renderBookingRow(slotSelectedBooking, false, undefined, true)}
+                            </View>
+                          )}
                         </View>
                       )}
                       {bookingSelectedDate && !pcAvailRow && dateBookings.length === 0 && (
