@@ -55,7 +55,7 @@ def find_user_by_email(email: str) -> Optional[dict]:
 
 def find_userlogin_by_username(username: str) -> Optional[dict]:
     start = _now_ms()
-    row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype, email_verified", {"username": username}, single=True)
+    row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"username": username}, single=True)
     logger.debug(f"find_userlogin_by_username username={username} ms={_now_ms()-start} row={row}")
     return row
 
@@ -219,6 +219,26 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
                     rest_update("userinfo", {"userid": existing_userid}, {"name": account_name})
                 except Exception as e:
                     logger.warning(f"/signup MERGE name update failed userid={existing_userid} err={e}")
+            # Ensure merged account always has a verified unverified_users record so the
+            # login check can rely on this table for all local accounts.
+            try:
+                existing_unver = find_unverified_by_email(email)
+                if not existing_unver:
+                    max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+                    next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+                    rest_upsert("unverified_users", {
+                        "unverifiedid": next_id,
+                        "userid": existing_userid,
+                        "email": email,
+                        "token_hash": f"VERIFIED:{hashlib.sha256(email.encode()).hexdigest()[:24]}",
+                        "token_expires_at": "2099-01-01T00:00:00+00:00",
+                        "resend_count": 0,
+                        "email_verified": True,
+                    })
+                elif not existing_unver.get("email_verified"):
+                    rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {"email_verified": True})
+            except Exception as e:
+                logger.warning(f"/signup MERGE: could not ensure unverified_users for email={email} err={e}")
             elapsed = _now_ms() - t0
             logger.info(f"/signup MERGE userid={existing_userid} email={email} username={username} name={account_name}")
             return {
@@ -297,7 +317,7 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
     pepper = _get_password_pepper()
     bcrypt_hash = pwd_context.hash(password + pepper)
     try:
-        login_rows = rest_upsert("userlogin", {"userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local", "email_verified": False})
+        login_rows = rest_upsert("userlogin", {"userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local"})
     except Exception as e:
         msg = str(e)
         if "permission denied for sequence userlogin_loginid_seq" in msg:
@@ -310,7 +330,7 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
             next_loginid = (max_row.get('loginid') if max_row else 0) + 1
             logger.debug(f"next_loginid={next_loginid}")
             try:
-                login_rows = rest_upsert("userlogin", {"loginid": next_loginid, "userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local", "email_verified": False})
+                login_rows = rest_upsert("userlogin", {"loginid": next_loginid, "userid": userid, "username": username, "passwordhash": bcrypt_hash, "logintype": "Local"})
             except Exception as e3:
                 logger.exception("Manual loginid insert failed")
                 raise HTTPException(status_code=500, detail=f"manual loginid insert failed: {e3}")
@@ -368,15 +388,12 @@ def login(payload: dict):
         if not info_row:
             raise HTTPException(status_code=404, detail="Account not found")
         userid = info_row.get('userid')
-        login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype, email_verified", {"userid": userid}, single=True)
-        # Enforce email verification — primary: check userlogin.email_verified (set at signup,
-        # cleared on verify). Fallback for pre-migration accounts: check unverified_users.
-        if not login_row.get('email_verified', True):
+        login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
+        # Enforce email verification — deny if record is absent (deleted-record bypass)
+        # or if the account has not completed verification.
+        unver = find_unverified_by_email(identifier)
+        if not unver or not unver.get('email_verified'):
             raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
-        elif 'email_verified' not in (login_row or {}):
-            unver = find_unverified_by_email(identifier)
-            if unver and not unver.get('email_verified'):
-                raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
     else:
         login_row = find_userlogin_by_username(identifier)
         if not login_row:
@@ -388,14 +405,9 @@ def login(payload: dict):
         userid = login_row.get('userid')
         info_row = find_userinfo_by_userid(userid)
         if info_row and info_row.get('email'):
-            # Enforce email verification — primary: check userlogin.email_verified.
-            # Fallback for pre-migration accounts: check unverified_users.
-            if not login_row.get('email_verified', True):
+            unver = find_unverified_by_email(info_row.get('email'))
+            if not unver or not unver.get('email_verified'):
                 raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
-            elif 'email_verified' not in (login_row or {}):
-                unver = find_unverified_by_email(info_row.get('email'))
-                if unver and not unver.get('email_verified'):
-                    raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
 
     if not login_row:
         raise HTTPException(status_code=404, detail="Login record not found")
@@ -631,12 +643,6 @@ def verify_email(token: str = Query(..., description="Plaintext email verificati
     except Exception as e:
         logger.exception(f"Failed updating verification status err={e}")
         raise HTTPException(status_code=500, detail="Failed marking verified")
-    # Persist verification into userlogin so a deleted unverified_users record cannot bypass login.
-    try:
-        rest_update("userlogin", {"userid": row.get("userid")}, {"email_verified": True})
-    except Exception as e:
-        logger.warning(f"verify-email: could not update userlogin.email_verified userid={row.get('userid')} err={e}")
-
     redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
     auto_login = os.getenv("EMAIL_VERIFY_AUTO_LOGIN", "").lower() == "true"
     if redirect_url:
