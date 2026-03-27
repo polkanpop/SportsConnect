@@ -1942,11 +1942,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 const endDt = parseTs(b.end_timestamp)
                 const endPlus1h = endDt ? new Date(endDt.getTime() + 60 * 60 * 1000) : null
                 const isInWindow = startDt != null && endPlus1h != null && now >= startDt && now <= endPlus1h
-                const hasStarted = startDt != null && now >= startDt
+                const bookingDayEnd = startDt ? new Date(startDt.getFullYear(), startDt.getMonth(), startDt.getDate() + 1) : null
+                const isWithinBookingDay = startDt != null && bookingDayEnd != null && now >= startDt && now < bookingDayEnd
                 const isAlreadyMarked = ['completed', 'missed', 'cancelled'].some(s => statusRaw.toLowerCase().includes(s))
-                const isAttendedEnabled = hasStarted && !isAlreadyMarked
-                const isNotAttendedEnabled = hasStarted && !isAlreadyMarked
-                const showAttendanceBtns = showAttendance && hasStarted && !isAlreadyMarked
+                const isAttendedEnabled = isWithinBookingDay && !isAlreadyMarked
+                const isNotAttendedEnabled = isWithinBookingDay && !isAlreadyMarked
+                const showAttendanceBtns = showAttendance && isWithinBookingDay && !isAlreadyMarked
                 return (
                   <View key={`${b.courtbookingid}-${overrideTime ?? ''}`} style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2197,7 +2198,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
                   {mergedParticipants.length === 0 ? (
                     <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
-                  ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay, true))}
+                  ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay, false))}
 
                   {/* Owner List */}
                   <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>

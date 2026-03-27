@@ -1195,7 +1195,8 @@ export default function DetailsPage() {
       const evCombined = Number.isFinite(eventid) ? eventsCombinedList.find((x) => x.eventid === eventid) : null
       const ev: any = evCombined || eventBookingEventQuery.data
       const start = parseTimestampLoose(ev?.start_timestamp ?? ev?.time ?? b?.start_timestamp ?? null)
-      return deriveBookingActionState(b?.status, b?.bookingstatus, start)
+      // Include event status so a "completed" event enables review even if booking status is "joined"
+      return deriveBookingActionState(b?.status ?? b?.bookingstatus, ev?.status ?? b?.bookingstatus, start)
     }
     if (parsed.kind === 'session_booking') {
       const b: any = sessionBookingQuery.data
@@ -1203,7 +1204,8 @@ export default function DetailsPage() {
       const sCombined = Number.isFinite(sessionid) ? sessionsCombinedList.find((x) => x.sessionid === sessionid) : null
       const s: any = sCombined || sessionBookingSessionQuery.data
       const start = parseTimestampLoose(s?.start_timestamp ?? s?.time ?? b?.start_timestamp ?? null)
-      return deriveBookingActionState(b?.status, b?.bookingstatus, start)
+      // Include session status so a "completed" session enables review even if booking status is "joined"
+      return deriveBookingActionState(b?.status ?? b?.bookingstatus, s?.status ?? b?.bookingstatus, start)
     }
     return null
   }, [
@@ -1347,7 +1349,13 @@ export default function DetailsPage() {
       const titleText = resolveTitle({ ...(ev || {}), eventinfo: eventBookingInfoQuery.data ? [eventBookingInfoQuery.data] : [] }, 'Event')
       const courtid = eventSummaryCourtid
       if (!Number.isFinite(courtid) || courtid == null) return null
-      const courtName = (eventSummaryVenueInfoQuery.data as any)?.name?.trim() || resolveVenueNameOnly(ev) || null
+      const courtName = (eventSummaryVenueInfoQuery.data as any)?.name?.trim()
+        || resolveVenueNameOnly(ev)
+        || resolveVenueNameOnly(eventBookingInfoQuery.data)
+        || resolveVenueNameOnly(eventCourtBooking)
+        || (eventCourtBooking as any)?.selected_court_name
+        || (eventCourtBooking as any)?.selected_base_name
+        || null
       if (!courtName) return null
       return {
         targettype: 'court',
@@ -1364,7 +1372,13 @@ export default function DetailsPage() {
       const titleText = resolveTitle({ ...(s || {}), trainingsessioninfo: sessionBookingInfoQuery.data ? [sessionBookingInfoQuery.data] : [] }, 'Training Session')
       const courtid = sessionSummaryCourtid
       if (!Number.isFinite(courtid) || courtid == null) return null
-      const courtName = (sessionSummaryVenueInfoQuery.data as any)?.name?.trim() || resolveVenueNameOnly(s) || null
+      const courtName = (sessionSummaryVenueInfoQuery.data as any)?.name?.trim()
+        || resolveVenueNameOnly(s)
+        || resolveVenueNameOnly(sessionBookingInfoQuery.data)
+        || resolveVenueNameOnly(sessionCourtBooking)
+        || (sessionCourtBooking as any)?.selected_court_name
+        || (sessionCourtBooking as any)?.selected_base_name
+        || null
       if (!courtName) return null
       return {
         targettype: 'court',
@@ -1392,8 +1406,10 @@ export default function DetailsPage() {
     sessionBookingInfoQuery.data,
     eventSummaryCourtid,
     eventSummaryVenueInfoQuery.data,
+    eventCourtBooking,
     sessionSummaryCourtid,
     sessionSummaryVenueInfoQuery.data,
+    sessionCourtBooking,
   ])
 
   const isLoading =

@@ -74,11 +74,8 @@ function parseTimestampLoose(raw: unknown): Date | null {
 // Timestamp-based filtering belongs only in the public event list, not here.
 
 function isHiddenEventStatus(statusRaw: unknown): boolean {
-	// Only hide cancelled events from the organizer panel.
-	// Completed events must remain visible so the organizer can review
-	// participants after autoCompletePastStatusesInBackground finalises them.
 	const st = String(statusRaw ?? "").trim().toLowerCase();
-	return st === "cancelled";
+	return st === "cancelled" || st === "completed";
 }
 
 function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: string | null }) {
@@ -1449,8 +1446,8 @@ export default function EventPanel({ organizerId }: Props) {
 										pointerEvents="none"
 										style={{
 											position: "absolute",
-											top: -2,
-											right: -6,
+											top: 6,
+											right: 6,
 											width: 46,
 											height: 46,
 											opacity: selected ? 0.95 : 0.9,
@@ -1459,7 +1456,7 @@ export default function EventPanel({ organizerId }: Props) {
 									>
 										<Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
 									</View>
-									<View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
+									<View style={{ flex: 1, minWidth: 0, paddingRight: 62 }}>
 										<Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, lineHeight: 18, color: selected ? "#fff" : "#111" }}>
 											{ev.title || `Event #${ev.eventid}`}
 										</Text>
