@@ -1980,8 +1980,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               onPress={async () => {
                                 setMutatingAttendanceIds(prev => ({ ...prev, [b.courtbookingid]: 'attended' }))
                                 try {
-                                  await updateCourtBooking(b.courtbookingid, { status: 'completed', bookingstatus: 'completed' })
-                                  setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'completed', bookingstatus: 'completed' } : x))
+                                  // 'completed' is not a valid courtbookingstatus enum value; keep bookingstatus as 'approved'
+                                  await updateCourtBooking(b.courtbookingid, { status: 'completed', bookingstatus: 'approved' })
+                                  setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'completed', bookingstatus: 'approved' } : x))
                                 } catch (e: any) { Alert.alert('Error', e?.message || 'Failed') }
                                 finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
                               }}
