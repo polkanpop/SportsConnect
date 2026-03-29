@@ -11,7 +11,8 @@ warnings.filterwarnings(
 
 from fastapi import FastAPI, Response, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from pathlib import Path
+from fastapi.responses import JSONResponse, FileResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -214,6 +215,26 @@ app.include_router(drafts.router,   prefix="/api")  # Redis form-draft endpoints
 app.include_router(me.router,       prefix="/api")  # /api/me/dashboard bootstrap
 app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
 app.include_router(devices.router,  prefix="/api")  # push notification device tokens
+
+# ── Legal document routes (served directly, no auth required) ──
+_HTML_DIR = Path(__file__).parent.parent / "static" / "html"
+
+@app.get("/privacy", include_in_schema=False)
+async def legal_privacy_en():
+    return FileResponse(_HTML_DIR / "privacy.html", media_type="text/html")
+
+@app.get("/terms", include_in_schema=False)
+async def legal_terms_en():
+    return FileResponse(_HTML_DIR / "terms.html", media_type="text/html")
+
+@app.get("/privacy-vi", include_in_schema=False)
+async def legal_privacy_vi():
+    return FileResponse(_HTML_DIR / "privacy_vi.html", media_type="text/html")
+
+@app.get("/terms-vi", include_in_schema=False)
+async def legal_terms_vi():
+    return FileResponse(_HTML_DIR / "terms_vi.html", media_type="text/html")
+
 
 @app.on_event("startup")
 async def _init_cache():
