@@ -15,6 +15,7 @@
     "@expo/plist": "^0.4.7",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.6",
+    "@hookform/resolvers": "^5.2.2",
     "@invertase/react-native-apple-authentication": "^2.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "^11.3.0",
@@ -64,6 +65,7 @@
     "prettier-plugin-tailwindcss": "^0.7.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-hook-form": "^7.72.0",
     "react-native": "0.81.5",
     "react-native-dotenv": "^3.4.11",
     "react-native-gesture-handler": "~2.28.0",
@@ -79,7 +81,9 @@
     "react-native-worklets": "0.5.1",
     "recoil": "^0.7.7",
     "tailwindcss": "^3.4.18",
-    "xml2js": "^0.5.0"
+    "xml2js": "^0.5.0",
+    "zod": "^4.3.6",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -87,6 +91,7 @@
     "@testing-library/react-native": "^13.2.0",
     "@types/lodash.debounce": "^4.0.9",
     "@types/react": "~19.1.10",
+    "@types/zxcvbn": "^4.4.5",
     "eslint": "^9.38.0",
     "eslint-config-expo": "~10.0.0",
     "expo": "~54.0.33",

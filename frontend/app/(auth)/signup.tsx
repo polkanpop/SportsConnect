@@ -1,254 +1,378 @@
-import { ICONS } from '@/constants/icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { authSignup } from '@/lib/backendApi';
-import { AUTO_EMAIL_LOGIN } from '@/env';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding';
+import { ICONS } from '@/constants/icons'
+import { router } from 'expo-router'
+import React, { useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useForm, Controller } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import zxcvbn from 'zxcvbn'
+import { authSignup } from '@/lib/backendApi'
+import { AUTO_EMAIL_LOGIN } from '@/env'
+import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding'
 
-  // Simple signup form (demo). NOTE: Storing plain passwords is NOT secure.
-  // For production, add hashing again (bcrypt/argon2) and stronger validation.
+// ─── Zod schema ──────────────────────────────────────────────────────────────
+const schema = z
+  .object({
+    accountName: z
+      .string()
+      .trim()
+      .min(1, 'Display name is required.')
+      .max(50, 'Max 50 characters.')
+      .regex(/^[\p{L}\p{M}\s'-]+$/u, "Name can only contain letters, spaces, hyphens, and apostrophes."),
+    username: z
+      .string()
+      .trim()
+      .min(3, 'Min 3 characters.')
+      .max(20, 'Max 20 characters.')
+      .regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores. No spaces.'),
+    email: z.string().trim().email('Enter a valid email address.'),
+    password: z
+      .string()
+      .min(8, 'Min 8 characters.')
+      .regex(/[0-9]/, 'Must contain at least one number.')
+      .regex(/[^a-zA-Z0-9]/, 'Must contain at least one symbol.'),
+    confirmPassword: z.string(),
+    agree: z.boolean().refine((v) => v === true, { message: 'Please accept Terms of Service.' }),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match.',
+  })
+  .refine(
+    (d) => {
+      if (d.password.length < 8) return true // let the min length rule fire first
+      return zxcvbn(d.password).score >= 2
+    },
+    { path: ['password'], message: 'Password is too weak. Try mixing symbols, numbers, and words.' },
+  )
 
-        const SignUpScreen = () => {
-          const [accountName, setAccountName] = useState(''); // display name shown publicly
-          const [username, setUsername] = useState(''); // unique login handle stored in userlogin.username
-          const [email, setEmail] = useState('');
-          const [password, setPassword] = useState('');
-          const [confirmPassword, setConfirmPassword] = useState('');
-          const [passwordVisible, setPasswordVisible] = useState(false);
-          const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
-          const [agree, setAgree] = useState(false);
-          const [loading, setLoading] = useState(false);
-          const [fieldErrors, setFieldErrors] = useState<{accountName?: string; username?: string; email?: string; password?: string; confirmPassword?: string; agree?: string}>({});
-          const [generalError, setGeneralError] = useState('');
-          const [successMessage, setSuccessMessage] = useState('');
+type FormData = z.infer<typeof schema>
 
-          const validate = () => {
-            const errs: typeof fieldErrors = {};
-            if (!accountName.trim()) errs.accountName = 'Display name is required.';
-            if (!username.trim()) errs.username = 'Username is required.';
-            else {
-              const uname = username.trim();
-              if (uname.length < 3) errs.username = 'Min 3 characters.';
-              else if (uname.length > 32) errs.username = 'Max 32 characters.';
-              else if (!/^[a-zA-Z0-9_]+$/.test(uname)) errs.username = 'Only letters, numbers, underscore.';
-            }
-            if (!email.trim()) errs.email = 'Email is required.';
-            else if (!email.toLowerCase().includes('@gmail.com')) errs.email = 'Email must contain @gmail.com';
-            if (password.length < 6) errs.password = 'Minimum 6 characters.';
-            if (password !== confirmPassword) errs.confirmPassword = 'Passwords do not match.';
-            if (!agree) errs.agree = 'Please accept Terms.';
-            setFieldErrors(errs);
-            setGeneralError('');
-            setSuccessMessage('');
-            return Object.keys(errs).length === 0;
-          };
+// ─── Strength display config ──────────────────────────────────────────────────
+const STRENGTH: { label: string; color: string }[] = [
+  { label: 'Very Weak', color: '#dc2626' },
+  { label: 'Weak',      color: '#f97316' },
+  { label: 'Fair',      color: '#eab308' },
+  { label: 'Good',      color: '#84cc16' },
+  { label: 'Strong',    color: '#22c55e' },
+]
 
-          const handleSignUp = async () => {
-            if (!validate()) return;
-            setLoading(true);
-            try {
-              const res = await authSignup({
-                username: username.trim(),
-                email: email.trim(),
-                password: password,
-                accountName: accountName.trim(),
-              })
-              console.log('[signup] success', res)
-              await requestLocationPermissionOnceAfterSignup()
-              setPassword('')
-              setConfirmPassword('')
-              if (res?.merged) {
-                // Email already verified via Google — skip waiting screen, go straight to login.
-                setSuccessMessage('Google account linked! You can now sign in with your email and password.')
-                setTimeout(() => router.replace('/(auth)/login'), 1800)
-                return
-              }
-              setSuccessMessage('Account created. Please verify your email to continue.')
-              if (!AUTO_EMAIL_LOGIN) {
-                setTimeout(() => {
-                  router.replace(`/(auth)/waiting?email=${encodeURIComponent(email.trim())}` as any)
-                }, 1200)
-              } else {
-                // In auto-login mode we simply display success; deep link will handle verification.
-              }
-            } catch (err: any) {
-              console.log('[signup] error', err)
-              setGeneralError(err.message || 'Signup failed')
-            } finally {
-              setLoading(false)
-            }
-          }
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function SignUpScreen() {
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const [confirmVisible, setConfirmVisible]   = useState(false)
+  const [generalError, setGeneralError]       = useState('')
+  const [successMessage, setSuccessMessage]   = useState('')
 
-          return (
-            <SafeAreaView style={{ flex: 1 }}>
-              <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <View style={styles.container}>
-                  <View style={styles.headerWrapper}>
-                    <Text style={styles.screenTitle}>Sign Up</Text>
-                  </View>
-                  <View style={styles.formWrapper}>
-                    {generalError ? <Text style={styles.feedbackError}>{generalError}</Text> : null}
-                    {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
-                    {/* Debug info removed */}
-                    <Text style={styles.subtitle}>Create your account</Text>
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      accountName: '',
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      agree: false,
+    },
+  })
 
-                    {/* Account Name */}
-                    <TextInput
-                      placeholder="Account Name"
-                      placeholderTextColor={COLOR.dark300}
-                      value={accountName}
-                      onChangeText={t => { setAccountName(t); if (fieldErrors.accountName) setFieldErrors({...fieldErrors, accountName: undefined}); }}
-                      autoCapitalize="words"
-                      style={styles.input}
-                    />
-                    {fieldErrors.accountName && <Text style={styles.fieldError}>{fieldErrors.accountName}</Text>}
+  const passwordValue  = watch('password')
+  const strengthResult = useMemo(
+    () => (passwordValue ? zxcvbn(passwordValue) : null),
+    [passwordValue],
+  )
 
-                    {/* Username (login handle) */}
-                    <TextInput
-                      placeholder="Username"
-                      placeholderTextColor={COLOR.dark300}
-                      value={username}
-                      onChangeText={t => { setUsername(t); if (fieldErrors.username) setFieldErrors({...fieldErrors, username: undefined}); }}
-                      autoCapitalize="none"
-                      style={styles.input}
-                    />
-                    {fieldErrors.username && <Text style={styles.fieldError}>{fieldErrors.username}</Text>}
+  const onSubmit = async (data: FormData) => {
+    setGeneralError('')
+    setSuccessMessage('')
+    try {
+      const res = await authSignup({
+        username: data.username.trim(),
+        email:    data.email.trim(),
+        password: data.password,
+        accountName: data.accountName.trim(),
+      })
+      await requestLocationPermissionOnceAfterSignup()
+      if (res?.merged) {
+        setSuccessMessage('Google account linked! You can now sign in.')
+        setTimeout(() => router.replace('/(auth)/login'), 1800)
+        return
+      }
+      setSuccessMessage('Account created. Please verify your email to continue.')
+      if (!AUTO_EMAIL_LOGIN) {
+        setTimeout(
+          () => router.replace(`/(auth)/waiting?email=${encodeURIComponent(data.email.trim())}` as any),
+          1200,
+        )
+      }
+    } catch (err: any) {
+      setGeneralError(err.message || 'Signup failed')
+    }
+  }
 
-                    {/* Email */}
-                    <TextInput
-                      placeholder="Email"
-                      placeholderTextColor={COLOR.dark300}
-                      value={email}
-                      onChangeText={t => { setEmail(t); if (fieldErrors.email) setFieldErrors({...fieldErrors, email: undefined}); }}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      style={styles.input}
-                    />
-                    {fieldErrors.email && <Text style={styles.fieldError}>{fieldErrors.email}</Text>}
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLOR.bg }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Header ── */}
+          <Text style={styles.screenTitle}>Sign Up</Text>
+          <Text style={styles.subtitle}>Create your SportConnect account</Text>
 
-                    {/* Password */}
-                    <View style={styles.passwordRow}>
-                      <TextInput
-                        placeholder="Password"
-                        placeholderTextColor={COLOR.dark300}
-                        secureTextEntry={!passwordVisible}
-                        value={password}
-                        onChangeText={t => { setPassword(t); if (fieldErrors.password) setFieldErrors({...fieldErrors, password: undefined}); }}
-                        style={styles.passwordInput}
-                      />
-                      <Pressable onPress={() => setPasswordVisible(p => !p)}>
-                        <Image source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
-                      </Pressable>
-                    </View>
-                    {fieldErrors.password && <Text style={styles.fieldError}>{fieldErrors.password}</Text>}
+          {generalError   ? <Text style={styles.feedbackError}>{generalError}</Text>   : null}
+          {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
 
-                    {/* Confirm Password */}
-                    <View style={styles.passwordRowConfirm}>
-                      <TextInput
-                        placeholder="Confirm Password"
-                        placeholderTextColor={COLOR.dark300}
-                        secureTextEntry={!confirmPasswordVisible}
-                        value={confirmPassword}
-                        onChangeText={t => { setConfirmPassword(t); if (fieldErrors.confirmPassword) setFieldErrors({...fieldErrors, confirmPassword: undefined}); }}
-                        style={styles.passwordInput}
-                      />
-                      <Pressable onPress={() => setConfirmPasswordVisible(p => !p)}>
-                        <Image source={confirmPasswordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
-                      </Pressable>
-                    </View>
-                    {fieldErrors.confirmPassword && <Text style={styles.fieldError}>{fieldErrors.confirmPassword}</Text>}
+          {/* ── Display Name ── */}
+          <Text style={styles.label}>Display Name</Text>
+          <Controller
+            control={control}
+            name="accountName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                placeholder="Your public name (e.g. Nguyễn Văn A)"
+                placeholderTextColor={COLOR.dark300}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                autoCapitalize="words"
+                style={[styles.input, !!errors.accountName && styles.inputError]}
+              />
+            )}
+          />
+          {errors.accountName && <Text style={styles.fieldError}>{errors.accountName.message}</Text>}
 
-                    {/* Terms Checkbox */}
-                    <Pressable
-                      onPress={() => { setAgree(a => !a); if (fieldErrors.agree) setFieldErrors({...fieldErrors, agree: undefined}); }}
-                      style={styles.checkboxRow}
-                    >
-                      <View style={[styles.checkboxBase, agree && styles.checkboxChecked]}>
-                        {agree && <Image source={ICONS.checkSmall} style={styles.checkboxTick} />}
-                      </View>
-                      <Text style={styles.textDark}>
-                        I agree with <Text onPress={() => {}} style={styles.termsLink}>Terms of Service</Text>
-                      </Text>
-                    </Pressable>
-                    {fieldErrors.agree && <Text style={styles.fieldErrorBottom}>{fieldErrors.agree}</Text>}
+          {/* ── Username ── */}
+          <Text style={styles.label}>Username</Text>
+          <Controller
+            control={control}
+            name="username"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                placeholder="e.g. john_doe99  (lowercase only)"
+                placeholderTextColor={COLOR.dark300}
+                value={value}
+                onChangeText={(t) => onChange(t.toLowerCase())}
+                onBlur={onBlur}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.input, !!errors.username && styles.inputError]}
+              />
+            )}
+          />
+          {errors.username && <Text style={styles.fieldError}>{errors.username.message}</Text>}
 
-                    {/* Submit Button */}
-                    <TouchableOpacity
-                      onPress={handleSignUp}
-                      disabled={loading}
-                      style={[styles.submitButton, loading && styles.submitButtonLoading]}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#fff" />
-                      ) : (
-                        <Text style={styles.submitButtonText}>Sign Up</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+          {/* ── Email ── */}
+          <Text style={styles.label}>Email</Text>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                placeholder="you@example.com"
+                placeholderTextColor={COLOR.dark300}
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[styles.input, !!errors.email && styles.inputError]}
+              />
+            )}
+          />
+          {errors.email && <Text style={styles.fieldError}>{errors.email.message}</Text>}
 
-                  {/* Footer */}
-                  <View style={styles.footerRow}>
-                    <Text style={styles.textDark}>Already have an account?</Text>
-                    <Pressable onPress={() => router.replace('/(auth)/login')}>
-                      <Text style={styles.footerLink}>Sign in</Text>
-                    </Pressable>
-                  </View>
+          {/* ── Password ── */}
+          <Text style={styles.label}>Password</Text>
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
+                <TextInput
+                  placeholder="Min 8 chars, 1 number, 1 symbol"
+                  placeholderTextColor={COLOR.dark300}
+                  secureTextEntry={!passwordVisible}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  style={styles.passwordInput}
+                />
+                <Pressable onPress={() => setPasswordVisible((p) => !p)} hitSlop={8}>
+                  <Image
+                    source={passwordVisible ? ICONS.notEye : ICONS.eye}
+                    style={styles.eyeIcon}
+                  />
+                </Pressable>
+              </View>
+            )}
+          />
+
+          {/* Strength bar — appears as soon as user starts typing */}
+          {strengthResult != null && (
+            <View style={styles.strengthWrapper}>
+              <View style={styles.strengthTrack}>
+                {[0, 1, 2, 3].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.strengthSegment,
+                      i < strengthResult.score
+                        ? { backgroundColor: STRENGTH[strengthResult.score].color }
+                        : { backgroundColor: COLOR.segmentEmpty },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={[styles.strengthLabel, { color: STRENGTH[strengthResult.score].color }]}>
+                {STRENGTH[strengthResult.score].label}
+              </Text>
+            </View>
+          )}
+          {errors.password && <Text style={styles.fieldError}>{errors.password.message}</Text>}
+
+          {/* ── Confirm Password ── */}
+          <Text style={styles.label}>Confirm Password</Text>
+          <Controller
+            control={control}
+            name="confirmPassword"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
+                <TextInput
+                  placeholder="Re-enter your password"
+                  placeholderTextColor={COLOR.dark300}
+                  secureTextEntry={!confirmVisible}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  style={styles.passwordInput}
+                />
+                <Pressable onPress={() => setConfirmVisible((p) => !p)} hitSlop={8}>
+                  <Image
+                    source={confirmVisible ? ICONS.notEye : ICONS.eye}
+                    style={styles.eyeIcon}
+                  />
+                </Pressable>
+              </View>
+            )}
+          />
+          {errors.confirmPassword && <Text style={styles.fieldError}>{errors.confirmPassword.message}</Text>}
+
+          {/* ── Terms checkbox ── */}
+          <Controller
+            control={control}
+            name="agree"
+            render={({ field: { onChange, value } }) => (
+              <Pressable onPress={() => onChange(!value)} style={styles.checkboxRow}>
+                <View style={[styles.checkboxBase, value && styles.checkboxChecked]}>
+                  {value && <Image source={ICONS.checkSmall} style={styles.checkboxTick} />}
                 </View>
-              </KeyboardAvoidingView>
-            </SafeAreaView>
-          );
-        };
+                <Text style={styles.textDark}>
+                  I agree with{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text>
+                </Text>
+              </Pressable>
+            )}
+          />
+          {errors.agree && <Text style={styles.fieldError}>{errors.agree.message}</Text>}
 
-        export default SignUpScreen;
+          {/* ── Submit ── */}
+          <TouchableOpacity
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+            style={[styles.submitButton, isSubmitting && styles.submitButtonLoading]}
+            activeOpacity={0.85}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Sign Up</Text>
+            )}
+          </TouchableOpacity>
 
-// Shared color tokens (matching login.tsx local definition)
+          {/* ── Footer ── */}
+          <View style={styles.footerRow}>
+            <Text style={styles.textDark}>Already have an account?</Text>
+            <Pressable onPress={() => router.replace('/(auth)/login')}>
+              <Text style={styles.footerLink}> Sign in</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  )
+}
+
+// ─── Color tokens ─────────────────────────────────────────────────────────────
 const COLOR = {
-  dark300: '#6A6B6B',
-  green700: '#FF6017',
-  green800: '#FF8147',
-  white: '#ffffff',
-  red600: '#dc2626',
-  bg: '#f8f8f8'
-};
+  dark300:      '#6A6B6B',
+  brand:        '#FF6017',
+  brandLight:   '#FF8147',
+  white:        '#ffffff',
+  red:          '#dc2626',
+  bg:           '#f8f8f8',
+  borderBase:   '#D1D5DB',
+  segmentEmpty: '#E5E7EB',
+}
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLOR.bg,
-    paddingHorizontal: 28, // px-7
-    paddingTop: 80, // unify with login (pt-20)
-  },
-  headerWrapper: {
-    alignItems: 'center',
-    marginBottom: 24, // mb-6
+  scroll: {
+    paddingHorizontal: 28,
+    paddingTop: 52,
+    paddingBottom: 48,
   },
   screenTitle: {
-    fontSize: 24, // standardized heading
-    fontWeight: '800', // font-extrabold
-    color: COLOR.green700,
-    letterSpacing: 0.5, // tracking-wide approx
-  },
-  formWrapper: {},
-  feedbackError: {
-    color: COLOR.red600,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLOR.brand,
     textAlign: 'center',
-    marginBottom: 12, // mb-3
-    fontSize: 14, // text-sm
+    marginBottom: 6,
   },
-  feedbackSuccess: {
-    color: COLOR.green700,
+  subtitle: {
+    fontSize: 14,
+    color: COLOR.dark300,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  feedbackError: {
+    color: COLOR.red,
     textAlign: 'center',
     marginBottom: 12,
     fontSize: 14,
   },
-  subtitle: {
-    fontSize: 14,
+  feedbackSuccess: {
+    color: COLOR.brand,
     textAlign: 'center',
-    marginBottom: 32, // increased spacing below subtitle (was mb-6 -> now mb-8)
-    color: COLOR.green700,
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLOR.dark300,
+    marginBottom: 4,
   },
   input: {
     width: '100%',
@@ -257,109 +381,137 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: COLOR.dark300,
-    marginBottom: 8, // mb-2
-    color: COLOR.dark300,
+    borderColor: COLOR.borderBase,
+    marginBottom: 4,
+    color: '#111',
+    fontSize: 15,
   },
-  fieldError: {
-    color: COLOR.red600,
-    fontSize: 12, // text-xs
-    marginBottom: 8, // mb-2
+  inputError: {
+    borderColor: COLOR.red,
   },
   passwordRow: {
     width: '100%',
-    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLOR.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLOR.dark300,
-    paddingRight: 12, // pr-3
-  },
-  passwordRowConfirm: {
-    width: '100%',
-    marginBottom: 12, // mb-3
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLOR.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLOR.dark300,
+    borderColor: COLOR.borderBase,
     paddingRight: 12,
+    marginBottom: 4,
+  },
+  inputRowError: {
+    borderColor: COLOR.red,
   },
   passwordInput: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    color: COLOR.dark300,
+    color: '#111',
+    fontSize: 15,
   },
-  eyeIcon: { width: 24, height: 24, tintColor: COLOR.dark300 },
-  fieldErrorBottom: {
-    color: COLOR.red600,
+  eyeIcon: {
+    width: 22,
+    height: 22,
+    tintColor: COLOR.dark300,
+  },
+
+  // ── Strength bar
+  strengthWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    columnGap: 8,
+  },
+  strengthTrack: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    columnGap: 4,
+  },
+  strengthSegment: {
+    flex: 1,
+    borderRadius: 3,
+  },
+  strengthLabel: {
     fontSize: 12,
-    marginBottom: 8, // mb-2 (for agree differs slightly after checkbox)
+    fontWeight: '600',
+    minWidth: 64,
+    textAlign: 'right',
+  },
+
+  fieldError: {
+    color: COLOR.red,
+    fontSize: 12,
+    marginBottom: 10,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16, // mb-4
+    marginTop: 4,
+    marginBottom: 4,
   },
   checkboxBase: {
     width: 20,
     height: 20,
-    borderRadius: 6, // rounded-md
-    borderWidth: 1,
+    borderRadius: 6,
+    borderWidth: 1.5,
     borderColor: COLOR.dark300,
-    marginRight: 8, // mr-2
+    marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
   checkboxChecked: {
-    backgroundColor: COLOR.green700,
-    borderColor: COLOR.green700,
+    backgroundColor: COLOR.brand,
+    borderColor: COLOR.brand,
   },
   checkboxTick: {
-    width: 20,
-    height: 20,
-    tintColor: COLOR.white, // icon tint
+    width: 12,
+    height: 12,
+    tintColor: COLOR.white,
   },
-  textDark: { color: COLOR.dark300 },
-  submitButton: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLOR.green700,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 4,
-    marginTop: 4,
-  },
-  submitButtonLoading: { backgroundColor: COLOR.green800 },
-  submitButtonText: {
-    color: COLOR.white,
-    textAlign: 'center',
-    fontWeight: '600',
-    fontSize: 18,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 40, // mt-10
-    columnGap: 4, // gap-1 (RN experimental)
-  },
-  footerLink: {
-    color: COLOR.green700,
-    fontWeight: '700',
-    marginLeft: 4,
+  textDark: {
+    color: COLOR.dark300,
+    fontSize: 14,
   },
   termsLink: {
-    color: COLOR.green700,
+    color: COLOR.brand,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
-});
+  submitButton: {
+    backgroundColor: COLOR.brand,
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  submitButtonLoading: {
+    backgroundColor: COLOR.brandLight,
+  },
+  submitButtonText: {
+    color: COLOR.white,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  footerLink: {
+    color: COLOR.brand,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+})
