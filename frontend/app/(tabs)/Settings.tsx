@@ -139,6 +139,11 @@ export default function SettingsPage() {
           <SettingRow icon={ICONS.settingCourt} label="Court Register" onPress={() => router.push('/event/courtRegister')} />
         </View>
 
+        {/* Data & Privacy */}
+        <View style={styles.card}>
+          <SettingRow icon={ICONS.lock} label="Data &amp; Privacy" onPress={() => router.push('/event/dataPrivacy' as any)} />
+        </View>
+
         {/* Section Two */}
         <TouchableOpacity
           activeOpacity={0.85}

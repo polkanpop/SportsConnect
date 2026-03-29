@@ -216,8 +216,12 @@ app.include_router(me.router,       prefix="/api")  # /api/me/dashboard bootstra
 app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
 app.include_router(devices.router,  prefix="/api")  # push notification device tokens
 
-# ── Legal document routes (served directly, no auth required) ──
+# ── Homepage + Legal document routes (served directly, no auth required) ──
 _HTML_DIR = Path(__file__).parent.parent / "static" / "html"
+
+@app.get("/", include_in_schema=False)
+async def homepage():
+    return FileResponse(_HTML_DIR / "index.html", media_type="text/html")
 
 @app.get("/privacy", include_in_schema=False)
 async def legal_privacy_en():

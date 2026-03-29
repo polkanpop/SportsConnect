@@ -44,7 +44,7 @@ export const ICONS = {
   mic: require('../assets/icons/mic.png'),
   location_icon: require('../assets/icons/location.png'),
   ggmap: require('../assets/icons/ggmap.png'),
-  app_icon: require('../assets/icons/placeholder_icon.png'),
+  app_icon: require('../assets/icons/SportConnect_icon.png'),
   eye: require('../assets/icons/Eye.png'),
   notEye: require('../assets/icons/notEye.png'),
   free: require('../assets/icons/free.png'),

@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -115,7 +116,7 @@ export default function SignUpScreen() {
             name="accountName"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="Your public name (e.g. Nguyễn Văn A)"
+                placeholder="Display Name"
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
@@ -134,7 +135,7 @@ export default function SignUpScreen() {
             name="username"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="e.g. john_doe99  (lowercase only)"
+                placeholder="Username"
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={(t) => onChange(t.toLowerCase())}
@@ -154,7 +155,7 @@ export default function SignUpScreen() {
             name="email"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="you@example.com"
+                placeholder="Email"
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
@@ -176,7 +177,7 @@ export default function SignUpScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
                 <TextInput
-                  placeholder="Min 8 chars, 1 number, 1 symbol"
+                  placeholder="Password"
                   placeholderTextColor={COLOR.dark300}
                   secureTextEntry={!passwordVisible}
                   value={value}
@@ -225,7 +226,7 @@ export default function SignUpScreen() {
             render={({ field: { onChange, onBlur, value } }) => (
               <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
                 <TextInput
-                  placeholder="Re-enter your password"
+                  placeholder="Confirm Password"
                   placeholderTextColor={COLOR.dark300}
                   secureTextEntry={!confirmVisible}
                   value={value}
@@ -255,7 +256,15 @@ export default function SignUpScreen() {
                 </View>
                 <Text style={styles.textDark}>
                   I agree with{' '}
-                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  <Text
+                    style={styles.termsLink}
+                    onPress={(e) => {
+                      e.stopPropagation()
+                      Linking.openURL('https://sportconnects.org/terms')
+                    }}
+                  >
+                    Terms of Service
+                  </Text>
                 </Text>
               </Pressable>
             )}
