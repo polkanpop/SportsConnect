@@ -218,6 +218,7 @@ app.include_router(devices.router,  prefix="/api")  # push notification device t
 
 # ── Homepage + Legal document routes (served directly, no auth required) ──
 _HTML_DIR = Path(__file__).parent.parent / "static" / "html"
+_STATIC_DIR = Path(__file__).parent.parent / "static"
 
 @app.get("/", include_in_schema=False)
 async def homepage():
@@ -226,6 +227,11 @@ async def homepage():
         media_type="text/html; charset=utf-8",
         headers={"Cache-Control": "no-cache, no-store", "X-Robots-Tag": "noindex"},
     )
+
+@app.get("/icon.png", include_in_schema=False)
+async def app_icon():
+    return FileResponse(_STATIC_DIR / "images" / "icon.png", media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 @app.get("/privacy", include_in_schema=False)
 async def legal_privacy_en():
