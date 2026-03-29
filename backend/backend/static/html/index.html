@@ -90,6 +90,34 @@
     }
     .cta-note strong { color: var(--brand); }
 
+    /* ── About ── */
+    .about {
+      max-width: 640px;
+      margin: 3rem auto 0;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 2rem 2.25rem;
+      text-align: left;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .about h2 {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--brand);
+      margin-bottom: .75rem;
+      letter-spacing: -.01em;
+    }
+    .about p {
+      font-size: .95rem;
+      color: #374151;
+      line-height: 1.7;
+      margin-bottom: .6rem;
+    }
+    .about p:last-child { margin-bottom: 0; }
+    .about a { color: var(--brand); font-weight: 600; text-decoration: none; }
+    .about a:hover { text-decoration: underline; }
+
     /* ── Divider ── */
     .divider {
       height: 1px;
@@ -155,6 +183,26 @@
     </div>
 
     <p class="cta-note">Available on <strong>iOS</strong> &amp; <strong>Android</strong> &mdash; stay tuned.</p>
+
+    <!-- About section — makes the page content-rich for Google's bot -->
+    <div class="about">
+      <h2>About SportConnect</h2>
+      <p>
+        SportConnect is a mobile application designed for sports enthusiasts in Vietnam.
+        It lets you discover and instantly book badminton, basketball, football, pickleball,
+        and other courts at venues across Ho Chi Minh City and beyond.
+      </p>
+      <p>
+        Beyond court booking, SportConnect connects you with local events, coaching sessions,
+        and a community of players who share your passion for sport &mdash; all from one app.
+      </p>
+      <p>
+        Learn how we handle your data in our
+        <a href="https://sportconnects.org/privacy">Privacy Policy</a>
+        and review our
+        <a href="https://sportconnects.org/terms">Terms of Service</a>.
+      </p>
+    </div>
   </main>
 
   <div class="divider"></div>
