@@ -58,7 +58,7 @@ from .routers import debug_identity
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
-from fastapi.responses import HTMLResponse
+
 # Silence deprecation warning emitted by limits (dependency of slowapi) regarding pkg_resources.
 warnings.filterwarnings(
     "ignore",
@@ -94,21 +94,6 @@ def _resolve_redis_url() -> str:
         redis_url = "rediss://" + redis_url[len("redis://"):]
 
     return redis_url
-
-
-
-@app.get("/privacy")
-async def privacy_policy():
-    html_content = """
-    <html>
-        <head><title>Privacy Policy - SportConnect</title></head>
-        <body>
-            <h1>Privacy Policy</h1>
-            <p>We respect your privacy. SportConnect does not share your data with third parties.</p>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content, status_code=200)
 
 
 @app.exception_handler(RequestValidationError)
