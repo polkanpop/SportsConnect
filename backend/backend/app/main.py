@@ -221,7 +221,11 @@ _HTML_DIR = Path(__file__).parent.parent / "static" / "html"
 
 @app.get("/", include_in_schema=False)
 async def homepage():
-    return FileResponse(_HTML_DIR / "index.html", media_type="text/html")
+    return FileResponse(
+        _HTML_DIR / "index.html",
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-cache, no-store", "X-Robots-Tag": "noindex"},
+    )
 
 @app.get("/privacy", include_in_schema=False)
 async def legal_privacy_en():
