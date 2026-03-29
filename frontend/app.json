@@ -61,8 +61,7 @@
       ],
       "expo-speech-recognition",
       "expo-secure-store",
-      "expo-apple-authentication",
-      "@react-native-firebase/app"
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true
