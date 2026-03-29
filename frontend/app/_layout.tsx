@@ -20,7 +20,18 @@ import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
 
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import { usePushNotifications } from '@/hooks/use-push-notifications'
 import AuthProvider from '@/providers/auth-providers'
+
+/**
+ * Registers the device push token after the user logs in.
+ * Must sit inside AuthProvider so useAuthContext() resolves correctly.
+ */
+function PushRegistrar() {
+  const { isLoggedIn } = useAuthContext()
+  usePushNotifications(isLoggedIn)
+  return null
+}
 
 let hasAppliedGlobalFont = false
 
@@ -162,6 +173,7 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <QueryProvider>
           <AuthProvider>
+            <PushRegistrar />
             <AppBootstrapProvider>
               <SplashScreenController />
               <Stack screenOptions={{ headerShown: false }}>

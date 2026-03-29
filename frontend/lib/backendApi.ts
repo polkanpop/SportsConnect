@@ -936,6 +936,37 @@ export async function authSessionClose(rememberMe: boolean): Promise<{ revoked: 
 	}
 }
 
+// ─── Device push-token registration ──────────────────────────────────────────
+
+/**
+ * Upsert this device's Expo Push Token in the backend `user_devices` table.
+ * Call this once after login (or when the token refreshes).
+ */
+export async function registerDeviceToken(payload: {
+	push_token: string
+	platform: 'android' | 'ios' | 'web'
+	token_type: 'expo' | 'fcm' | 'apns'
+}): Promise<{ ok: boolean; deviceid?: number }> {
+	return await request('/devices/register-token', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'registerDeviceToken',
+	}) as { ok: boolean; deviceid?: number }
+}
+
+/**
+ * Mark this device's push token as inactive.
+ * Call this on logout so the user no longer receives push notifications
+ * on this device until they log in again.
+ */
+export async function unregisterDeviceToken(push_token: string): Promise<{ ok: boolean }> {
+	return await request('/devices/unregister-token', {
+		method: 'DELETE',
+		body: JSON.stringify({ push_token }),
+		debugLabel: 'unregisterDeviceToken',
+	}) as { ok: boolean }
+}
+
 // ---- Password Reset Flow ----
 export async function requestPasswordReset(identifier: string): Promise<{ status: string }> {
 	const data = await request('/userlogin/forgot-password', {

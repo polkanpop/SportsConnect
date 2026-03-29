@@ -50,6 +50,7 @@ from .routers import (
     bookings,   # race-safe RPC booking endpoints
     drafts,     # Redis form-draft cache endpoints
     me,         # /api/me/dashboard bootstrap endpoint
+    devices,    # push notification token registration
 )
 from .routers import venues
 from .routers import debug_identity
@@ -212,6 +213,7 @@ app.include_router(bookings.router, prefix="/api")  # race-safe RPC endpoints
 app.include_router(drafts.router,   prefix="/api")  # Redis form-draft endpoints
 app.include_router(me.router,       prefix="/api")  # /api/me/dashboard bootstrap
 app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
+app.include_router(devices.router,  prefix="/api")  # push notification device tokens
 
 @app.on_event("startup")
 async def _init_cache():

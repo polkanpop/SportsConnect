@@ -28,6 +28,20 @@ module.exports = () => {
     },
   ])
 
+  // expo-notifications: adds FCM service for Android and configures APNs entitlement on iOS.
+  // Switch mode to 'production' when submitting to the stores.
+  ensurePlugin(plugins, [
+    'expo-notifications',
+    {
+      icon: './assets/icons/SportConnect_icon.png',
+      color: '#FF6017',
+      defaultChannel: 'default',
+      sounds: [],
+      iosDisplayInForeground: true,
+      mode: 'development',
+    },
+  ])
+
   if (hasPackage('@rnmapbox/maps')) {
     ensurePlugin(plugins, [
       '@rnmapbox/maps',

@@ -17,49 +17,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { signupSchema, SignupFormData } from '@/lib/signupSchema'
 import zxcvbn from 'zxcvbn'
 import { authSignup } from '@/lib/backendApi'
 import { AUTO_EMAIL_LOGIN } from '@/env'
 import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding'
 
-// ─── Zod schema ──────────────────────────────────────────────────────────────
-const schema = z
-  .object({
-    accountName: z
-      .string()
-      .trim()
-      .min(1, 'Display name is required.')
-      .max(50, 'Max 50 characters.')
-      .regex(/^[\p{L}\p{M}\s'-]+$/u, "Name can only contain letters, spaces, hyphens, and apostrophes."),
-    username: z
-      .string()
-      .trim()
-      .min(3, 'Min 3 characters.')
-      .max(20, 'Max 20 characters.')
-      .regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores. No spaces.'),
-    email: z.string().trim().email('Enter a valid email address.'),
-    password: z
-      .string()
-      .min(8, 'Min 8 characters.')
-      .regex(/[0-9]/, 'Must contain at least one number.')
-      .regex(/[^a-zA-Z0-9]/, 'Must contain at least one symbol.'),
-    confirmPassword: z.string(),
-    agree: z.boolean().refine((v) => v === true, { message: 'Please accept Terms of Service.' }),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    path: ['confirmPassword'],
-    message: 'Passwords do not match.',
-  })
-  .refine(
-    (d) => {
-      if (d.password.length < 8) return true // let the min length rule fire first
-      return zxcvbn(d.password).score >= 2
-    },
-    { path: ['password'], message: 'Password is too weak. Try mixing symbols, numbers, and words.' },
-  )
-
-type FormData = z.infer<typeof schema>
+// ─── Local alias for hook-form generic ───────────────────────────────────────
+type FormData = SignupFormData
 
 // ─── Strength display config ──────────────────────────────────────────────────
 const STRENGTH: { label: string; color: string }[] = [
@@ -83,7 +48,7 @@ export default function SignUpScreen() {
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(signupSchema),
     defaultValues: {
       accountName: '',
       username: '',
