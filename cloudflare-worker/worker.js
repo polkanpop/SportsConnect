@@ -2,11 +2,23 @@
  * SportConnect – Cloudflare Worker (sportconnect-static)
  *
  * Fully self-contained: no fetch() passthrough to origin.
- * Serves: / (homepage), /privacy, /terms
- * Includes cache-control headers so Google Bot caches pages properly.
+ * Serves: / (homepage), /privacy, /terms, /icon.png
+ * Zero cold start — all content is inlined in this worker.
  */
 
 const BRAND = "#FF6017";
+
+// Basketball icon served as SVG — no external dependency, no 404
+const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <circle cx="50" cy="50" r="48" fill="#FF6017"/>
+  <clipPath id="b"><circle cx="50" cy="50" r="48"/></clipPath>
+  <g clip-path="url(#b)" stroke="white" stroke-width="3.5" fill="none">
+    <line x1="2" y1="50" x2="98" y2="50"/>
+    <line x1="50" y1="2" x2="50" y2="98"/>
+    <path d="M50,2 C22,18 22,82 50,98"/>
+    <path d="M50,2 C78,18 78,82 50,98"/>
+  </g>
+</svg>`;
 
 const HOME_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -35,7 +47,7 @@ const HOME_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <img src="https://sportconnects.org/icon.png" alt="SportConnect logo" width="80" height="80" style="border-radius:18px;margin-bottom:1rem;" onerror="this.style.display='none'" />
+  <img src="/icon.png" alt="SportConnect logo" width="80" height="80" style="border-radius:18px;margin-bottom:1rem;" />
   <h1>SportConnect</h1>
   <p class="subtitle">Find and book basketball courts, join pickup games and<br/>training sessions, and connect with players near you.</p>
 
@@ -184,10 +196,19 @@ export default {
       return new Response(TERMS_HTML, { headers });
     }
 
-    // Homepage (/ or anything else that lands here via the route rule)
+    // Serve the basketball icon as SVG — fixes the 404 on /icon.png
+    if (path === "/icon.png" || path === "/favicon.ico") {
+      return new Response(ICON_SVG, {
+        headers: {
+          "content-type": "image/svg+xml",
+          "cache-control": "public, max-age=86400",
+        },
+      });
+    }
+
+    // Homepage (/ or anything else that lands here via the Worker route)
     return new Response(HOME_HTML, { headers });
 
     // ⚠️  NO fetch(request) passthrough — never proxy to the origin server.
-    //     That was causing 11-second cold-start delays and Google seeing a login page.
   },
 };
