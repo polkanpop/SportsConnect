@@ -2,6 +2,8 @@ import time
 import logging
 import hashlib
 import os
+import json
+import base64
 import secrets
 from email.message import EmailMessage
 import smtplib
@@ -12,6 +14,9 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from jose import jwt
+import firebase_admin
+import firebase_admin.auth as fb_auth
+from firebase_admin import credentials as fb_credentials
 from ..db import rest_select, rest_upsert, rest_update
 from ..auth import get_jwt_secret, HS_ALGORITHM, decode_token
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
@@ -34,6 +39,42 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Bcrypt password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ─── Firebase Admin SDK ───────────────────────────────────────────────────────
+
+_firebase_app = None
+
+def _get_firebase_app():
+    """Lazy singleton: initialise firebase_admin once and reuse."""
+    global _firebase_app
+    if _firebase_app is not None:
+        return _firebase_app
+    # Try service-account JSON file next to the backend package
+    cred_path = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), '..', '..', 'sportconnect-c34b9-firebase-adminsdk-fbsvc-dd20b22440.json')
+    )
+    if os.path.exists(cred_path):
+        cred = fb_credentials.Certificate(cred_path)
+    else:
+        # Fallback: base64-encoded JSON in env var (for hosted deployments)
+        fb_json_b64 = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if fb_json_b64:
+            cred_dict = json.loads(base64.b64decode(fb_json_b64))
+            cred = fb_credentials.Certificate(cred_dict)
+        else:
+            raise RuntimeError("Firebase credentials not found: missing service-account file and FIREBASE_SERVICE_ACCOUNT_JSON env var")
+    try:
+        _firebase_app = firebase_admin.get_app()
+    except ValueError:
+        _firebase_app = firebase_admin.initialize_app(cred)
+    return _firebase_app
+
+
+def find_user_by_phone(phone: str) -> Optional[dict]:
+    """Look up userinfo by contactnumber (E.164 format like +84912345678)."""
+    row = rest_select("userinfo", "infoid, userid, email, name, contactnumber", {"contactnumber": phone}, single=True)
+    logger.debug(f"find_user_by_phone phone={phone} row={row}")
+    return row
 
 
 def _get_password_pepper() -> str:
@@ -1001,4 +1042,133 @@ def sync_social_user(
         "accessTokenExpiresAt": tokens["access_token_expires_at"],
         "refreshToken": tokens["refresh_token"],
         "refreshTokenExpiresAt": tokens["refresh_token_expires_at"],
+    }
+
+
+@router.post('/phone-login')
+def phone_login(payload: dict):
+    """
+    Firebase Phone OTP login.
+    Client verifies OTP with Firebase, then sends the resulting ID token here.
+    We verify the token server-side, find or create the user by phone number,
+    and return a standard session token pair.
+    """
+    t0 = _now_ms()
+    firebase_id_token = (payload.get('firebase_id_token') or '').strip()
+    display_name = (payload.get('display_name') or '').strip()
+
+    if not firebase_id_token:
+        raise HTTPException(status_code=400, detail="Missing firebase_id_token")
+
+    # ── Verify Firebase ID token ──────────────────────────────────────────────
+    try:
+        firebase_app = _get_firebase_app()
+        decoded = fb_auth.verify_id_token(firebase_id_token, app=firebase_app, check_revoked=False)
+    except Exception as e:
+        logger.warning(f"/phone-login Firebase verify failed err={e}")
+        raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)[:120]}")
+
+    phone_number = decoded.get('phone_number')
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Firebase token does not contain a phone_number claim")
+
+    logger.debug(f"/phone-login START phone={phone_number}")
+
+    # ── Find or create user ───────────────────────────────────────────────────
+    info_row = find_user_by_phone(phone_number)
+    login_row = None
+
+    if info_row:
+        userid = info_row.get('userid')
+        login_row = rest_select("userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True)
+        logger.debug(f"/phone-login existing user userid={userid}")
+    else:
+        # ── Create new user (users → userinfo → userlogin) ────────────────
+        role = 'player'
+        try:
+            users_rows = rest_upsert("users", {"role": role})
+        except Exception as e:
+            if "permission denied for sequence users_userid_seq" in str(e):
+                max_row = rest_select("users", "userid", single=True, order={"column": "userid", "desc": True})
+                next_id = (max_row.get('userid') if max_row else 0) + 1
+                users_rows = rest_upsert("users", {"userid": next_id, "role": role})
+            else:
+                raise HTTPException(status_code=500, detail=f"users insert failed: {e}")
+        if not users_rows or not isinstance(users_rows, list):
+            raise HTTPException(status_code=500, detail="Unexpected users insert response")
+        userid = users_rows[0].get('userid')
+        if not userid:
+            raise HTTPException(status_code=500, detail="No userid from users insert")
+
+        account_name = display_name or f"User{userid}"
+        try:
+            info_rows = rest_upsert("userinfo", {"userid": userid, "name": account_name, "contactnumber": phone_number})
+        except Exception as e:
+            if "permission denied for sequence userinfo_infoid_seq" in str(e):
+                max_row = rest_select("userinfo", "infoid", single=True, order={"column": "infoid", "desc": True})
+                next_id = (max_row.get('infoid') if max_row else 0) + 1
+                info_rows = rest_upsert("userinfo", {"infoid": next_id, "userid": userid, "name": account_name, "contactnumber": phone_number})
+            else:
+                raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
+        info_row = info_rows[0] if isinstance(info_rows, list) else {"userid": userid, "name": account_name}
+
+        try:
+            login_rows = rest_upsert("userlogin", {"userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
+        except Exception as e:
+            if "permission denied for sequence userlogin_loginid_seq" in str(e):
+                max_row = rest_select("userlogin", "loginid", single=True, order={"column": "loginid", "desc": True})
+                next_id = (max_row.get('loginid') if max_row else 0) + 1
+                login_rows = rest_upsert("userlogin", {"loginid": next_id, "userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
+            else:
+                raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
+        login_row = login_rows[0] if isinstance(login_rows, list) else {"userid": userid}
+        logger.debug(f"/phone-login new user created userid={userid}")
+
+    # ── Ensure unverified_users record (phone as identifier, pre-verified) ────
+    # Stored in the email column using the E.164 phone number as the unique identifier.
+    # email_verified=True because OTP was already confirmed by Firebase.
+    try:
+        existing_unver = rest_select("unverified_users", "unverifiedid, email_verified", {"email": phone_number}, single=True)
+        if not existing_unver:
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_id,
+                "userid": userid,
+                "email": phone_number,
+                "token_hash": f"PHONE_VERIFIED:{hashlib.sha256(phone_number.encode()).hexdigest()[:24]}",
+                "token_expires_at": "2099-01-01T00:00:00+00:00",
+                "resend_count": 0,
+                "email_verified": True,
+            })
+        elif not existing_unver.get("email_verified"):
+            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {"email_verified": True})
+    except Exception as e:
+        logger.warning(f"/phone-login unverified_users ensure failed phone={phone_number} err={e}")
+
+    # ── Issue session tokens ──────────────────────────────────────────────────
+    username = (login_row.get('username') if login_row else None)
+    email = (info_row.get('email') if info_row else None)
+    name = (info_row.get('name') if info_row else None)
+
+    try:
+        tokens = create_user_tokens(userid, username, email, False)
+    except Exception as e:
+        logger.error(f"/phone-login token creation failed userid={userid} err={e}")
+        raise HTTPException(status_code=500, detail="Token creation failed")
+
+    elapsed = _now_ms() - t0
+    logger.info(f"/phone-login SUCCESS userid={userid} phone={phone_number} elapsedMs={elapsed}")
+    return {
+        "status": "ok",
+        "userid": userid,
+        "username": username,
+        "email": email,
+        "name": name,
+        "phone": phone_number,
+        "elapsedMs": elapsed,
+        "accessToken": tokens.get('access_token'),
+        "accessTokenExpiresAt": tokens.get('access_token_expires_at'),
+        "refreshToken": tokens.get('refresh_token'),
+        "refreshTokenExpiresAt": tokens.get('refresh_token_expires_at'),
     }

@@ -881,6 +881,16 @@ export async function authLogin(payload: { identifier: string; password: string;
 	return data
 }
 
+export async function authPhoneLogin(payload: { firebase_id_token: string; display_name?: string }) {
+	const data = await request('/auth/phone-login', {
+		method: 'POST',
+		body: JSON.stringify(payload),
+		debugLabel: 'authPhoneLogin'
+	})
+	await persistAuthSession(data)
+	return data
+}
+
 // ---- Email Verification Helpers ----
 export async function getVerificationStatus(email: string): Promise<{ emailVerified: boolean }> {
 	const data = await request(`/auth/verification-status?email=${encodeURIComponent(email)}`, { debugLabel: 'getVerificationStatus' })
