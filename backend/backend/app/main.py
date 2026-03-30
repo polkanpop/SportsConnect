@@ -225,7 +225,7 @@ async def homepage():
     return FileResponse(
         _HTML_DIR / "index.html",
         media_type="text/html; charset=utf-8",
-        headers={"Cache-Control": "no-cache, no-store", "X-Robots-Tag": "noindex"},
+        headers={"Cache-Control": "public, max-age=3600", "X-Robots-Tag": "index, follow"},
     )
 
 @app.get("/icon.png", include_in_schema=False)
@@ -235,11 +235,13 @@ async def app_icon():
 
 @app.get("/privacy", include_in_schema=False)
 async def legal_privacy_en():
-    return FileResponse(_HTML_DIR / "privacy.html", media_type="text/html")
+    return FileResponse(_HTML_DIR / "privacy.html", media_type="text/html",
+                        headers={"Cache-Control": "public, max-age=3600", "X-Robots-Tag": "index, follow"})
 
 @app.get("/terms", include_in_schema=False)
 async def legal_terms_en():
-    return FileResponse(_HTML_DIR / "terms.html", media_type="text/html")
+    return FileResponse(_HTML_DIR / "terms.html", media_type="text/html",
+                        headers={"Cache-Control": "public, max-age=3600", "X-Robots-Tag": "index, follow"})
 
 @app.get("/privacy-vi", include_in_schema=False)
 async def legal_privacy_vi():
