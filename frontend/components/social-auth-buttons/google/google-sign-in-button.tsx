@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto'; // Ensure URL & URLSearchParams exist in RN environment
 import { supabase } from '@/lib/supabase';
+import { ICONS } from '@/constants/icons';
 import { useRouter } from 'expo-router';
 import { TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useState, useCallback } from 'react';
@@ -220,8 +221,9 @@ export default function GoogleSignInButton() {
       disabled={loading}
     >
       <Image
-        source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+        source={ICONS.gmailButton}
         style={{ width: 24, height: 24, marginRight: 10 }}
+        contentFit="contain"
       />
       {loading ? (
         <ActivityIndicator size="small" color="#555" />

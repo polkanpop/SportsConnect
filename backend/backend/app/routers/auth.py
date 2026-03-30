@@ -1,3 +1,4 @@
+import re
 import time
 import logging
 import hashlib
@@ -70,6 +71,22 @@ def _get_firebase_app():
     return _firebase_app
 
 
+# Vietnam mobile regex (10 digits, leading 0, second digit 3-9)
+_VN_PHONE_RE = re.compile(r'^0[3-9]\d{8}$')
+
+def _normalize_phone(raw: str) -> str:
+    """Normalise a raw phone input to E.164 (+84...). Passes through if already E.164."""
+    raw = raw.strip()
+    if raw.startswith('+'):
+        return raw
+    if _VN_PHONE_RE.match(raw):
+        return '+84' + raw[1:]
+    return raw
+
+def _looks_like_phone(raw: str) -> bool:
+    stripped = raw.strip()
+    return bool(_VN_PHONE_RE.match(stripped) or (stripped.startswith('+') and stripped[1:].isdigit()))
+
 def find_user_by_phone(phone: str) -> Optional[dict]:
     """Look up userinfo by contactnumber (E.164 format like +84912345678)."""
     row = rest_select("userinfo", "infoid, userid, email, name, contactnumber", {"contactnumber": phone}, single=True)
@@ -102,7 +119,7 @@ def find_userlogin_by_username(username: str) -> Optional[dict]:
 
 def find_userinfo_by_userid(userid: int) -> Optional[dict]:
     start = _now_ms()
-    row = rest_select("userinfo", "infoid, userid, email, name", {"userid": userid}, single=True)
+    row = rest_select("userinfo", "infoid, userid, email, name, contactnumber", {"userid": userid}, single=True)
     logger.debug(f"find_userinfo_by_userid userid={userid} ms={_now_ms()-start} row={row}")
     return row
 
@@ -411,9 +428,8 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
 @router.post('/login')
 def login(payload: dict):
     """
-    Minimal login: Accept identifier (email OR username) + password.
-    Resolves to user via userlogin or userinfo then verifies bcrypt hash.
-    Returns basic profile data if match.
+    Login: accepts email+password, phone+password, or username+password.
+    Phone numbers are normalised to E.164 before lookup.
     """
     t0 = _now_ms()
     identifier = (payload.get('identifier') or '').strip()
@@ -424,14 +440,25 @@ def login(payload: dict):
         raise HTTPException(status_code=400, detail="Missing identifier/password")
 
     looks_like_email = '@' in identifier
-    if looks_like_email:
+    looks_like_phone = _looks_like_phone(identifier)
+
+    if looks_like_phone:
+        e164 = _normalize_phone(identifier)
+        info_row = find_user_by_phone(e164)
+        if not info_row:
+            raise HTTPException(status_code=404, detail="Account not found")
+        userid = info_row.get('userid')
+        login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
+        # Phone users are verified via unverified_users with the E.164 number as the key
+        unver = find_unverified_by_email(e164)
+        if not unver or not unver.get('email_verified'):
+            raise HTTPException(status_code=403, detail="PHONE_NOT_VERIFIED")
+    elif looks_like_email:
         info_row = find_user_by_email(identifier)
         if not info_row:
             raise HTTPException(status_code=404, detail="Account not found")
         userid = info_row.get('userid')
         login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
-        # Enforce email verification — deny if record is absent (deleted-record bypass)
-        # or if the account has not completed verification.
         unver = find_unverified_by_email(identifier)
         if not unver or not unver.get('email_verified'):
             raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
@@ -454,9 +481,9 @@ def login(payload: dict):
         raise HTTPException(status_code=404, detail="Login record not found")
 
     # Reject OAuth (Google/Apple/etc.) accounts from using password-based login.
-    # These accounts have NULL passwords and must use /auth/sync.
+    # Phone accounts (logintype='Phone') and local email accounts (logintype='Local') are allowed.
     _logintype = (login_row.get('logintype') or 'local').strip().lower()
-    if _logintype != 'local':
+    if _logintype not in ('local', 'phone'):
         provider_display = login_row.get('logintype') or 'social'
         raise HTTPException(
             status_code=400,

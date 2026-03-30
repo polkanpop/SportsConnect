@@ -3,6 +3,14 @@
     "name": "SportConnect",
     "slug": "sport_connect",
     "icon": "./assets/icons/SportConnect_icon.png",
+    "assetBundlePatterns": [
+      "assets/**",
+      "assets/icons/**",
+      "assets/icons/import_icons/**",
+      "assets/myimages/**",
+      "assets/animation/**",
+      "assets/svgs/**"
+    ],
     "extra": {
       "SUPABASE_URL": "https://pfhgiyujvxeartkomrpv.supabase.co",
       "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1Ni...",
@@ -29,7 +37,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/SportConnect_adaptive.png",
-        "backgroundColor": "#E6F4FE"
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

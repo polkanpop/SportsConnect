@@ -100,11 +100,19 @@ export default function ProfileSpectate() {
           </View>
           {!contactVisible ? (
             <Text style={{ fontSize: 12, color: '#888', fontStyle: 'italic' }}>This user has hidden their contact information.</Text>
-          ) : (
-            <View style={styles.contactRow}>
-              <Text style={styles.contactText}>{userInfo?.email || userInfo?.contactnumber || ''}</Text>
-            </View>
-          )}
+          ) : (() => {
+            const email = userInfo?.email
+            const phone = userInfo?.contactnumber
+            if (!email && !phone) return null
+            const label = email ? 'Email' : 'Phone'
+            const value = email || phone || ''
+            return (
+              <View style={styles.contactRow}>
+                <Text style={[styles.contactText, { color: '#888', marginRight: 6 }]}>{label}:</Text>
+                <Text style={styles.contactText}>{value}</Text>
+              </View>
+            )
+          })()}
         </View>
 
         <View style={{ height: 10 }} />

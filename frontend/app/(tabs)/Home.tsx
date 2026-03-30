@@ -562,10 +562,11 @@ export default function Home() {
             onPress={() => router.push("/event/profile")}
           >
             {userInfo?.pfp ? (
-              <Image
+              <ExpoImage
                 source={{ uri: userInfo.pfp as string }}
                 style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#E5E7EB' }}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="disk"
               />
             ) : (
               <Image
@@ -758,10 +759,10 @@ export default function Home() {
                             borderColor: 'transparent',
                           }}
                         >
-                          <Image
+                          <ExpoImage
                             source={ICONS.starCal}
                             style={{ width: 20, height: 20, tintColor: COLORS.gold }}
-                            resizeMode="contain"
+                            contentFit="contain"
                           />
                         </View>
 
@@ -999,10 +1000,10 @@ export default function Home() {
                           />
                         ) : (
                           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                            <Image
+                            <ExpoImage
                               source={ICONS.event_category}
                               style={{ width: 34, height: 34, tintColor: COLORS.neutral600 }}
-                              resizeMode="contain"
+                              contentFit="contain"
                             />
                           </View>
                         )}

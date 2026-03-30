@@ -1,23 +1,20 @@
 import AppleSignInButton from "@/components/social-auth-buttons/apple/expo-apple-sign-in-button";
 import GoogleSignInButton from "@/components/social-auth-buttons/google/google-sign-in-button";
 import { ICONS } from "@/constants/icons";
-import { authLogin, authPhoneLogin } from '@/lib/backendApi';
+import { authLogin } from '@/lib/backendApi';
 import { AUTO_EMAIL_LOGIN } from '@/env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
+import { Image as ExpoImage } from 'expo-image';
 import { Link, Stack, router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import auth from '@react-native-firebase/auth';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
-// Covers Viettel (03x/08x/09x), Mobifone (07x/08x/09x), Vinaphone (08x/09x), etc.
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
 
 function normalizeVNPhone(raw: string): string {
-  // 0912345678 → +84912345678
   return '+84' + raw.slice(1);
 }
 
@@ -35,17 +32,9 @@ export default function LoginScreen() {
 
   const [identifier, setIdentifier] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('unknown');
-
-  // Phone OTP
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const confirmationRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
-
-  // Email / password
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -69,59 +58,23 @@ export default function LoginScreen() {
   const handleIdentifierChange = (t: string) => {
     setIdentifier(t);
     setInputMode(detectMode(t));
-    if (otpSent) { setOtpSent(false); setOtp(''); confirmationRef.current = null; }
     if (errorMsg) setErrorMsg(null);
   };
 
-  // ── Phone: send OTP ───────────────────────────────────────────────────────
-  const handleSendOTP = async () => {
-    setErrorMsg(null);
-    const e164 = normalizeVNPhone(identifier.trim());
-    setLoading(true);
-    try {
-      const confirmation = await auth().signInWithPhoneNumber(e164);
-      confirmationRef.current = confirmation;
-      setOtpSent(true);
-    } catch (e: any) {
-      setErrorMsg(e.message || 'Failed to send OTP. Please check the number.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Phone: confirm OTP ────────────────────────────────────────────────────
-  const handleConfirmOTP = async () => {
-    setErrorMsg(null);
-    if (!otp.trim() || !confirmationRef.current) {
-      setErrorMsg('Please enter the OTP code.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await confirmationRef.current.confirm(otp.trim());
-      const firebaseIdToken = await result!.user.getIdToken();
-      const res = await authPhoneLogin({ firebase_id_token: firebaseIdToken });
-      console.log('[login] phone login success', res);
-      try { await initFavoritesForCurrentUser(); } catch {}
-      router.replace('/(tabs)/Home');
-    } catch (e: any) {
-      setErrorMsg(e.message || 'OTP verification failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Email: password login ─────────────────────────────────────────────────
-  const handleEmailLogin = async () => {
+  const handleLogin = async () => {
     setErrorMsg(null);
     if (!identifier.trim() || !password) {
-      setErrorMsg('Enter email and password.');
+      setErrorMsg('Enter your email or phone number and password.');
       return;
     }
     setLoading(true);
+    // Normalize VN phone to E.164 so backend can look it up
+    const resolvedIdentifier = inputMode === 'phone'
+      ? normalizeVNPhone(identifier.trim())
+      : identifier.trim();
     try {
-      const res = await authLogin({ identifier: identifier.trim(), password, rememberMe });
-      console.log('[login] email login success', res);
+      const res = await authLogin({ identifier: resolvedIdentifier, password, rememberMe });
+      console.log('[login] success', res);
       try { await initFavoritesForCurrentUser(); } catch {}
       setPassword('');
       router.replace('/(tabs)/Home');
@@ -129,9 +82,11 @@ export default function LoginScreen() {
       const msg = e.message || 'Login failed';
       if (msg === 'EMAIL_NOT_VERIFIED') {
         setErrorMsg('Email not verified. Please check your inbox or resend.');
-        if (!AUTO_EMAIL_LOGIN) {
+        if (!AUTO_EMAIL_LOGIN && inputMode === 'email') {
           setTimeout(() => router.replace(`/(auth)/waiting?email=${encodeURIComponent(identifier.trim())}` as any), 800);
         }
+      } else if (msg === 'PHONE_NOT_VERIFIED') {
+        setErrorMsg('Phone number not verified. Please contact support.');
       } else {
         setErrorMsg(msg);
       }
@@ -149,70 +104,25 @@ export default function LoginScreen() {
           contentContainerStyle={[styles.container, { paddingBottom: 24 + (insets?.bottom ?? 0) }]}
         >
           <View style={styles.logoWrapper}>
-            <Image source={ICONS.app_icon} style={styles.logo} />
+            <ExpoImage source={ICONS.app_icon} style={styles.logo} contentFit="contain" />
             <Text style={styles.appTitle}>SportConnect</Text>
           </View>
 
           <View style={styles.formWrapper}>
             <Text style={styles.formTitle}>Login</Text>
 
-            {/* ── Identifier input (hidden once OTP is sent) ── */}
-            {!otpSent && (
-              <TextInput
-                placeholder="Gmail or Phone Number"
-                placeholderTextColor={COLORS.dark300}
-                value={identifier}
-                onChangeText={handleIdentifierChange}
-                autoCapitalize="none"
-                keyboardType={inputMode === 'phone' ? 'phone-pad' : 'email-address'}
-                style={styles.input}
-              />
-            )}
+            <TextInput
+              placeholder="Email or Phone Number"
+              placeholderTextColor={COLORS.dark300}
+              value={identifier}
+              onChangeText={handleIdentifierChange}
+              autoCapitalize="none"
+              keyboardType={inputMode === 'phone' ? 'phone-pad' : 'email-address'}
+              style={styles.input}
+            />
 
-            {/* ── Phone mode: "Send OTP" button ── */}
-            {inputMode === 'phone' && !otpSent && (
-              <TouchableOpacity
-                disabled={loading}
-                onPress={handleSendOTP}
-                style={[styles.loginButton, loading && { opacity: 0.7 }]}
-              >
-                <Text style={styles.loginButtonText}>{loading ? 'Sending OTP…' : 'Send OTP'}</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* ── Phone mode: OTP input ── */}
-            {inputMode === 'phone' && otpSent && (
-              <>
-                <Text style={styles.otpInfo}>
-                  OTP sent to +84{identifier.trim().slice(1)}
-                </Text>
-                <TextInput
-                  placeholder="Enter 6-digit OTP"
-                  placeholderTextColor={COLORS.dark300}
-                  value={otp}
-                  onChangeText={(t) => { setOtp(t); if (errorMsg) setErrorMsg(null); }}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  style={styles.input}
-                />
-                <Pressable
-                  onPress={() => { setOtpSent(false); setOtp(''); confirmationRef.current = null; }}
-                  style={styles.changeNumberRow}
-                >
-                  <Text style={styles.changeNumberText}>← Change number</Text>
-                </Pressable>
-                <TouchableOpacity
-                  disabled={loading}
-                  onPress={handleConfirmOTP}
-                  style={[styles.loginButton, loading && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.loginButtonText}>{loading ? 'Verifying…' : 'Verify OTP'}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* ── Email mode: password + extras ── */}
-            {inputMode === 'email' && (
+            {/* Password field appears once mode is detected */}
+            {inputMode !== 'unknown' && (
               <>
                 <View style={styles.passwordRow}>
                   <TextInput
@@ -224,14 +134,14 @@ export default function LoginScreen() {
                     style={styles.passwordInput}
                   />
                   <Pressable onPress={() => setPasswordVisible(!passwordVisible)}>
-                    <Image source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
+                    <ExpoImage source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
                   </Pressable>
                 </View>
 
                 <View style={styles.optionsRow}>
                   <Pressable onPress={() => setRememberMe(!rememberMe)} style={styles.rememberMePressable}>
                     <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
-                      {rememberMe && (<Image source={ICONS.checkSmall} style={styles.checkboxTick} />)}
+                      {rememberMe && (<ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} />)}
                     </View>
                     <Text style={styles.textDark}>Remember me</Text>
                   </Pressable>
@@ -239,18 +149,18 @@ export default function LoginScreen() {
                     <Text style={styles.forgotPassword}>Forgot Password ?</Text>
                   </Link>
                 </View>
-
-                <TouchableOpacity
-                  disabled={loading}
-                  onPress={handleEmailLogin}
-                  style={[styles.loginButton, loading && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.loginButtonText}>{loading ? 'Signing in…' : 'Login'}</Text>
-                </TouchableOpacity>
               </>
             )}
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+            <TouchableOpacity
+              disabled={loading}
+              onPress={handleLogin}
+              style={[styles.loginButton, loading && { opacity: 0.7 }]}
+            >
+              <Text style={styles.loginButtonText}>{loading ? 'Signing in…' : 'Login'}</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.dividerRow}>
@@ -295,7 +205,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logo: { width: 80, height: 80 },
+  logo: { width: 80, height: 80, borderRadius: 20, overflow: 'hidden' },
   appTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -322,21 +232,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: COLORS.dark300,
   },
-  otpInfo: {
-    color: COLORS.dark300,
-    textAlign: 'center',
-    marginBottom: 12,
-    fontSize: 14,
-  },
-  changeNumberRow: {
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  changeNumberText: {
-    color: COLORS.green700,
-    fontWeight: '600',
-    fontSize: 14,
-  },
   passwordRow: {
     width: '100%',
     marginBottom: 20,
@@ -360,7 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   rememberMePressable: { flexDirection: 'row', alignItems: 'center' },
   checkboxBase: {
@@ -401,8 +296,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.red600,
     textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 4,
+    marginBottom: 12,
     fontSize: 14,
   },
   dividerRow: {
@@ -435,3 +329,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
