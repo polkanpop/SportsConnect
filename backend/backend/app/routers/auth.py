@@ -126,8 +126,21 @@ def find_userinfo_by_userid(userid: int) -> Optional[dict]:
 
 def find_unverified_by_email(email: str) -> Optional[dict]:
     start = _now_ms()
-    row = rest_select("unverified_users", "unverifiedid, userid, email, token_hash, token_expires_at, resend_count, email_verified", {"email": email}, single=True)
+    row = rest_select("unverified_users", "unverifiedid, userid, email, phone, token_hash, token_expires_at, resend_count, email_verified, phone_verified", {"email": email}, single=True)
     logger.debug(f"find_unverified_by_email email={email} ms={_now_ms()-start} row={row}")
+    return row
+
+def find_unverified_by_phone(phone: str) -> Optional[dict]:
+    """Look up unverified_users by the dedicated phone column.
+    Falls back to the legacy pattern of phone number stored in the email column."""
+    start = _now_ms()
+    row = rest_select("unverified_users", "unverifiedid, userid, email, phone, token_hash, token_expires_at, resend_count, email_verified, phone_verified", {"phone": phone}, single=True)
+    if not row:
+        # Legacy: older records stored phone number in the email column
+        row = rest_select("unverified_users", "unverifiedid, userid, email, phone, token_hash, token_expires_at, resend_count, email_verified, phone_verified", {"email": phone}, single=True)
+        if row:
+            logger.debug(f"find_unverified_by_phone phone={phone} found via legacy email column")
+    logger.debug(f"find_unverified_by_phone phone={phone} ms={_now_ms()-start} row={row}")
     return row
 
 def _email_settings():
@@ -451,8 +464,8 @@ def login(payload: dict):
         userid = info_row.get('userid')
         login_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
         # Phone users are verified via unverified_users with the E.164 number as the key
-        unver = find_unverified_by_email(e164)
-        if not unver or not unver.get('email_verified'):
+        unver = find_unverified_by_phone(e164)
+        if not unver or not unver.get('phone_verified'):
             raise HTTPException(status_code=403, detail="PHONE_NOT_VERIFIED")
     elif looks_like_email:
         info_row = find_user_by_email(identifier)
@@ -473,7 +486,15 @@ def login(payload: dict):
             raise HTTPException(status_code=404, detail="Account not found")
         userid = login_row.get('userid')
         info_row = find_userinfo_by_userid(userid)
-        if info_row and info_row.get('email'):
+        _lt = (login_row.get('logintype') or 'local').strip().lower()
+        if _lt == 'phone':
+            # Phone account — verify via phone column
+            phone_num = info_row.get('contactnumber') if info_row else None
+            if phone_num:
+                unver_ph = find_unverified_by_phone(phone_num)
+                if not unver_ph or not unver_ph.get('phone_verified'):
+                    raise HTTPException(status_code=403, detail="PHONE_NOT_VERIFIED")
+        elif info_row and info_row.get('email'):
             unver = find_unverified_by_email(info_row.get('email'))
             if not unver or not unver.get('email_verified'):
                 raise HTTPException(status_code=403, detail="EMAIL_NOT_VERIFIED")
@@ -1348,25 +1369,36 @@ def phone_login(payload: dict):
         login_row = login_rows[0] if isinstance(login_rows, list) else {"userid": userid}
         logger.debug(f"/phone-login new user created userid={userid}")
 
-    # ── Ensure unverified_users record (phone as identifier, pre-verified) ────
-    # Stored in the email column using the E.164 phone number as the unique identifier.
-    # email_verified=True because OTP was already confirmed by Firebase.
+    # ── Ensure unverified_users record (phone column, pre-verified) ─────────
+    # OTP was already confirmed by Firebase when we reach here, so phone_verified=True.
     try:
-        existing_unver = rest_select("unverified_users", "unverifiedid, email_verified", {"email": phone_number}, single=True)
+        existing_unver = rest_select("unverified_users", "unverifiedid, phone_verified, phone", {"phone": phone_number}, single=True)
         if not existing_unver:
-            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
-            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
-            rest_upsert("unverified_users", {
-                "unverifiedid": next_id,
-                "userid": userid,
-                "email": phone_number,
-                "token_hash": f"PHONE_VERIFIED:{hashlib.sha256(phone_number.encode()).hexdigest()[:24]}",
-                "token_expires_at": "2099-01-01T00:00:00+00:00",
-                "resend_count": 0,
-                "email_verified": True,
-            })
-        elif not existing_unver.get("email_verified"):
-            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {"email_verified": True})
+            # Check legacy record stored in email column and migrate it
+            legacy_unver = rest_select("unverified_users", "unverifiedid, email, phone_verified", {"email": phone_number}, single=True)
+            if legacy_unver:
+                # Migrate: move phone number from email column to phone column
+                rest_update("unverified_users", {"unverifiedid": legacy_unver.get("unverifiedid")}, {
+                    "phone": phone_number,
+                    "phone_verified": True,
+                    "email": None,
+                })
+                logger.debug(f"/phone-login migrated legacy unverified record for phone={phone_number}")
+            else:
+                # No record at all — create new one using proper phone column
+                max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+                next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+                rest_upsert("unverified_users", {
+                    "unverifiedid": next_id,
+                    "userid": userid,
+                    "phone": phone_number,
+                    "token_hash": f"PHONE_VERIFIED:{hashlib.sha256(phone_number.encode()).hexdigest()[:24]}",
+                    "token_expires_at": "2099-01-01T00:00:00+00:00",
+                    "resend_count": 0,
+                    "phone_verified": True,
+                })
+        elif not existing_unver.get("phone_verified"):
+            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {"phone_verified": True})
     except Exception as e:
         logger.warning(f"/phone-login unverified_users ensure failed phone={phone_number} err={e}")
 

@@ -5,8 +5,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },
@@ -87,7 +87,8 @@
     "tailwindcss": "^3.4.18",
     "xml2js": "^0.5.0",
     "zod": "^4.3.6",
-    "zxcvbn": "^4.4.2"
+    "zxcvbn": "^4.4.2",
+    "expo": "~54.0.33"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
