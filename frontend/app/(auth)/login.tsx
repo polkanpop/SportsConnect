@@ -87,7 +87,8 @@ export default function LoginScreen() {
           setTimeout(() => router.replace(`/(auth)/waiting?email=${encodeURIComponent(identifier.trim())}` as any), 800);
         }
       } else if (msg === 'PHONE_NOT_VERIFIED') {
-        setErrorMsg('Phone number not verified. Please contact support.');
+        setErrorMsg('Phone number not verified. Redirecting to OTP verification…');
+        setTimeout(() => router.replace(`/(auth)/phone-otp?phone=${encodeURIComponent(identifier.trim())}` as any), 800);
       } else {
         setErrorMsg(msg);
       }
@@ -122,36 +123,31 @@ export default function LoginScreen() {
               style={styles.input}
             />
 
-            {/* Password field appears once mode is detected */}
-            {inputMode !== 'unknown' && (
-              <>
-                <View style={styles.passwordRow}>
-                  <TextInput
-                    placeholder="Password"
-                    placeholderTextColor="#6A6B6B"
-                    secureTextEntry={!passwordVisible}
-                    value={password}
-                    onChangeText={setPassword}
-                    style={styles.passwordInput}
-                  />
-                  <Pressable onPress={() => setPasswordVisible(!passwordVisible)}>
-                    <ExpoImage source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
-                  </Pressable>
-                </View>
+            <View style={styles.passwordRow}>
+              <TextInput
+                placeholder="Password"
+                placeholderTextColor="#6A6B6B"
+                secureTextEntry={!passwordVisible}
+                value={password}
+                onChangeText={setPassword}
+                style={styles.passwordInput}
+              />
+              <Pressable onPress={() => setPasswordVisible(!passwordVisible)}>
+                <ExpoImage source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
+              </Pressable>
+            </View>
 
-                <View style={styles.optionsRow}>
-                  <Pressable onPress={() => setRememberMe(!rememberMe)} style={styles.rememberMePressable}>
-                    <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
-                      {rememberMe && (<ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} />)}
-                    </View>
-                    <Text style={styles.textDark}>Remember me</Text>
-                  </Pressable>
-                  <Link href="/(auth)/forgotpassword">
-                    <Text style={styles.forgotPassword}>Forgot Password ?</Text>
-                  </Link>
+            <View style={styles.optionsRow}>
+              <Pressable onPress={() => setRememberMe(!rememberMe)} style={styles.rememberMePressable}>
+                <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
+                  {rememberMe && (<ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} />)}
                 </View>
-              </>
-            )}
+                <Text style={styles.textDark}>Remember me</Text>
+              </Pressable>
+              <Link href="/(auth)/forgotpassword">
+                <Text style={styles.forgotPassword}>Forgot Password ?</Text>
+              </Link>
+            </View>
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 

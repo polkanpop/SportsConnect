@@ -7,6 +7,7 @@ export default function AuthLayout() {
       <Stack.Screen name="signup" />
       <Stack.Screen name="waiting" />
       <Stack.Screen name="verified" />
+      <Stack.Screen name="phone-otp" />
     </Stack>
   );
 }

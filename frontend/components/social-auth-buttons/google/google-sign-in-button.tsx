@@ -200,24 +200,8 @@ export default function GoogleSignInButton() {
   return (
     <TouchableOpacity
       onPress={signIn}
-      style={{
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#ffffff',
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 3,
-        elevation: 2,
-        marginHorizontal: 8,
-        opacity: loading ? 0.6 : 1,
-      }}
-      activeOpacity={0.8}
+      style={{ opacity: loading ? 0.6 : 1, marginHorizontal: 12 }}
+      activeOpacity={0.7}
       disabled={loading}
     >
       {loading ? (
@@ -225,7 +209,7 @@ export default function GoogleSignInButton() {
       ) : (
         <Image
           source={ICONS.googleIcon}
-          style={{ width: 32, height: 32 }}
+          style={{ width: 40, height: 40 }}
           contentFit="contain"
         />
       )}

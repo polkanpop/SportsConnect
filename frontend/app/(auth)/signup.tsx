@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { signupSchema, SignupFormData } from '@/lib/signupSchema'
+import { signupSchema, SignupFormData, isPhoneInput } from '@/lib/signupSchema'
 import zxcvbn from 'zxcvbn'
 import { authSignup } from '@/lib/backendApi'
 import { AUTO_EMAIL_LOGIN } from '@/env'
@@ -53,27 +53,39 @@ export default function SignUpScreen() {
     defaultValues: {
       accountName: '',
       username: '',
-      email: '',
+      emailOrPhone: '',
       password: '',
       confirmPassword: '',
       agree: false,
     },
   })
 
-  const passwordValue  = watch('password')
+  const emailOrPhoneValue = watch('emailOrPhone') ?? ''
+  const isPhone = isPhoneInput(emailOrPhoneValue)
+
+  const passwordValue  = watch('password') ?? ''
   const strengthResult = useMemo(
-    () => (passwordValue ? zxcvbn(passwordValue) : null),
-    [passwordValue],
+    () => (passwordValue && !isPhone ? zxcvbn(passwordValue) : null),
+    [passwordValue, isPhone],
   )
 
   const onSubmit = async (data: FormData) => {
     setGeneralError('')
     setSuccessMessage('')
+
+    // Phone number → navigate to Firebase OTP screen
+    if (isPhoneInput(data.emailOrPhone)) {
+      router.push(
+        `/(auth)/phone-otp?phone=${encodeURIComponent(data.emailOrPhone.trim())}&name=${encodeURIComponent(data.accountName.trim())}&username=${encodeURIComponent(data.username.trim())}` as any
+      )
+      return
+    }
+
     try {
       const res = await authSignup({
         username: data.username.trim(),
-        email:    data.email.trim(),
-        password: data.password,
+        email:    data.emailOrPhone.trim(),
+        password: data.password ?? '',
         accountName: data.accountName.trim(),
       })
       await requestLocationPermissionOnceAfterSignup()
@@ -85,7 +97,7 @@ export default function SignUpScreen() {
       setSuccessMessage('Account created. Please verify your email to continue.')
       if (!AUTO_EMAIL_LOGIN) {
         setTimeout(
-          () => router.replace(`/(auth)/waiting?email=${encodeURIComponent(data.email.trim())}` as any),
+          () => router.replace(`/(auth)/waiting?email=${encodeURIComponent(data.emailOrPhone.trim())}` as any),
           1200,
         )
       }
@@ -148,102 +160,113 @@ export default function SignUpScreen() {
           />
           {errors.username && <Text style={styles.fieldError}>{errors.username.message}</Text>}
 
-          {/* ── Email ── */}
-          <Text style={styles.label}>Email</Text>
+          {/* ── Email or Phone Number ── */}
+          <Text style={styles.label}>Email or Phone Number</Text>
           <Controller
             control={control}
-            name="email"
+            name="emailOrPhone"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="Email"
+                placeholder="Email or Phone Number"
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
-                keyboardType="email-address"
+                keyboardType="default"
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={[styles.input, !!errors.email && styles.inputError]}
+                style={[styles.input, !!errors.emailOrPhone && styles.inputError]}
               />
             )}
           />
-          {errors.email && <Text style={styles.fieldError}>{errors.email.message}</Text>}
+          {errors.emailOrPhone && <Text style={styles.fieldError}>{errors.emailOrPhone.message}</Text>}
 
-          {/* ── Password ── */}
-          <Text style={styles.label}>Password</Text>
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
-                <TextInput
-                  placeholder="Password"
-                  placeholderTextColor={COLOR.dark300}
-                  secureTextEntry={!passwordVisible}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  style={styles.passwordInput}
-                />
-                <Pressable onPress={() => setPasswordVisible((p) => !p)} hitSlop={8}>
-                  <Image
-                    source={passwordVisible ? ICONS.notEye : ICONS.eye}
-                    style={styles.eyeIcon}
-                  />
-                </Pressable>
-              </View>
-            )}
-          />
-
-          {/* Strength bar — appears as soon as user starts typing */}
-          {strengthResult != null && (
-            <View style={styles.strengthWrapper}>
-              <View style={styles.strengthTrack}>
-                {[0, 1, 2, 3].map((i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.strengthSegment,
-                      i < strengthResult.score
-                        ? { backgroundColor: STRENGTH[strengthResult.score].color }
-                        : { backgroundColor: COLOR.segmentEmpty },
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text style={[styles.strengthLabel, { color: STRENGTH[strengthResult.score].color }]}>
-                {STRENGTH[strengthResult.score].label}
-              </Text>
-            </View>
+          {/* Phone mode hint */}
+          {isPhone && (
+            <Text style={styles.phoneHint}>
+              📱 You'll verify your number via SMS — no password needed.
+            </Text>
           )}
-          {errors.password && <Text style={styles.fieldError}>{errors.password.message}</Text>}
 
-          {/* ── Confirm Password ── */}
-          <Text style={styles.label}>Confirm Password</Text>
-          <Controller
-            control={control}
-            name="confirmPassword"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
-                <TextInput
-                  placeholder="Confirm Password"
-                  placeholderTextColor={COLOR.dark300}
-                  secureTextEntry={!confirmVisible}
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  style={styles.passwordInput}
-                />
-                <Pressable onPress={() => setConfirmVisible((p) => !p)} hitSlop={8}>
-                  <Image
-                    source={confirmVisible ? ICONS.notEye : ICONS.eye}
-                    style={styles.eyeIcon}
-                  />
-                </Pressable>
-              </View>
-            )}
-          />
-          {errors.confirmPassword && <Text style={styles.fieldError}>{errors.confirmPassword.message}</Text>}
+          {/* ── Password (email mode only) ── */}
+          {!isPhone && (
+            <>
+              <Text style={styles.label}>Password</Text>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
+                    <TextInput
+                      placeholder="Password"
+                      placeholderTextColor={COLOR.dark300}
+                      secureTextEntry={!passwordVisible}
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      style={styles.passwordInput}
+                    />
+                    <Pressable onPress={() => setPasswordVisible((p) => !p)} hitSlop={8}>
+                      <Image
+                        source={passwordVisible ? ICONS.notEye : ICONS.eye}
+                        style={styles.eyeIcon}
+                      />
+                    </Pressable>
+                  </View>
+                )}
+              />
+
+              {/* Strength bar */}
+              {strengthResult != null && (
+                <View style={styles.strengthWrapper}>
+                  <View style={styles.strengthTrack}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.strengthSegment,
+                          i < strengthResult.score
+                            ? { backgroundColor: STRENGTH[strengthResult.score].color }
+                            : { backgroundColor: COLOR.segmentEmpty },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={[styles.strengthLabel, { color: STRENGTH[strengthResult.score].color }]}>
+                    {STRENGTH[strengthResult.score].label}
+                  </Text>
+                </View>
+              )}
+              {errors.password && <Text style={styles.fieldError}>{errors.password.message}</Text>}
+
+              {/* ── Confirm Password ── */}
+              <Text style={styles.label}>Confirm Password</Text>
+              <Controller
+                control={control}
+                name="confirmPassword"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
+                    <TextInput
+                      placeholder="Confirm Password"
+                      placeholderTextColor={COLOR.dark300}
+                      secureTextEntry={!confirmVisible}
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      style={styles.passwordInput}
+                    />
+                    <Pressable onPress={() => setConfirmVisible((p) => !p)} hitSlop={8}>
+                      <Image
+                        source={confirmVisible ? ICONS.notEye : ICONS.eye}
+                        style={styles.eyeIcon}
+                      />
+                    </Pressable>
+                  </View>
+                )}
+              />
+              {errors.confirmPassword && <Text style={styles.fieldError}>{errors.confirmPassword.message}</Text>}
+            </>
+          )}
 
           {/* ── Terms checkbox ── */}
           <Controller
@@ -341,6 +364,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     fontSize: 14,
+  },
+  phoneHint: {
+    fontSize: 13,
+    color: COLOR.brand,
+    marginBottom: 16,
+    marginTop: 2,
   },
   label: {
     fontSize: 13,
