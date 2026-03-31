@@ -25,6 +25,8 @@ export const queryKeys = {
   eventBookingsByEvent: (eventid: number | null) => ['bookings', 'by-event', eventid ?? -1] as const,
   reviews: (params?: { userid?: number | null; targettype?: string; targetid?: number | null }) =>
     ['reviews', params?.userid ?? null, params?.targettype ?? null, params?.targetid ?? null] as const,
+  mapEventsInBounds: (boundsKey: string) => ['map', 'events', boundsKey] as const,
+  mapTSInBounds: (boundsKey: string) => ['map', 'trainingsessions', boundsKey] as const,
 }
 
 export type QueryKey = ReturnType<typeof queryKeys.courtAvailability>

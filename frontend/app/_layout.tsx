@@ -17,6 +17,7 @@ import './global.css'
 import { SplashScreenController } from '@/components/splash-controller'
 import QueryProvider from '@/providers/query-provider'
 import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
+import { LanguageProvider } from '@/providers/language-provider'
 
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -171,20 +172,22 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <QueryProvider>
-          <AuthProvider>
-            <PushRegistrar />
-            <AppBootstrapProvider>
-              <SplashScreenController />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="+not-found" />
-              </Stack>
-              <StatusBar style="auto" />
-            </AppBootstrapProvider>
-          </AuthProvider>
-        </QueryProvider>
+        <LanguageProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <PushRegistrar />
+              <AppBootstrapProvider>
+                <SplashScreenController />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+              </AppBootstrapProvider>
+            </AuthProvider>
+          </QueryProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   )

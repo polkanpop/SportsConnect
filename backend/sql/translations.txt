@@ -1,0 +1,258 @@
+# SportConnect — UI String Translations
+# Format: ENGLISH_KEY | English text | Vietnamese translation
+# Generated from frontend codebase scan
+
+# ─── COMMON / SHARED ────────────────────────────────────────────
+COMMON_BTN_CANCEL | Cancel | Hủy
+COMMON_BTN_CONFIRM | Confirm | Xác nhận
+COMMON_BTN_SUBMIT | Submit | Gửi
+COMMON_BTN_SAVE | Save | Lưu
+COMMON_BTN_EDIT | Edit | Chỉnh sửa
+COMMON_BTN_DELETE | Delete | Xóa
+COMMON_BTN_CLOSE | Close | Đóng
+COMMON_BTN_DONE | Done | Xong
+COMMON_BTN_BACK | Back | Quay lại
+COMMON_BTN_NEXT | Next | Tiếp theo
+COMMON_BTN_RETURN | Return | Quay lại
+COMMON_BTN_EXIT | Exit | Thoát
+COMMON_LABEL_LOADING | Loading... | Đang tải...
+COMMON_LABEL_ERROR | Error | Lỗi
+COMMON_LABEL_SUCCESS | Success | Thành công
+COMMON_LABEL_FREE | Free | Miễn phí
+COMMON_LABEL_DATE | Date | Ngày
+COMMON_LABEL_TIME | Time | Thời gian
+COMMON_LABEL_ADDRESS | Address | Địa chỉ
+COMMON_LABEL_COURT | Court | Sân
+COMMON_LABEL_VENUE | Venue | Địa điểm
+COMMON_LABEL_PAYMENT | Payment | Thanh toán
+COMMON_LABEL_NOTE | Note | Ghi chú
+COMMON_LABEL_TYPE | Type | Loại
+COMMON_LABEL_STATUS | Status | Trạng thái
+COMMON_LABEL_NO_IMAGE | No image | Không có ảnh
+COMMON_LABEL_AMOUNT | Amount | Số tiền
+COMMON_LABEL_DESCRIPTION | Description | Mô tả
+
+# ─── AUTH — LOGIN ────────────────────────────────────────────────
+AUTH_APP_TITLE | SportConnect | SportConnect
+AUTH_LOGIN_TITLE | Login | Đăng nhập
+AUTH_LABEL_REMEMBER_ME | Remember me | Ghi nhớ đăng nhập
+AUTH_LINK_FORGOT_PASSWORD | Forgot Password ? | Quên mật khẩu ?
+AUTH_DIVIDER_OR_LOGIN_WITH | Or Login with | Hoặc đăng nhập với
+AUTH_LINK_SIGN_UP | Sign up | Đăng ký
+AUTH_PLACEHOLDER_EMAIL | Email | Email
+AUTH_PLACEHOLDER_PASSWORD | Password | Mật khẩu
+
+# ─── AUTH — SIGN UP ──────────────────────────────────────────────
+AUTH_SIGNUP_TITLE | Sign Up | Đăng ký
+AUTH_SIGNUP_SUBTITLE | Create your SportConnect account | Tạo tài khoản SportConnect của bạn
+AUTH_LABEL_DISPLAY_NAME | Display Name | Tên hiển thị
+AUTH_LABEL_USERNAME | Username | Tên người dùng
+AUTH_LABEL_EMAIL_OR_PHONE | Email or Phone Number | Email hoặc Số điện thoại
+AUTH_LABEL_PASSWORD | Password | Mật khẩu
+AUTH_LABEL_CONFIRM_PASSWORD | Confirm Password | Xác nhận mật khẩu
+AUTH_BTN_SIGN_UP | Sign Up | Đăng ký
+AUTH_LABEL_ALREADY_HAVE_ACCOUNT | Already have an account? | Đã có tài khoản?
+
+# ─── HOME ────────────────────────────────────────────────────────
+HOME_SECTION_YOUR_CHOICES | Your choices | Lựa chọn của bạn
+HOME_SECTION_EVENT | Event | Sự kiện
+HOME_LABEL_ADD_MORE | Add more... | Thêm nữa...
+HOME_LABEL_TAP_FIND_FAVOURITE | Tap to find your favourite courts!! | Nhấn để tìm sân yêu thích của bạn!!
+HOME_LABEL_NO_CURRENT_EVENTS | There is no current event | Hiện tại không có sự kiện nào
+HOME_ERR_FAILED_LOAD_FAVOURITES | Failed to load favourites: | Không tải được danh sách yêu thích:
+HOME_LABEL_REFINING_DISTANCE | Refining nearby distance... | Đang xác định khoảng cách gần...
+HOME_MENU_TITLE | Menu | Menu
+HOME_MENU_LANGUAGE | Language | Ngôn ngữ
+HOME_CAT_COACH | Coach | Buổi tập
+HOME_CAT_EVENT | Event | Sự kiện
+HOME_CAT_COURT | Court | Sân
+
+# ─── MAP ─────────────────────────────────────────────────────────
+MAP_PLACEHOLDER_SEARCH | Search for a location... | Tìm kiếm địa điểm...
+MAP_CHIP_COURTS | Courts | Sân
+MAP_CHIP_EVENTS | Events | Sự kiện
+MAP_CHIP_TRAINING | Training | Tập luyện
+MAP_CHIP_VENUE | Venue | Không gian
+MAP_CHIP_VENUE_BOTH | Venue: Both | Không gian: Cả hai
+MAP_CHIP_STATUS | Status | Trạng thái
+MAP_CHIP_DISTANCE | Distance | Khoảng cách
+MAP_CHIP_DISTANCE_KM | Distance: {n}km | Khoảng cách: {n}km
+MAP_FILTER_CLEAR_ALL | Clear All | Xóa tất cả
+MAP_FILTER_CLEAR | Clear | Xóa
+MAP_FILTER_DISTANCE_INPUT_TITLE | Type distance (km) | Nhập khoảng cách (km)
+MAP_LABEL_INDOOR | Indoor | Trong nhà
+MAP_LABEL_OUTDOOR | Outdoor | Ngoài trời
+MAP_LABEL_IN_OUTDOOR | In/Outdoor | Trong/Ngoài nhà
+MAP_LABEL_AVAILABLE | Available | Có sẵn
+MAP_LABEL_UNAVAILABLE | Unavailable | Không có sẵn
+MAP_LOADING_COURTS | Loading courts... | Đang tải sân...
+MAP_ERR_LOAD_COURTS | Error: | Lỗi:
+MAP_EMPTY_NO_COURTS | No courts found | Không tìm thấy sân
+MAP_BTN_BOOK | Book | Đặt chỗ
+MAP_BTN_JOIN | Join | Tham gia
+MAP_PLACEHOLDER_NO_COVER | No cover image available | Không có ảnh bìa
+MAP_TAB_SCHEDULE | Schedule | Lịch trình
+MAP_TAB_TRANSPORT | Transport | Di chuyển
+MAP_TAB_IMAGES | Images | Hình ảnh
+MAP_TAB_REVIEWS | Reviews | Đánh giá
+MAP_SCHEDULE_LOADING | Loading schedule... | Đang tải lịch...
+MAP_SCHEDULE_EMPTY | No schedule available yet. | Chưa có lịch.
+MAP_IMAGES_LOADING | Loading images... | Đang tải ảnh...
+MAP_IMAGES_EMPTY | No images available yet. | Chưa có ảnh.
+MAP_REVIEWS_PLACEHOLDER | Placeholder for user review :D | Đánh giá của người dùng #note change the placeholder... to There is no review for this court/ Không có đánh giá nào cho địa điểm này 
+MAP_TRANSPORT_DISTANCE | Distance | Khoảng cách
+MAP_TRANSPORT_TRAVEL_TIME | Travel time | Thời gian di chuyển
+MAP_TRANSPORT_WALK_TIME | Walk time | Thời gian đi bộ
+MAP_OPENING_TIME | Opening Time: | Giờ mở cửa:
+MAP_MODAL_SCHEDULE_TITLE | Schedule | Lịch trình
+MAP_NO_SELECTION | Select a location to see details | Chọn một địa điểm để xem chi tiết
+
+# ─── ACTIVITY ────────────────────────────────────────────────────
+ACTIVITY_HEADER_TITLE | Activity | Hoạt động
+ACTIVITY_SUB_SELECTED_RECORD | Selected Record | Bản ghi đã chọn
+ACTIVITY_LABEL_TAP_ICON | Tap an icon to preview. | Nhấn vào biểu tượng để xem trước.
+ACTIVITY_SUB_ACTIVITY_RECORDS | Activity Records | Hồ sơ hoạt động
+ACTIVITY_EMPTY_NO_RECORDS | No activity records found. | Không tìm thấy hoạt động.
+ACTIVITY_EVENT_META_DATE | Date: | Ngày:
+ACTIVITY_EVENT_META_TIME | Time: | Thời gian:
+ACTIVITY_EVENT_META_VENUE | Venue: | Địa điểm:
+ACTIVITY_LINK_VIEW_BOOKING | View booking | Xem đặt chỗ
+
+# ─── SETTINGS ────────────────────────────────────────────────────
+SETTINGS_TITLE | Settings | Cài đặt
+SETTINGS_BTN_SIGN_OUT | Sign Out | Đăng xuất
+SETTINGS_MODAL_SIGN_OUT_TITLE | Are you sure you want to sign out ? | Bạn có chắc muốn đăng xuất không?
+SETTINGS_MODAL_BTN_RETURN | Return | Quay lại
+SETTINGS_MODAL_BTN_CONFIRM | Confirm | Xác nhận
+
+# ─── NOTIFICATIONS ───────────────────────────────────────────────
+NOTIF_HEADER_TITLE | Notifications | Thông báo
+NOTIF_LINK_HISTORY | History | Lịch sử
+NOTIF_BTN_SELECT_ALL | Select all | Chọn tất cả
+NOTIF_BTN_MARK_ALL_READ | Mark all as read | Đánh dấu tất cả đã đọc
+NOTIF_EMPTY_TODAY | You have no notifications today. | Bạn không có thông báo nào hôm nay.
+NOTIF_MODAL_DELETE_TITLE | Delete notifications? | Xóa thông báo?
+NOTIF_MODAL_DELETE_BODY | Selected notifications will be deleted permanently. | Các thông báo đã chọn sẽ bị xóa vĩnh viễn.
+NOTIF_MODAL_BTN_CANCEL | Cancel | Hủy
+NOTIF_MODAL_BTN_DELETE | Delete | Xóa
+
+# ─── COURT BOOKING ───────────────────────────────────────────────
+BOOKING_COURT_HEADER | Court Booking | Đặt sân
+BOOKING_COURT_SECTION_COURT | Court | Sân
+BOOKING_COURT_SECTION_SCHEDULE | Schedule | Lịch
+BOOKING_COURT_SECTION_PAYMENT | Payment | Thanh toán
+BOOKING_COURT_SECTION_SERVICES | Services | Dịch vụ
+BOOKING_COURT_NO_SCHEDULE | No availability schedule found for this court yet. | Sân này chưa có lịch trình.
+BOOKING_COURT_SELECT_TIME | Select Time | Chọn thời gian
+BOOKING_COURT_LABEL_START | Start | Bắt đầu
+BOOKING_COURT_LABEL_END | End | Kết thúc
+BOOKING_COURT_SELECT_COURT | Select Court | Chọn sân
+BOOKING_COURT_NO_FUTURE_SLOTS | No future slots available for today. | Không còn khung giờ nào cho hôm nay.
+BOOKING_COURT_ERR_MIN_DURATION | Booking duration must be at least 1 hour. | Thời gian đặt phải ít nhất 1 giờ.
+BOOKING_COURT_ERR_START_PASSED | Selected start time has already passed. Please choose another slot. | Thời gian bắt đầu đã qua. Vui lòng chọn khung giờ khác.
+BOOKING_COURT_PAYMENT_CASH | Cash | Tiền mặt
+BOOKING_COURT_PAYMENT_VNPAY | VNPay | VNPay
+BOOKING_COURT_NO_SERVICES | This court have no services | Sân này không có dịch vụ
+BOOKING_COURT_LABEL_NOTE | Note | Ghi chú
+BOOKING_COURT_APPLY_PROMO | Apply Promotion Code | Áp dụng mã khuyến mãi
+BOOKING_COURT_SUCCESS_TITLE | Booked! | Đã đặt!
+BOOKING_COURT_SUCCESS_ID | ID: | Mã đặt chỗ:
+BOOKING_COURT_ERR_MUTATION | Mutation error occurred. | Đã xảy ra lỗi.
+BOOKING_COURT_MODAL_TITLE | Confirm Booking | Xác nhận đặt chỗ
+BOOKING_COURT_MODAL_BODY | Are you sure you want to book this court? | Bạn có chắc muốn đặt sân này không?
+BOOKING_COURT_MODAL_BTN_CANCEL | Cancel | Hủy
+BOOKING_COURT_MODAL_BTN_CONFIRM | Confirm | Xác nhận
+
+# ─── EVENT BOOKING ───────────────────────────────────────────────
+BOOKING_EVENT_HEADER | Event Booking | Đặt tham dự sự kiện
+BOOKING_EVENT_LOADING | Loading event... | Đang tải sự kiện...
+BOOKING_EVENT_NOT_FOUND | Event not found. | Không tìm thấy sự kiện.
+BOOKING_EVENT_CANCELLED | This event was cancelled. | Sự kiện này đã bị hủy.
+BOOKING_EVENT_BOOKING_DISABLED | Booking is disabled. | Đặt chỗ bị tắt.
+BOOKING_EVENT_DESC_PREFIX | Description: | Mô tả:
+BOOKING_EVENT_NO_DESC | No description | Không có mô tả
+BOOKING_EVENT_FREE_NOTE | This event entry is free | Sự kiện này miễn phí
+BOOKING_EVENT_SELECT_PAYMENT | Select payment method: | Chọn phương thức thanh toán:
+BOOKING_EVENT_NO_PAYMENT_METHODS | No supported methods. | Không có phương thức được hỗ trợ.
+BOOKING_EVENT_NOTE_OPTIONAL | Add a note (optional) | Thêm ghi chú (tùy chọn)
+BOOKING_EVENT_SUCCESS_TITLE | Booking Submitted | Đã gửi đặt chỗ
+BOOKING_EVENT_SUCCESS_STATUS | Status: pending | Trạng thái: chờ xử lý
+BOOKING_EVENT_SUCCESS_PAYMENT | Payment Method: | Phương thức thanh toán:
+BOOKING_EVENT_MODAL_TITLE | Confirm Booking | Xác nhận đặt chỗ
+BOOKING_EVENT_MODAL_BODY | Are you sure you want to book this event? | Bạn có chắc muốn đăng ký tham dự sự kiện này không?
+BOOKING_EVENT_MODAL_BTN_CANCEL | Cancel | Hủy
+
+# ─── TRAINING SESSION BOOKING ────────────────────────────────────
+BOOKING_TS_HEADER | Session Booking | Đặt buổi tập
+BOOKING_TS_LOADING | Loading session... | Đang tải buổi tập...
+BOOKING_TS_NOT_FOUND | Session not found. | Không tìm thấy buổi tập.
+BOOKING_TS_CANCELLED | This training session was cancelled. | Buổi tập này đã bị hủy.
+BOOKING_TS_BOOKING_DISABLED | Booking is disabled. | Đặt chỗ bị tắt.
+BOOKING_TS_DESC_PREFIX | Description: | Mô tả:
+BOOKING_TS_NO_DESC | No description | Không có mô tả
+BOOKING_TS_FREE_NOTE | This training session entry is free | Buổi tập này miễn phí
+BOOKING_TS_SELECT_PAYMENT | Select payment method: | Chọn phương thức thanh toán:
+BOOKING_TS_NO_PAYMENT_METHODS | No supported methods. | Không có phương thức được hỗ trợ.
+BOOKING_TS_NOTE_OPTIONAL | Add a note (optional) | Thêm ghi chú (tùy chọn)
+BOOKING_TS_SUCCESS_TITLE | Booking Submitted | Đã gửi đặt chỗ
+BOOKING_TS_SUCCESS_STATUS | Status: pending | Trạng thái: chờ xử lý
+BOOKING_TS_SUCCESS_PAYMENT | Payment Method: | Phương thức thanh toán:
+BOOKING_TS_MODAL_TITLE | Confirm Booking | Xác nhận đặt chỗ
+BOOKING_TS_MODAL_BODY | Are you sure you want to book this session? | Bạn có chắc muốn đặt chỗ buổi tập này không?
+BOOKING_TS_MODAL_BTN_CANCEL | Cancel | Hủy
+
+# ─── PROFILE ─────────────────────────────────────────────────────
+PROFILE_HEADER_TITLE | Your Profile | Hồ sơ của bạn
+PROFILE_LINK_CHANGE_THEME | Change Theme | Đổi giao diện
+PROFILE_SECTION_BIOGRAPHY | Biography | Tiểu sử
+PROFILE_SECTION_CONTACT | Contact | Liên hệ
+PROFILE_SECTION_ACHIEVEMENTS | Achievements | Thành tích
+PROFILE_MODAL_UNSAVED_CHANGES | Your changes have not been saved. Are you sure you want to exit? | Thay đổi của bạn chưa được lưu. Bạn có chắc muốn thoát không?
+PROFILE_MODAL_BTN_RETURN | Return | Quay lại
+PROFILE_MODAL_BTN_EXIT | Exit | Thoát
+
+# ─── HISTORY ─────────────────────────────────────────────────────
+HISTORY_HEADER_TITLE | History | Lịch sử
+HISTORY_SUB_ACTIVITY_LOGS | Activity Logs: | Nhật ký hoạt động:
+HISTORY_EMPTY_TITLE | No history yet | Chưa có lịch sử
+HISTORY_SCHEDULE_TIME | Time: | Thời gian:
+HISTORY_SCHEDULE_TYPE | Type: | Loại:
+HISTORY_SCHEDULE_COURT | Court: | Sân:
+HISTORY_META_PAYMENT | Payment: | Thanh toán:
+HISTORY_META_TYPE | Type: | Loại:
+HISTORY_META_COURT | Court: | Sân:
+HISTORY_META_AMOUNT | Amount: | Số tiền:
+
+# ─── INVOICE ─────────────────────────────────────────────────────
+INVOICE_SUCCESS_TITLE | Booking Successful! | Đặt chỗ thành công!
+INVOICE_SUCCESS_SUB | Your booking has been confirmed. | Đặt chỗ của bạn đã được xác nhận.
+INVOICE_CARD_HEADER | INVOICE DETAILS | CHI TIẾT HÓA ĐƠN
+INVOICE_LABEL_BOOKING_ID | Booking ID | Mã đặt chỗ
+INVOICE_LABEL_COURT | Court | Sân
+INVOICE_LABEL_TYPE | Type | Loại
+INVOICE_LABEL_ADDRESS | Address | Địa chỉ
+INVOICE_LABEL_DATE | Date | Ngày
+INVOICE_LABEL_TIME | Time | Thời gian
+INVOICE_LABEL_PAYMENT_METHOD | Payment Method | Phương thức thanh toán
+INVOICE_LABEL_PAYMENT_STATUS | Payment Status | Trạng thái thanh toán
+INVOICE_LABEL_BOOKING_STATUS | Booking Status | Trạng thái đặt chỗ
+INVOICE_LABEL_NOTE | Note | Ghi chú
+INVOICE_TOTAL_AMOUNT | Total Amount | Tổng số tiền
+INVOICE_BTN_SEE_DETAILS | See details | Xem chi tiết
+INVOICE_BTN_BACK_HOME | Back to Home | Về trang chủ
+
+# ─── ACCOUNT SETTINGS ────────────────────────────────────────────
+ACCOUNT_HEADER_TITLE | Account | Tài khoản
+ACCOUNT_ROW_THEME | Theme | Giao diện
+
+# ─── REVIEW FORM ─────────────────────────────────────────────────
+REVIEW_HEADER_TITLE | Review | Đánh giá
+REVIEW_SECTION_RATING | Your rating | Xếp hạng của bạn
+REVIEW_SECTION_COMMENT | Your comment | Nhận xét của bạn
+REVIEW_BTN_SUBMIT | Submit Review | Gửi đánh giá
+REVIEW_MODAL_CONFIRM_TITLE | Submit this review? | Gửi đánh giá này?
+REVIEW_MODAL_BTN_CANCEL | Cancel | Hủy
+REVIEW_MODAL_BTN_SUBMIT | Submit | Gửi
+REVIEW_MODAL_SUCCESS_TITLE | Review Submitted! | Đã gửi đánh giá!
+REVIEW_MODAL_SUCCESS_BODY | Thank you for your feedback. | Cảm ơn phản hồi của bạn.
+REVIEW_MODAL_BTN_DONE | Done | Xong

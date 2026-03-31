@@ -18,6 +18,11 @@
     peekDistanceMatrixCached,
     listCourtBookingsByCourtId,
     type CourtBookingRow,
+    listEventsForMap,
+    listTrainingSessionsForMap,
+    type MapBounds,
+    type MapEventPin,
+    type MapTSPin,
   } from '@/lib/backendApi';
   import { favouritesEvents } from '@/lib/favouritesEvents';
   import { getCache, setCache } from '@/lib/cache';
@@ -51,6 +56,7 @@
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
   import { useQuery } from '@tanstack/react-query';
+  import { queryKeys } from '@/hooks/query-keys';
   import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
   import { GestureHandlerRootView, Gesture, GestureDetector, NativeViewGestureHandler } from "react-native-gesture-handler";
@@ -355,6 +361,59 @@
     const [distanceKmInput, setDistanceKmInput] = useState<string>('');
     const [distanceKmError, setDistanceKmError] = useState<string | null>(null);
     const [activeSheetTab, setActiveSheetTab] = useState<'Schedule' | 'Transport' | 'Images' | 'Reviews'>('Schedule');
+
+    // Map mode (Courts / Events / Training Sessions)
+    const [mapMode, setMapMode] = useState<'courts' | 'events' | 'training'>('courts');
+    const [selectedEventPin, setSelectedEventPin] = useState<MapEventPin | null>(null);
+    const [selectedTSPin, setSelectedTSPin] = useState<MapTSPin | null>(null);
+
+    // Bounds key: rounded bbox string used as stable React Query key
+    const boundsKey = useMemo(() => {
+      const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+      const minLat = Math.round((latitude - latitudeDelta / 2) * 100) / 100;
+      const maxLat = Math.round((latitude + latitudeDelta / 2) * 100) / 100;
+      const minLng = Math.round((longitude - longitudeDelta / 2) * 100) / 100;
+      const maxLng = Math.round((longitude + longitudeDelta / 2) * 100) / 100;
+      return `${minLat},${maxLat},${minLng},${maxLng}`;
+    }, [mapRegion]);
+
+    const regionToBounds = useCallback((): MapBounds => {
+      const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+      return {
+        minLat: latitude - latitudeDelta / 2,
+        maxLat: latitude + latitudeDelta / 2,
+        minLng: longitude - longitudeDelta / 2,
+        maxLng: longitude + longitudeDelta / 2,
+      };
+    }, [mapRegion]);
+
+    // Event pins for map (only fetched when in events mode)
+    const { data: eventPins = [] } = useQuery<MapEventPin[]>({
+      queryKey: queryKeys.mapEventsInBounds(boundsKey),
+      queryFn: () => listEventsForMap(regionToBounds()),
+      enabled: mapMode === 'events',
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    });
+
+    // TS pins for map (only fetched when in training mode)
+    const { data: tsPins = [] } = useQuery<MapTSPin[]>({
+      queryKey: queryKeys.mapTSInBounds(boundsKey),
+      queryFn: () => listTrainingSessionsForMap(regionToBounds()),
+      enabled: mapMode === 'training',
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    });
+
+    // Clear per-mode selections when switching modes
+    useEffect(() => {
+      setSelectedEventPin(null);
+      setSelectedTSPin(null);
+      if (mapMode !== 'courts') {
+        setSelectedMarker(null);
+        bottomSheetRef.current?.close();
+      }
+    }, [mapMode]);
 
     const [selectedSchedulePlayingCourtId, setSelectedSchedulePlayingCourtId] = useState<number | null>(null);
     const [selectedMapScheduleDate, setSelectedMapScheduleDate] = useState<string | null>(null);
@@ -871,6 +930,8 @@
     // Handle marker when pressed
     const handleMarkerPress = async (marker: MarkerType) => {
       setSelectedMarker(marker);
+      setSelectedEventPin(null);
+      setSelectedTSPin(null);
       // Favorite state derived from favoriteIds
       setIsFavorite(favoriteIds.includes(marker.courtid));
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
@@ -1214,21 +1275,63 @@
                   rotateEnabled={false}
                   pitchEnabled={false}
                   onRegionChangeComplete={handleRegionChangeComplete}
-                  markers={filteredMarkers.map((marker): DynamicMapMarker => ({
-                    id: marker.id,
-                    coordinate: { latitude: marker.latitude, longitude: marker.longitude },
-                    title: marker.name,
-                    description: marker.address,
-                    pinColor: selectedMarker?.id === marker.id
-                      ? COLORS.green
-                      : marker.isFavorite
-                        ? COLORS.amber200
-                        : COLORS.brandOrangeDeep,
-                  }))}
+                  markers={
+                    mapMode === 'courts'
+                      ? filteredMarkers.map((marker): DynamicMapMarker => ({
+                          id: marker.id,
+                          coordinate: { latitude: marker.latitude, longitude: marker.longitude },
+                          title: marker.name,
+                          description: marker.address,
+                          pinColor: selectedMarker?.id === marker.id
+                            ? COLORS.green
+                            : marker.isFavorite
+                              ? COLORS.amber200
+                              : COLORS.brandOrangeDeep,
+                        }))
+                      : mapMode === 'events'
+                      ? eventPins.map((pin): DynamicMapMarker => ({
+                          id: `event-${pin.eventid}`,
+                          coordinate: { latitude: pin.latitude, longitude: pin.longitude },
+                          title: pin.title ?? '',
+                          description: pin.address ?? '',
+                          imageKey: 'event',
+                        }))
+                      : tsPins.map((pin): DynamicMapMarker => ({
+                          id: `ts-${pin.sessionid}`,
+                          coordinate: { latitude: pin.latitude, longitude: pin.longitude },
+                          title: pin.title ?? '',
+                          description: pin.address ?? '',
+                          imageKey: 'training',
+                        }))
+                  }
                   onMarkerPress={(markerId) => {
-                    const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
-                    if (marker) {
-                      void handleMarkerPress(marker);
+                    if (mapMode === 'courts') {
+                      const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
+                      if (marker) void handleMarkerPress(marker);
+                    } else if (mapMode === 'events') {
+                      const pin = eventPins.find((p) => `event-${p.eventid}` === String(markerId));
+                      if (pin) {
+                        setSelectedEventPin(pin);
+                        setSelectedTSPin(null);
+                        setSelectedMarker(null);
+                        focusMapRegion(pin.latitude, pin.longitude, MARKER_FOCUS_STAGE);
+                        setTimeout(() => {
+                          bottomSheetRef.current?.snapToIndex(0);
+                          bottomSheetHasOpenedRef.current = true;
+                        }, bottomSheetHasOpenedRef.current ? 50 : 300);
+                      }
+                    } else {
+                      const pin = tsPins.find((p) => `ts-${p.sessionid}` === String(markerId));
+                      if (pin) {
+                        setSelectedTSPin(pin);
+                        setSelectedEventPin(null);
+                        setSelectedMarker(null);
+                        focusMapRegion(pin.latitude, pin.longitude, MARKER_FOCUS_STAGE);
+                        setTimeout(() => {
+                          bottomSheetRef.current?.snapToIndex(0);
+                          bottomSheetHasOpenedRef.current = true;
+                        }, bottomSheetHasOpenedRef.current ? 50 : 300);
+                      }
                     }
                   }}
                   onPress={(coordinate) => {
@@ -1286,6 +1389,22 @@
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.filterBarScroll}
                     >
+                    {/* Mode: Courts / Events / Training Sessions */}
+                    <TouchableOpacity
+                      style={[styles.filterChip, mapMode !== 'courts' && { backgroundColor: COLORS.brandOrangeDeep }]}
+                      activeOpacity={0.8}
+                      onPress={() => setMapMode((prev) => prev === 'courts' ? 'events' : prev === 'events' ? 'training' : 'courts')}
+                    >
+                      <View style={styles.filterChipLeft}>
+                        <Image
+                          source={mapMode === 'events' ? ICONS.markerEvent : mapMode === 'training' ? ICONS.markerTs : ICONS.mapPin}
+                          style={[styles.filterIcon, mapMode === 'courts' && { tintColor: COLORS.neutral700 }]}
+                        />
+                        <Text style={[styles.filterChipText, mapMode !== 'courts' && { color: '#fff' }]}>
+                          {mapMode === 'courts' ? 'Courts' : mapMode === 'events' ? 'Events' : 'Training'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                     {/* Venue */}
                     <TouchableOpacity
                       style={styles.filterChip}
@@ -1573,7 +1692,65 @@
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
                 >
-                  {selectedMarker ? (
+                  {selectedEventPin ? (
+                    <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
+                      <View style={styles.sheetHeaderCard}>
+                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? 'Event'}</Text>
+                        <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedEventPin.address ?? ''}</Text>
+                        {selectedEventPin.court_name ? (
+                          <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedEventPin.court_name}</Text>
+                        ) : null}
+                        <View style={[styles.actionRow, { marginTop: 10 }]}>
+                          {selectedEventPin.start_timestamp ? (
+                            <Text style={styles.filterChipText}>
+                              {new Date(selectedEventPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                            </Text>
+                          ) : null}
+                          {selectedEventPin.entry_fee != null ? (
+                            <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
+                              {selectedEventPin.entry_fee === 0 ? 'Free' : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.bookingButton}
+                          onPress={() => router.push({ pathname: '/event/eventBooking', params: { eventid: String(selectedEventPin.eventid) } })}
+                        >
+                          <Image source={ICONS.booking} style={styles.bookingIcon} />
+                          <Text style={styles.bookingText}>Join</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </BottomSheetScrollView>
+                  ) : selectedTSPin ? (
+                    <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
+                      <View style={styles.sheetHeaderCard}>
+                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? 'Training Session'}</Text>
+                        <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedTSPin.address ?? ''}</Text>
+                        {selectedTSPin.court_name ? (
+                          <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedTSPin.court_name}</Text>
+                        ) : null}
+                        <View style={[styles.actionRow, { marginTop: 10 }]}>
+                          {selectedTSPin.start_timestamp ? (
+                            <Text style={styles.filterChipText}>
+                              {new Date(selectedTSPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                            </Text>
+                          ) : null}
+                          {selectedTSPin.entry_fee != null ? (
+                            <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
+                              {selectedTSPin.entry_fee === 0 ? 'Free' : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.bookingButton}
+                          onPress={() => router.push({ pathname: '/event/tsBooking', params: { sessionid: String(selectedTSPin.sessionid) } })}
+                        >
+                          <Image source={ICONS.booking} style={styles.bookingIcon} />
+                          <Text style={styles.bookingText}>Join</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </BottomSheetScrollView>
+                  ) : selectedMarker ? (
                     <BottomSheetScrollView
                       scrollEnabled
                       contentContainerStyle={[

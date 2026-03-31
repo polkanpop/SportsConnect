@@ -75,6 +75,81 @@ def list_training_sessions(
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/map-pins", response_model=list[dict])
+def training_sessions_map_pins(
+    minLat: float = Query(...),
+    maxLat: float = Query(...),
+    minLng: float = Query(...),
+    maxLng: float = Query(...),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Return upcoming training sessions with lat/lng coords for map pin display."""
+    try:
+        courtinfo_rows = rest_select(
+            "courtinfo",
+            "courtinfoid,courtid,name,address,latitude,longitude",
+            filters={
+                "latitude__gte": minLat,
+                "latitude__lte": maxLat,
+                "longitude__gte": minLng,
+                "longitude__lte": maxLng,
+            },
+        )
+        if not courtinfo_rows:
+            return []
+        court_ids = list({row["courtid"] for row in courtinfo_rows if row.get("courtid") is not None})
+        if not court_ids:
+            return []
+        booking_rows = rest_select(
+            "courtbooking",
+            "courtbookingid,courtid,start_timestamp,end_timestamp",
+            filters={"courtid": court_ids},
+        )
+        if not booking_rows:
+            return []
+        booking_by_id: dict = {row["courtbookingid"]: row for row in booking_rows}
+        booking_ids = list(booking_by_id.keys())
+        session_rows = rest_select(
+            "trainingsessions",
+            "sessionid,courtbookingid,status",
+            filters={"courtbookingid": booking_ids, "status": "upcoming"},
+        )
+        if not session_rows:
+            return []
+        session_rows = session_rows[:limit]
+        session_ids = [row["sessionid"] for row in session_rows]
+        tsinfo_rows = rest_select(
+            "trainingsessioninfo",
+            "sessionid,title,entry_fee,participants_cap",
+            filters={"sessionid": session_ids},
+        )
+        tsinfo_by_sessionid: dict = {row["sessionid"]: row for row in (tsinfo_rows or [])}
+        courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
+        result = []
+        for s in session_rows:
+            booking = booking_by_id.get(s["courtbookingid"])
+            if not booking:
+                continue
+            ci = courtinfo_by_courtid.get(booking["courtid"])
+            if not ci or ci.get("latitude") is None or ci.get("longitude") is None:
+                continue
+            info = tsinfo_by_sessionid.get(s["sessionid"], {})
+            result.append({
+                "sessionid": s["sessionid"],
+                "title": info.get("title"),
+                "entry_fee": info.get("entry_fee"),
+                "participants_cap": info.get("participants_cap"),
+                "latitude": ci["latitude"],
+                "longitude": ci["longitude"],
+                "address": ci.get("address"),
+                "court_name": ci.get("name"),
+                "start_timestamp": booking.get("start_timestamp"),
+                "end_timestamp": booking.get("end_timestamp"),
+            })
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{sessionid}", response_model=dict)
 @cache(expire=120, key_builder=make_key_builder("trainingsessions"))
 def get_training_session(sessionid: int):

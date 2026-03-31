@@ -85,6 +85,89 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/map-pins", response_model=list[dict])
+def events_map_pins(
+    minLat: float = Query(...),
+    maxLat: float = Query(...),
+    minLng: float = Query(...),
+    maxLng: float = Query(...),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Return upcoming events with lat/lng coords for map pin display.
+
+    Multi-step approach:
+      1) courtinfo rows within the bbox
+      2) courtbookings for those courts
+      3) upcoming events for those bookings
+      4) eventinfo for title/fees
+      5) assemble and return
+    """
+    try:
+        courtinfo_rows = rest_select(
+            "courtinfo",
+            "courtinfoid,courtid,name,address,latitude,longitude",
+            filters={
+                "latitude__gte": minLat,
+                "latitude__lte": maxLat,
+                "longitude__gte": minLng,
+                "longitude__lte": maxLng,
+            },
+        )
+        if not courtinfo_rows:
+            return []
+        court_ids = list({row["courtid"] for row in courtinfo_rows if row.get("courtid") is not None})
+        if not court_ids:
+            return []
+        booking_rows = rest_select(
+            "courtbooking",
+            "courtbookingid,courtid,start_timestamp,end_timestamp",
+            filters={"courtid": court_ids},
+        )
+        if not booking_rows:
+            return []
+        booking_by_id: dict = {row["courtbookingid"]: row for row in booking_rows}
+        booking_ids = list(booking_by_id.keys())
+        event_rows = rest_select(
+            "events",
+            "eventid,courtbookingid,status",
+            filters={"courtbookingid": booking_ids, "status": "upcoming"},
+        )
+        if not event_rows:
+            return []
+        event_rows = event_rows[:limit]
+        event_ids = [row["eventid"] for row in event_rows]
+        eventinfo_rows = rest_select(
+            "eventinfo",
+            "eventinfoid,eventid,title,entry_fee,participants_cap",
+            filters={"eventid": event_ids},
+        )
+        eventinfo_by_eventid: dict = {row["eventid"]: row for row in (eventinfo_rows or [])}
+        courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
+        result = []
+        for ev in event_rows:
+            booking = booking_by_id.get(ev["courtbookingid"])
+            if not booking:
+                continue
+            ci = courtinfo_by_courtid.get(booking["courtid"])
+            if not ci or ci.get("latitude") is None or ci.get("longitude") is None:
+                continue
+            info = eventinfo_by_eventid.get(ev["eventid"], {})
+            result.append({
+                "eventid": ev["eventid"],
+                "title": info.get("title"),
+                "entry_fee": info.get("entry_fee"),
+                "participants_cap": info.get("participants_cap"),
+                "latitude": ci["latitude"],
+                "longitude": ci["longitude"],
+                "address": ci.get("address"),
+                "court_name": ci.get("name"),
+                "start_timestamp": booking.get("start_timestamp"),
+                "end_timestamp": booking.get("end_timestamp"),
+            })
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{eventid}", response_model=dict)
 @cache(expire=120, key_builder=make_key_builder("events"))
 def get_event(eventid: int):

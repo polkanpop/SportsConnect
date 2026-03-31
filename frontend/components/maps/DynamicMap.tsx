@@ -37,6 +37,8 @@ export type DynamicMapMarker = {
   title?: string
   description?: string
   pinColor?: string
+  /** Optional image key for non-court markers: 'event' | 'training' */
+  imageKey?: 'court' | 'event' | 'training'
 }
 
 type GeoFeature = {
@@ -51,6 +53,7 @@ type GeoFeature = {
     title?: string
     description?: string
     pinColor?: string
+    imageKey?: string
   }
 }
 
@@ -164,6 +167,7 @@ export function DynamicMap({
         title: marker.title,
         description: marker.description,
         pinColor: marker.pinColor,
+        imageKey: marker.imageKey ?? 'court',
       },
     })),
   }), [validMarkers])
@@ -259,16 +263,33 @@ export function DynamicMap({
                 image: require('../../assets/icons/map_markers.png'),
                 sdf: true,
               },
+              eventMarker: require('../../assets/icons/marker-event.png'),
+              trainingMarker: require('../../assets/icons/marker_ts.png'),
             }}
           />
+          {/* Court markers: SDF with dynamic color tinting */}
           <Mapbox.SymbolLayer
             id="court-markers-symbol"
+            filter={['==', ['get', 'imageKey'], 'court']}
             style={{
               iconImage: 'courtMarker',
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
               iconSize: 0.07,
               iconColor: ['coalesce', ['get', 'pinColor'], '#FF5733'],
+              iconAnchor: 'bottom',
+              iconOpacity: 1,
+            }}
+          />
+          {/* Event / Training session markers: pre-colored PNG images, no SDF color tinting */}
+          <Mapbox.SymbolLayer
+            id="event-ts-markers-symbol"
+            filter={['in', ['get', 'imageKey'], ['literal', ['event', 'training']]]}
+            style={{
+              iconImage: ['match', ['get', 'imageKey'], 'event', 'eventMarker', 'training', 'trainingMarker', 'courtMarker'],
+              iconAllowOverlap: true,
+              iconIgnorePlacement: true,
+              iconSize: 0.14,
               iconAnchor: 'bottom',
               iconOpacity: 1,
             }}

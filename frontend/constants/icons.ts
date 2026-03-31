@@ -149,6 +149,10 @@ export const ICONS = {
   attended: require('../assets/icons/attended.png'),
   notAttended: require('../assets/icons/not_attended.png'),
   userNote: require('../assets/icons/user_note.png'),
+
+  // Map markers
+  markerEvent: require('../assets/icons/marker-event.png'),
+  markerTs: require('../assets/icons/marker_ts.png'),
 }; 
 
 

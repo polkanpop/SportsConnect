@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -20,8 +21,14 @@ import { useCallback, useState } from 'react';
 import { getUserInfoByUserIdCached, authLogout, purgeSessionCaches } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useI18n } from '@/lib/i18n';
+import { useLanguage } from '@/providers/language-provider';
 
 export default function SettingsPage() {
+  const { t } = useI18n();
+  const { lang, toggleLanguage } = useLanguage();
+  const isVietnamese = lang === 'vi';
+
   const [displayName, setDisplayName] = useState<string>('Guest');
   const [loadingName, setLoadingName] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -99,7 +106,7 @@ export default function SettingsPage() {
     <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <View style={styles.header}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>{t('SETTINGS_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
       <View style={styles.divider} />
@@ -130,18 +137,29 @@ export default function SettingsPage() {
         {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
 
         {/* Search */}
-        <SearchBar placeholder="Search in settings..." />
+        <SearchBar placeholder={t('SETTINGS_SEARCH_PLACEHOLDER')} />
 
         {/* Section One */}
         <View style={styles.card}>
-          <SettingRow icon={ICONS.user} label="Account" disabled />
-          <SettingRow icon={ICONS.notifications} label="Notification" />
-          <SettingRow icon={ICONS.settingCourt} label="Court Register" onPress={() => router.push('/event/courtRegister')} />
+          <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} disabled />
+          <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />
+          <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />
         </View>
 
         {/* Data & Privacy */}
         <View style={styles.card}>
-          <SettingRow icon={ICONS.lock} label="Data &amp; Privacy" onPress={() => router.push('/event/dataPrivacy' as any)} />
+          <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />
+        </View>
+
+        {/* Language Toggle */}
+        <View style={styles.card}>
+          <SettingRowSwitch
+            icon={ICONS.language}
+            label={t('SETTINGS_ROW_LANGUAGE')}
+            sublabel={t('SETTINGS_LANG_TOGGLE_LABEL')}
+            value={isVietnamese}
+            onValueChange={toggleLanguage}
+          />
         </View>
 
         {/* Section Two */}
@@ -152,7 +170,7 @@ export default function SettingsPage() {
         >
           <View style={styles.signOutButtonLeft}>
             <Image source={ICONS.signout} style={styles.signOutIcon} />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{t('SETTINGS_BTN_SIGN_OUT')}</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -169,21 +187,21 @@ export default function SettingsPage() {
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Are you sure you want to sign out ?</Text>
+            <Text style={styles.modalTitle}>{t('SETTINGS_MODAL_SIGN_OUT_TITLE')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
                 onPress={closeSignOutModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>Return</Text>
+                <Text style={styles.modalButtonCancelText}>{t('SETTINGS_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={confirmAndSignOut}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonConfirmText}>Confirm</Text>
+                <Text style={styles.modalButtonConfirmText}>{t('SETTINGS_MODAL_BTN_CONFIRM')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -220,6 +238,37 @@ const SettingRow = ({
       style={{ width: 18, height: 18, tintColor: "#555" }}
     />
   </TouchableOpacity>
+);
+
+/** Setting Row with a Switch toggle instead of chevron */
+const SettingRowSwitch = ({
+  icon,
+  label,
+  sublabel,
+  value,
+  onValueChange,
+}: {
+  icon: any;
+  label: string;
+  sublabel: string;
+  value: boolean;
+  onValueChange: () => void;
+}) => (
+  <View style={[styles.row, { borderBottomWidth: 0 }]}>
+    <View style={styles.rowLeft}>
+      <Image source={icon} style={styles.rowIcon} />
+      <View>
+        <Text style={styles.rowText}>{label}</Text>
+        <Text style={styles.rowSubText}>{sublabel}</Text>
+      </View>
+    </View>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: '#D1D5DB', true: COLORS.brandOrangeDeep }}
+      thumbColor="#FFFFFF"
+    />
+  </View>
 );
 
 const styles = StyleSheet.create({
@@ -301,6 +350,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#000",
     marginLeft: 12,
+  },
+  rowSubText: {
+    fontSize: 12,
+    color: "#888",
+    marginLeft: 12,
+    marginTop: 1,
   },
   rowIcon: {
     width: 22,

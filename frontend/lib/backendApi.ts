@@ -1828,6 +1828,52 @@ export type CombinedEvent = {
 
 export type TrainingSessionRow = { sessionid: number; time: string; courtbookingid: number; status?: string; coachid: number }
 
+export type MapBounds = { minLat: number; maxLat: number; minLng: number; maxLng: number }
+
+export type MapEventPin = {
+	eventid: number
+	title?: string | null
+	entry_fee?: number | null
+	participants_cap?: number | null
+	latitude: number
+	longitude: number
+	address?: string | null
+	court_name?: string | null
+	start_timestamp?: string | null
+	end_timestamp?: string | null
+}
+
+export type MapTSPin = {
+	sessionid: number
+	title?: string | null
+	entry_fee?: number | null
+	participants_cap?: number | null
+	latitude: number
+	longitude: number
+	address?: string | null
+	court_name?: string | null
+	start_timestamp?: string | null
+	end_timestamp?: string | null
+}
+
+export async function listEventsForMap(bounds: MapBounds): Promise<MapEventPin[]> {
+	const { minLat, maxLat, minLng, maxLng } = bounds
+	const data = await request(
+		`/events/map-pins?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}`,
+		{ debugLabel: 'listEventsForMap' },
+	)
+	return Array.isArray(data) ? (data as MapEventPin[]) : []
+}
+
+export async function listTrainingSessionsForMap(bounds: MapBounds): Promise<MapTSPin[]> {
+	const { minLat, maxLat, minLng, maxLng } = bounds
+	const data = await request(
+		`/trainingsessions/map-pins?minLat=${minLat}&maxLat=${maxLat}&minLng=${minLng}&maxLng=${maxLng}`,
+		{ debugLabel: 'listTrainingSessionsForMap' },
+	)
+	return Array.isArray(data) ? (data as MapTSPin[]) : []
+}
+
 export async function listEventsByCourtBookingId(courtbookingid: number): Promise<EventRow[]> {
 	if (courtbookingid == null) throw new Error('courtbookingid required')
 	const data = await request(`/events?courtbookingid=${encodeURIComponent(courtbookingid)}`, {
