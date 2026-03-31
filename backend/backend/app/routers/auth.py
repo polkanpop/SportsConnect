@@ -143,6 +143,47 @@ def find_unverified_by_phone(phone: str) -> Optional[dict]:
     logger.debug(f"find_unverified_by_phone phone={phone} ms={_now_ms()-start} row={row}")
     return row
 
+def find_user_by_provider(provider: str, provider_uid: str) -> Optional[dict]:
+    """Look up user_auth_providers by (provider, provider_uid). Returns row with userid if found."""
+    start = _now_ms()
+    row = rest_select(
+        "user_auth_providers", "providerid, userid, provider, provider_uid",
+        {"provider": provider, "provider_uid": provider_uid}, single=True
+    )
+    logger.debug(f"find_user_by_provider provider={provider} uid={provider_uid} ms={_now_ms()-start} found={bool(row)}")
+    return row
+
+def ensure_auth_provider(userid: int, provider: str, provider_uid: str) -> dict:
+    """Upsert a user_auth_providers row. Idempotent — safe to call even if the row already exists."""
+    try:
+        rows = rest_upsert(
+            "user_auth_providers",
+            {"userid": userid, "provider": provider, "provider_uid": provider_uid},
+            on_conflict="provider,provider_uid",
+        )
+        row = rows[0] if isinstance(rows, list) and rows else {}
+        logger.debug(f"ensure_auth_provider ok userid={userid} provider={provider} uid={provider_uid}")
+        return row
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence" in msg:
+            try:
+                max_row = rest_select("user_auth_providers", "providerid", single=True, order={"column": "providerid", "desc": True})
+                next_id = ((max_row.get("providerid") if max_row else None) or 0) + 1
+                rows = rest_upsert(
+                    "user_auth_providers",
+                    {"providerid": next_id, "userid": userid, "provider": provider, "provider_uid": provider_uid},
+                    on_conflict="provider,provider_uid",
+                )
+                row = rows[0] if isinstance(rows, list) and rows else {}
+                logger.debug(f"ensure_auth_provider (manual id) ok userid={userid} provider={provider} uid={provider_uid}")
+                return row
+            except Exception as e2:
+                logger.warning(f"ensure_auth_provider manual id failed userid={userid} provider={provider} uid={provider_uid} err={e2}")
+                return {}
+        logger.warning(f"ensure_auth_provider failed userid={userid} provider={provider} uid={provider_uid} err={e}")
+        return {}
+
 def _email_settings():
     return {
         "host": os.getenv("SMTP_HOST"),
@@ -312,6 +353,7 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
             except Exception as e:
                 logger.warning(f"/signup MERGE: could not ensure unverified_users for email={email} err={e}")
             elapsed = _now_ms() - t0
+            ensure_auth_provider(existing_userid, "Local", username)
             logger.info(f"/signup MERGE userid={existing_userid} email={email} username={username} name={account_name}")
             return {
                 "status": "ok",
@@ -414,6 +456,9 @@ def signup(payload: dict, background_tasks: BackgroundTasks):
     login_row = login_rows[0]
     loginid = login_row.get('loginid')
     logger.debug(f"Inserted/allocated userlogin loginid={loginid}")
+
+    # 3b. Register Local auth provider
+    ensure_auth_provider(userid, "Local", username)
 
     # 4. Create verification record + queue email send
     ver_rec = _create_or_update_unverified(userid, email)
@@ -613,6 +658,13 @@ def login(payload: dict):
             record_username_attempt(identifier, success=True)
     except Exception as e:
         logger.warning(f"/login rule reset failure userid={userid} err={e}")
+
+    # Back-fill user_auth_providers for Local accounts (idempotent)
+    _lt_local = (login_row.get('logintype') or '').strip().lower()
+    if _lt_local == 'local':
+        _ul = login_row.get('username')
+        if _ul:
+            ensure_auth_provider(userid, 'Local', _ul)
 
     elapsed = _now_ms() - t0
     state_snapshot = {}
@@ -931,11 +983,11 @@ def zalo_sign_in(payload: dict):
         logger.error(f"/auth/zalo token exchange returned no access_token: {token_json}")
         raise HTTPException(status_code=401, detail=f"Zalo token exchange error: {token_json.get('error_description') or token_json.get('error') or 'unknown'}")
 
-    # 2. Fetch Zalo user info
+    # 2. Fetch Zalo user info (id and name only — no picture for privacy)
     try:
         user_resp = httpx.get(
             "https://graph.zalo.me/v2.0/me",
-            params={"fields": "id,name,picture"},
+            params={"fields": "id,name"},
             headers={"access_token": access_token},
             timeout=10.0,
         )
@@ -946,53 +998,42 @@ def zalo_sign_in(payload: dict):
 
     zalo_id = str(user_json.get("id") or "")
     zalo_name = str(user_json.get("name") or "")
-    avatar_url = None
-    try:
-        avatar_url = user_json.get("picture", {}).get("data", {}).get("url")
-    except Exception:
-        pass
 
     if not zalo_id:
         logger.error(f"/auth/zalo user info missing id: {user_json}")
         raise HTTPException(status_code=401, detail="Zalo did not return a user id")
 
-    # 3. Derive a stable synthetic email for Zalo users (Zalo does not expose email via this API)
-    synthetic_email = f"zalo_{zalo_id}@zalo.sportconnect.internal"
     display_name = zalo_name or f"Zalo User {zalo_id}"
 
-    # 4. Create or find user (reuse same pattern as /auth/sync)
-    existing = find_user_by_email(synthetic_email)
-    if existing:
-        userid = existing.get("userid")
-        # Update name/pfp if changed
-        update_fields = {}
-        if zalo_name and existing.get("name") != zalo_name:
-            update_fields["name"] = zalo_name
-        if avatar_url:
-            update_fields["pfp"] = avatar_url
-        if update_fields:
+    # 3. Find or create user — provider-first lookup, then create new
+
+    # Step 1: look up by (Zalo, zalo_id) in user_auth_providers
+    existing_by_provider = find_user_by_provider("Zalo", zalo_id)
+    if existing_by_provider:
+        userid = existing_by_provider.get("userid")
+        existing_info = find_userinfo_by_userid(userid)
+        # Only update display name if it changed — never touch email or pfp
+        if zalo_name and (existing_info or {}).get("name") != zalo_name:
             try:
-                rest_update("userinfo", {"userid": userid}, update_fields)
+                rest_update("userinfo", {"userid": userid}, {"name": zalo_name})
             except Exception as e:
-                logger.warning(f"/auth/zalo name/pfp update failed userid={userid} err={e}")
+                logger.warning(f"/auth/zalo name update failed userid={userid} err={e}")
         try:
-            tokens = create_user_tokens(userid, None, synthetic_email, remember_me=True)
+            tokens = create_user_tokens(userid, None, None, remember_me=True)
         except Exception as e:
-            logger.warning(f"/auth/zalo token creation failed userid={userid} err={e}")
             raise HTTPException(status_code=500, detail="Token creation failed")
-        logger.debug(f"/auth/zalo existing user userid={userid} elapsedMs={_now_ms()-t0}")
+        logger.debug(f"/auth/zalo existing user (provider lookup) userid={userid} elapsedMs={_now_ms()-t0}")
         return {
             "status": "ok",
             "userid": userid,
-            "name": display_name,
-            "email": synthetic_email,
+            "name": (existing_info or {}).get("name") or display_name,
             "accessToken": tokens.get("access_token"),
             "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
             "refreshToken": tokens.get("refresh_token"),
             "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
         }
 
-    # New user — provision users, userinfo, userlogin rows
+    # Step 2: New user — provision users, userinfo, userlogin rows
     role = "player"
     try:
         users_rows = rest_upsert("users", {"role": role})
@@ -1008,9 +1049,7 @@ def zalo_sign_in(payload: dict):
     if not userid:
         raise HTTPException(status_code=500, detail="No userid returned")
 
-    info_payload: dict = {"userid": userid, "name": display_name, "email": synthetic_email}
-    if avatar_url:
-        info_payload["pfp"] = avatar_url
+    info_payload: dict = {"userid": userid, "name": display_name, "email": None}
     try:
         info_rows = rest_upsert("userinfo", info_payload)
     except Exception as e:
@@ -1045,24 +1084,31 @@ def zalo_sign_in(payload: dict):
         else:
             raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
 
-    # Pre-verify synthetic email (Zalo already confirmed identity)
+    # Register Zalo auth provider for this new user
+    ensure_auth_provider(userid, "Zalo", zalo_id)
+
+    # Create unverified_users record — Zalo provides no email or phone,
+    # so both fields are null and verification flags start as false.
     try:
         max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
         next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+        placeholder_hash = f"ZALO:{hashlib.sha256(f'zalo:{zalo_id}'.encode()).hexdigest()[:32]}"
         rest_upsert("unverified_users", {
             "unverifiedid": next_unver_id,
             "userid": userid,
-            "email": synthetic_email,
-            "token_hash": f"ZALO_VERIFIED:{hashlib.sha256(synthetic_email.encode()).hexdigest()[:24]}",
-            "token_expires_at": "2099-01-01T00:00:00+00:00",
+            "email": None,
+            "phone": None,
+            "token_hash": placeholder_hash,
+            "token_expires_at": "2126-01-01T00:00:00+00:00",
             "resend_count": 0,
-            "email_verified": True,
+            "email_verified": False,
+            "phone_verified": False,
         })
     except Exception as e:
-        logger.warning(f"/auth/zalo pre-verify failed userid={userid} err={e}")
+        logger.warning(f"/auth/zalo unverified_users insert failed userid={userid} err={e}")
 
     try:
-        tokens = create_user_tokens(userid, None, synthetic_email, remember_me=True)
+        tokens = create_user_tokens(userid, None, None, remember_me=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Token creation failed: {e}")
 
@@ -1071,7 +1117,6 @@ def zalo_sign_in(payload: dict):
         "status": "ok",
         "userid": userid,
         "name": display_name,
-        "email": synthetic_email,
         "accessToken": tokens.get("access_token"),
         "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
         "refreshToken": tokens.get("refresh_token"),
@@ -1151,12 +1196,43 @@ def sync_social_user(
     raw_provider = (app_meta.get("provider") or "").strip()
     provider = raw_provider.capitalize() if raw_provider else "Social"
 
+    # Supabase JWT sub (UUID) used as provider_uid for OAuth providers
+    sub = (payload.get("sub") or "").strip()
+
     t0 = _now_ms()
 
-    # --- Existing user path ---
+    # ── Step 1: Check user_auth_providers by (provider, sub) ─────────────────
+    if sub:
+        existing_by_provider = find_user_by_provider(provider, sub)
+        if existing_by_provider:
+            userid = existing_by_provider.get("userid")
+            login_row = rest_select("userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True)
+            info_row = find_userinfo_by_userid(userid)
+            username = (login_row.get("username") if login_row else None) or email.split("@")[0]
+            try:
+                tokens = create_user_tokens(userid, username, email, False)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed issuing tokens: {e}")
+            logger.debug(f"/auth/sync via provider lookup userid={userid} elapsedMs={_now_ms()-t0}")
+            return {
+                "status": "ok",
+                "userid": userid,
+                "username": username,
+                "email": email,
+                "name": (info_row.get("name") if info_row else None) or name,
+                "logintype": provider,
+                "accessToken": tokens["access_token"],
+                "accessTokenExpiresAt": tokens["access_token_expires_at"],
+                "refreshToken": tokens["refresh_token"],
+                "refreshTokenExpiresAt": tokens["refresh_token_expires_at"],
+            }
+
+    # ── Step 2: Check by email (account linking / migration) ─────────────────
     existing_info = find_user_by_email(email)
     if existing_info:
         userid = existing_info.get("userid")
+        if sub:
+            ensure_auth_provider(userid, provider, sub)
         login_row = rest_select(
             "userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True
         )
@@ -1167,7 +1243,7 @@ def sync_social_user(
         except Exception as e:
             logger.warning(f"/auth/sync token creation failed userid={userid} err={e}")
             raise HTTPException(status_code=500, detail="Failed issuing tokens")
-        logger.debug(f"/auth/sync existing user userid={userid} elapsedMs={_now_ms()-t0}")
+        logger.debug(f"/auth/sync existing user (email match) userid={userid} elapsedMs={_now_ms()-t0}")
         return {
             "status": "ok",
             "userid": userid,
@@ -1181,7 +1257,7 @@ def sync_social_user(
             "refreshTokenExpiresAt": tokens["refresh_token_expires_at"],
         }
 
-    # --- New user provisioning ---
+    # ── Step 3: New user provisioning ────────────────────────────────────────
     role = "player"
     try:
         users_rows = rest_upsert("users", {"role": role})
@@ -1255,6 +1331,10 @@ def sync_social_user(
         else:
             raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
 
+    # Register OAuth provider for this new user
+    if sub:
+        ensure_auth_provider(userid, provider, sub)
+
     # Mark email as pre-verified — OAuth providers already confirm email ownership.
     # This is critical: /login checks unverified_users.email_verified before allowing access.
     try:
@@ -1314,60 +1394,79 @@ def phone_login(payload: dict):
         raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)[:120]}")
 
     phone_number = decoded.get('phone_number')
+    firebase_uid = (decoded.get('uid') or '').strip()
     if not phone_number:
         raise HTTPException(status_code=400, detail="Firebase token does not contain a phone_number claim")
 
-    logger.debug(f"/phone-login START phone={phone_number}")
+    logger.debug(f"/phone-login START phone={phone_number} firebase_uid={firebase_uid}")
 
     # ── Find or create user ───────────────────────────────────────────────────
-    info_row = find_user_by_phone(phone_number)
+    info_row = None
     login_row = None
+    _phone_provider_linked = False  # True when user was found via user_auth_providers (no re-insert needed)
 
-    if info_row:
-        userid = info_row.get('userid')
-        login_row = rest_select("userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True)
-        logger.debug(f"/phone-login existing user userid={userid}")
-    else:
-        # ── Create new user (users → userinfo → userlogin) ────────────────
-        role = 'player'
-        try:
-            users_rows = rest_upsert("users", {"role": role})
-        except Exception as e:
-            if "permission denied for sequence users_userid_seq" in str(e):
-                max_row = rest_select("users", "userid", single=True, order={"column": "userid", "desc": True})
-                next_id = (max_row.get('userid') if max_row else 0) + 1
-                users_rows = rest_upsert("users", {"userid": next_id, "role": role})
-            else:
-                raise HTTPException(status_code=500, detail=f"users insert failed: {e}")
-        if not users_rows or not isinstance(users_rows, list):
-            raise HTTPException(status_code=500, detail="Unexpected users insert response")
-        userid = users_rows[0].get('userid')
-        if not userid:
-            raise HTTPException(status_code=500, detail="No userid from users insert")
+    # Step 1: look up by user_auth_providers (Phone, firebase_uid)
+    if firebase_uid:
+        prov_row = find_user_by_provider('Phone', firebase_uid)
+        if prov_row:
+            userid = prov_row.get('userid')
+            info_row = find_userinfo_by_userid(userid)
+            login_row = rest_select("userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True)
+            _phone_provider_linked = True
+            logger.debug(f"/phone-login existing user via provider lookup userid={userid}")
 
-        account_name = display_name or f"User{userid}"
-        try:
-            info_rows = rest_upsert("userinfo", {"userid": userid, "name": account_name, "contactnumber": phone_number})
-        except Exception as e:
-            if "permission denied for sequence userinfo_infoid_seq" in str(e):
-                max_row = rest_select("userinfo", "infoid", single=True, order={"column": "infoid", "desc": True})
-                next_id = (max_row.get('infoid') if max_row else 0) + 1
-                info_rows = rest_upsert("userinfo", {"infoid": next_id, "userid": userid, "name": account_name, "contactnumber": phone_number})
-            else:
-                raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
-        info_row = info_rows[0] if isinstance(info_rows, list) else {"userid": userid, "name": account_name}
+    if not _phone_provider_linked:
+        # Step 2: fallback to contactnumber lookup (existing user / migration path)
+        info_row = find_user_by_phone(phone_number)
+        if info_row:
+            userid = info_row.get('userid')
+            login_row = rest_select("userlogin", "loginid, userid, username, logintype", {"userid": userid}, single=True)
+            logger.debug(f"/phone-login existing user via phone lookup userid={userid}")
+        else:
+            # Step 3: create new user (users → userinfo → userlogin)
+            role = 'player'
+            try:
+                users_rows = rest_upsert("users", {"role": role})
+            except Exception as e:
+                if "permission denied for sequence users_userid_seq" in str(e):
+                    max_row = rest_select("users", "userid", single=True, order={"column": "userid", "desc": True})
+                    next_id = (max_row.get('userid') if max_row else 0) + 1
+                    users_rows = rest_upsert("users", {"userid": next_id, "role": role})
+                else:
+                    raise HTTPException(status_code=500, detail=f"users insert failed: {e}")
+            if not users_rows or not isinstance(users_rows, list):
+                raise HTTPException(status_code=500, detail="Unexpected users insert response")
+            userid = users_rows[0].get('userid')
+            if not userid:
+                raise HTTPException(status_code=500, detail="No userid from users insert")
 
-        try:
-            login_rows = rest_upsert("userlogin", {"userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
-        except Exception as e:
-            if "permission denied for sequence userlogin_loginid_seq" in str(e):
-                max_row = rest_select("userlogin", "loginid", single=True, order={"column": "loginid", "desc": True})
-                next_id = (max_row.get('loginid') if max_row else 0) + 1
-                login_rows = rest_upsert("userlogin", {"loginid": next_id, "userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
-            else:
-                raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
-        login_row = login_rows[0] if isinstance(login_rows, list) else {"userid": userid}
-        logger.debug(f"/phone-login new user created userid={userid}")
+            account_name = display_name or f"User{userid}"
+            try:
+                info_rows = rest_upsert("userinfo", {"userid": userid, "name": account_name, "contactnumber": phone_number})
+            except Exception as e:
+                if "permission denied for sequence userinfo_infoid_seq" in str(e):
+                    max_row = rest_select("userinfo", "infoid", single=True, order={"column": "infoid", "desc": True})
+                    next_id = (max_row.get('infoid') if max_row else 0) + 1
+                    info_rows = rest_upsert("userinfo", {"infoid": next_id, "userid": userid, "name": account_name, "contactnumber": phone_number})
+                else:
+                    raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
+            info_row = info_rows[0] if isinstance(info_rows, list) else {"userid": userid, "name": account_name}
+
+            try:
+                login_rows = rest_upsert("userlogin", {"userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
+            except Exception as e:
+                if "permission denied for sequence userlogin_loginid_seq" in str(e):
+                    max_row = rest_select("userlogin", "loginid", single=True, order={"column": "loginid", "desc": True})
+                    next_id = (max_row.get('loginid') if max_row else 0) + 1
+                    login_rows = rest_upsert("userlogin", {"loginid": next_id, "userid": userid, "username": None, "passwordhash": None, "logintype": "Phone"})
+                else:
+                    raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
+            login_row = login_rows[0] if isinstance(login_rows, list) else {"userid": userid}
+            logger.debug(f"/phone-login new user created userid={userid}")
+
+        # Register Phone provider (step 2 migration linking + step 3 new user)
+        if firebase_uid:
+            ensure_auth_provider(userid, 'Phone', firebase_uid)
 
     # ── Ensure unverified_users record (phone column, pre-verified) ─────────
     # OTP was already confirmed by Firebase when we reach here, so phone_verified=True.
