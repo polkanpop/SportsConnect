@@ -121,6 +121,8 @@ export const ICONS = {
   buttonBooking: require('../assets/icons/bookingButton.png'),
   favouriteStar: require('../assets/icons/favouriteStar.png'),
   gmailButton: require('../assets/icons/gmail.png'),
+  googleIcon: require('../assets/icons/google.png'),
+  zaloIcon: require('../assets/icons/zalo.png'),
   bookMark: require('../assets/icons/bookmark.png'),
   eventIllustration: require('../assets/icons/event_illustration.png'),
   coachIllustration: require('../assets/icons/coach_illustration.png'),

@@ -1,5 +1,6 @@
 import AppleSignInButton from "@/components/social-auth-buttons/apple/expo-apple-sign-in-button";
 import GoogleSignInButton from "@/components/social-auth-buttons/google/google-sign-in-button";
+import ZaloSignInButton from "@/components/social-auth-buttons/zalo/zalo-sign-in-button";
 import { ICONS } from "@/constants/icons";
 import { authLogin } from '@/lib/backendApi';
 import { AUTO_EMAIL_LOGIN } from '@/env';
@@ -171,6 +172,7 @@ export default function LoginScreen() {
 
           <View style={styles.socialRow}>
             <GoogleSignInButton />
+            <ZaloSignInButton />
             <AppleSignInButton />
           </View>
 

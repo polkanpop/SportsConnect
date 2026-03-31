@@ -6,6 +6,7 @@ import os
 import json
 import base64
 import secrets
+import httpx
 from email.message import EmailMessage
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -859,6 +860,202 @@ def debug_token(authorization: str | None = Query(None, alias="authorization")):
         return {"status": "ok", "unverifiedClaims": payload, "header": decoded, "decoded": full}
     except HTTPException as e:
         return {"status": "error", "detail": e.detail, "unverifiedClaims": payload, "header": decoded}
+
+
+@router.post('/zalo')
+def zalo_sign_in(payload: dict):
+    """Exchange a Zalo authorization code for our backend JWT.
+
+    Flow (PKCE, V4):
+      1. Frontend opens Zalo OAuth with code_challenge.
+      2. Zalo redirects to app with ?code=...
+      3. Frontend POSTs { code, code_verifier } here.
+      4. Backend exchanges code+verifier+app_secret for Zalo access_token.
+      5. Backend fetches Zalo user info (id, name, avatar_url).
+      6. Backend creates/syncs user and returns our JWT.
+    """
+    t0 = _now_ms()
+    code = (payload.get('code') or '').strip()
+    code_verifier = (payload.get('code_verifier') or '').strip()
+    if not code or not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing code or code_verifier")
+
+    zalo_app_id = os.getenv("ZALO_APP_ID", "959402498466634174")
+    zalo_app_secret = os.getenv("ZALO_APP_SECRET", "")
+    if not zalo_app_secret:
+        logger.error("/auth/zalo ZALO_APP_SECRET not configured")
+        raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
+
+    # 1. Exchange code for access_token
+    try:
+        token_resp = httpx.post(
+            "https://oauth.zaloapp.com/v4/access_token",
+            data={
+                "app_id": zalo_app_id,
+                "app_secret": zalo_app_secret,
+                "code": code,
+                "code_verifier": code_verifier,
+                "grant_type": "authorization_code",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10.0,
+        )
+        token_json = token_resp.json()
+    except Exception as e:
+        logger.exception(f"/auth/zalo token exchange error: {e}")
+        raise HTTPException(status_code=502, detail=f"Zalo token exchange failed: {e}")
+
+    access_token = token_json.get("access_token") or ""
+    if not access_token:
+        logger.error(f"/auth/zalo token exchange returned no access_token: {token_json}")
+        raise HTTPException(status_code=401, detail=f"Zalo token exchange error: {token_json.get('error_description') or token_json.get('error') or 'unknown'}")
+
+    # 2. Fetch Zalo user info
+    try:
+        user_resp = httpx.get(
+            "https://graph.zalo.me/v2.0/me",
+            params={"fields": "id,name,picture"},
+            headers={"access_token": access_token},
+            timeout=10.0,
+        )
+        user_json = user_resp.json()
+    except Exception as e:
+        logger.exception(f"/auth/zalo user info error: {e}")
+        raise HTTPException(status_code=502, detail=f"Zalo user info fetch failed: {e}")
+
+    zalo_id = str(user_json.get("id") or "")
+    zalo_name = str(user_json.get("name") or "")
+    avatar_url = None
+    try:
+        avatar_url = user_json.get("picture", {}).get("data", {}).get("url")
+    except Exception:
+        pass
+
+    if not zalo_id:
+        logger.error(f"/auth/zalo user info missing id: {user_json}")
+        raise HTTPException(status_code=401, detail="Zalo did not return a user id")
+
+    # 3. Derive a stable synthetic email for Zalo users (Zalo does not expose email via this API)
+    synthetic_email = f"zalo_{zalo_id}@zalo.sportconnect.internal"
+    display_name = zalo_name or f"Zalo User {zalo_id}"
+
+    # 4. Create or find user (reuse same pattern as /auth/sync)
+    existing = find_user_by_email(synthetic_email)
+    if existing:
+        userid = existing.get("userid")
+        # Update name/pfp if changed
+        update_fields = {}
+        if zalo_name and existing.get("name") != zalo_name:
+            update_fields["name"] = zalo_name
+        if avatar_url:
+            update_fields["pfp"] = avatar_url
+        if update_fields:
+            try:
+                rest_update("userinfo", {"userid": userid}, update_fields)
+            except Exception as e:
+                logger.warning(f"/auth/zalo name/pfp update failed userid={userid} err={e}")
+        try:
+            tokens = create_user_tokens(userid, None, synthetic_email, remember_me=True)
+        except Exception as e:
+            logger.warning(f"/auth/zalo token creation failed userid={userid} err={e}")
+            raise HTTPException(status_code=500, detail="Token creation failed")
+        logger.debug(f"/auth/zalo existing user userid={userid} elapsedMs={_now_ms()-t0}")
+        return {
+            "status": "ok",
+            "userid": userid,
+            "name": display_name,
+            "email": synthetic_email,
+            "accessToken": tokens.get("access_token"),
+            "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+            "refreshToken": tokens.get("refresh_token"),
+            "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+        }
+
+    # New user — provision users, userinfo, userlogin rows
+    role = "player"
+    try:
+        users_rows = rest_upsert("users", {"role": role})
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence users_userid_seq" in msg:
+            max_row = rest_select("users", "userid", single=True, order={"column": "userid", "desc": True})
+            next_userid = (max_row.get("userid") if max_row else 0) + 1
+            users_rows = rest_upsert("users", {"userid": next_userid, "role": role})
+        else:
+            raise HTTPException(status_code=500, detail=f"users insert failed: {e}")
+    userid = (users_rows[0] if users_rows else {}).get("userid")
+    if not userid:
+        raise HTTPException(status_code=500, detail="No userid returned")
+
+    info_payload: dict = {"userid": userid, "name": display_name, "email": synthetic_email}
+    if avatar_url:
+        info_payload["pfp"] = avatar_url
+    try:
+        info_rows = rest_upsert("userinfo", info_payload)
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence userinfo_infoid_seq" in msg:
+            max_row = rest_select("userinfo", "infoid", single=True, order={"column": "infoid", "desc": True})
+            next_infoid = (max_row.get("infoid") if max_row else 0) + 1
+            info_payload["infoid"] = next_infoid
+            info_rows = rest_upsert("userinfo", info_payload)
+        else:
+            raise HTTPException(status_code=500, detail=f"userinfo insert failed: {e}")
+
+    try:
+        login_rows = rest_upsert("userlogin", {
+            "userid": userid,
+            "username": None,
+            "passwordhash": None,
+            "logintype": "Zalo",
+        })
+    except Exception as e:
+        msg = str(e)
+        if "permission denied for sequence userlogin_loginid_seq" in msg:
+            max_row = rest_select("userlogin", "loginid", single=True, order={"column": "loginid", "desc": True})
+            next_loginid = (max_row.get("loginid") if max_row else 0) + 1
+            login_rows = rest_upsert("userlogin", {
+                "loginid": next_loginid,
+                "userid": userid,
+                "username": None,
+                "passwordhash": None,
+                "logintype": "Zalo",
+            })
+        else:
+            raise HTTPException(status_code=500, detail=f"userlogin insert failed: {e}")
+
+    # Pre-verify synthetic email (Zalo already confirmed identity)
+    try:
+        max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+        next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+        rest_upsert("unverified_users", {
+            "unverifiedid": next_unver_id,
+            "userid": userid,
+            "email": synthetic_email,
+            "token_hash": f"ZALO_VERIFIED:{hashlib.sha256(synthetic_email.encode()).hexdigest()[:24]}",
+            "token_expires_at": "2099-01-01T00:00:00+00:00",
+            "resend_count": 0,
+            "email_verified": True,
+        })
+    except Exception as e:
+        logger.warning(f"/auth/zalo pre-verify failed userid={userid} err={e}")
+
+    try:
+        tokens = create_user_tokens(userid, None, synthetic_email, remember_me=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token creation failed: {e}")
+
+    logger.debug(f"/auth/zalo NEW user userid={userid} zalo_id={zalo_id} elapsedMs={_now_ms()-t0}")
+    return {
+        "status": "ok",
+        "userid": userid,
+        "name": display_name,
+        "email": synthetic_email,
+        "accessToken": tokens.get("access_token"),
+        "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+        "refreshToken": tokens.get("refresh_token"),
+        "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+    }
 
 
 @router.post('/logout')

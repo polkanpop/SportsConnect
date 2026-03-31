@@ -201,43 +201,33 @@ export default function GoogleSignInButton() {
     <TouchableOpacity
       onPress={signIn}
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         backgroundColor: '#ffffff',
         borderWidth: 1,
-        borderColor: '#dbdbdb',
-        borderRadius: 4,
-        paddingVertical: 10,
-        paddingHorizontal: 15,
+        borderColor: '#e5e7eb',
+        alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
         elevation: 2,
+        marginHorizontal: 8,
         opacity: loading ? 0.6 : 1,
       }}
       activeOpacity={0.8}
       disabled={loading}
     >
-      <Image
-        source={ICONS.gmailButton}
-        style={{ width: 24, height: 24, marginRight: 10 }}
-        contentFit="contain"
-      />
       {loading ? (
         <ActivityIndicator size="small" color="#555" />
       ) : (
-        <Text
-          style={{
-            fontSize: 16,
-            color: '#757575',
-            fontFamily: 'Roboto-Regular',
-            fontWeight: '500',
-          }}
-        >
-          Sign in with Google
-        </Text>
+        <Image
+          source={ICONS.googleIcon}
+          style={{ width: 32, height: 32 }}
+          contentFit="contain"
+        />
       )}
     </TouchableOpacity>
   );
