@@ -188,6 +188,22 @@ export default {
       "x-robots-tag": "index, follow",
     };
 
+    if (path === "/zalo-callback") {
+      // Bridge Zalo OAuth redirect (must be HTTPS) → app deep link.
+      // Zalo redirects here with ?code=...&state=... after user authorises.
+      // We forward ALL query params to the custom-scheme deep link so the app
+      // can pick them up via expo-linking inside openAuthSessionAsync.
+      const params = url.searchParams.toString();
+      const deepLink = `sportconnect://auth/zalo-callback${params ? "?" + params : ""}`;
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: deepLink,
+          "cache-control": "no-store",
+        },
+      });
+    }
+
     if (path === "/privacy") {
       return new Response(PRIVACY_HTML, { headers });
     }

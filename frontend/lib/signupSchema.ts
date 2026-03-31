@@ -25,7 +25,7 @@ export const signupSchema = z
       .string()
       .trim()
       .min(1, 'Display name is required.')
-      .max(50, 'Max 50 characters.')
+      .max(30, 'Max 30 characters.')
       .regex(
         /^[\p{L}\p{M}\s'-]+$/u,
         "Name can only contain letters, spaces, hyphens, and apostrophes.",
@@ -35,7 +35,10 @@ export const signupSchema = z
       .trim()
       .min(3, 'Min 3 characters.')
       .max(20, 'Max 20 characters.')
-      .regex(/^[a-z0-9_]+$/, 'Only lowercase letters, numbers, and underscores. No spaces.'),
+      .regex(
+        /^[a-z0-9_]+$/,
+        'Lowercase letters (a–z), numbers, and underscores only. No capital letters or spaces.',
+      ),
     emailOrPhone: z
       .string()
       .trim()

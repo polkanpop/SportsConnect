@@ -52,22 +52,30 @@ export default function ZaloSignInButton() {
     setLoading(true);
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
-    const redirectUri = Linking.createURL('auth/zalo-callback', { scheme: expo.scheme });
+
+    // HTTPS URL registered in Zalo Developer Console → Web tab → Callback URL.
+    // Zalo only accepts HTTPS here; our Cloudflare worker at sportconnects.org
+    // bridges this to the app deep link (sportconnect://auth/zalo-callback).
+    const zaloCallbackHttps = 'https://sportconnects.org/zalo-callback';
+
+    // Deep link the app's intent-filter listens on — used as the second arg to
+    // openAuthSessionAsync so it knows when to close the browser tab.
+    const appDeepLink = Linking.createURL('auth/zalo-callback', { scheme: expo.scheme });
 
     try {
       // 1. PKCE
       const codeVerifier = await generateCodeVerifier();
       const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-      // 2. Open Zalo auth page
+      // 2. Open Zalo auth page — redirect_uri must match Zalo dev console registration
       const authUrl =
         `https://oauth.zaloapp.com/v4/permission?` +
         `app_id=${ZALO_APP_ID}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&redirect_uri=${encodeURIComponent(zaloCallbackHttps)}` +
         `&code_challenge=${encodeURIComponent(codeChallenge)}` +
         `&state=sportconnect`;
 
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, {
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, appDeepLink, {
         showInRecents: true,
       });
 
@@ -138,7 +146,7 @@ export default function ZaloSignInButton() {
 
 const styles = StyleSheet.create({
   icon: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
   },
 });

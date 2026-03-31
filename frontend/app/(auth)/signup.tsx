@@ -50,6 +50,8 @@ export default function SignUpScreen() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(signupSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: {
       accountName: '',
       username: '',
@@ -150,7 +152,7 @@ export default function SignUpScreen() {
                 placeholder="Username"
                 placeholderTextColor={COLOR.dark300}
                 value={value}
-                onChangeText={(t) => onChange(t.toLowerCase())}
+                onChangeText={onChange}
                 onBlur={onBlur}
                 autoCapitalize="none"
                 autoCorrect={false}
