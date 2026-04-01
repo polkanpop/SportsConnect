@@ -384,9 +384,18 @@ export default function ActivityPage() {
   const [openFilter, setOpenFilter] = useState<null | 'status' | 'activity' | 'type'>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const statusLabel = statusFilter === 'All' ? 'Status' : statusFilter;
-  const activityLabel = activityKindFilter === 'All' ? 'Activity' : activityKindFilter;
-  const typeLabel = calendarMode;
+  const statusLabel =
+    statusFilter === 'All' ? t('COMMON_LABEL_STATUS') :
+    statusFilter === 'Upcoming' ? t('ACTIVITY_FILTER_UPCOMING') :
+    statusFilter === 'Completed' ? t('ACTIVITY_FILTER_COMPLETED') :
+    statusFilter === 'Cancelled' ? t('ACTIVITY_FILTER_CANCELLED') :
+    t('ACTIVITY_FILTER_MISSED');
+  const activityLabel =
+    activityKindFilter === 'All' ? t('ACTIVITY_HEADER_TITLE') :
+    activityKindFilter === 'Court' ? t('COMMON_FILTER_COURT') :
+    activityKindFilter === 'Event' ? t('COMMON_FILTER_EVENT') :
+    t('ACTIVITY_FILTER_TS');
+  const typeLabel = calendarMode === 'Booking' ? t('ACTIVITY_FILTER_BOOKING') : t('ACTIVITY_FILTER_HOSTING');
   
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -939,7 +948,11 @@ export default function ActivityPage() {
                   {(openFilter === 'status'
                     ? (['All', 'Upcoming', 'Completed', 'Cancelled', 'Missed'] as const).map((opt) => ({
                         key: opt,
-                        label: opt,
+                        label: opt === 'All' ? t('COMMON_FILTER_ALL') :
+                               opt === 'Upcoming' ? t('ACTIVITY_FILTER_UPCOMING') :
+                               opt === 'Completed' ? t('ACTIVITY_FILTER_COMPLETED') :
+                               opt === 'Cancelled' ? t('ACTIVITY_FILTER_CANCELLED') :
+                               t('ACTIVITY_FILTER_MISSED'),
                         selected: statusFilter === opt,
                         onPress: () => {
                           setStatusFilter(opt);
@@ -949,7 +962,10 @@ export default function ActivityPage() {
                     : openFilter === 'activity'
                       ? (['All', 'Court', 'Event', 'TS'] as const).map((opt) => ({
                           key: opt,
-                          label: opt,
+                          label: opt === 'All' ? t('COMMON_FILTER_ALL') :
+                                 opt === 'Court' ? t('COMMON_FILTER_COURT') :
+                                 opt === 'Event' ? t('COMMON_FILTER_EVENT') :
+                                 t('ACTIVITY_FILTER_TS'),
                           selected: activityKindFilter === opt,
                           onPress: () => {
                             setActivityKindFilter(opt);
@@ -958,7 +974,7 @@ export default function ActivityPage() {
                         }))
                       : (['Booking', 'Hosting'] as const).map((opt) => ({
                           key: opt,
-                          label: opt,
+                          label: opt === 'Booking' ? t('ACTIVITY_FILTER_BOOKING') : t('ACTIVITY_FILTER_HOSTING'),
                           selected: calendarMode === opt,
                           onPress: () => {
                             setCalendarMode(opt);

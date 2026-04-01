@@ -1397,7 +1397,7 @@
                     >
                       <View style={styles.filterChipLeft}>
                         <Image
-                          source={mapMode === 'events' ? ICONS.markerEvent : mapMode === 'training' ? ICONS.markerTs : ICONS.mapPin}
+                          source={mapMode === 'events' ? ICONS.starCal : mapMode === 'training' ? ICONS.tsNoti : ICONS.mapPin}
                           style={[styles.filterIcon, { tintColor: COLORS.neutral700 }]}
                         />
                         <Text style={styles.filterChipText}>
@@ -1503,7 +1503,7 @@
                               >
                                 <View style={styles.dropdownItemLeft}>
                                   <Image
-                                    source={opt === 'events' ? ICONS.markerEvent : opt === 'training' ? ICONS.markerTs : ICONS.mapPin}
+                                    source={opt === 'events' ? ICONS.starCal : opt === 'training' ? ICONS.tsNoti : ICONS.mapPin}
                                     style={styles.optionIcon}
                                   />
                                   <Text style={styles.dropdownItemText}>

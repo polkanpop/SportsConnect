@@ -565,7 +565,12 @@ export default function NotificationsPage() {
             onPress={() => setDropdownOpen(v => !v)}
             activeOpacity={0.85}
           >
-            <Text style={styles.dropdownButtonText}>{selectedCategory}</Text>
+            <Text style={styles.dropdownButtonText}>
+              {selectedCategory === 'All' ? t('COMMON_FILTER_ALL') :
+               selectedCategory === 'Court' ? t('COMMON_FILTER_COURT') :
+               selectedCategory === 'Event' ? t('COMMON_FILTER_EVENT') :
+               t('COMMON_FILTER_TRAINING')}
+            </Text>
             <Image source={ICONS.arrowdown} style={[styles.dropdownArrow, dropdownOpen ? styles.dropdownArrowOpen : null]} />
           </TouchableOpacity>
           {dropdownOpen && (
@@ -579,7 +584,12 @@ export default function NotificationsPage() {
                     setDropdownOpen(false)
                   }}
                 >
-                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? styles.dropdownItemTextSelected : null]}>{opt}</Text>
+                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? styles.dropdownItemTextSelected : null]}>
+                    {opt === 'All' ? t('COMMON_FILTER_ALL') :
+                     opt === 'Court' ? t('COMMON_FILTER_COURT') :
+                     opt === 'Event' ? t('COMMON_FILTER_EVENT') :
+                     t('COMMON_FILTER_TRAINING')}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -626,7 +636,12 @@ export default function NotificationsPage() {
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
           <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : styles.sectionHeaderWrapAfterToday]}>
-            <Text style={styles.sectionHeaderText}>{section.title}</Text>
+            <Text style={styles.sectionHeaderText}>
+              {section.title === 'Today' ? t('NOTIF_SECTION_TODAY') :
+               section.title === 'Yesterday' ? t('NOTIF_SECTION_YESTERDAY') :
+               section.title === 'Earlier' ? t('NOTIF_SECTION_EARLIER') :
+               section.title}
+            </Text>
             {section.title === 'Today' && !deleteMode ? (
               <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
                 <Text style={styles.markAllText}>{t('NOTIF_BTN_MARK_ALL_READ')}</Text>

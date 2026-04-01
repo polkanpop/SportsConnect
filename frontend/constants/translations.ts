@@ -272,6 +272,49 @@ export const en = {
   REVIEW_MODAL_SUCCESS_TITLE: 'Review Submitted!',
   REVIEW_MODAL_SUCCESS_BODY: 'Thank you for your feedback.',
   REVIEW_MODAL_BTN_DONE: 'Done',
+
+  // Filters (shared across screens)
+  COMMON_FILTER_ALL: 'All',
+  COMMON_FILTER_COURT: 'Court',
+  COMMON_FILTER_EVENT: 'Event',
+  COMMON_FILTER_TRAINING: 'Training',
+
+  // Activity filters
+  ACTIVITY_FILTER_UPCOMING: 'Upcoming',
+  ACTIVITY_FILTER_COMPLETED: 'Completed',
+  ACTIVITY_FILTER_CANCELLED: 'Cancelled',
+  ACTIVITY_FILTER_MISSED: 'Missed',
+  ACTIVITY_FILTER_BOOKING: 'Booking',
+  ACTIVITY_FILTER_HOSTING: 'Hosting',
+  ACTIVITY_FILTER_TS: 'TS',
+
+  // Notification section headers
+  NOTIF_SECTION_TODAY: 'Today',
+  NOTIF_SECTION_YESTERDAY: 'Yesterday',
+  NOTIF_SECTION_EARLIER: 'Earlier',
+
+  // Details page sections
+  DETAILS_SECTION_SUMMARY: 'Summary',
+  DETAILS_SECTION_BOOKING: 'Booking',
+  DETAILS_SECTION_EVENT: 'Event',
+  DETAILS_SECTION_TRAINING: 'Training Session',
+
+  // Details page row labels
+  DETAILS_ROW_VENUE_NAME: 'Venue Name',
+  DETAILS_ROW_BOOKING_STATUS: 'Booking Status',
+  DETAILS_ROW_COURT_NAME: 'Court Name',
+  DETAILS_ROW_TITLE: 'Title',
+  DETAILS_ROW_EVENT_STATUS: 'Event Status',
+  DETAILS_ROW_SESSION_STATUS: 'Training Session Status',
+  DETAILS_ROW_PARTICIPANTS_CAP: 'Participants cap',
+  DETAILS_ROW_ENTRY_FEE: 'Entry fee',
+
+  // Details page buttons / states
+  DETAILS_BTN_CANCELLED: 'Cancelled',
+  DETAILS_BTN_REVIEW: 'Review',
+  DETAILS_LOADING: 'Loading details…',
+  DETAILS_ERR_FAILED: 'Failed to load',
+  DETAILS_LABEL_UNKNOWN: 'Unknown record',
 } as const
 
 // ─── VIETNAMESE ──────────────────────────────────────────────────
@@ -537,6 +580,49 @@ export const vi: Record<TranslationKey, string> = {
   REVIEW_MODAL_SUCCESS_TITLE: 'Đã gửi đánh giá!',
   REVIEW_MODAL_SUCCESS_BODY: 'Cảm ơn phản hồi của bạn.',
   REVIEW_MODAL_BTN_DONE: 'Xong',
+
+  // Filters (shared across screens)
+  COMMON_FILTER_ALL: 'Tất cả',
+  COMMON_FILTER_COURT: 'Sân',
+  COMMON_FILTER_EVENT: 'Sự kiện',
+  COMMON_FILTER_TRAINING: 'Tập luyện',
+
+  // Activity filters
+  ACTIVITY_FILTER_UPCOMING: 'Sắp diễn ra',
+  ACTIVITY_FILTER_COMPLETED: 'Đã hoàn thành',
+  ACTIVITY_FILTER_CANCELLED: 'Đã hủy',
+  ACTIVITY_FILTER_MISSED: 'Đã bỏ lỡ',
+  ACTIVITY_FILTER_BOOKING: 'Đặt chỗ',
+  ACTIVITY_FILTER_HOSTING: 'Tổ chức',
+  ACTIVITY_FILTER_TS: 'Buổi tập',
+
+  // Notification section headers
+  NOTIF_SECTION_TODAY: 'Hôm nay',
+  NOTIF_SECTION_YESTERDAY: 'Hôm qua',
+  NOTIF_SECTION_EARLIER: 'Trước đó',
+
+  // Details page sections
+  DETAILS_SECTION_SUMMARY: 'Tóm tắt',
+  DETAILS_SECTION_BOOKING: 'Đặt chỗ',
+  DETAILS_SECTION_EVENT: 'Sự kiện',
+  DETAILS_SECTION_TRAINING: 'Buổi tập',
+
+  // Details page row labels
+  DETAILS_ROW_VENUE_NAME: 'Tên địa điểm',
+  DETAILS_ROW_BOOKING_STATUS: 'Trạng thái đặt',
+  DETAILS_ROW_COURT_NAME: 'Tên sân',
+  DETAILS_ROW_TITLE: 'Tiêu đề',
+  DETAILS_ROW_EVENT_STATUS: 'Trạng thái sự kiện',
+  DETAILS_ROW_SESSION_STATUS: 'Trạng thái buổi tập',
+  DETAILS_ROW_PARTICIPANTS_CAP: 'Số người tối đa',
+  DETAILS_ROW_ENTRY_FEE: 'Phí tham gia',
+
+  // Details page buttons / states
+  DETAILS_BTN_CANCELLED: 'Đã hủy',
+  DETAILS_BTN_REVIEW: 'Đánh giá',
+  DETAILS_LOADING: 'Đang tải chi tiết…',
+  DETAILS_ERR_FAILED: 'Không tải được',
+  DETAILS_LABEL_UNKNOWN: 'Không xác định được',
 }
 
 // ─── TYPES ───────────────────────────────────────────────────────

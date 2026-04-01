@@ -27,7 +27,6 @@ import CourtPanel from "@/app/event/courtPanel";
 import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
-import { useLanguage } from '@/providers/language-provider'
 
 export default function Home() {
   const router = useRouter();
@@ -42,7 +41,6 @@ export default function Home() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
   const { t } = useTranslation();
-  const { language: uiLanguage, setLanguage } = useLanguage();
   const drawerW = Math.min(320, Math.max(260, Dimensions.get('window').width * 0.78));
   const drawerX = React.useRef(new Animated.Value(-drawerW)).current;
 
@@ -102,26 +100,26 @@ export default function Home() {
   // Category data with navigation routes
   const categories = [
     {
-      icon: ICONS.tsNoti,
+      icon: ICONS.coachIcon,
       label: t('HOME_CAT_COACH'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50, tintColor: '#111' },
+      iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/tsList",
     },
     {
-      icon: ICONS.favouriteStar,
+      icon: ICONS.event_category,
       label: t('HOME_CAT_EVENT'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50, tintColor: '#111' },
+      iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/eventList",
     },
     {
-      icon: ICONS.venueCategory,
+      icon: ICONS.court,
       label: t('HOME_CAT_COURT'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50, tintColor: '#111' },
+      iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       // Updated to point to the new simplified court list screen
       route: "/event/courtList",
@@ -1183,63 +1181,6 @@ export default function Home() {
                 >
                   <Image source={ICONS.closeMenu} style={{ width: 20, height: 20, tintColor: '#111' }} resizeMode="contain" />
                 </TouchableOpacity>
-              </View>
-
-              {/* Language switch (UI only for now) */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginTop: 6, marginBottom: 12 }}>
-                <Text style={{ flex: 1, marginRight: 12, fontSize: 16, lineHeight: 24, fontWeight: '700', color: '#111' }} numberOfLines={1}>{t('HOME_MENU_LANGUAGE')}</Text>
-
-                <View
-                  style={{
-                    width: 132,
-                    flexDirection: 'row',
-                    backgroundColor: '#F3F4F6',
-                    borderRadius: 999,
-                    padding: 2,
-                    borderWidth: 1,
-                    borderColor: '#E5E7EB',
-                  }}
-                >
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => setLanguage('vi')}
-                    style={{
-                      flex: 1,
-                      height: 30,
-                      borderRadius: 999,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: uiLanguage === 'vi' ? '#FFFFFF' : 'transparent',
-                      shadowColor: '#000',
-                      shadowOpacity: uiLanguage === 'vi' ? 0.08 : 0,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 3 },
-                      elevation: uiLanguage === 'vi' ? 2 : 0,
-                    }}
-                  >
-                    <Text style={{ fontWeight: '600', fontSize: 14, color: uiLanguage === 'vi' ? '#2563EB' : '#9CA3AF' }}>Vi</Text>
-                  </TouchableOpacity>
-                  <View pointerEvents="none" style={{ width: 1, backgroundColor: '#E5E7EB', marginVertical: 6, opacity: 0.8 }} />
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => setLanguage('en')}
-                    style={{
-                      flex: 1,
-                      height: 30,
-                      borderRadius: 999,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: uiLanguage === 'en' ? '#FFFFFF' : 'transparent',
-                      shadowColor: '#000',
-                      shadowOpacity: uiLanguage === 'en' ? 0.08 : 0,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 3 },
-                      elevation: uiLanguage === 'en' ? 2 : 0,
-                    }}
-                  >
-                    <Text style={{ fontWeight: '600', fontSize: 14, color: uiLanguage === 'en' ? '#2563EB' : '#9CA3AF' }}>En</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               <View style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 16 }} />

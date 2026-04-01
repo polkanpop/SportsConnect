@@ -139,20 +139,10 @@ export default function SettingsPage() {
         {/* Search */}
         <SearchBar placeholder={t('SETTINGS_SEARCH_PLACEHOLDER')} />
 
-        {/* Section One */}
+        {/* Section One: Account + Notification + Language */}
         <View style={styles.card}>
           <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} disabled />
           <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />
-          <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />
-        </View>
-
-        {/* Data & Privacy */}
-        <View style={styles.card}>
-          <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />
-        </View>
-
-        {/* Language Toggle */}
-        <View style={styles.card}>
           <SettingRowSwitch
             icon={ICONS.language}
             label={t('SETTINGS_ROW_LANGUAGE')}
@@ -160,6 +150,12 @@ export default function SettingsPage() {
             value={isVietnamese}
             onValueChange={toggleLanguage}
           />
+        </View>
+
+        {/* Section Two: Court Register + Data & Privacy */}
+        <View style={styles.card}>
+          <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />
+          <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />
         </View>
 
         {/* Section Two */}

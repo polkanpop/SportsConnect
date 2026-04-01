@@ -25,7 +25,16 @@ export default function DataPrivacyScreen() {
       {/* Content */}
       <View style={styles.body}>
         <Text style={styles.bodyText}>
-          Our documentation:{' '}
+          Our Terms of Service:{' '}
+          <Text
+            style={styles.link}
+            onPress={() => Linking.openURL('https://sportconnects.org/terms')}
+          >
+            click here
+          </Text>
+        </Text>
+        <Text style={[styles.bodyText, { marginTop: 12 }]}>
+          Our Policy:{' '}
           <Text
             style={styles.link}
             onPress={() => Linking.openURL('https://sportconnects.org/privacy')}
