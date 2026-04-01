@@ -354,7 +354,7 @@
     const MARKER_FOCUS_STAGE = 2;
 
     // Filter states
-    const [openDropdown, setOpenDropdown] = useState<"venue" | "availability" | "distance" | null>(null);
+    const [openDropdown, setOpenDropdown] = useState<"mode" | "venue" | "availability" | "distance" | null>(null);
     const [selectedVenue, setSelectedVenue] = useState<string[]>([]); // multi-select
     const [selectedAvailability, setSelectedAvailability] = useState<string | null>(null); // single-select
     const [selectedDistanceKm, setSelectedDistanceKm] = useState<number | null>(null); // radius filter (km)
@@ -1391,19 +1391,26 @@
                     >
                     {/* Mode: Courts / Events / Training Sessions */}
                     <TouchableOpacity
-                      style={[styles.filterChip, mapMode !== 'courts' && { backgroundColor: COLORS.brandOrangeDeep }]}
+                      style={styles.filterChip}
                       activeOpacity={0.8}
-                      onPress={() => setMapMode((prev) => prev === 'courts' ? 'events' : prev === 'events' ? 'training' : 'courts')}
+                      onPress={() => setOpenDropdown((prev) => (prev === 'mode' ? null : 'mode'))}
                     >
                       <View style={styles.filterChipLeft}>
                         <Image
                           source={mapMode === 'events' ? ICONS.markerEvent : mapMode === 'training' ? ICONS.markerTs : ICONS.mapPin}
-                          style={[styles.filterIcon, mapMode === 'courts' && { tintColor: COLORS.neutral700 }]}
+                          style={[styles.filterIcon, { tintColor: COLORS.neutral700 }]}
                         />
-                        <Text style={[styles.filterChipText, mapMode !== 'courts' && { color: '#fff' }]}>
+                        <Text style={styles.filterChipText}>
                           {mapMode === 'courts' ? 'Courts' : mapMode === 'events' ? 'Events' : 'Training'}
                         </Text>
                       </View>
+                      <Image
+                        source={ICONS.arrowdown}
+                        style={[
+                          styles.filterArrow,
+                          openDropdown === 'mode' ? styles.arrowOpen : null,
+                        ]}
+                      />
                     </TouchableOpacity>
                     {/* Venue */}
                     <TouchableOpacity
@@ -1482,6 +1489,38 @@
                     <Pressable style={styles.overlay} onPress={handleOverlayPress} />
 
                     <View style={styles.dropdownContainer}>
+                      {openDropdown === 'mode' && (
+                        <View style={styles.dropdown}>
+                          {(['courts', 'events', 'training'] as const).map((opt, idx, arr) => (
+                            <>
+                              <TouchableOpacity
+                                key={opt}
+                                style={styles.dropdownItem}
+                                onPress={() => {
+                                  setMapMode(opt);
+                                  setOpenDropdown(null);
+                                }}
+                              >
+                                <View style={styles.dropdownItemLeft}>
+                                  <Image
+                                    source={opt === 'events' ? ICONS.markerEvent : opt === 'training' ? ICONS.markerTs : ICONS.mapPin}
+                                    style={styles.optionIcon}
+                                  />
+                                  <Text style={styles.dropdownItemText}>
+                                    {opt === 'courts' ? 'Courts' : opt === 'events' ? 'Events' : 'Training'}
+                                  </Text>
+                                </View>
+                                <Image
+                                  source={mapMode === opt ? ICONS.tick : undefined}
+                                  style={styles.optionCheck}
+                                />
+                              </TouchableOpacity>
+                              {idx < arr.length - 1 && <View style={styles.sep} />}
+                            </>
+                          ))}
+                        </View>
+                      )}
+
                       {openDropdown === "venue" && (
                         <View style={styles.dropdown}>
                           <FlatList

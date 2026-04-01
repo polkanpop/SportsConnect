@@ -2638,7 +2638,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         </View>
                       ))}
 
-                      {(d.images || []).length < 6 && (
+                      {(d.images || []).length < 1 && (
                         <View style={[styles.serviceCoverFrame, imageUploading && styles.btnDisabled]}>
                           <TouchableOpacity
                             onPress={() => pickServiceImage(d.localId)}

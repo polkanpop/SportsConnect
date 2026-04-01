@@ -209,7 +209,7 @@ export default function GoogleSignInButton() {
       ) : (
         <Image
           source={ICONS.googleIcon}
-          style={{ width: 40, height: 40 }}
+          style={{ width: 44, height: 44 }}
           contentFit="contain"
         />
       )}

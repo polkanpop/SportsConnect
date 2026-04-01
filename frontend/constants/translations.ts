@@ -1,20 +1,17 @@
 /**
- * SportConnect — i18n translation dictionary
- * Two locales: 'en' (English) | 'vi' (Vietnamese)
+ * SportConnect — Translation dictionary
+ * Source of truth: backend/sql/translations.txt
  *
  * Usage:
- *   const { t } = useI18n()
- *   t('SETTINGS_TITLE')  → 'Settings' or 'Cài đặt'
+ *   const { t } = useTranslation()
+ *   t('SETTINGS_TITLE')  →  'Settings'  or  'Cài đặt'
  */
 
 import { useLanguage } from '@/providers/language-provider'
 
-// ─── TRANSLATION KEYS TYPE ──────────────────────────────────────
-export type TranslationKey = keyof typeof en
-
 // ─── ENGLISH ────────────────────────────────────────────────────
 export const en = {
-  // Common / Shared
+  // Common
   COMMON_BTN_CANCEL: 'Cancel',
   COMMON_BTN_CONFIRM: 'Confirm',
   COMMON_BTN_SUBMIT: 'Submit',
@@ -267,11 +264,19 @@ export const en = {
   // Review
   REVIEW_HEADER_TITLE: 'Review',
   REVIEW_SECTION_RATING: 'Your rating',
+  REVIEW_SECTION_COMMENT: 'Your comment',
+  REVIEW_BTN_SUBMIT: 'Submit Review',
+  REVIEW_MODAL_CONFIRM_TITLE: 'Submit this review?',
+  REVIEW_MODAL_BTN_CANCEL: 'Cancel',
+  REVIEW_MODAL_BTN_SUBMIT: 'Submit',
+  REVIEW_MODAL_SUCCESS_TITLE: 'Review Submitted!',
+  REVIEW_MODAL_SUCCESS_BODY: 'Thank you for your feedback.',
+  REVIEW_MODAL_BTN_DONE: 'Done',
 } as const
 
-// ─── VIETNAMESE ─────────────────────────────────────────────────
+// ─── VIETNAMESE ──────────────────────────────────────────────────
 export const vi: Record<TranslationKey, string> = {
-  // Common / Shared
+  // Common
   COMMON_BTN_CANCEL: 'Hủy',
   COMMON_BTN_CONFIRM: 'Xác nhận',
   COMMON_BTN_SUBMIT: 'Gửi',
@@ -292,7 +297,7 @@ export const vi: Record<TranslationKey, string> = {
   COMMON_LABEL_TIME: 'Thời gian',
   COMMON_LABEL_ADDRESS: 'Địa chỉ',
   COMMON_LABEL_COURT: 'Sân',
-  COMMON_LABEL_VENUE: 'Cơ sở thể thao',
+  COMMON_LABEL_VENUE: 'Địa điểm',
   COMMON_LABEL_PAYMENT: 'Thanh toán',
   COMMON_LABEL_NOTE: 'Ghi chú',
   COMMON_LABEL_TYPE: 'Loại',
@@ -384,7 +389,7 @@ export const vi: Record<TranslationKey, string> = {
   ACTIVITY_EMPTY_NO_RECORDS: 'Không tìm thấy hoạt động.',
   ACTIVITY_EVENT_META_DATE: 'Ngày:',
   ACTIVITY_EVENT_META_TIME: 'Thời gian:',
-  ACTIVITY_EVENT_META_VENUE: 'Cơ sở:',
+  ACTIVITY_EVENT_META_VENUE: 'Địa điểm:',
   ACTIVITY_LINK_VIEW_BOOKING: 'Xem đặt chỗ',
 
   // Settings
@@ -524,19 +529,29 @@ export const vi: Record<TranslationKey, string> = {
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',
   REVIEW_SECTION_RATING: 'Xếp hạng của bạn',
+  REVIEW_SECTION_COMMENT: 'Nhận xét của bạn',
+  REVIEW_BTN_SUBMIT: 'Gửi đánh giá',
+  REVIEW_MODAL_CONFIRM_TITLE: 'Gửi đánh giá này?',
+  REVIEW_MODAL_BTN_CANCEL: 'Hủy',
+  REVIEW_MODAL_BTN_SUBMIT: 'Gửi',
+  REVIEW_MODAL_SUCCESS_TITLE: 'Đã gửi đánh giá!',
+  REVIEW_MODAL_SUCCESS_BODY: 'Cảm ơn phản hồi của bạn.',
+  REVIEW_MODAL_BTN_DONE: 'Xong',
 }
 
-// ─── HOOK ───────────────────────────────────────────────────────
-const dictionaries: Record<'en' | 'vi', Record<TranslationKey, string>> = { en, vi }
+// ─── TYPES ───────────────────────────────────────────────────────
+export type TranslationKey = keyof typeof en
 
-/** @deprecated Use useTranslation() from '@/constants/translations' instead */
-export function useI18n() {
-  const { lang } = useLanguage()
-  const dict = dictionaries[(lang as 'en' | 'vi') ?? 'vi'] ?? dictionaries.vi
+const dictionaries: Record<string, Record<TranslationKey, string>> = { en, vi }
+
+// ─── HOOK ────────────────────────────────────────────────────────
+export function useTranslation() {
+  const { language } = useLanguage()
+  const dict = dictionaries[language] ?? en
 
   function t(key: TranslationKey): string {
     return dict[key] ?? en[key] ?? key
   }
 
-  return { t, lang }
+  return { t, language }
 }

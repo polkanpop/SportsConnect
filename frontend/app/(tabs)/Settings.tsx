@@ -21,11 +21,11 @@ import { useCallback, useState } from 'react';
 import { getUserInfoByUserIdCached, authLogout, purgeSessionCaches } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useI18n } from '@/lib/i18n';
+import { useTranslation } from '@/constants/translations';
 import { useLanguage } from '@/providers/language-provider';
 
 export default function SettingsPage() {
-  const { t } = useI18n();
+  const { t } = useTranslation();
   const { lang, toggleLanguage } = useLanguage();
   const isVietnamese = lang === 'vi';
 

@@ -1,5 +1,6 @@
 import { ICONS } from "@/constants/icons";
 import { COLORS } from "@/constants/colors";
+import { useTranslation } from '@/constants/translations';
 import { deleteNotifications, listNotifications, markAllNotificationsRead, markNotificationRead, type NotificationCategory, type NotificationRow } from "@/lib/backendApi";
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { listHistory, type HistoryEntry } from '@/storage/history'
@@ -39,6 +40,7 @@ function firstNonEmptyText(...values: unknown[]): string | null {
 }
 
 export default function NotificationsPage() {
+  const { t } = useTranslation();
   const { dashboard, notifications, userId } = useAppBootstrap()
   const [selectedCategory, setSelectedCategory] = useState<"All" | "Court" | "Event" | "Training">("All");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -550,7 +552,7 @@ export default function NotificationsPage() {
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
       <View style={styles.header}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>{t('NOTIF_HEADER_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
 
@@ -590,7 +592,7 @@ export default function NotificationsPage() {
           activeOpacity={0.85}
         >
           <Image source={ICONS.clock} style={styles.historyIcon} />
-          <Text style={styles.historyText}>History</Text>
+          <Text style={styles.historyText}>{t('NOTIF_LINK_HISTORY')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -611,7 +613,7 @@ export default function NotificationsPage() {
             <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.markAllWrap, { flex: 1 }]} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
-            <Text style={styles.markAllText}>Select all</Text>
+            <Text style={styles.markAllText}>{t('NOTIF_BTN_SELECT_ALL')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -627,7 +629,7 @@ export default function NotificationsPage() {
             <Text style={styles.sectionHeaderText}>{section.title}</Text>
             {section.title === 'Today' && !deleteMode ? (
               <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
-                <Text style={styles.markAllText}>Mark all as read</Text>
+                <Text style={styles.markAllText}>{t('NOTIF_BTN_MARK_ALL_READ')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.sectionHeaderActionSpacer} />
@@ -637,7 +639,7 @@ export default function NotificationsPage() {
         renderSectionFooter={({ section }) => (
           section.title === 'Today' && section.data.length === 0 ? (
             <View style={styles.emptyTodayWrap}>
-              <Text style={styles.emptyTodayText}>You have no notifications today.</Text>
+              <Text style={styles.emptyTodayText}>{t('NOTIF_EMPTY_TODAY')}</Text>
             </View>
           ) : null
         )}
@@ -654,11 +656,11 @@ export default function NotificationsPage() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Delete notifications?</Text>
-            <Text style={styles.modalText}>Selected notifications will be deleted permanently.</Text>
+            <Text style={styles.modalTitle}>{t('NOTIF_MODAL_DELETE_TITLE')}</Text>
+            <Text style={styles.modalText}>{t('NOTIF_MODAL_DELETE_BODY')}</Text>
             <View style={styles.modalActions}>
               <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setDeleteConfirmVisible(false)}>
-                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+                <Text style={styles.modalBtnCancelText}>{t('NOTIF_MODAL_BTN_CANCEL')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnDelete]}
@@ -667,7 +669,7 @@ export default function NotificationsPage() {
                   void handleDeleteSelected()
                 }}
               >
-                <Text style={styles.modalBtnDeleteText}>Delete</Text>
+                <Text style={styles.modalBtnDeleteText}>{t('NOTIF_MODAL_BTN_DELETE')}</Text>
               </Pressable>
             </View>
           </View>

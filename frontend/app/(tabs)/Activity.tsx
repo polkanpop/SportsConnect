@@ -11,6 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
+import { useTranslation } from '@/constants/translations';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -374,6 +375,7 @@ const getWeekDaysForOffset = (weekOffset: number) => {
 };
 
 export default function ActivityPage() {
+  const { t } = useTranslation();
   const [calendarMode, setCalendarMode] = useState<"Booking" | "Hosting">("Booking");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedActivity, setSelectedActivity] = useState<UnifiedBooking | null>(null);
@@ -702,7 +704,7 @@ export default function ActivityPage() {
 
         {item.activity !== 'court' && !!item.courtName && (
           <Text style={styles.eventMetaLine}>
-            <Text style={styles.eventMetaLabel}>Venue:</Text> {item.courtName}
+            <Text style={styles.eventMetaLabel}>{t('ACTIVITY_EVENT_META_VENUE')}</Text> {item.courtName}
           </Text>
         )}
       </View>
@@ -750,7 +752,7 @@ export default function ActivityPage() {
   if (!userIdLoading && typeof userId !== 'number') {
     return (
       <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <Text style={{ marginTop: 10, color: COLORS.neutral850, textAlign: 'center' }}>
           Please log in to view your activity.
         </Text>
@@ -763,7 +765,7 @@ export default function ActivityPage() {
   if (loadError) {
     return (
       <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0 }}>
-        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <Text style={{ marginTop: 10, color: COLORS.danger }}>
           Failed to load activity records. Check Metro logs for request details.
         </Text>
@@ -775,7 +777,7 @@ export default function ActivityPage() {
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
       <View style={styles.header}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
 
@@ -868,19 +870,19 @@ export default function ActivityPage() {
 
         <View style={styles.upcomingSection}>
           <View style={styles.upcomingHeader}>
-            <Text style={styles.subHeader}>Selected Record</Text>
+            <Text style={styles.subHeader}>{t('ACTIVITY_SUB_SELECTED_RECORD')}</Text>
           </View>
           {selectedActivity ? (
             renderRecord(selectedActivity)
           ) : (
             <View style={{ paddingVertical: 6 }}>
-              <Text style={{ color: COLORS.neutral850 }}>Tap an icon to preview.</Text>
+              <Text style={{ color: COLORS.neutral850 }}>{t('ACTIVITY_LABEL_TAP_ICON')}</Text>
             </View>
           )}
         </View>
 
         <View style={styles.activityRecordsContainer}>
-          <Text style={styles.subHeader}>Activity Records</Text>
+          <Text style={styles.subHeader}>{t('ACTIVITY_SUB_ACTIVITY_RECORDS')}</Text>
 
           <View style={styles.expandFiltersContainer}>
             <View style={styles.dropdownBarWrapper}>
@@ -991,7 +993,7 @@ export default function ActivityPage() {
 
           {filteredData.length === 0 ? (
             <View style={{ paddingVertical: 20 }}>
-              <Text style={{ color: COLORS.neutral850 }}>No activity records found.</Text>
+              <Text style={{ color: COLORS.neutral850 }}>{t('ACTIVITY_EMPTY_NO_RECORDS')}</Text>
             </View>
           ) : (
             filteredData.map((item) => <View key={item.id}>{renderRecord(item)}</View>)

@@ -1,6 +1,7 @@
 /**
  * Language provider — persists 'en' | 'vi' choice to AsyncStorage.
  * Wrap the app root with <LanguageProvider> to enable i18n.
+ * Default language is Vietnamese ('vi').
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -8,24 +9,30 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 
 export type Language = 'en' | 'vi'
 
-const STORAGE_KEY = '@lang'
+const STORAGE_KEY = 'language'
 
 interface LanguageContextValue {
+  language: Language
+  /** @deprecated use language instead of lang */
   lang: Language
+  isReady: boolean
   toggleLanguage: () => void
   setLanguage: (lang: Language) => void
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
-  lang: 'en',
+  language: 'vi',
+  lang: 'vi',
+  isReady: false,
   toggleLanguage: () => {},
   setLanguage: () => {},
 })
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Language>('en')
+  const [language, setLangState] = useState<Language>('vi')
+  const [isReady, setIsReady] = useState(false)
 
-  // Load persisted preference once on mount
+  // Load persisted preference once on mount, then mark ready
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
@@ -33,7 +40,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           setLangState(stored)
         }
       })
-      .catch(() => {/* ignore read errors, fall back to 'en' */})
+      .catch(() => {/* ignore read errors, fall back to 'vi' */})
+      .finally(() => setIsReady(true))
   }, [])
 
   const setLanguage = useCallback((next: Language) => {
@@ -50,7 +58,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <LanguageContext.Provider value={{ lang, toggleLanguage, setLanguage }}>
+    <LanguageContext.Provider value={{ language, lang: language, isReady, toggleLanguage, setLanguage }}>
       {children}
     </LanguageContext.Provider>
   )

@@ -26,6 +26,8 @@ import EventPanel from "@/app/event/eventPanel";
 import CourtPanel from "@/app/event/courtPanel";
 import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
+import { useTranslation } from '@/constants/translations'
+import { useLanguage } from '@/providers/language-provider'
 
 export default function Home() {
   const router = useRouter();
@@ -39,7 +41,8 @@ export default function Home() {
   const [reviewsPanelMounted, setReviewsPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
-  const [uiLanguage, setUiLanguage] = useState<'en' | 'vi'>('en');
+  const { t } = useTranslation();
+  const { language: uiLanguage, setLanguage } = useLanguage();
   const drawerW = Math.min(320, Math.max(260, Dimensions.get('window').width * 0.78));
   const drawerX = React.useRef(new Animated.Value(-drawerW)).current;
 
@@ -99,26 +102,26 @@ export default function Home() {
   // Category data with navigation routes
   const categories = [
     {
-      icon: ICONS.coachIcon,
-      label: "Coach",
+      icon: ICONS.tsNoti,
+      label: t('HOME_CAT_COACH'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50 },
+      iconStyle: { width: 50, height: 50, tintColor: '#111' },
       labelStyle: categoryLabelStyle,
       route: "/event/tsList",
     },
     {
-      icon: ICONS.event_category,
-      label: "Event",
+      icon: ICONS.favouriteStar,
+      label: t('HOME_CAT_EVENT'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50 },
+      iconStyle: { width: 50, height: 50, tintColor: '#111' },
       labelStyle: categoryLabelStyle,
       route: "/event/eventList",
     },
     {
-      icon: ICONS.court,
-      label: "Court",
+      icon: ICONS.venueCategory,
+      label: t('HOME_CAT_COURT'),
       color: COLORS.orangeSoft,
-      iconStyle: { width: 50, height: 50 },
+      iconStyle: { width: 50, height: 50, tintColor: '#111' },
       labelStyle: categoryLabelStyle,
       // Updated to point to the new simplified court list screen
       route: "/event/courtList",
@@ -657,10 +660,10 @@ export default function Home() {
           {/* Your Choices (Favorites) Section */}
           <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8, paddingHorizontal: 10 }}>
-              Your choices
+              {t('HOME_SECTION_YOUR_CHOICES')}
             </Text>
             {favError && (
-              <Text style={{ color: 'red', marginBottom: 6 }}>Failed to load favourites: {favError}</Text>
+              <Text style={{ color: 'red', marginBottom: 6 }}>{t('HOME_ERR_FAILED_LOAD_FAVOURITES')} {favError}</Text>
             )}
             <ScrollView
               horizontal
@@ -701,8 +704,8 @@ export default function Home() {
                     borderColor: '#e2e2e2'
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>Add more...</Text>
-                  <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>Tap to find your favourite courts!!</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>{t('HOME_LABEL_ADD_MORE')}</Text>
+                  <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{t('HOME_LABEL_TAP_FIND_FAVOURITE')}</Text>
                 </TouchableOpacity>
               )}
               {!loadingFavs && favoriteLocations.map(fav => {
@@ -872,7 +875,7 @@ export default function Home() {
                     borderColor: '#e6e6e6',
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#666' }}>Add more...</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#666' }}>{t('HOME_LABEL_ADD_MORE')}</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -881,7 +884,7 @@ export default function Home() {
           {/* Event Section */}
           <View style={{ marginBottom: 32 }}>
             <Text style={{ fontWeight: "600", fontSize: 18, marginTop: 14, marginBottom: 12, paddingHorizontal: 10 }}>
-              Event
+              {t('HOME_SECTION_EVENT')}
             </Text>
             {nearbyEventsLoading ? (
               <SkeletonPulse>
@@ -903,7 +906,7 @@ export default function Home() {
               </SkeletonPulse>
             ) : visibleNearbyEvents.length === 0 ? (
               <Text style={{ paddingHorizontal: 10, color: '#666' }}>
-                There is no current event
+                {t('HOME_LABEL_NO_CURRENT_EVENTS')}
               </Text>
             ) : (
               <ScrollView
@@ -1037,7 +1040,7 @@ export default function Home() {
 
             {!locationResolved && visibleNearbyEvents.length > 0 && (
               <Text style={{ paddingHorizontal: 10, marginTop: 8, color: '#6B7280', fontWeight: '600' }}>
-                Refining nearby distance...
+                {t('HOME_LABEL_REFINING_DISTANCE')}
               </Text>
             )}
           </View>
@@ -1172,7 +1175,7 @@ export default function Home() {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
-                <Text style={{ fontSize: 18, lineHeight: 32, fontWeight: '700', color: '#111' }}>Menu</Text>
+                <Text style={{ fontSize: 18, lineHeight: 32, fontWeight: '700', color: '#111' }}>{t('HOME_MENU_TITLE')}</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={closeMenu}
@@ -1184,7 +1187,7 @@ export default function Home() {
 
               {/* Language switch (UI only for now) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, marginTop: 6, marginBottom: 12 }}>
-                <Text style={{ flex: 1, marginRight: 12, fontSize: 16, lineHeight: 24, fontWeight: '700', color: '#111' }} numberOfLines={1}>Language</Text>
+                <Text style={{ flex: 1, marginRight: 12, fontSize: 16, lineHeight: 24, fontWeight: '700', color: '#111' }} numberOfLines={1}>{t('HOME_MENU_LANGUAGE')}</Text>
 
                 <View
                   style={{
@@ -1199,7 +1202,7 @@ export default function Home() {
                 >
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => setUiLanguage('vi')}
+                    onPress={() => setLanguage('vi')}
                     style={{
                       flex: 1,
                       height: 30,
@@ -1219,7 +1222,7 @@ export default function Home() {
                   <View pointerEvents="none" style={{ width: 1, backgroundColor: '#E5E7EB', marginVertical: 6, opacity: 0.8 }} />
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => setUiLanguage('en')}
+                    onPress={() => setLanguage('en')}
                     style={{
                       flex: 1,
                       height: 30,
