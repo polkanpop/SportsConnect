@@ -618,9 +618,9 @@ export default function ActivityPage() {
   const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed' || status === 'Missed';
 
   const recordTitlePrefix = (activity: UnifiedBooking['activity']): string => {
-    if (activity === 'court') return 'Venue';
-    if (activity === 'event') return 'Event';
-    return 'Training';
+    if (activity === 'court') return t('ACTIVITY_PREFIX_VENUE');
+    if (activity === 'event') return t('ACTIVITY_PREFIX_EVENT');
+    return t('ACTIVITY_PREFIX_TRAINING');
   };
 
   const renderRecord = (item: UnifiedBooking) => {
@@ -631,25 +631,25 @@ export default function ActivityPage() {
     if (item.mode === 'Booking') {
       if (item.activity === 'court') {
         if (bs === 'pending') {
-          badges = [{ label: 'Pending', bg: '#EAB308' }]
+          badges = [{ label: t('ACTIVITY_BADGE_PENDING'), bg: '#EAB308' }]
         } else if (bs === 'rejected') {
-          badges = [{ label: 'Rejected', bg: '#EF4444' }]
+          badges = [{ label: t('ACTIVITY_BADGE_REJECTED'), bg: '#EF4444' }]
         } else if (bs === 'approved') {
           if (ss !== 'cancelled') {
-            const approvedBadge = { label: 'Approved', bg: '#22C55E' }
-            if (ss === 'completed') badges = [approvedBadge, { label: 'Completed', bg: '#22C55E' }]
-            else if (ss === 'missed') badges = [approvedBadge, { label: 'Missed', bg: '#374151' }]
-            else badges = [approvedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
+            const approvedBadge = { label: t('ACTIVITY_BADGE_APPROVED'), bg: '#22C55E' }
+            if (ss === 'completed') badges = [approvedBadge, { label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
+            else if (ss === 'missed') badges = [approvedBadge, { label: t('ACTIVITY_BADGE_MISSED'), bg: '#374151' }]
+            else badges = [approvedBadge, { label: t('ACTIVITY_BADGE_UPCOMING'), bg: '#3B82F6' }]
           }
         }
       } else {
         if (bs === 'pending') {
-          badges = [{ label: 'Pending', bg: '#EAB308' }]
+          badges = [{ label: t('ACTIVITY_BADGE_PENDING'), bg: '#EAB308' }]
         } else if (bs === 'joined') {
-          const joinedBadge = { label: 'Joined', bg: '#22C55E' }
-          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: 'Completed', bg: '#22C55E' }]
-          else if (ss.includes('missed') || item.status === 'Missed') badges = [joinedBadge, { label: 'Missed', bg: '#374151' }]
-          else badges = [joinedBadge, { label: 'Upcoming', bg: '#3B82F6' }]
+          const joinedBadge = { label: t('ACTIVITY_BADGE_JOINED'), bg: '#22C55E' }
+          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
+          else if (ss.includes('missed') || item.status === 'Missed') badges = [joinedBadge, { label: t('ACTIVITY_BADGE_MISSED'), bg: '#374151' }]
+          else badges = [joinedBadge, { label: t('ACTIVITY_BADGE_UPCOMING'), bg: '#3B82F6' }]
         }
       }
     }
@@ -695,11 +695,11 @@ export default function ActivityPage() {
         </View>
 
         <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>Date:</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || '—'}
+          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_DATE')}</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || '—'}
         </Text>
 
         <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>Time:</Text>{" "}
+          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_TIME')}</Text>{" "}
           {(() => {
             const start = parseTimestampLoose(item.startTimestamp ?? null);
             const end = parseTimestampLoose(item.endTimestamp ?? null);
@@ -820,7 +820,7 @@ export default function ActivityPage() {
                 <Text
                   style={[styles.modeSegmentText, calendarMode === 'Booking' && styles.modeSegmentTextActive]}
                 >
-                  Booking
+                  {t('ACTIVITY_FILTER_BOOKING')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -833,7 +833,7 @@ export default function ActivityPage() {
                 <Text
                   style={[styles.modeSegmentText, calendarMode === 'Hosting' && styles.modeSegmentTextActive]}
                 >
-                  Hosting
+                  {t('ACTIVITY_FILTER_HOSTING')}
                 </Text>
               </TouchableOpacity>
             </View>

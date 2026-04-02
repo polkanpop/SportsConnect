@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 
 export type ManagementPanelKey = 'user' | 'event' | 'court' | 'reviews'
 
@@ -20,6 +21,7 @@ export default function ManagementPanel(props: {
   } = props
   const [expandedInternal, setExpandedInternal] = useState(defaultExpanded)
   const expanded = typeof expandedProp === 'boolean' ? expandedProp : expandedInternal
+  const { t } = useTranslation()
 
   const setExpanded = (next: boolean) => {
     if (typeof expandedProp === 'boolean') {
@@ -33,15 +35,15 @@ export default function ManagementPanel(props: {
   const items = useMemo(
     () =>
       [
-        { key: 'event', label: 'Event/Training Session' },
-        { key: 'court', label: 'Venue & Court' },
-        { key: 'reviews', label: 'My Reviews' },
+        { key: 'event', label: t('MANAGEMENT_PANEL_EVENT') },
+        { key: 'court', label: t('MANAGEMENT_PANEL_COURT') },
+        { key: 'reviews', label: t('MANAGEMENT_PANEL_REVIEWS') },
       ] as Array<{
         key: ManagementPanelKey
         label: string
         disabled?: boolean
       }>,
-    [],
+    [t],
   )
 
   return (
@@ -51,7 +53,7 @@ export default function ManagementPanel(props: {
         onPress={() => setExpanded(!expanded)}
         style={styles.sectionHeader}
       >
-        <Text style={styles.sectionTitle}>Management Panel</Text>
+        <Text style={styles.sectionTitle}>{t('MANAGEMENT_PANEL_TITLE')}</Text>
         <Image
           source={expanded ? ICONS.arrowdown : ICONS.smallArrowLeft}
           style={styles.chevron}

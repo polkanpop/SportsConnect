@@ -253,9 +253,9 @@ const SettingRowSwitch = ({
   <View style={[styles.row, { borderBottomWidth: 0 }]}>
     <View style={styles.rowLeft}>
       <Image source={icon} style={styles.rowIcon} />
-      <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Text style={styles.rowText}>{label}</Text>
-        <Text style={styles.rowSubText}>{sublabel}</Text>
+        <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8 }]}>{sublabel}</Text>
       </View>
     </View>
     <Switch

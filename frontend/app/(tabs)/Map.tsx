@@ -62,6 +62,7 @@
   import { GestureHandlerRootView, Gesture, GestureDetector, NativeViewGestureHandler } from "react-native-gesture-handler";
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
   import { regionToZoom } from '@/lib/goong-map'
+  import { useTranslation } from '@/constants/translations'
 
   type Region = {
     latitude: number;
@@ -275,6 +276,7 @@
 
   export default function App() {
     const router = useRouter();
+    const { t } = useTranslation();
     // Favorite state for selected marker
     const [isFavorite, setIsFavorite] = useState(false);
     // Image zoom
@@ -1397,11 +1399,11 @@
                     >
                       <View style={styles.filterChipLeft}>
                         <Image
-                          source={mapMode === 'events' ? ICONS.starCal : mapMode === 'training' ? ICONS.tsNoti : ICONS.mapPin}
+                          source={mapMode === 'events' ? ICONS.starCal : mapMode === 'training' ? ICONS.tsNoti : ICONS.courtFilter}
                           style={[styles.filterIcon, { tintColor: COLORS.neutral700 }]}
                         />
                         <Text style={styles.filterChipText}>
-                          {mapMode === 'courts' ? 'Courts' : mapMode === 'events' ? 'Events' : 'Training'}
+                          {mapMode === 'courts' ? t('MAP_CHIP_COURTS') : mapMode === 'events' ? t('MAP_CHIP_EVENTS') : t('MAP_CHIP_TRAINING')}
                         </Text>
                       </View>
                       <Image
@@ -1421,7 +1423,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image source={ICONS.venueCategory} style={styles.filterIcon} />
                         <Text style={styles.filterChipText}>
-                          Venue{selectedVenue.length === 2 ? ": Both" : selectedVenue.length === 1 ? `: ${selectedVenue[0]}` : ""}
+                          {selectedVenue.length === 2 ? t('MAP_CHIP_VENUE_BOTH') : selectedVenue.length === 1 ? `${t('MAP_CHIP_VENUE')}: ${selectedVenue[0]}` : t('MAP_CHIP_VENUE')}
                         </Text>
                       </View>
                       <Image
@@ -1444,7 +1446,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image source={ICONS.availCategory} style={styles.filterIcon} />
                         <Text style={styles.filterChipText}>
-                          {selectedAvailability ? selectedAvailability : "Status"}
+                          {selectedAvailability === 'Available' ? t('MAP_LABEL_AVAILABLE') : selectedAvailability === 'Unavailable' ? t('MAP_LABEL_UNAVAILABLE') : t('MAP_CHIP_STATUS')}
                         </Text>
                       </View>
                       <Image
@@ -1467,7 +1469,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image source={ICONS.radar} style={styles.filterIcon} />
                         <Text style={styles.filterChipText}>
-                          {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : "Distance"}
+                          {selectedDistanceKm != null ? t('MAP_CHIP_DISTANCE_KM').replace('{n}', String(selectedDistanceKm)) : t('MAP_CHIP_DISTANCE')}
                         </Text>
                       </View>
                       <Image
@@ -1503,11 +1505,11 @@
                               >
                                 <View style={styles.dropdownItemLeft}>
                                   <Image
-                                    source={opt === 'events' ? ICONS.starCal : opt === 'training' ? ICONS.tsNoti : ICONS.mapPin}
-                                    style={styles.optionIcon}
+                                    source={opt === 'events' ? ICONS.starCal : opt === 'training' ? ICONS.tsNoti : ICONS.courtFilter}
+                                    style={[styles.optionIcon, (opt === 'events' || opt === 'training') && { tintColor: '#111' }]}
                                   />
                                   <Text style={styles.dropdownItemText}>
-                                    {opt === 'courts' ? 'Courts' : opt === 'events' ? 'Events' : 'Training'}
+                                    {opt === 'courts' ? t('MAP_CHIP_COURTS') : opt === 'events' ? t('MAP_CHIP_EVENTS') : t('MAP_CHIP_TRAINING')}
                                   </Text>
                                 </View>
                                 <Image
@@ -1554,7 +1556,7 @@
                               onPress={() => setSelectedVenue([])}
                               style={styles.clearButton}
                             >
-                              <Text style={styles.clearText}>Clear All</Text>
+                              <Text style={styles.clearText}>{t('MAP_FILTER_CLEAR_ALL')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1580,7 +1582,7 @@
                                       source={item === "Available" ? ICONS.check : ICONS.x}
                                       style={styles.optionIcon}
                                     />
-                                    <Text style={styles.dropdownItemText}>{item}</Text>
+                                    <Text style={styles.dropdownItemText}>{item === 'Available' ? t('MAP_LABEL_AVAILABLE') : t('MAP_LABEL_UNAVAILABLE')}</Text>
                                   </View>
                                   <Image
                                     source={selected ? ICONS.tick : ""}
@@ -1597,11 +1599,11 @@
                       {openDropdown === "distance" && (
                         <View style={styles.dropdown}>
                           <View style={styles.distanceHeader}>
-                            <Text style={styles.distanceHeaderTitle}>Type distance (km)</Text>
+                            <Text style={styles.distanceHeaderTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
                             <TextInput
                               value={distanceKmInput}
-                              onChangeText={(t) => {
-                                const cleaned = sanitizeKmInput(t);
+                              onChangeText={(inputText) => {
+                                const cleaned = sanitizeKmInput(inputText);
                                 setDistanceKmInput(cleaned);
 
                                 if (cleaned.trim().length === 0) {
@@ -1611,7 +1613,7 @@
                                 }
                                 const parsed = parseKmInput(cleaned);
                                 if (parsed == null) {
-                                  setDistanceKmError('Please type in number');
+                                  setDistanceKmError(t('MAP_FILTER_DISTANCE_ERROR'));
                                   return;
                                 }
                                 setDistanceKmError(null);
@@ -1635,7 +1637,7 @@
                               }}
                               style={styles.clearButton}
                             >
-                              <Text style={styles.clearText}>Clear</Text>
+                              <Text style={styles.clearText}>{t('MAP_FILTER_CLEAR')}</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1647,12 +1649,12 @@
                 {/* Loading / Error */}
                 {overlaysVisible && loadingMarkers && (
                   <View style={[styles.searchResults,{justifyContent:'center',alignItems:'center'}]}>
-                    <Text>Loading courts...</Text>
+                    <Text>{t('MAP_LOADING_COURTS')}</Text>
                   </View>
                 )}
                 {overlaysVisible && errorMarkers && !loadingMarkers && (
                   <View style={[styles.searchResults,{justifyContent:'center'}]}>
-                    <Text style={{color:'red'}}>Error: {errorMarkers}</Text>
+                    <Text style={{color:'red'}}>{t('MAP_ERR_LOAD_COURTS')} {errorMarkers}</Text>
                   </View>
                 )}
                 {/* Search Results (FlatList) */}
@@ -1697,7 +1699,7 @@
 
                 {overlaysVisible && isFlatListVisible && sortedFilteredMarkersForList.length === 0 && !loadingMarkers && !errorMarkers && (
                   <View style={styles.searchResults}>
-                    <Text style={styles.noResultsText}>No courts found</Text>
+                    <Text style={styles.noResultsText}>{t('MAP_EMPTY_NO_COURTS')}</Text>
                   </View>
                 )}
 
@@ -1734,7 +1736,7 @@
                   {selectedEventPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
                       <View style={styles.sheetHeaderCard}>
-                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? 'Event'}</Text>
+                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? t('MAP_CHIP_EVENTS')}</Text>
                         <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedEventPin.address ?? ''}</Text>
                         {selectedEventPin.court_name ? (
                           <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedEventPin.court_name}</Text>
@@ -1747,7 +1749,7 @@
                           ) : null}
                           {selectedEventPin.entry_fee != null ? (
                             <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
-                              {selectedEventPin.entry_fee === 0 ? 'Free' : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
+                              {selectedEventPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
                             </Text>
                           ) : null}
                         </View>
@@ -1756,14 +1758,14 @@
                           onPress={() => router.push({ pathname: '/event/eventBooking', params: { eventid: String(selectedEventPin.eventid) } })}
                         >
                           <Image source={ICONS.booking} style={styles.bookingIcon} />
-                          <Text style={styles.bookingText}>Join</Text>
+                          <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
                         </TouchableOpacity>
                       </View>
                     </BottomSheetScrollView>
                   ) : selectedTSPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
                       <View style={styles.sheetHeaderCard}>
-                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? 'Training Session'}</Text>
+                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? t('MAP_CHIP_TRAINING')}</Text>
                         <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedTSPin.address ?? ''}</Text>
                         {selectedTSPin.court_name ? (
                           <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedTSPin.court_name}</Text>
@@ -1776,7 +1778,7 @@
                           ) : null}
                           {selectedTSPin.entry_fee != null ? (
                             <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
-                              {selectedTSPin.entry_fee === 0 ? 'Free' : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
+                              {selectedTSPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
                             </Text>
                           ) : null}
                         </View>
@@ -1785,7 +1787,7 @@
                           onPress={() => router.push({ pathname: '/event/tsBooking', params: { sessionid: String(selectedTSPin.sessionid) } })}
                         >
                           <Image source={ICONS.booking} style={styles.bookingIcon} />
-                          <Text style={styles.bookingText}>Join</Text>
+                          <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
                         </TouchableOpacity>
                       </View>
                     </BottomSheetScrollView>
@@ -1810,7 +1812,7 @@
                               />
                             ) : (
                               <View style={styles.sheetCoverPlaceholder}>
-                                <Text style={styles.placeholderText}>No cover image available</Text>
+                                <Text style={styles.placeholderText}>{t('MAP_PLACEHOLDER_NO_COVER')}</Text>
                               </View>
                             )}
                           </View>
@@ -1888,13 +1890,13 @@
                           accessibilityLabel="Book this court"
                         >
                           <Image source={ICONS.booking} style={[styles.bookingIcon, selectedMarker.availability === "Unavailable" && { tintColor: '#bbb' }]} />
-                          <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>Book</Text>
+                          <Text style={[styles.bookingText, selectedMarker.availability === "Unavailable" && { color: '#bbb' }]}>{t('MAP_BTN_BOOK')}</Text>
                         </TouchableOpacity>
                           </View>
                         </View>
 
                         <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
-                          Address: {selectedMarker.address}
+                          {t('COMMON_LABEL_ADDRESS')}: {selectedMarker.address}
                         </Text>
 
                         <View style={styles.sheetTagRow}>
@@ -1918,6 +1920,7 @@
                         {(['Schedule', 'Transport', 'Images', 'Reviews'] as const).map((tab) => {
                           const active = activeSheetTab === tab;
                           const isLast = tab === 'Reviews';
+                          const tabLabel = tab === 'Schedule' ? t('MAP_TAB_SCHEDULE') : tab === 'Transport' ? t('MAP_TAB_TRANSPORT') : tab === 'Images' ? t('MAP_TAB_IMAGES') : t('MAP_TAB_REVIEWS');
                           return (
                             <TouchableOpacity
                               key={tab}
@@ -1925,7 +1928,7 @@
                               onPress={() => setActiveSheetTab(tab)}
                               activeOpacity={0.85}
                             >
-                              <Text style={[styles.sheetTabBtnText, active && styles.sheetTabBtnTextActive]}>{tab}</Text>
+                              <Text style={[styles.sheetTabBtnText, active && styles.sheetTabBtnTextActive]}>{tabLabel}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -1934,7 +1937,7 @@
                       {activeSheetTab === 'Schedule' && (
                         availabilityLoading ? (
                           <View style={styles.placeholderSection}>
-                            <Text style={styles.placeholderText}>Loading schedule...</Text>
+                          <Text style={styles.placeholderText}>{t('MAP_SCHEDULE_LOADING')}</Text>
                           </View>
                         ) : availability ? (
                           <View style={styles.scheduleBox}>
@@ -1968,7 +1971,7 @@
                                 numberOfLines={1}
                                 style={[styles.scheduleTimeText, styles.scheduleTimeTextInline]}
                               >
-                                Opening Time: {String(availability.start_time || '').slice(0, 5)} - {String(availability.end_time || '').slice(0, 5)}
+                                {t('MAP_OPENING_TIME')} {String(availability.start_time || '').slice(0, 5)} - {String(availability.end_time || '').slice(0, 5)}
                               </Text>
 
                               <View style={styles.weekNavInline}>
@@ -2039,7 +2042,7 @@
                           </View>
                         ) : (
                           <View style={styles.placeholderSection}>
-                            <Text style={styles.placeholderText}>No schedule available yet.</Text>
+                            <Text style={styles.placeholderText}>{t('MAP_SCHEDULE_EMPTY')}</Text>
                           </View>
                         )
                       )}
@@ -2060,15 +2063,15 @@
                               selectedMarker.longitude,
                             )
                           : null;
-                        const crowKmLabel = crowMeters != null ? (formatKmFromMeters(crowMeters) ?? 'Unavailable') : null;
+                        const crowKmLabel = crowMeters != null ? (formatKmFromMeters(crowMeters) ?? t('MAP_LABEL_UNAVAILABLE')) : null;
 
-                        const approxKmLabel = (crowKmLabel && crowKmLabel !== 'Unavailable')
+                        const approxKmLabel = (crowKmLabel && crowKmLabel !== t('MAP_LABEL_UNAVAILABLE'))
                           ? `~ ${crowKmLabel}`
-                          : (crowKmLabel ?? 'Loading…');
+                          : (crowKmLabel ?? t('COMMON_LABEL_LOADING'));
                         const approxTravelSecs = estimateMotorbikeSecondsFromMeters(crowMeters);
                         const approxWalkSecs = estimateWalkSecondsFromMeters(crowMeters);
-                        const approxTravelLabel = approxTravelSecs != null ? `~ ${formatDuration(approxTravelSecs) ?? 'Unavailable'}` : 'Loading…';
-                        const approxWalkLabel = approxWalkSecs != null ? `~ ${formatDuration(approxWalkSecs) ?? 'Unavailable'}` : 'Loading…';
+                        const approxTravelLabel = approxTravelSecs != null ? `~ ${formatDuration(approxTravelSecs) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
+                        const approxWalkLabel = approxWalkSecs != null ? `~ ${formatDuration(approxWalkSecs) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
 
                         if (isLoading) {
                           // Show "as the crow flies" distance placeholder (same concept as Court List)
@@ -2077,7 +2080,7 @@
                               <View style={styles.transportRow}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.distance} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Distance</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_DISTANCE')}</Text>
                                 </View>
                                 <Text style={styles.transportValue}>{approxKmLabel}</Text>
                               </View>
@@ -2085,7 +2088,7 @@
                               <View style={styles.transportRow}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.motorbike} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Travel time</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_TRAVEL_TIME')}</Text>
                                 </View>
                                 <Text style={styles.transportValue}>{approxTravelLabel}</Text>
                               </View>
@@ -2093,7 +2096,7 @@
                               <View style={styles.transportRowLast}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.walk} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Walk time</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                                 </View>
                                 <Text style={styles.transportValue}>{approxWalkLabel}</Text>
                               </View>
@@ -2107,25 +2110,25 @@
                               <View style={styles.transportRow}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.distance} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Distance</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_DISTANCE')}</Text>
                                 </View>
-                                <Text style={styles.transportValue}>{approxKmLabel ?? 'Unavailable'}</Text>
+                                <Text style={styles.transportValue}>{approxKmLabel ?? t('MAP_LABEL_UNAVAILABLE')}</Text>
                               </View>
 
                               <View style={styles.transportRow}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.motorbike} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Travel time</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_TRAVEL_TIME')}</Text>
                                 </View>
-                                <Text style={styles.transportValue}>{approxTravelSecs != null ? approxTravelLabel : 'Unavailable'}</Text>
+                                <Text style={styles.transportValue}>{approxTravelSecs != null ? approxTravelLabel : t('MAP_LABEL_UNAVAILABLE')}</Text>
                               </View>
 
                               <View style={styles.transportRowLast}>
                                 <View style={styles.transportLeft}>
                                   <Image source={ICONS.walk} style={styles.transportIcon} />
-                                  <Text style={styles.transportLabel}>Walk time</Text>
+                                  <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                                 </View>
-                                <Text style={styles.transportValue}>{approxWalkSecs != null ? approxWalkLabel : 'Unavailable'}</Text>
+                                <Text style={styles.transportValue}>{approxWalkSecs != null ? approxWalkLabel : t('MAP_LABEL_UNAVAILABLE')}</Text>
                               </View>
                             </View>
                           );
@@ -2133,17 +2136,17 @@
 
                         const meters = hasDistance ? distanceMetersByCourtInfoId[id] : null;
                         const secs = hasDuration ? durationSecondsByCourtInfoId[id] : null;
-                        const kmLabel = meters != null ? (formatKmFromMeters(meters) ?? 'Unavailable') : 'Unavailable';
-                        const travelLabel = secs != null ? (formatDuration(secs) ?? 'Unavailable') : 'Unavailable';
+                        const kmLabel = meters != null ? (formatKmFromMeters(meters) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
+                        const travelLabel = secs != null ? (formatDuration(secs) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
                         const walkSecs = meters != null ? estimateWalkSecondsFromMeters(meters) : null;
-                        const walkLabel = walkSecs != null ? (formatDuration(walkSecs) ?? 'Unavailable') : 'Unavailable';
+                        const walkLabel = walkSecs != null ? (formatDuration(walkSecs) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
 
                         return (
                           <View style={styles.transportBox}>
                             <View style={styles.transportRow}>
                               <View style={styles.transportLeft}>
                                 <Image source={ICONS.distance} style={styles.transportIcon} />
-                                <Text style={styles.transportLabel}>Distance</Text>
+                                <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_DISTANCE')}</Text>
                               </View>
                               <Text style={styles.transportValue}>{kmLabel}</Text>
                             </View>
@@ -2151,7 +2154,7 @@
                             <View style={styles.transportRow}>
                               <View style={styles.transportLeft}>
                                 <Image source={ICONS.motorbike} style={styles.transportIcon} />
-                                <Text style={styles.transportLabel}>Travel time</Text>
+                                <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_TRAVEL_TIME')}</Text>
                               </View>
                               <Text style={styles.transportValue}>{travelLabel}</Text>
                             </View>
@@ -2159,7 +2162,7 @@
                             <View style={styles.transportRowLast}>
                               <View style={styles.transportLeft}>
                                 <Image source={ICONS.walk} style={styles.transportIcon} />
-                                <Text style={styles.transportLabel}>Walk time</Text>
+                                <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                               </View>
                               <Text style={styles.transportValue}>{walkLabel}</Text>
                             </View>
@@ -2193,23 +2196,23 @@
                         </NativeViewGestureHandler>
                       ) : playingCourtsLoading ? (
                         <View style={styles.placeholderSection}>
-                          <Text style={styles.placeholderText}>Loading images...</Text>
+                          <Text style={styles.placeholderText}>{t('MAP_IMAGES_LOADING')}</Text>
                         </View>
                       ) : (
                         <View style={styles.placeholderSection}>
-                          <Text style={styles.placeholderText}>No images available yet.</Text>
+                          <Text style={styles.placeholderText}>{t('MAP_IMAGES_EMPTY')}</Text>
                         </View>
                       ))}
 
                       {activeSheetTab === 'Reviews' && (
                         <View style={styles.placeholderSection}>
-                          <Text style={styles.placeholderText}>Placeholder for user review :D</Text>
+                          <Text style={styles.placeholderText}>{t('MAP_REVIEWS_PLACEHOLDER')}</Text>
                         </View>
                       )}
                     </BottomSheetScrollView>
                   ) : (
                     <View style={styles.bottomSheetContent}>
-                      <Text style={styles.placeholderText}>Select a location to see details</Text>
+                      <Text style={styles.placeholderText}>{t('MAP_NO_SELECTION')}</Text>
                     </View>
                   )}
                 </BottomSheet>
@@ -2225,7 +2228,7 @@
               <View style={styles.modalCard}>
                 {/* Schedule Header with Navigation */}
                 <View style={styles.scheduleHeaderRow}>
-                  <Text style={styles.modalTitle}>Schedule</Text>
+                  <Text style={styles.modalTitle}>{t('MAP_MODAL_SCHEDULE_TITLE')}</Text>
                   <View style={styles.weekNavInline}>
                     <TouchableOpacity 
                       style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]} 
@@ -2246,7 +2249,7 @@
                 
                 {availability && (
                   <Text style={{ fontSize: 14, color: '#444', marginBottom: 12 }}>
-                    Opening Time: {availability.start_time?.slice(0, 5)} - {availability.end_time?.slice(0, 5)}
+                    {t('MAP_OPENING_TIME')} {availability.start_time?.slice(0, 5)} - {availability.end_time?.slice(0, 5)}
                   </Text>
                 )}
 
@@ -2285,7 +2288,7 @@
                     style={[styles.modalBtn, styles.modalCancel]} 
                     onPress={() => setCalendarModalVisible(false)}
                   >
-                    <Text style={styles.modalBtnText}>Close</Text>
+                    <Text style={styles.modalBtnText}>{t('COMMON_BTN_CLOSE')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>

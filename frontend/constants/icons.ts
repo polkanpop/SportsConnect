@@ -100,6 +100,7 @@ export const ICONS = {
   coachCal: require('../assets/icons/coach_cal.png'),
   stadiumCal: require('../assets/icons/stadium_cal.png'),
   event_category: require('../assets/icons/event.png'),
+  courtFilter: require('../assets/icons/court_filter.png'),
   smallArrowLeft: require('../assets/icons/small_arrow_left.png'),
   cashIcon: require('../assets/icons/cash_icon.png'),
   dotdotdot: require('../assets/icons/3dot.png'),

@@ -89,6 +89,7 @@ export const en = {
   MAP_FILTER_CLEAR_ALL: 'Clear All',
   MAP_FILTER_CLEAR: 'Clear',
   MAP_FILTER_DISTANCE_INPUT_TITLE: 'Type distance (km)',
+  MAP_FILTER_DISTANCE_ERROR: 'Please type in number',
   MAP_LABEL_INDOOR: 'Indoor',
   MAP_LABEL_OUTDOOR: 'Outdoor',
   MAP_LABEL_IN_OUTDOOR: 'In/Outdoor',
@@ -134,7 +135,7 @@ export const en = {
   SETTINGS_ROW_COURT_REGISTER: 'Court Register',
   SETTINGS_ROW_DATA_PRIVACY: 'Data & Privacy',
   SETTINGS_ROW_LANGUAGE: 'Language',
-  SETTINGS_LANG_TOGGLE_LABEL: 'Vietnamese',
+  SETTINGS_LANG_TOGGLE_LABEL: 'English',
   SETTINGS_SEARCH_PLACEHOLDER: 'Search in settings...',
   SETTINGS_BTN_SIGN_OUT: 'Sign Out',
   SETTINGS_MODAL_SIGN_OUT_TITLE: 'Are you sure you want to sign out ?',
@@ -288,6 +289,21 @@ export const en = {
   ACTIVITY_FILTER_HOSTING: 'Hosting',
   ACTIVITY_FILTER_TS: 'TS',
 
+  // Activity card labels
+  ACTIVITY_CARD_DATE: 'Date:',
+  ACTIVITY_CARD_TIME: 'Time:',
+  ACTIVITY_PREFIX_VENUE: 'Venue',
+  ACTIVITY_PREFIX_EVENT: 'Event',
+  ACTIVITY_PREFIX_TRAINING: 'Training',
+  ACTIVITY_BADGE_PENDING: 'Pending',
+  ACTIVITY_BADGE_APPROVED: 'Approved',
+  ACTIVITY_BADGE_REJECTED: 'Rejected',
+  ACTIVITY_BADGE_COMPLETED: 'Completed',
+  ACTIVITY_BADGE_MISSED: 'Missed',
+  ACTIVITY_BADGE_UPCOMING: 'Upcoming',
+  ACTIVITY_BADGE_JOINED: 'Joined',
+  ACTIVITY_BADGE_CANCELLED: 'Cancelled',
+
   // Notification section headers
   NOTIF_SECTION_TODAY: 'Today',
   NOTIF_SECTION_YESTERDAY: 'Yesterday',
@@ -309,12 +325,29 @@ export const en = {
   DETAILS_ROW_PARTICIPANTS_CAP: 'Participants cap',
   DETAILS_ROW_ENTRY_FEE: 'Entry fee',
 
+  // Details page header titles
+  DETAILS_HEADER_COURT_BOOKING: 'Court Booking',
+  DETAILS_HEADER_EVENT_BOOKING: 'Event Booking',
+  DETAILS_HEADER_TS_BOOKING: 'Training Booking',
+  DETAILS_HEADER_CREATED_EVENT: 'Created Event',
+  DETAILS_HEADER_CREATED_SESSION: 'Created Training Session',
+  DETAILS_HEADER_DEFAULT: 'Details',
+
   // Details page buttons / states
   DETAILS_BTN_CANCELLED: 'Cancelled',
   DETAILS_BTN_REVIEW: 'Review',
   DETAILS_LOADING: 'Loading details…',
   DETAILS_ERR_FAILED: 'Failed to load',
   DETAILS_LABEL_UNKNOWN: 'Unknown record',
+  DETAILS_MODAL_CANCEL_TITLE: 'Are you sure you want to cancel ?',
+  DETAILS_MODAL_BTN_RETURN: 'Return',
+  DETAILS_MODAL_BTN_CONFIRM: 'Confirm',
+
+  // Management Panel (menu drawer)
+  MANAGEMENT_PANEL_TITLE: 'Management Panel',
+  MANAGEMENT_PANEL_EVENT: 'Event/Training Session',
+  MANAGEMENT_PANEL_COURT: 'Venue & Court',
+  MANAGEMENT_PANEL_REVIEWS: 'My Reviews',
 } as const
 
 // ─── VIETNAMESE ──────────────────────────────────────────────────
@@ -397,6 +430,7 @@ export const vi: Record<TranslationKey, string> = {
   MAP_FILTER_CLEAR_ALL: 'Xóa tất cả',
   MAP_FILTER_CLEAR: 'Xóa',
   MAP_FILTER_DISTANCE_INPUT_TITLE: 'Nhập khoảng cách (km)',
+  MAP_FILTER_DISTANCE_ERROR: 'Vui lòng nhập số',
   MAP_LABEL_INDOOR: 'Trong nhà',
   MAP_LABEL_OUTDOOR: 'Ngoài trời',
   MAP_LABEL_IN_OUTDOOR: 'Trong/Ngoài nhà',
@@ -596,6 +630,21 @@ export const vi: Record<TranslationKey, string> = {
   ACTIVITY_FILTER_HOSTING: 'Tổ chức',
   ACTIVITY_FILTER_TS: 'Buổi tập',
 
+  // Activity card labels
+  ACTIVITY_CARD_DATE: 'Ngày:',
+  ACTIVITY_CARD_TIME: 'Thời gian:',
+  ACTIVITY_PREFIX_VENUE: 'Địa điểm',
+  ACTIVITY_PREFIX_EVENT: 'Sự kiện',
+  ACTIVITY_PREFIX_TRAINING: 'Buổi tập',
+  ACTIVITY_BADGE_PENDING: 'Chờ xử lý',
+  ACTIVITY_BADGE_APPROVED: 'Đã duyệt',
+  ACTIVITY_BADGE_REJECTED: 'Từ chối',
+  ACTIVITY_BADGE_COMPLETED: 'Đã hoàn thành',
+  ACTIVITY_BADGE_MISSED: 'Đã bỏ lỡ',
+  ACTIVITY_BADGE_UPCOMING: 'Sắp diễn ra',
+  ACTIVITY_BADGE_JOINED: 'Đã tham gia',
+  ACTIVITY_BADGE_CANCELLED: 'Đã hủy',
+
   // Notification section headers
   NOTIF_SECTION_TODAY: 'Hôm nay',
   NOTIF_SECTION_YESTERDAY: 'Hôm qua',
@@ -617,12 +666,29 @@ export const vi: Record<TranslationKey, string> = {
   DETAILS_ROW_PARTICIPANTS_CAP: 'Số người tối đa',
   DETAILS_ROW_ENTRY_FEE: 'Phí tham gia',
 
+  // Details page header titles
+  DETAILS_HEADER_COURT_BOOKING: 'Đặt sân',
+  DETAILS_HEADER_EVENT_BOOKING: 'Đặt tham dự sự kiện',
+  DETAILS_HEADER_TS_BOOKING: 'Đặt buổi tập',
+  DETAILS_HEADER_CREATED_EVENT: 'Sự kiện đã tạo',
+  DETAILS_HEADER_CREATED_SESSION: 'Buổi tập đã tạo',
+  DETAILS_HEADER_DEFAULT: 'Chi tiết',
+
   // Details page buttons / states
   DETAILS_BTN_CANCELLED: 'Đã hủy',
   DETAILS_BTN_REVIEW: 'Đánh giá',
   DETAILS_LOADING: 'Đang tải chi tiết…',
   DETAILS_ERR_FAILED: 'Không tải được',
   DETAILS_LABEL_UNKNOWN: 'Không xác định được',
+  DETAILS_MODAL_CANCEL_TITLE: 'Bạn có chắc muốn hủy không?',
+  DETAILS_MODAL_BTN_RETURN: 'Quay lại',
+  DETAILS_MODAL_BTN_CONFIRM: 'Xác nhận',
+
+  // Management Panel (menu drawer)
+  MANAGEMENT_PANEL_TITLE: 'Bảng quản lý',
+  MANAGEMENT_PANEL_EVENT: 'Sự kiện/Buổi tập',
+  MANAGEMENT_PANEL_COURT: 'Địa điểm & Sân',
+  MANAGEMENT_PANEL_REVIEWS: 'Đánh giá của tôi',
 }
 
 // ─── TYPES ───────────────────────────────────────────────────────

@@ -1113,19 +1113,19 @@ export default function DetailsPage() {
   const headerTitle = useMemo(() => {
     switch (parsed.kind) {
       case 'court_booking':
-        return 'Court Booking'
+        return t('DETAILS_HEADER_COURT_BOOKING')
       case 'event_booking':
-        return 'Event Booking'
+        return t('DETAILS_HEADER_EVENT_BOOKING')
       case 'session_booking':
-        return 'Training Booking'
+        return t('DETAILS_HEADER_TS_BOOKING')
       case 'created_event':
-        return 'Created Event'
+        return t('DETAILS_HEADER_CREATED_EVENT')
       case 'created_session':
-        return 'Created Training Session'
+        return t('DETAILS_HEADER_CREATED_SESSION')
       default:
-        return 'Details'
+        return t('DETAILS_HEADER_DEFAULT')
     }
-  }, [parsed.kind])
+  }, [parsed.kind, t])
 
   const courtCancelBlockedReason = useMemo(() => {
     if (parsed.kind !== 'court_booking') return null
@@ -1681,7 +1681,7 @@ export default function DetailsPage() {
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Are you sure you want to cancel ?</Text>
+            <Text style={styles.modalTitle}>{t('DETAILS_MODAL_CANCEL_TITLE')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -1689,7 +1689,7 @@ export default function DetailsPage() {
                 activeOpacity={0.8}
                 disabled={busy || cancelMutation.isPending}
               >
-                <Text style={styles.modalButtonCancelText}>Return</Text>
+                <Text style={styles.modalButtonCancelText}>{t('DETAILS_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm, (busy || cancelMutation.isPending) && styles.modalButtonDisabled]}
@@ -1697,7 +1697,7 @@ export default function DetailsPage() {
                 activeOpacity={0.8}
                 disabled={busy || cancelMutation.isPending}
               >
-                <Text style={styles.modalButtonConfirmText}>Confirm</Text>
+                <Text style={styles.modalButtonConfirmText}>{t('DETAILS_MODAL_BTN_CONFIRM')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1723,7 +1723,7 @@ export default function DetailsPage() {
                 onPress={closeResultModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>OK</Text>
+                <Text style={styles.modalButtonCancelText}>{t('COMMON_BTN_DONE')}</Text>
               </TouchableOpacity>
             </View>
           </View>
