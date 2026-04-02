@@ -3,10 +3,12 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 
 export default function InvoicePending() {
   const router = useRouter()
   const params = useLocalSearchParams()
+  const { t } = useTranslation()
 
   const {
     title,
@@ -112,16 +114,16 @@ export default function InvoicePending() {
           <View style={styles.iconCircle}>
             <Image source={ICONS.pending} style={styles.headerIcon} />
           </View>
-          <Text style={styles.title}>Your request has been Submitted</Text>
-          <Text style={styles.subTitle}>Waiting for host approval.</Text>
+          <Text style={styles.title}>{t('INVOICE_PENDING_TITLE')}</Text>
+          <Text style={styles.subTitle}>{t('INVOICE_PENDING_SUBTITLE')}</Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardHeader}>REQUEST DETAILS</Text>
+          <Text style={styles.cardHeader}>{t('INVOICE_PENDING_CARD_HEADER')}</Text>
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Booking ID</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_BOOKING_ID')}</Text>
             <Text style={styles.value}>#{bookingId || '---'}</Text>
           </View>
 
@@ -132,52 +134,52 @@ export default function InvoicePending() {
 
           {effectiveType !== 'court' && effectiveType !== '' ? (
             <View style={styles.row}>
-              <Text style={styles.label}>Court</Text>
+              <Text style={styles.label}>{t('INVOICE_LABEL_COURT')}</Text>
               <Text style={styles.value}>{normalizedCourtName || '---'}</Text>
             </View>
           ) : null}
 
           {subtitle ? (
             <View style={styles.row}>
-              <Text style={styles.label}>Type</Text>
+              <Text style={styles.label}>{t('INVOICE_LABEL_TYPE')}</Text>
               <Text style={styles.value}>{subtitle}</Text>
             </View>
           ) : null}
 
           <View style={styles.row}>
-            <Text style={styles.label}>Address</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_ADDRESS')}</Text>
             <Text style={styles.value}>{location || '---'}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Date</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_DATE')}</Text>
             <Text style={styles.value}>{formatDate(date)}</Text>
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.label}>Time</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_TIME')}</Text>
             <Text style={styles.value}>{timeDisplay}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Payment Method</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_METHOD')}</Text>
             <Text style={[styles.value, { textTransform: 'capitalize' }]}>{paymentMethod || '---'}</Text>
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.label}>Payment Status</Text>
+            <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_STATUS')}</Text>
             <Text style={[styles.value, { textTransform: 'capitalize', color: paymentStatus === 'paid' ? '#28a745' : '#FF5733' }]}>
-              {paymentStatus || 'Pending'}
+              {paymentStatus || t('HISTORY_STATUS_PENDING')}
             </Text>
           </View>
 
           {showBookingStatus ? (
             <View style={styles.row}>
-              <Text style={styles.label}>Approve Status</Text>
+              <Text style={styles.label}>{t('INVOICE_PENDING_APPROVE_STATUS')}</Text>
               <Text style={[styles.value, { textTransform: 'capitalize', color: bookingStatusColor }]}>
                 {bookingStatusText}
               </Text>
@@ -186,13 +188,13 @@ export default function InvoicePending() {
 
           {note ? (
             <View style={styles.row}>
-              <Text style={styles.label}>Note</Text>
+              <Text style={styles.label}>{t('INVOICE_LABEL_NOTE')}</Text>
               <Text style={[styles.value, { maxWidth: '60%' }]}>{note}</Text>
             </View>
           ) : null}
 
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalLabel}>{t('INVOICE_TOTAL_AMOUNT')}</Text>
             <Text style={styles.totalValue}>{formatPrice(price)}đ</Text>
           </View>
         </View>
@@ -200,10 +202,10 @@ export default function InvoicePending() {
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.detailsBtn} onPress={handleSeeDetails}>
-          <Text style={styles.detailsBtnText}>See details</Text>
+          <Text style={styles.detailsBtnText}>{t('INVOICE_BTN_SEE_DETAILS')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.homeBtn} onPress={handleHome}>
-          <Text style={styles.homeBtnText}>Back to Home</Text>
+          <Text style={styles.homeBtnText}>{t('INVOICE_BTN_BACK_HOME')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

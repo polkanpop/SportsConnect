@@ -179,6 +179,10 @@ export const en = {
   BOOKING_COURT_MODAL_BODY: 'Are you sure you want to book this court?',
   BOOKING_COURT_MODAL_BTN_CANCEL: 'Cancel',
   BOOKING_COURT_MODAL_BTN_CONFIRM: 'Confirm',
+  BOOKING_COURT_NO_IMAGE: 'No image',
+  BOOKING_COURT_NOTE_PLACEHOLDER: 'Note something here...',
+  BOOKING_COURT_CONFIRM_BTN: 'Confirm Booking',
+  BOOKING_COURT_CONFIRM_BTN_SUBMITTING: 'Submitting...',
 
   // Event Booking
   BOOKING_EVENT_HEADER: 'Event Booking',
@@ -198,6 +202,17 @@ export const en = {
   BOOKING_EVENT_MODAL_TITLE: 'Confirm Booking',
   BOOKING_EVENT_MODAL_BODY: 'Are you sure you want to book this event?',
   BOOKING_EVENT_MODAL_BTN_CANCEL: 'Cancel',
+  BOOKING_EVENT_MODAL_BTN_CONFIRM: 'Confirm',
+  BOOKING_EVENT_ENTRY_FREE: 'Entry: Free',
+  BOOKING_EVENT_ENTRY_FEE_PREFIX: 'Entry Fee:',
+  BOOKING_EVENT_PER_PLAYER: '₫/player',
+  BOOKING_EVENT_COURT_FALLBACK: 'Court',
+  BOOKING_EVENT_PAYMENT_SECTION: 'Payment',
+  BOOKING_EVENT_NOTE_PLACEHOLDER: 'Type your note here...',
+  BOOKING_EVENT_SUCCESS_BOOKED_TITLE: 'Booking Submitted',
+  BOOKING_EVENT_SUBMITTING: 'Submitting...',
+  BOOKING_EVENT_ALREADY_BOOKED: 'Already Booked',
+  BOOKING_EVENT_CONFIRM_BTN: 'Confirm Booking',
 
   // Training Session Booking
   BOOKING_TS_HEADER: 'Session Booking',
@@ -217,6 +232,16 @@ export const en = {
   BOOKING_TS_MODAL_TITLE: 'Confirm Booking',
   BOOKING_TS_MODAL_BODY: 'Are you sure you want to book this session?',
   BOOKING_TS_MODAL_BTN_CANCEL: 'Cancel',
+  BOOKING_TS_MODAL_BTN_CONFIRM: 'Confirm',
+  BOOKING_TS_ENTRY_FREE: 'Entry: Free',
+  BOOKING_TS_ENTRY_FEE_PREFIX: 'Entry Fee:',
+  BOOKING_TS_PER_PLAYER: '₫/player',
+  BOOKING_TS_COURT_FALLBACK: 'Court',
+  BOOKING_TS_PAYMENT_SECTION: 'Payment',
+  BOOKING_TS_NOTE_PLACEHOLDER: 'Type your note here...',
+  BOOKING_TS_SUBMITTING: 'Submitting...',
+  BOOKING_TS_ALREADY_BOOKED: 'Already Booked',
+  BOOKING_TS_CONFIRM_BTN: 'Confirm Booking',
 
   // Profile
   PROFILE_HEADER_TITLE: 'Your Profile',
@@ -291,6 +316,43 @@ export const en = {
   INVOICE_TOTAL_AMOUNT: 'Total Amount',
   INVOICE_BTN_SEE_DETAILS: 'See details',
   INVOICE_BTN_BACK_HOME: 'Back to Home',
+
+  // Invoice Pending
+  INVOICE_PENDING_TITLE: 'Your request has been Submitted',
+  INVOICE_PENDING_SUBTITLE: 'Waiting for host approval.',
+  INVOICE_PENDING_CARD_HEADER: 'REQUEST DETAILS',
+  INVOICE_PENDING_APPROVE_STATUS: 'Approve Status',
+
+  // Court List
+  COURT_LIST_HEADER: 'Court List',
+  COURT_LIST_SEARCH_PLACEHOLDER: 'Search for courts...',
+  COURT_LIST_FILTER_FAVOURITE: 'Favourite',
+  COURT_LIST_FILTER_NEARBY: 'Nearby Location',
+  COURT_LIST_NO_RESULTS: 'No courts match your filters.',
+  COURT_LIST_LOAD_MORE: 'Load more...',
+  COURT_LIST_ERR_FAILED: 'Failed:',
+  COURT_LIST_ERR_LOCATION_PERM: 'Location permission is required',
+  COURT_LIST_ERR_LOCATION_FAIL: 'Unable to get your location',
+
+  // Session List
+  TS_LIST_HEADER: 'Session List',
+  TS_LIST_SEARCH_PLACEHOLDER: 'Search sessions...',
+  TS_LIST_FILTER_PAYMENT: 'Payment',
+  TS_LIST_FILTER_NEARBY: 'Nearby Location',
+  TS_LIST_PAYMENT_HINT: 'Select payment methods to filter sessions.',
+  TS_LIST_NO_RESULTS: 'No sessions found',
+  TS_LIST_PARTICIPANTS: 'participants',
+  TS_LIST_COACH_PREFIX: 'Coach:',
+  TS_LIST_ADDRESS_PREFIX: 'Address:',
+  TS_LIST_NO_ADDRESS: 'Unknown address',
+  TS_LIST_ENTRY_FREE: 'Entry: Free',
+  TS_LIST_PER_PLAYER: '₫/player',
+  TS_LIST_NO_DESC: 'No description',
+  TS_LIST_LOAD_MORE: 'Load more...',
+  TS_LIST_ERR_FAILED: 'Failed:',
+  TS_LIST_ERR_LOCATION_PERM: 'Location permission is required',
+  TS_LIST_ERR_LOCATION_FAIL: 'Unable to get your location',
+  TS_LIST_BTN_CREATE: 'Create',
 
   // Account Settings
   ACCOUNT_HEADER_TITLE: 'Account',
@@ -776,6 +838,10 @@ export const vi: Record<TranslationKey, string> = {
   BOOKING_COURT_MODAL_BODY: 'Bạn có chắc muốn đặt sân này không?',
   BOOKING_COURT_MODAL_BTN_CANCEL: 'Hủy',
   BOOKING_COURT_MODAL_BTN_CONFIRM: 'Xác nhận',
+  BOOKING_COURT_NO_IMAGE: 'Không có ảnh',
+  BOOKING_COURT_NOTE_PLACEHOLDER: 'Ghi chú tại đây...',
+  BOOKING_COURT_CONFIRM_BTN: 'Xác nhận đặt sân',
+  BOOKING_COURT_CONFIRM_BTN_SUBMITTING: 'Đang gửi...',
 
   // Event Booking
   BOOKING_EVENT_HEADER: 'Đặt tham dự sự kiện',
@@ -795,6 +861,17 @@ export const vi: Record<TranslationKey, string> = {
   BOOKING_EVENT_MODAL_TITLE: 'Xác nhận đặt chỗ',
   BOOKING_EVENT_MODAL_BODY: 'Bạn có chắc muốn đăng ký tham dự sự kiện này không?',
   BOOKING_EVENT_MODAL_BTN_CANCEL: 'Hủy',
+  BOOKING_EVENT_MODAL_BTN_CONFIRM: 'Xác nhận',
+  BOOKING_EVENT_ENTRY_FREE: 'Miễn phí vào',
+  BOOKING_EVENT_ENTRY_FEE_PREFIX: 'Phí vào:',
+  BOOKING_EVENT_PER_PLAYER: '₫/người',
+  BOOKING_EVENT_COURT_FALLBACK: 'Sân',
+  BOOKING_EVENT_PAYMENT_SECTION: 'Thanh toán',
+  BOOKING_EVENT_NOTE_PLACEHOLDER: 'Nhập ghi chú tại đây...',
+  BOOKING_EVENT_SUCCESS_BOOKED_TITLE: 'Đã gửi đặt chỗ',
+  BOOKING_EVENT_SUBMITTING: 'Đang gửi...',
+  BOOKING_EVENT_ALREADY_BOOKED: 'Đã đặt',
+  BOOKING_EVENT_CONFIRM_BTN: 'Xác nhận đặt chỗ',
 
   // Training Session Booking
   BOOKING_TS_HEADER: 'Đặt buổi tập',
@@ -814,6 +891,16 @@ export const vi: Record<TranslationKey, string> = {
   BOOKING_TS_MODAL_TITLE: 'Xác nhận đặt chỗ',
   BOOKING_TS_MODAL_BODY: 'Bạn có chắc muốn đặt chỗ buổi tập này không?',
   BOOKING_TS_MODAL_BTN_CANCEL: 'Hủy',
+  BOOKING_TS_MODAL_BTN_CONFIRM: 'Xác nhận',
+  BOOKING_TS_ENTRY_FREE: 'Miễn phí vào',
+  BOOKING_TS_ENTRY_FEE_PREFIX: 'Phí vào:',
+  BOOKING_TS_PER_PLAYER: '₫/người',
+  BOOKING_TS_COURT_FALLBACK: 'Sân',
+  BOOKING_TS_PAYMENT_SECTION: 'Thanh toán',
+  BOOKING_TS_NOTE_PLACEHOLDER: 'Nhập ghi chú tại đây...',
+  BOOKING_TS_SUBMITTING: 'Đang gửi...',
+  BOOKING_TS_ALREADY_BOOKED: 'Đã đặt',
+  BOOKING_TS_CONFIRM_BTN: 'Xác nhận đặt chỗ',
 
   // Profile
   PROFILE_HEADER_TITLE: 'Hồ sơ của bạn',
@@ -888,6 +975,43 @@ export const vi: Record<TranslationKey, string> = {
   INVOICE_TOTAL_AMOUNT: 'Tổng số tiền',
   INVOICE_BTN_SEE_DETAILS: 'Xem chi tiết',
   INVOICE_BTN_BACK_HOME: 'Về trang chủ',
+
+  // Invoice Pending
+  INVOICE_PENDING_TITLE: 'Yêu cầu của bạn đã được gửi',
+  INVOICE_PENDING_SUBTITLE: 'Đang chờ ph承 duyệt từ chủ sân.',
+  INVOICE_PENDING_CARD_HEADER: 'CHI TIẾT YÊU CẦU',
+  INVOICE_PENDING_APPROVE_STATUS: 'Trạng thái duyệt',
+
+  // Court List
+  COURT_LIST_HEADER: 'Danh sách sân',
+  COURT_LIST_SEARCH_PLACEHOLDER: 'Tìm kiếm sân...',
+  COURT_LIST_FILTER_FAVOURITE: 'Yêu thích',
+  COURT_LIST_FILTER_NEARBY: 'Gần tôi',
+  COURT_LIST_NO_RESULTS: 'Không có sân phù hợp.',
+  COURT_LIST_LOAD_MORE: 'Xem thêm...',
+  COURT_LIST_ERR_FAILED: 'Lỗi:',
+  COURT_LIST_ERR_LOCATION_PERM: 'Cần quyền truy cập vị trí',
+  COURT_LIST_ERR_LOCATION_FAIL: 'Không thể lấy vị trí của bạn',
+
+  // Session List
+  TS_LIST_HEADER: 'Danh sách buổi tập',
+  TS_LIST_SEARCH_PLACEHOLDER: 'Tìm buổi tập...',
+  TS_LIST_FILTER_PAYMENT: 'Thanh toán',
+  TS_LIST_FILTER_NEARBY: 'Gần tôi',
+  TS_LIST_PAYMENT_HINT: 'Chọn phương thức thanh toán để lọc buổi tập.',
+  TS_LIST_NO_RESULTS: 'Không tìm thấy buổi tập',
+  TS_LIST_PARTICIPANTS: 'người tham gia',
+  TS_LIST_COACH_PREFIX: 'Huấn luyện viên:',
+  TS_LIST_ADDRESS_PREFIX: 'Địa chỉ:',
+  TS_LIST_NO_ADDRESS: 'Địa chỉ không rõ',
+  TS_LIST_ENTRY_FREE: 'Miễn phí',
+  TS_LIST_PER_PLAYER: 'đ/người',
+  TS_LIST_NO_DESC: 'Không có mô tả',
+  TS_LIST_LOAD_MORE: 'Xem thêm...',
+  TS_LIST_ERR_FAILED: 'Lỗi:',
+  TS_LIST_ERR_LOCATION_PERM: 'Cần quyền truy cập vị trí',
+  TS_LIST_ERR_LOCATION_FAIL: 'Không thể lấy vị trí của bạn',
+  TS_LIST_BTN_CREATE: 'Tạo mới',
 
   // Account Settings
   ACCOUNT_HEADER_TITLE: 'Tài khoản',

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, invalidateTrainingSessionsCombinedCache, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
@@ -64,6 +65,7 @@ const LIST_ACCENT = COLORS.orangeAccent // Training sessions
 const TrainingSessionListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslation()
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -161,7 +163,7 @@ const TrainingSessionListScreen = () => {
         status = req.status
       }
       if (status !== 'granted') {
-        setLocationError('Location permission is required')
+        setLocationError(t('TS_LIST_ERR_LOCATION_PERM'))
         return null
       }
 
@@ -181,7 +183,7 @@ const TrainingSessionListScreen = () => {
       void setCachedUserCoord(next)
       return next
     } catch {
-      setLocationError('Unable to get your location')
+      setLocationError(t('TS_LIST_ERR_LOCATION_FAIL'))
       return null
     } finally {
       setLocationLoading(false)
@@ -365,13 +367,13 @@ const TrainingSessionListScreen = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Session List</Text>
+        <Text style={styles.headerTitle}>{t('TS_LIST_HEADER')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       <View style={styles.searchRow}>
         <View style={styles.searchContainer}>
           <Image source={ICONS.search} style={styles.searchIcon} />
-          <TextInput placeholder='Search sessions...' placeholderTextColor={COLORS.neutral750} value={search} onChangeText={setSearch} style={styles.searchInput} />
+          <TextInput placeholder={t('TS_LIST_SEARCH_PLACEHOLDER')} placeholderTextColor={COLORS.neutral750} value={search} onChangeText={setSearch} style={styles.searchInput} />
         </View>
       </View>
       <View style={styles.container}>
@@ -379,12 +381,12 @@ const TrainingSessionListScreen = () => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>Venue</Text>
+            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COMMON_LABEL_VENUE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
             <Image source={ICONS.freeIcon} style={styles.filterIcon} />
-            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>Free</Text>
+            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.filterButton, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
@@ -392,7 +394,7 @@ const TrainingSessionListScreen = () => {
             disabled={freeOnly}
           >
             <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor: COLORS.neutral600 }]} />
-            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>Payment</Text>
+            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>{t('TS_LIST_FILTER_PAYMENT')}</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
 
@@ -402,7 +404,7 @@ const TrainingSessionListScreen = () => {
           >
             <Image source={ICONS.radar} style={styles.filterIcon} />
             <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
-              {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : (closeToMe ? 'Nearby Location' : 'Distance')}
+              {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('TS_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
             </Text>
           </TouchableOpacity>
           </ScrollView>
@@ -430,7 +432,7 @@ const TrainingSessionListScreen = () => {
                 const selected = paymentSelections.includes(opt)
                 return (
                   <Pressable key={opt} onPress={() => togglePaymentSelection(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{opt==='cash'?'Cash':'VNPay'}</Text>
+                    <Text style={styles.dropdownItemText}>{opt==='cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -449,7 +451,7 @@ const TrainingSessionListScreen = () => {
                   style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
                   onPress={() => setCloseToMe(v => !v)}
                 >
-                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>Nearby Location</Text>
+                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>{t('TS_LIST_FILTER_NEARBY')}</Text>
                 </TouchableOpacity>
                 {locationLoading && (
                   <View style={styles.locationSpinnerWrap}>
@@ -457,7 +459,7 @@ const TrainingSessionListScreen = () => {
                   </View>
                 )}
               </View>
-              <Text style={styles.distanceFilterTitle}>Type distance (km)</Text>
+              <Text style={styles.distanceFilterTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
               <TextInput
                 value={distanceKmInput}
                 onChangeText={(t) => {
@@ -470,7 +472,7 @@ const TrainingSessionListScreen = () => {
                   }
                   const parsed = parseKmInput(cleaned)
                   if (parsed == null) {
-                    setDistanceKmError('Please type in number')
+                    setDistanceKmError(t('MAP_FILTER_DISTANCE_ERROR'))
                     return
                   }
                   setDistanceKmError(null)
@@ -524,9 +526,9 @@ const TrainingSessionListScreen = () => {
           {(loading || isFetching) && visibleSessions.length === 0 && (
             <SkeletonList count={6} style={{ paddingTop: 6 }} />
           )}
-          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
+          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>{t('TS_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !isFetching && !error && filteredSessions.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>No sessions found</Text>
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>{t('TS_LIST_NO_RESULTS')}</Text>
           )}
           {visibleSessions.map(s => {
             const venues = asArray(s.venue)
@@ -601,7 +603,7 @@ const TrainingSessionListScreen = () => {
                   {/* Entry fee + payment methods displayed on their own line (match events layout) */}
                   <View style={styles.entryRow}>
                     <View style={[styles.tag, (s as any).entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
-                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? 'Entry: Free' : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}₫/player`}</Text>
+                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? t('TS_LIST_ENTRY_FREE') : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${t('TS_LIST_PER_PLAYER')}`}</Text>
                     </View>
                     {(s as any).entry_fee != null && (s as any).support_payment_method && (
                       <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
@@ -616,14 +618,14 @@ const TrainingSessionListScreen = () => {
                   </View>
                   <View style={styles.participantsRow}>
                     <Image source={ICONS.participants} style={styles.participantsIconLarge} />
-                    <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)} participants</Text>
+                      <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)} {t('TS_LIST_PARTICIPANTS')}</Text>
                   </View>
                   {expanded && (
                     <View style={styles.expandedContent}>
-                      <Text style={styles.expandedLine}>Coach: {s.coachName || s.coachid}</Text>
-                      <Text style={styles.expandedLine}>Address: {s.address || 'Unknown address'}</Text>
-                      <Text style={styles.expandedDescLabel}>Description:</Text>
-                      <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || 'No description'}</Text>
+                      <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName || s.coachid}</Text>
+                      <Text style={styles.expandedLine}>{t('TS_LIST_ADDRESS_PREFIX')} {s.address || t('TS_LIST_NO_ADDRESS')}</Text>
+                      <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
+                      <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || t('TS_LIST_NO_DESC')}</Text>
                     </View>
                   )}
                 </View>
@@ -637,7 +639,7 @@ const TrainingSessionListScreen = () => {
                 <ActivityIndicator size="small" color={COLORS.neutral800} />
               ) : (
                 <Pressable onPress={handleLoadMore} hitSlop={8}>
-                  <Text style={styles.loadMoreText}>Load more...</Text>
+                  <Text style={styles.loadMoreText}>{t('TS_LIST_LOAD_MORE')}</Text>
                 </Pressable>
               )}
             </View>
@@ -646,7 +648,7 @@ const TrainingSessionListScreen = () => {
       </View>
       <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/tsCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
-        <Text style={styles.fabText}>Create</Text>
+        <Text style={styles.fabText}>{t('TS_LIST_BTN_CREATE')}</Text>
       </TouchableOpacity>
     </SafeAreaView>
   )

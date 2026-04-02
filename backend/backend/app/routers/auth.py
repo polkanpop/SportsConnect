@@ -1023,10 +1023,14 @@ def zalo_sign_in(payload: dict):
         except Exception as e:
             raise HTTPException(status_code=500, detail="Token creation failed")
         logger.debug(f"/auth/zalo existing user (provider lookup) userid={userid} elapsedMs={_now_ms()-t0}")
+        users_row = rest_select("users", "userid, role", {"userid": userid}, single=True)
+        existing_role = (users_row.get("role") if users_row else None) or "player"
         return {
             "status": "ok",
             "userid": userid,
             "name": (existing_info or {}).get("name") or display_name,
+            "logintype": "Zalo",
+            "role": existing_role,
             "accessToken": tokens.get("access_token"),
             "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
             "refreshToken": tokens.get("refresh_token"),
@@ -1117,6 +1121,8 @@ def zalo_sign_in(payload: dict):
         "status": "ok",
         "userid": userid,
         "name": display_name,
+        "logintype": "Zalo",
+        "role": role,
         "accessToken": tokens.get("access_token"),
         "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
         "refreshToken": tokens.get("refresh_token"),

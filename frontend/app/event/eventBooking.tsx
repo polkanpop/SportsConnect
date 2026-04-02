@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
@@ -54,6 +55,7 @@ export default function EventBooking() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const params = useLocalSearchParams()
+  const { t } = useTranslation()
   const eventid = params.eventid ? parseInt(String(params.eventid), 10) : NaN
   const { profile } = useAuthContext()
   const { userId, dashboard } = useAppBootstrap()
@@ -294,17 +296,17 @@ export default function EventBooking() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Image source={ICONS.arrowLeft} style={styles.backIcon} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Event Booking</Text>
+          <Text style={styles.headerTitle}>{t('BOOKING_EVENT_HEADER')}</Text>
         </View>
       </SafeAreaView>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 220, paddingTop: 12 }}>
         <View style={styles.sectionCard}>
-          {loadingEvents && <Text style={styles.statusText}>Loading event...</Text>}
-          {!loadingEvents && !event && <Text style={styles.errorText}>Event not found.</Text>}
+          {loadingEvents && <Text style={styles.statusText}>{t('BOOKING_EVENT_LOADING')}</Text>}
+          {!loadingEvents && !event && <Text style={styles.errorText}>{t('BOOKING_EVENT_NOT_FOUND')}</Text>}
           {!loadingEvents && !!event && isCancelledEvent && (
             <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
-              <Text style={{ color: '#cc0000', fontWeight: '700' }}>This event was cancelled.</Text>
-              <Text style={{ color: '#cc0000', marginTop: 2 }}>Booking is disabled.</Text>
+              <Text style={{ color: '#cc0000', fontWeight: '700' }}>{t('BOOKING_EVENT_CANCELLED')}</Text>
+              <Text style={{ color: '#cc0000', marginTop: 2 }}>{t('BOOKING_EVENT_BOOKING_DISABLED')}</Text>
             </View>
           )}
           {event && (
@@ -315,8 +317,8 @@ export default function EventBooking() {
           {event && (
             <>
               <Text style={styles.eventTime}>{formatRange(event)}</Text>
-              <Text style={styles.eventFee}>{isFree ? 'Entry: Free' : `Entry Fee: ${formatCurrency(event.entry_fee)}₫/player`}</Text>
-              <Text style={styles.eventDesc}>Description: {event.description || 'No description'}</Text>
+              <Text style={styles.eventFee}>{isFree ? t('BOOKING_EVENT_ENTRY_FREE') : `${t('BOOKING_EVENT_ENTRY_FEE_PREFIX')} ${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')}`}</Text>
+              <Text style={styles.eventDesc}>{t('BOOKING_EVENT_DESC_PREFIX')} {event.description || t('BOOKING_EVENT_NO_DESC')}</Text>
             </>
           )}
         </View>
@@ -334,7 +336,7 @@ export default function EventBooking() {
                 else if (hasOutdoor) iconSrc = ICONS.outdoorIcon
                 return iconSrc ? <Image source={iconSrc} style={styles.venueIcon} /> : null
               })()}
-              <Text style={styles.courtNameText}>{event.court_name || 'Court'}</Text>
+              <Text style={styles.courtNameText}>{event.court_name || t('BOOKING_EVENT_COURT_FALLBACK')}</Text>
             </View>
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={styles.metaIcon} />
@@ -348,22 +350,22 @@ export default function EventBooking() {
         )}
         {event && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{isFree ? 'Payment' : `Payment (${formatCurrency(event.entry_fee)}₫/player)`}</Text>
-            {isFree && <Text style={styles.freeNote}>This event entry is free</Text>}
+            <Text style={styles.sectionTitle}>{isFree ? t('BOOKING_EVENT_PAYMENT_SECTION') : `${t('BOOKING_EVENT_PAYMENT_SECTION')} (${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')})`}</Text>
+            {isFree && <Text style={styles.freeNote}>{t('BOOKING_EVENT_FREE_NOTE')}</Text>}
             {!isFree && (
               <View style={{marginTop:4}}>
-                <Text style={styles.paymentMeta}>Select payment method:</Text>
+                <Text style={styles.paymentMeta}>{t('BOOKING_EVENT_SELECT_PAYMENT')}</Text>
                 <View style={styles.paymentRow}>
                   {allowedMethods.map(m => {
                     const active = paymentMethod === m
                     return (
                       <TouchableOpacity key={m} style={[styles.payMethodBtn, active && styles.payMethodActive]} onPress={() => setPaymentMethod(m)}>
                         <Image source={m === 'cash' ? ICONS.cashIcon : ICONS.vnpayIcon} style={styles.payIcon} />
-                        <Text style={styles.payText}>{m === 'cash' ? 'Cash' : 'VNPay'}</Text>
+                        <Text style={styles.payText}>{m === 'cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                       </TouchableOpacity>
                     )
                   })}
-                  {allowedMethods.length === 0 && <Text style={styles.smallText}>No supported methods.</Text>}
+                  {allowedMethods.length === 0 && <Text style={styles.smallText}>{t('BOOKING_EVENT_NO_PAYMENT_METHODS')}</Text>}
                 </View>
               </View>
             )}
@@ -373,13 +375,13 @@ export default function EventBooking() {
         <View style={styles.sectionCard}>
           <TouchableOpacity style={styles.noteRow} onPress={() => setNoteExpanded(n => !n)}>
             <Image source={ICONS.noteIcon} style={styles.noteIcon} />
-            <Text style={styles.noteTextLabel}>Add a note (optional)</Text>
+            <Text style={styles.noteTextLabel}>{t('BOOKING_EVENT_NOTE_OPTIONAL')}</Text>
             <Image source={ICONS.arrowright} style={[styles.noteArrow, noteExpanded && styles.noteArrowExpanded]} />
           </TouchableOpacity>
           {noteExpanded && (
             <View style={styles.noteInputWrapper}>
               <TextInput
-                placeholder='Type your note here...'
+                placeholder={t('BOOKING_EVENT_NOTE_PLACEHOLDER')}
                 placeholderTextColor={'#888'}
                 value={noteText}
                 onChangeText={setNoteText}
@@ -392,8 +394,8 @@ export default function EventBooking() {
         {submitError && <Text style={[styles.errorText,{marginHorizontal:16}]}>{submitError}</Text>}
         {confirmation && (
           <View style={[styles.sectionCard, { backgroundColor: '#e9ffe9' }] }>
-            <Text style={styles.successTitle}>Booking Submitted</Text>
-            <Text style={styles.successLine}>Status: pending</Text>
+            <Text style={styles.successTitle}>{t('BOOKING_EVENT_SUCCESS_TITLE')}</Text>
+            <Text style={styles.successLine}>{t('BOOKING_EVENT_SUCCESS_STATUS')}</Text>
             <Text style={styles.successLine}>Event: {event?.title || event?.eventid}</Text>
             <Text style={styles.successLine}>Time: {formatRange(event)}</Text>
             <Text style={styles.successLine}>Payment Method: {isFree ? 'cash (free)' : paymentMethod}</Text>
@@ -410,7 +412,7 @@ export default function EventBooking() {
               onPress={() => setConfirmModalVisible(true)}
             >
               <Text style={styles.confirmUnifiedText}>
-                {submitting ? 'Submitting...' : alreadyBooked ? 'Already Booked' : 'Confirm Booking'}
+                {submitting ? t('BOOKING_EVENT_SUBMITTING') : alreadyBooked ? t('BOOKING_EVENT_ALREADY_BOOKED') : t('BOOKING_EVENT_CONFIRM_BTN')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -425,18 +427,18 @@ export default function EventBooking() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirm Booking</Text>
-            <Text style={styles.modalBody}>Are you sure you want to book this event?</Text>
+            <Text style={styles.modalTitle}>{t('BOOKING_EVENT_MODAL_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('BOOKING_EVENT_MODAL_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.modalBtnText}>Cancel</Text>
+                <Text style={styles.modalBtnText}>{t('BOOKING_EVENT_MODAL_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
                 setConfirmModalVisible(false)
                 handleSubmit()
               }} disabled={!canSubmit}>
                 <Text style={[styles.modalBtnText, {color: '#fff'}]}>
-                  Confirm
+                  {t('BOOKING_EVENT_MODAL_BTN_CONFIRM')}
                 </Text>
               </TouchableOpacity>
             </View>

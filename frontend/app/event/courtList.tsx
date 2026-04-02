@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -50,6 +51,7 @@ const LIST_ACCENT = COLORS.orangeAccent // Courts
 
 const CourtListScreen = () => {
   const router = useRouter()
+  const { t } = useTranslation()
   const [allCourts, setAllCourts] = useState<CourtInfoRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +129,7 @@ const CourtListScreen = () => {
         status = req.status
       }
       if (status !== 'granted') {
-        setLocationError('Location permission is required')
+        setLocationError(t('COURT_LIST_ERR_LOCATION_PERM'))
         return null
       }
 
@@ -147,7 +149,7 @@ const CourtListScreen = () => {
       void setCachedUserCoord(next)
       return next
     } catch {
-      setLocationError('Unable to get your location')
+      setLocationError(t('COURT_LIST_ERR_LOCATION_FAIL'))
       return null
     } finally {
       setLocationLoading(false)
@@ -384,7 +386,7 @@ const CourtListScreen = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Court List</Text>
+        <Text style={styles.headerTitle}>{t('COURT_LIST_HEADER')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       {/* Search row */}
@@ -392,7 +394,7 @@ const CourtListScreen = () => {
         <View style={styles.searchContainer}>
           <Image source={ICONS.search} style={styles.searchIcon} />
           <TextInput
-            placeholder='Search for courts...'
+            placeholder={t('COURT_LIST_SEARCH_PLACEHOLDER')}
             placeholderTextColor={COLORS.neutral750}
             value={search}
             onChangeText={setSearch}
@@ -410,7 +412,7 @@ const CourtListScreen = () => {
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
               <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>Venue</Text>
+              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COMMON_LABEL_VENUE')}</Text>
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
@@ -418,7 +420,7 @@ const CourtListScreen = () => {
               onPress={() => setShowFavouritesOnly(prev => !prev)}
             >
               <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
-              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>Favourite</Text>
+              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -427,7 +429,7 @@ const CourtListScreen = () => {
             >
               <Image source={ICONS.radar} style={styles.filterIcon} />
               <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
-                {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : (closeToMe ? 'Nearby Location' : 'Distance')}
+                {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('COURT_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -459,7 +461,7 @@ const CourtListScreen = () => {
                   style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
                   onPress={() => setCloseToMe(v => !v)}
                 >
-                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>Nearby Location</Text>
+                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>{t('COURT_LIST_FILTER_NEARBY')}</Text>
                 </TouchableOpacity>
                 {locationLoading && (
                   <View style={styles.locationSpinnerWrap}>
@@ -468,7 +470,7 @@ const CourtListScreen = () => {
                 )}
               </View>
 
-              <Text style={styles.distanceFilterTitle}>Type distance (km)</Text>
+              <Text style={styles.distanceFilterTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
               <TextInput
                 value={distanceKmInput}
                 onChangeText={(t) => {
@@ -482,7 +484,7 @@ const CourtListScreen = () => {
                   }
                   const parsed = parseKmInput(cleaned)
                   if (parsed == null) {
-                    setDistanceKmError('Please type in number')
+                    setDistanceKmError(t('MAP_FILTER_DISTANCE_ERROR'))
                     return
                   }
                   setDistanceKmError(null)
@@ -511,10 +513,10 @@ const CourtListScreen = () => {
                     setLocationError(null)
                   }}
                 >
-                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Clear</Text>
+                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>{t('MAP_FILTER_CLEAR')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.clearPriceBtn, styles.priceCloseBtn]} onPress={() => { setOpenFilter(null) }}>
-                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>Close</Text>
+                  <Text style={[styles.clearPriceBtnText, styles.priceCloseText]}>{t('COMMON_BTN_CLOSE')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -536,9 +538,9 @@ const CourtListScreen = () => {
           {loading && visibleCourts.length === 0 && (
             <SkeletonList count={6} style={{ paddingTop: 6 }} />
           )}
-          {error && <Text style={[styles.statusText, { color: COLORS.danger }]}>Failed: {error}</Text>}
+          {error && <Text style={[styles.statusText, { color: COLORS.danger }]}>{t('COURT_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !error && filteredCourts.length === 0 && (
-            <Text style={styles.statusText}>No courts match your filters.</Text>
+            <Text style={styles.statusText}>{t('COURT_LIST_NO_RESULTS')}</Text>
           )}
           {visibleCourts.map(c => {
             const venues = asArray(c.venue)
@@ -624,7 +626,7 @@ const CourtListScreen = () => {
                 <ActivityIndicator size="small" color={COLORS.neutral800} />
               ) : (
                 <Pressable onPress={handleLoadMore} hitSlop={8}>
-                  <Text style={styles.loadMoreText}>Load more...</Text>
+                  <Text style={styles.loadMoreText}>{t('COURT_LIST_LOAD_MORE')}</Text>
                 </Pressable>
               )}
             </View>

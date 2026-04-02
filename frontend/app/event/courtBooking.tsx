@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
@@ -120,6 +121,7 @@ const WEEK_DAYS: { key: string; label: string }[] = [
 export default function CourtBooking() {
   const router = useRouter()
   const params = useLocalSearchParams()
+  const { t } = useTranslation()
   const courtid = params.courtid ? parseInt(String(params.courtid), 10) : NaN
   useAuthContext()
 
@@ -482,8 +484,8 @@ export default function CourtBooking() {
     return Math.max(0, Number(courtAmount) || 0) + Math.max(0, Number(servicesTotal) || 0)
   }, [courtAmount, servicesTotal])
   const formattedAmount = totalAmount > 0
-    ? `Confirm Booking — ${Math.round(totalAmount).toLocaleString('en-US')}đ`
-    : 'Confirm Booking'
+    ? `${t('BOOKING_COURT_CONFIRM_BTN')} — ${Math.round(totalAmount).toLocaleString('en-US')}đ`
+    : t('BOOKING_COURT_CONFIRM_BTN')
   const selectedPart = useMemo(() => {
     const p = String((selectedPc as any)?.part || '').toLowerCase()
     if (p === 'full' || p === 'half_a' || p === 'half_b') return p as 'full' | 'half_a' | 'half_b'
@@ -848,7 +850,7 @@ export default function CourtBooking() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Image source={ICONS.arrowLeft} style={styles.backIcon} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginLeft: -44 }]}>Court Booking</Text>
+          <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginLeft: -44 }]}>{t('BOOKING_COURT_HEADER')}</Text>
         </View>
       </SafeAreaView>
 
@@ -898,7 +900,7 @@ export default function CourtBooking() {
       {/* Court selector: Step 1 pills → Step 2 schedule → Step 3 image cards */}
       {(playingCourtsLoading || playingCourts.length > 0) && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Court</Text>
+          <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_COURT')}</Text>
           {playingCourtsLoading ? (
             <SkeletonPulse>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -939,8 +941,7 @@ export default function CourtBooking() {
               {selectedBaseName != null && (
                 <>
                   <View style={[styles.scheduleHeaderRow, { marginTop: 16 }]}>
-                    <Text style={styles.sectionTitle}>Schedule</Text>
-                    <View style={styles.weekNavInline}>
+                    <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_SCHEDULE')}</Text>
                       <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
                         <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
                       </TouchableOpacity>
@@ -975,12 +976,12 @@ export default function CourtBooking() {
                     })}
                   </View>
                   {!loading && !error && !scheduleDisplayAvailability && (
-                    <Text style={styles.statusText}>No availability schedule found for this court yet.</Text>
+                    <Text style={styles.statusText}>{t('BOOKING_COURT_NO_SCHEDULE')}</Text>
                   )}
                   {showTimePicker && scheduleDisplayAvailability && (
                     <View style={{ marginTop: 16 }}>
-                      <Text style={styles.subHeading}>Select Time</Text>
-                      <Text style={styles.smallText}>Start</Text>
+                      <Text style={styles.subHeading}>{t('BOOKING_COURT_SELECT_TIME')}</Text>
+                      <Text style={styles.smallText}>{t('BOOKING_COURT_LABEL_START')}</Text>
                       <View style={styles.slotRow}>
                         {startVisibleSlots.map((ts) => {
                           const disabled = isStartSlotBlocked(ts)
@@ -992,12 +993,11 @@ export default function CourtBooking() {
                         })}
                       </View>
                       {startVisibleSlots.length === 0 && (
-                        <Text style={styles.durationWarning}>No future slots available for today.</Text>
+                        <Text style={styles.durationWarning}>{t('BOOKING_COURT_NO_FUTURE_SLOTS')}</Text>
                       )}
                       {startSlot && (
                         <>
-                          <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
-                          <View style={styles.slotRow}>
+                          <Text style={[styles.smallText, { marginTop: 12 }]}>{t('BOOKING_COURT_LABEL_END')}</Text>
                             {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
                               const disabled = isEndSlotBlocked(ts)
                               return (
@@ -1007,8 +1007,8 @@ export default function CourtBooking() {
                               )
                             })}
                           </View>
-                          {endSlot && durationInvalid && <Text style={styles.durationWarning}>Booking duration must be at least 1 hour.</Text>}
-                          {isStartInPast && <Text style={styles.durationWarning}>Selected start time has already passed. Please choose another slot.</Text>}
+                          {endSlot && durationInvalid && <Text style={styles.durationWarning}>{t('BOOKING_COURT_ERR_MIN_DURATION')}</Text>}
+                          {isStartInPast && <Text style={styles.durationWarning}>{t('BOOKING_COURT_ERR_START_PASSED')}</Text>}
                         </>
                       )}
                     </View>
@@ -1019,7 +1019,7 @@ export default function CourtBooking() {
               {/* Step 3: Part image cards (shown after time span selected) */}
               {selectedDateStr && startSlot && endSlot && !durationInvalid && (
                 <View style={{ marginTop: 16 }}>
-                  <Text style={styles.subHeading}>Select Court</Text>
+                  <Text style={styles.subHeading}>{t('BOOKING_COURT_SELECT_COURT')}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 8 }}>
                     {baseGroupCourts.map((pc) => {
                       const courtLabel = String(pc.name || pc.base_name || `Court ${pc.playingcourtid}`)
@@ -1055,7 +1055,7 @@ export default function CourtBooking() {
                               <ExpoImage source={{ uri: imageUri }} style={styles.selectCourtImage} contentFit="cover" />
                             ) : (
                               <View style={styles.selectCourtImagePlaceholder}>
-                                <Text style={{ color: '#aaa', fontSize: 12 }}>No image</Text>
+                                <Text style={{ color: '#aaa', fontSize: 12 }}>{t('BOOKING_COURT_NO_IMAGE')}</Text>
                               </View>
                             )}
                           </View>
@@ -1078,8 +1078,7 @@ export default function CourtBooking() {
       {playingCourts.length === 0 && (
         <View style={styles.sectionCard}>
           <View style={styles.scheduleHeaderRow}>
-            <Text style={styles.sectionTitle}>Schedule</Text>
-            <View style={styles.weekNavInline}>
+            <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_SCHEDULE')}</Text>
               <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
                 <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
               </TouchableOpacity>
@@ -1109,12 +1108,12 @@ export default function CourtBooking() {
             })}
           </View>
           {!loading && !error && !availability && (
-            <Text style={styles.statusText}>No availability schedule found for this court yet.</Text>
+            <Text style={styles.statusText}>{t('BOOKING_COURT_NO_SCHEDULE')}</Text>
           )}
           {showTimePicker && scheduleDisplayAvailability && (
             <View style={{ marginTop: 16 }}>
-              <Text style={styles.subHeading}>Select Time</Text>
-              <Text style={styles.smallText}>Start</Text>
+              <Text style={styles.subHeading}>{t('BOOKING_COURT_SELECT_TIME')}</Text>
+              <Text style={styles.smallText}>{t('BOOKING_COURT_LABEL_START')}</Text>
               <View style={styles.slotRow}>
                 {startVisibleSlots.map((ts) => {
                   const disabled = isStartSlotBlocked(ts)
@@ -1127,8 +1126,7 @@ export default function CourtBooking() {
               </View>
               {startSlot && (
                 <>
-                  <Text style={[styles.smallText, { marginTop: 12 }]}>End</Text>
-                  <View style={styles.slotRow}>
+                  <Text style={[styles.smallText, { marginTop: 12 }]}>{t('BOOKING_COURT_LABEL_END')}</Text>
                     {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
                       const disabled = isEndSlotBlocked(ts)
                       return (
@@ -1149,27 +1147,27 @@ export default function CourtBooking() {
       {/* Payment/Services/Note — always shown */}
       <View style={styles.sectionCard}>
         <View style={{ marginTop: 0 }}>
-          <Text style={styles.sectionTitle}>Payment</Text>
+          <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_PAYMENT')}</Text>
           <View style={styles.paymentRow}>
             <TouchableOpacity
               onPress={() => setPaymentMethod(paymentMethod === 'cash' ? null : 'cash')}
               style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodActive]}
             >
               <Image source={ICONS.cashIcon} style={styles.payIcon} />
-              <Text style={styles.payText}>Cash</Text>
+              <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_CASH')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setPaymentMethod(paymentMethod === 'vnpay' ? null : 'vnpay')}
               style={[styles.payMethodBtn, paymentMethod === 'vnpay' && styles.payMethodActive]}
             >
               <Image source={ICONS.vnpayIcon} style={styles.payIcon} />
-              <Text style={styles.payText}>VNPay</Text>
+              <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Services (expandable, closed by default) */}
           <TouchableOpacity style={styles.servicesHeaderRow} activeOpacity={0.8} onPress={() => setServicesExpanded(p => !p)}>
-            <Text style={styles.servicesHeaderText}>Services</Text>
+            <Text style={styles.servicesHeaderText}>{t('BOOKING_COURT_SECTION_SERVICES')}</Text>
             <Image source={ICONS.arrowdown} style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]} />
           </TouchableOpacity>
           {servicesExpanded && (
@@ -1184,7 +1182,7 @@ export default function CourtBooking() {
                 </SkeletonPulse>
               ) : (
                 (Array.isArray(servicesData) ? servicesData : []).length === 0 ? (
-                  <Text style={styles.statusText}>This court have no services</Text>
+                  <Text style={styles.statusText}>{t('BOOKING_COURT_NO_SERVICES')}</Text>
                 ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.servicesScrollContent}>
                   {(Array.isArray(servicesData) ? servicesData : []).map((s: ServiceRow) => {
@@ -1258,14 +1256,14 @@ export default function CourtBooking() {
           {/* Note Section */}
           <TouchableOpacity style={styles.noteRow} activeOpacity={0.8} onPress={() => setNoteExpanded(p => !p)}>
             <Image source={ICONS.noteIcon} style={styles.noteIcon} />
-            <Text style={styles.noteTextLabel}>Note</Text>
+            <Text style={styles.noteTextLabel}>{t('BOOKING_COURT_LABEL_NOTE')}</Text>
             <Image source={ICONS.arrowright} style={[styles.noteArrow, noteExpanded && styles.noteArrowExpanded]} />
           </TouchableOpacity>
           {noteExpanded && (
             <View style={styles.noteInputWrapper}>
               <TextInput
                 style={styles.noteInput}
-                placeholder="Note something here..."
+                placeholder={t('BOOKING_COURT_NOTE_PLACEHOLDER')}
                 multiline
                 value={noteText}
                 onChangeText={setNoteText}
@@ -1275,7 +1273,7 @@ export default function CourtBooking() {
           {/* Promotion moved under payment methods */}
           <View style={[styles.promoWrapper,{marginTop:16}]}>
             <TouchableOpacity style={styles.promoBox} activeOpacity={0.75}>
-              <Text style={styles.promoText}>Apply Promotion Code</Text>
+              <Text style={styles.promoText}>{t('BOOKING_COURT_APPLY_PROMO')}</Text>
             </TouchableOpacity>
           </View>
           {(fullHalfOverlapError || submitError) && <Text style={styles.errorText}>{fullHalfOverlapError || submitError}</Text>}
@@ -1314,17 +1312,17 @@ export default function CourtBooking() {
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Confirm Booking</Text>
-          <Text style={styles.modalBody}>Are you sure you want to book this court?</Text>
+          <Text style={styles.modalTitle}>{t('BOOKING_COURT_MODAL_TITLE')}</Text>
+          <Text style={styles.modalBody}>{t('BOOKING_COURT_MODAL_BODY')}</Text>
           <View style={styles.modalActions}>
             <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-              <Text style={styles.modalBtnText}>Cancel</Text>
+              <Text style={styles.modalBtnText}>{t('BOOKING_COURT_MODAL_BTN_CANCEL')}</Text>
             </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
               setConfirmModalVisible(false)
               confirmBooking()
             }}>
-              <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+              <Text style={[styles.modalBtnText, {color: '#fff'}]}>{t('BOOKING_COURT_MODAL_BTN_CONFIRM')}</Text>
             </TouchableOpacity>
           </View>
         </View>
