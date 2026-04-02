@@ -375,7 +375,7 @@ const getWeekDaysForOffset = (weekOffset: number) => {
 };
 
 export default function ActivityPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [calendarMode, setCalendarMode] = useState<"Booking" | "Hosting">("Booking");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedActivity, setSelectedActivity] = useState<UnifiedBooking | null>(null);
@@ -586,19 +586,27 @@ export default function ActivityPage() {
     const end = parseIsoDateLocal(weekDays[weekDays.length - 1].fullDate);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
 
-    const startMonth = start.toLocaleString(undefined, { month: 'long' });
-    const endMonth = end.toLocaleString(undefined, { month: 'long' });
+    const VI_MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
+                       'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
+    const getMonthName = (d: Date) => language === 'vi'
+      ? VI_MONTHS[d.getMonth()]
+      : d.toLocaleString('en-US', { month: 'long' })
+
+    const startMonth = getMonthName(start);
+    const endMonth = getMonthName(end);
     const startYear = start.getFullYear();
     const endYear = end.getFullYear();
 
     if (start.getMonth() === end.getMonth() && startYear === endYear) {
-      return start.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+      return language === 'vi'
+        ? `${VI_MONTHS[start.getMonth()]} ${startYear}`
+        : start.toLocaleString('en-US', { month: 'long', year: 'numeric' });
     }
     if (startYear === endYear) {
       return `${startMonth} - ${endMonth} ${startYear}`;
     }
     return `${startMonth} ${startYear} - ${endMonth} ${endYear}`;
-  }, [weekDays]);
+  }, [weekDays, language]);
 
   const isLoading =
     userIdLoading ||

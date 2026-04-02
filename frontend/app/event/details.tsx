@@ -268,6 +268,21 @@ export default function DetailsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+
+  // Translate raw booking/event status strings to the current language
+  const tStatus = (raw: any): string => {
+    const s = String(raw ?? '').trim().toLowerCase()
+    if (!s) return t('ACTIVITY_BADGE_PENDING')
+    if (s.includes('approv')) return t('ACTIVITY_BADGE_APPROVED')
+    if (s.includes('join')) return t('ACTIVITY_BADGE_JOINED')
+    if (s.includes('pend') || s.includes('wait')) return t('ACTIVITY_BADGE_PENDING')
+    if (s.includes('cancel') || s.includes('reject')) return t('ACTIVITY_BADGE_CANCELLED')
+    if (s.includes('miss')) return t('ACTIVITY_BADGE_MISSED')
+    if (s.includes('complet')) return t('ACTIVITY_BADGE_COMPLETED')
+    if (s.includes('upcom')) return t('ACTIVITY_BADGE_UPCOMING')
+    // fallback: return title-cased raw
+    return s.charAt(0).toUpperCase() + s.slice(1) || t('DETAILS_LABEL_UNKNOWN')
+  }
   const { id } = useLocalSearchParams<{ id?: string }>()
   const parsed = useMemo(() => parseUnifiedId(id), [id])
   const {
@@ -1757,7 +1772,7 @@ export default function DetailsPage() {
             return (
               <>
                 <Section title={t('DETAILS_SECTION_BOOKING')}>
-                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={formatStatusTitleCase(b.status || b.bookingstatus)} />
+                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={tStatus(b.status || b.bookingstatus)} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || '—'} />
                   <Row label={t('COMMON_LABEL_ADDRESS')} value={courtBookingCourt?.address || '—'} />
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1780,8 +1795,8 @@ export default function DetailsPage() {
               <>
                 <Section title={t('DETAILS_SECTION_EVENT')}>
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(ev || {}), eventinfo: evMeta ? [evMeta] : [] }, 'Event')} />
-                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={formatBookingStatusTitleCase((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
-                  <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={formatStatusTitleCase(ev?.status ?? 'upcoming')} />
+                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={tStatus((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
+                  <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={tStatus(ev?.status ?? 'upcoming')} />
                   <Row label={t('COMMON_LABEL_VENUE')} value={summaryVenueName || '—'} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || '—'} />
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1804,8 +1819,8 @@ export default function DetailsPage() {
               <>
                 <Section title={t('DETAILS_SECTION_TRAINING')}>
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(s || {}), trainingsessioninfo: sMeta ? [sMeta] : [] }, 'Training Session')} />
-                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={formatBookingStatusTitleCase((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
-                  <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={formatStatusTitleCase(s?.status ?? 'upcoming')} />
+                  <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={tStatus((b as any)?.status ?? (b as any)?.bookingstatus ?? 'pending')} />
+                  <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={tStatus(s?.status ?? 'upcoming')} />
                   <Row label={t('COMMON_LABEL_VENUE')} value={summaryVenueName || '—'} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || '—'} />
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
@@ -1824,7 +1839,7 @@ export default function DetailsPage() {
               <>
                 <Section title={t('DETAILS_SECTION_EVENT')}>
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(ev as any), eventinfo: meta ? [meta] : [] }, 'Event')} />
-                  <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={formatStatusTitleCase(ev.status)} />
+                  <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={tStatus(ev.status)} />
                   <Row label={t('COMMON_LABEL_COURT')} value={createdEventCourtName || '—'} />
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />
@@ -1844,7 +1859,7 @@ export default function DetailsPage() {
               <>
                 <Section title={t('DETAILS_SECTION_TRAINING')}>
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(s as any), trainingsessioninfo: meta ? [meta] : [] }, 'Training Session')} />
-                  <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={formatStatusTitleCase(s.status)} />
+                  <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={tStatus(s.status)} />
                   <Row label={t('COMMON_LABEL_COURT')} value={createdSessionCourtName || '—'} />
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />

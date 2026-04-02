@@ -634,17 +634,25 @@
     }, [weekOffset, language])
 
     // 30-min time slots derived from availability window (view-only in Map)
+    // When the selected date is today, only show slots that haven't started yet.
     const mapTimeSlots = useMemo((): string[] => {
       if (!availability) return []
       const [sh, sm] = String(availability.start_time || '08:00').split(':').map(Number)
       const [eh, em] = String(availability.end_time || '22:00').split(':').map(Number)
       if (!Number.isFinite(sh) || !Number.isFinite(eh)) return []
+
+      const todayStr = toDateString(new Date())
+      const isToday = selectedMapScheduleDate === todayStr
+      const now = new Date()
+      const nowMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : -1
+
       const slots: string[] = []
       for (let m = sh * 60 + sm; m + 30 <= eh * 60 + em; m += 30) {
+        if (isToday && m <= nowMinutes) continue // hide past/current slots
         slots.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`)
       }
       return slots
-    }, [availability])
+    }, [availability, selectedMapScheduleDate])
 
     // Compute booked slots for the selected date (approved bookings only)
     const mapBookedSlots = useMemo((): Set<string> => {
@@ -2031,7 +2039,7 @@
                             {selectedMapScheduleDate && mapTimeSlots.length > 0 && (
                               <View style={{ marginTop: 10, backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
                                 <Text style={{ fontSize: 12, fontWeight: '700', color: '#9a3412', marginBottom: 6 }}>
-                                  {`Open: ${String(availability!.start_time || '').slice(0, 5)} – ${String(availability!.end_time || '').slice(0, 5)}`}
+                                  {`${t('COURT_PANEL_OPEN_PREFIX')}${String(availability!.start_time || '').slice(0, 5)} – ${String(availability!.end_time || '').slice(0, 5)}`}
                                 </Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                                   {mapTimeSlots.map((slot) => {

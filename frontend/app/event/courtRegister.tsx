@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { getCache, invalidateCache, setCache } from '@/lib/cache'
+import { useTranslation } from '@/constants/translations'
 
 import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, getCourtInfoByCourtId, registerCourt, type CourtAddressSuggestion, type CourtRegisterRequest, upsertCourtInfoIntoCache } from '@/lib/backendApi'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
@@ -44,9 +45,9 @@ const formatVnd = (value: unknown) => {
     : Number(raw)
   const safe = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
   try {
-    return `${new Intl.NumberFormat('vi-VN').format(safe)}₫`
+    return `${new Intl.NumberFormat('vi-VN').format(safe)}?`
   } catch {
-    return `${String(safe).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}₫`
+    return `${String(safe).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}?`
   }
 }
 
@@ -95,6 +96,7 @@ type ServiceDraft = {
 export default function CourtRegisterPage() {
   const router = useRouter()
   const isMountedRef = useRef(true)
+  const { t } = useTranslation()
 
   useEffect(() => {
     return () => {
@@ -289,7 +291,7 @@ export default function CourtRegisterPage() {
         if (!parsed) return
         if (cancelled) return
 
-        // If a registration was in-flight when the user left the screen, keep showing "Registering…"
+        // If a registration was in-flight when the user left the screen, keep showing "Registering�"
         // for a short window so the UI doesn't fall back to a disabled state.
         if (parsed?.registerInFlight === true) {
           const startedAt = Number(parsed?.registerInFlightStartedAt)
@@ -680,7 +682,7 @@ export default function CourtRegisterPage() {
     const fullName = pcFullName.trim()
     const fullPrice = pcFullPrice.trim()
     if (!fullName) {
-      Alert.alert('Missing info', 'Please enter a court name.')
+      Alert.alert(t('COMMON_ERR_MISSING_INFO'), t('COURT_PANEL_ERR_ENTER_NAME'))
       return
     }
     if (!fullPrice || !Number.isFinite(toNumberFromInput(fullPrice)) || toNumberFromInput(fullPrice) < 0) {
@@ -932,7 +934,7 @@ export default function CourtRegisterPage() {
     const nm = name.trim()
     const addr = address.trim()
     if (!nm || !addr) {
-      Alert.alert('Missing info', 'Please fill in name and address.')
+      Alert.alert(t('COMMON_ERR_MISSING_INFO'), t('COURT_PANEL_ERR_FILL_NAME_ADDR'))
       return
     }
 
@@ -942,21 +944,21 @@ export default function CourtRegisterPage() {
       return
     }
     if (!isScheduleValid) {
-      Alert.alert('Invalid schedule', 'Please select days and use a valid time range (HH:MM, start < end).')
+      Alert.alert(t('COURT_REGISTER_ERR_INVALID_SCHEDULE'), t('COURT_REGISTER_ERR_INVALID_SCHEDULE_MSG'))
       return
     }
     if (!agreeTruth) {
-      Alert.alert('Confirm required', 'Please agree that the information you submit is true.')
+      Alert.alert(t('COURT_REGISTER_ERR_AGREE_TRUTH'), t('COURT_REGISTER_ERR_AGREE_TRUTH_MSG'))
       return
     }
 
     if (playingCourts.length === 0) {
-      Alert.alert('Court required', 'Please add at least one court in the “Court” section.')
+      Alert.alert('Court required', 'Please add at least one court in the �Court� section.')
       return
     }
 
     setSubmitting(true)
-    // Persist in-flight state immediately so leaving/re-entering keeps the button in "Registering…".
+    // Persist in-flight state immediately so leaving/re-entering keeps the button in "Registering�".
     try {
       const existingDraft: any = await getCache<any>(COURT_REGISTER_DRAFT_STORAGE_KEY)
       const mergedDraft = {
@@ -1059,7 +1061,7 @@ export default function CourtRegisterPage() {
       return
     }
     if (!name.trim() || !address.trim()) {
-      Alert.alert('Missing info', 'Please fill in name and address.')
+      Alert.alert(t('COMMON_ERR_MISSING_INFO'), t('COURT_PANEL_ERR_FILL_NAME_ADDR'))
       return
     }
     if (!verifiedCoord) {
@@ -1067,11 +1069,11 @@ export default function CourtRegisterPage() {
       return
     }
     if (!isScheduleValid) {
-      Alert.alert('Invalid schedule', 'Please select days and use a valid time range (HH:MM, start < end).')
+      Alert.alert(t('COURT_REGISTER_ERR_INVALID_SCHEDULE'), t('COURT_REGISTER_ERR_INVALID_SCHEDULE_MSG'))
       return
     }
     if (!agreeTruth) {
-      Alert.alert('Confirm required', 'Please agree that the information you submit is true.')
+      Alert.alert(t('COURT_REGISTER_ERR_AGREE_TRUTH'), t('COURT_REGISTER_ERR_AGREE_TRUTH_MSG'))
       return
     }
     setConfirmVisible(true)
@@ -1100,14 +1102,14 @@ export default function CourtRegisterPage() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Venue Register</Text>
+        <Text style={styles.headerTitle}>{t('COURT_REGISTER_TITLE')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-      <Text style={styles.label}>Court Name</Text>
+      <Text style={styles.label}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
       <TextInput
         value={name}
         onChangeText={setName}
@@ -1116,7 +1118,7 @@ export default function CourtRegisterPage() {
       />
 
       <View style={styles.labelRow}>
-        <Text style={styles.label}>Address</Text>
+        <Text style={styles.label}>{t('COMMON_LABEL_ADDRESS')}</Text>
       </View>
       <View style={styles.inputWrap}>
         <TextInput
@@ -1151,7 +1153,7 @@ export default function CourtRegisterPage() {
             if (verifiedCoord) setVerifiedCoord(null)
             if (verifyError) setVerifyError(null)
           }}
-          placeholder="Street, City, Country"
+          placeholder={t('COURT_REGISTER_PLACEHOLDER_ADDRESS')}
           style={[styles.input, styles.inputWithIcon, verifyError && styles.inputError, { minHeight: 44 }]}
         />
         {!!verifiedCoord ? (
@@ -1192,10 +1194,10 @@ export default function CourtRegisterPage() {
           disabled={checking || submitting || (!selectedPlaceId && !verifiedCoord)}
           style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, (checking || submitting || (!selectedPlaceId && !verifiedCoord)) && styles.btnDisabled]}
         >
-          <Text style={styles.smallBtnText}>{checking ? 'Verifying…' : 'Verify Location'}</Text>
+          <Text style={styles.smallBtnText}>{checking ? t('COURT_REGISTER_VERIFYING') : t('COURT_PANEL_BTN_VERIFY')}</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.label}>Venue</Text>
+      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_VENUE_TYPE')}</Text>
       <View style={styles.segmented}>
         {(['Indoor', 'Outdoor', 'Both'] as const).map(v => {
           const active = venue === v
@@ -1206,13 +1208,15 @@ export default function CourtRegisterPage() {
               style={[styles.segment, active && styles.segmentActive]}
               activeOpacity={0.8}
             >
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v}</Text>
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                {v === 'Indoor' ? t('MAP_LABEL_INDOOR') : v === 'Outdoor' ? t('MAP_LABEL_OUTDOOR') : t('COURT_PANEL_VENUE_BOTH')}
+              </Text>
             </TouchableOpacity>
           )
         })}
       </View>
 
-      <Text style={styles.label}>Court</Text>
+      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_COURT_SECTION')}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1234,27 +1238,27 @@ export default function CourtRegisterPage() {
                 />
               </TouchableOpacity>
 
-              <Text style={styles.myCourtMeta}>{`Full price: ${formatVnd(pc.fullPrice)}`}</Text>
-              <Text style={styles.myCourtMeta}>{pc.allowHalfBooking ? 'Half Court Booking: On' : 'Half Court Booking: Off'}</Text>
+              <Text style={styles.myCourtMeta}>{`${t('COURT_REGISTER_FULL_PRICE_PREFIX')}${formatVnd(pc.fullPrice)}`}</Text>
+              <Text style={styles.myCourtMeta}>{pc.allowHalfBooking ? t('COURT_REGISTER_HALF_BOOKING_ON') : t('COURT_REGISTER_HALF_BOOKING_OFF')}</Text>
 
               {expanded && (
                 <View style={styles.courtCardBody}>
-                  <Text style={styles.courtDetailLine}>{`Surface: ${pc.surface || 'concrete'}`}</Text>
+                  <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_SURFACE_PREFIX')}${pc.surface || 'concrete'}`}</Text>
                   {pc.allowHalfBooking ? (
                     <>
-                      <Text style={styles.courtDetailLine}>{`Half Court 1: ${pc.half1Name || 'Half Court 1'} • ${formatVnd(pc.half1Price)}`}</Text>
-                      <Text style={styles.courtDetailLine}>{`Half Court 2: ${pc.half2Name || 'Half Court 2'} • ${formatVnd(pc.half2Price)}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 1: ${pc.half1Name || 'Half Court 1'} � ${formatVnd(pc.half1Price)}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 2: ${pc.half2Name || 'Half Court 2'} � ${formatVnd(pc.half2Price)}`}</Text>
                     </>
                   ) : null}
                   <Text style={styles.courtDetailLabel}>Description:</Text>
                   <Text style={styles.courtDetailDesc} numberOfLines={4}>
-                    {(pc.description || '').trim() ? pc.description : 'No description'}
+                    {(pc.description || '').trim() ? pc.description : t('COURT_REGISTER_NO_DESCRIPTION')}
                   </Text>
-                  <Text style={styles.courtDetailLine}>{`Full Court Images: ${Array.isArray(pc.images) ? pc.images.length : 0}`}</Text>
+                  <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_FULL_COURT_IMAGES_PREFIX')}${Array.isArray(pc.images) ? pc.images.length : 0}`}</Text>
                   {pc.allowHalfBooking ? (
                     <>
-                      <Text style={styles.courtDetailLine}>{`Half Court 1 Images: ${Array.isArray(pc.half1Images) ? pc.half1Images.length : 0}`}</Text>
-                      <Text style={styles.courtDetailLine}>{`Half Court 2 Images: ${Array.isArray(pc.half2Images) ? pc.half2Images.length : 0}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_HALF1_IMAGES_PREFIX')}${Array.isArray(pc.half1Images) ? pc.half1Images.length : 0}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_HALF2_IMAGES_PREFIX')}${Array.isArray(pc.half2Images) ? pc.half2Images.length : 0}`}</Text>
                     </>
                   ) : null}
                 </View>
@@ -1270,7 +1274,7 @@ export default function CourtRegisterPage() {
             activeOpacity={0.85}
             style={styles.coverPressable}
           >
-            <Text style={styles.addCourtCoverText}>Add Court</Text>
+            <Text style={styles.addCourtCoverText}>{t('COURT_REGISTER_BTN_ADD_COURT')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1280,7 +1284,7 @@ export default function CourtRegisterPage() {
         activeOpacity={0.85}
         style={styles.servicesHeaderRow}
       >
-        <Text style={styles.servicesHeaderText}>Services (optional)</Text>
+        <Text style={styles.servicesHeaderText}>{t('COURT_REGISTER_LABEL_SERVICES')}</Text>
         <Image
           source={ICONS.arrowdown}
           style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]}
@@ -1290,7 +1294,7 @@ export default function CourtRegisterPage() {
       {servicesExpanded && (
         <View style={styles.servicesBody}>
           {services.length === 0 ? (
-            <Text style={styles.servicesHint}>No services added.</Text>
+            <Text style={styles.servicesHint}>{t('COURT_REGISTER_NO_SERVICES')}</Text>
           ) : null}
 
           <ScrollView
@@ -1314,12 +1318,12 @@ export default function CourtRegisterPage() {
                     />
                   </TouchableOpacity>
 
-                  <Text style={styles.servicesMeta}>{`${s.category} • ${formatVnd(s.price)}`}</Text>
+                  <Text style={styles.servicesMeta}>{`${s.category} � ${formatVnd(s.price)}`}</Text>
 
                   {expanded && (
                     <View style={styles.serviceCardBody}>
-                      <Text style={styles.courtDetailLine}>{`Stock: ${s.stock ? Number(s.stock) || 0 : 0}`}</Text>
-                      <Text style={styles.courtDetailLine}>{`Images: ${Array.isArray(s.images) ? s.images.length : 0}`}</Text>
+                  <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_STOCK_PREFIX')}${s.stock ? Number(s.stock) || 0 : 0}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_IMAGES_COUNT_PREFIX')}${Array.isArray(s.images) ? s.images.length : 0}`}</Text>
                       {Array.isArray(s.images) && s.images.length > 0 ? (
                         <ScrollView
                           horizontal
@@ -1346,17 +1350,17 @@ export default function CourtRegisterPage() {
                 activeOpacity={0.85}
                 style={styles.coverPressable}
               >
-                <Text style={styles.addCourtCoverText}>Add service</Text>
+                <Text style={styles.addCourtCoverText}>{t('COURT_REGISTER_BTN_ADD_SERVICE')}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
 
           {serviceDraftVisible && (
             <View style={styles.serviceDraftInline}>
-                <Text style={styles.label}>Service name</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_SVC_NAME')}</Text>
                 <TextInput value={svcName} onChangeText={setSvcName} placeholder="Water" style={styles.input} />
 
-                <Text style={styles.label}>Category</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_CATEGORY')}</Text>
                 <TouchableOpacity
                   onPress={() => setSvcCategoryDropdownOpen(v => !v)}
                   activeOpacity={0.85}
@@ -1399,7 +1403,7 @@ export default function CourtRegisterPage() {
                   </View>
                 </Modal>
 
-                <Text style={styles.label}>Price(₫) :</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
                 <View style={styles.priceInputWrap}>
                   <TextInput
                     value={svcPrice}
@@ -1409,10 +1413,10 @@ export default function CourtRegisterPage() {
                     inputMode="numeric"
                     style={[styles.input, styles.inputWithSuffix]}
                   />
-                  <Text style={styles.suffixInInput}>₫</Text>
+                  <Text style={styles.suffixInInput}>?</Text>
                 </View>
 
-                <Text style={styles.label}>Stock</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_STOCK')}</Text>
                 <TextInput
                   value={svcStock}
                   onChangeText={setSvcStock}
@@ -1422,7 +1426,7 @@ export default function CourtRegisterPage() {
                   style={styles.input}
                 />
 
-                <Text style={styles.label}>Images (optional)</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES_OPT')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                   {svcImages.map((uri) => (
                     <View key={uri} style={styles.coverFrame}>
@@ -1430,7 +1434,7 @@ export default function CourtRegisterPage() {
                         <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => removeServiceImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                        <Text style={styles.removeXText}>×</Text>
+                        <Text style={styles.removeXText}>�</Text>
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -1443,7 +1447,7 @@ export default function CourtRegisterPage() {
                         style={styles.coverPressable}
                       >
                         <Text style={styles.addPlus}>+</Text>
-                        <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                        <Text style={styles.coverHint}>{imageUploading ? t('COURT_REGISTER_UPLOADING') : t('COURT_REGISTER_ADD_IMAGE')}</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1455,14 +1459,14 @@ export default function CourtRegisterPage() {
                     style={[styles.modalBtn, styles.modalCancel]}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.modalBtnText}>Close</Text>
+                    <Text style={styles.modalBtnText}>{t('COMMON_BTN_CLOSE')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={addService}
                     style={[styles.modalBtn, styles.modalConfirm]}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.modalBtnText}>Submit</Text>
+                    <Text style={styles.modalBtnText}>{t('COURT_REGISTER_BTN_SUBMIT')}</Text>
                   </TouchableOpacity>
                 </View>
             </View>
@@ -1471,7 +1475,7 @@ export default function CourtRegisterPage() {
       )}
 
       <View style={styles.rowBetween}>
-        <Text style={styles.label}>Images</Text>
+        <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
       </View>
 
       <ScrollView
@@ -1489,7 +1493,7 @@ export default function CourtRegisterPage() {
               style={styles.removeXBtn}
               activeOpacity={0.85}
             >
-              <Text style={styles.removeXText}>×</Text>
+              <Text style={styles.removeXText}>�</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -1521,26 +1525,26 @@ export default function CourtRegisterPage() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCardTall}>
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>Add Court</Text>
+              <Text style={[styles.modalTitle, styles.modalTitleCentered]}>{t('COURT_REGISTER_BTN_ADD_COURT')}</Text>
               <TouchableOpacity
                 onPress={() => setPlayingCourtModalVisible(false)}
                 style={styles.modalCloseXBtn}
                 activeOpacity={0.85}
               >
-                <Text style={styles.modalCloseXText}>×</Text>
+                <Text style={styles.modalCloseXText}>�</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.label}>Court Name</Text>
+              <Text style={styles.label}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
               <TextInput
                 value={pcFullName}
                 onChangeText={setPcFullName}
-                placeholder="Court 1"
+                placeholder={t('COURT_REGISTER_PLACEHOLDER_COURT_NAME')}
                 style={styles.input}
               />
 
-              <Text style={styles.label}>Price(₫) :</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
               <View style={styles.priceInputWrap}>
                 <TextInput
                   value={pcFullPrice}
@@ -1550,10 +1554,10 @@ export default function CourtRegisterPage() {
                   inputMode="numeric"
                   style={[styles.input, styles.inputWithSuffix]}
                 />
-                <Text style={styles.suffixInInput}>₫</Text>
+                <Text style={styles.suffixInInput}>?</Text>
               </View>
 
-              <Text style={styles.label}>Schedule</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_SCHEDULE')}</Text>
               <View style={styles.weekRow}>
                 {WEEK_DAYS.map((label) => {
                   const active = scheduleDays.includes(label)
@@ -1574,7 +1578,7 @@ export default function CourtRegisterPage() {
 
               <View style={styles.timeRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Start Time (HH:MM)</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_START_TIME')}</Text>
                   <TextInput
                     value={startTime}
                     onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
@@ -1586,7 +1590,7 @@ export default function CourtRegisterPage() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>End Time (HH:MM)</Text>
+                <Text style={styles.label}>{t('COURT_REGISTER_LABEL_END_TIME')}</Text>
                   <TextInput
                     value={endTime}
                     onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
@@ -1599,7 +1603,7 @@ export default function CourtRegisterPage() {
                 </View>
               </View>
 
-              <Text style={styles.label}>Images</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {pcImages.map((uri) => (
                   <View key={uri} style={styles.coverFrame}>
@@ -1607,7 +1611,7 @@ export default function CourtRegisterPage() {
                       <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => removePlayingCourtImage('full', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                      <Text style={styles.removeXText}>×</Text>
+                      <Text style={styles.removeXText}>�</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -1620,17 +1624,17 @@ export default function CourtRegisterPage() {
                       style={styles.coverPressable}
                     >
                       <Text style={styles.addPlus}>+</Text>
-                      <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                      <Text style={styles.coverHint}>{imageUploading ? t('COURT_REGISTER_UPLOADING') : t('COURT_REGISTER_ADD_IMAGE')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </ScrollView>
 
-              <Text style={styles.label}>Allow Half Court Booking</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_ALLOW_HALF')}</Text>
               <View style={styles.segmented}>
                 {([
-                  { label: 'Yes', value: true },
-                  { label: 'No', value: false },
+                  { label: t('COURT_REGISTER_LABEL_YES'), value: true as const },
+                  { label: t('COURT_REGISTER_LABEL_NO'), value: false as const },
                 ] as const).map(opt => {
                   const active = pcAllowHalf === opt.value
                   return (
@@ -1648,34 +1652,34 @@ export default function CourtRegisterPage() {
 
               {pcAllowHalf && (
                 <>
-                  <Text style={styles.label}>Choose Court Half:</Text>
+                  <Text style={styles.label}>{t('COURT_REGISTER_LABEL_CHOOSE_HALF')}</Text>
                   <View style={styles.halfTabsRow}>
                     <TouchableOpacity
                       onPress={() => setPcHalfTab('half1')}
                       activeOpacity={0.85}
                       style={[styles.halfTab, pcHalfTab === 'half1' && styles.halfTabActive]}
                     >
-                      <Text style={[styles.halfTabText, pcHalfTab === 'half1' && styles.halfTabTextActive]}>Half Court 1</Text>
+                      <Text style={[styles.halfTabText, pcHalfTab === 'half1' && styles.halfTabTextActive]}>{t('COURT_REGISTER_LABEL_HALF1')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => setPcHalfTab('half2')}
                       activeOpacity={0.85}
                       style={[styles.halfTab, pcHalfTab === 'half2' && styles.halfTabActive]}
                     >
-                      <Text style={[styles.halfTabText, pcHalfTab === 'half2' && styles.halfTabTextActive]}>Half Court 2</Text>
+                      <Text style={[styles.halfTabText, pcHalfTab === 'half2' && styles.halfTabTextActive]}>{t('COURT_REGISTER_LABEL_HALF2')}</Text>
                     </TouchableOpacity>
                   </View>
 
                   {pcHalfTab === 'half1' ? (
                     <>
-                      <Text style={styles.label}>Name</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_NAME')}</Text>
                       <TextInput
                         value={pcHalf1Name}
                         onChangeText={setPcHalf1Name}
                         placeholder="Name"
                         style={styles.input}
                       />
-                      <Text style={styles.label}>Price(₫) :</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
                       <View style={styles.priceInputWrap}>
                         <TextInput
                           value={pcHalf1Price}
@@ -1685,10 +1689,10 @@ export default function CourtRegisterPage() {
                           inputMode="numeric"
                           style={[styles.input, styles.inputWithSuffix]}
                         />
-                        <Text style={styles.suffixInInput}>₫</Text>
+                        <Text style={styles.suffixInInput}>?</Text>
                       </View>
 
-                      <Text style={styles.label}>Images</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf1Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
@@ -1696,7 +1700,7 @@ export default function CourtRegisterPage() {
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half1', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                              <Text style={styles.removeXText}>×</Text>
+                              <Text style={styles.removeXText}>�</Text>
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -1709,7 +1713,7 @@ export default function CourtRegisterPage() {
                               style={styles.coverPressable}
                             >
                               <Text style={styles.addPlus}>+</Text>
-                              <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                              <Text style={styles.coverHint}>{imageUploading ? t('COURT_REGISTER_UPLOADING') : t('COURT_REGISTER_ADD_IMAGE')}</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -1717,14 +1721,14 @@ export default function CourtRegisterPage() {
                     </>
                   ) : (
                     <>
-                      <Text style={styles.label}>Name</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_NAME')}</Text>
                       <TextInput
                         value={pcHalf2Name}
                         onChangeText={setPcHalf2Name}
                         placeholder="Name"
                         style={styles.input}
                       />
-                      <Text style={styles.label}>Price(₫) :</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
                       <View style={styles.priceInputWrap}>
                         <TextInput
                           value={pcHalf2Price}
@@ -1734,10 +1738,10 @@ export default function CourtRegisterPage() {
                           inputMode="numeric"
                           style={[styles.input, styles.inputWithSuffix]}
                         />
-                        <Text style={styles.suffixInInput}>₫</Text>
+                        <Text style={styles.suffixInInput}>?</Text>
                       </View>
 
-                      <Text style={styles.label}>Images</Text>
+                      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf2Images.map((uri) => (
                           <View key={uri} style={styles.coverFrame}>
@@ -1745,7 +1749,7 @@ export default function CourtRegisterPage() {
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half2', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                              <Text style={styles.removeXText}>×</Text>
+                              <Text style={styles.removeXText}>�</Text>
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -1758,7 +1762,7 @@ export default function CourtRegisterPage() {
                               style={styles.coverPressable}
                             >
                               <Text style={styles.addPlus}>+</Text>
-                              <Text style={styles.coverHint}>{imageUploading ? 'Uploading…' : 'Add image'}</Text>
+                              <Text style={styles.coverHint}>{imageUploading ? t('COURT_REGISTER_UPLOADING') : t('COURT_REGISTER_ADD_IMAGE')}</Text>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -1768,7 +1772,7 @@ export default function CourtRegisterPage() {
                 </>
               )}
 
-              <Text style={styles.label}>Surface</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_SURFACE')}</Text>
               <View style={styles.surfaceWrap}>
                 {(['hardwood', 'concrete', 'synthetic'] as const).map(s => {
                   const active = pcSurface === s
@@ -1785,7 +1789,7 @@ export default function CourtRegisterPage() {
                 })}
               </View>
 
-              <Text style={styles.label}>Description (optional)</Text>
+              <Text style={styles.label}>{t('COURT_REGISTER_LABEL_DESC_OPT')}</Text>
               <TextInput
                 value={pcDescription}
                 onChangeText={setPcDescription}
@@ -1801,7 +1805,7 @@ export default function CourtRegisterPage() {
                 style={[styles.submitBtn, { alignSelf: 'center', marginTop: 16 }]}
                 activeOpacity={0.85}
               >
-                <Text style={styles.submitText}>Submit</Text>
+                <Text style={styles.submitText}>{t('COURT_REGISTER_BTN_SUBMIT')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1814,24 +1818,24 @@ export default function CourtRegisterPage() {
         onPress={() => setAgreeTruth(v => !v)}
       >
         <View style={[styles.checkboxBox, agreeTruth && styles.checkboxBoxChecked]}>
-          {agreeTruth && <Text style={styles.checkboxTick}>✓</Text>}
+          {agreeTruth && <Text style={styles.checkboxTick}>?</Text>}
         </View>
         <Text style={styles.checkboxLabel}>
-          I agree that all the information I submit is <Text style={styles.truthBold}>true</Text>.
+          {t('COURT_REGISTER_AGREE_TRUTH1')}<Text style={styles.truthBold}>{t('COURT_REGISTER_AGREE_TRUTH_BOLD')}</Text>.
         </Text>
       </TouchableOpacity>
 
       {warnings.length > 0 && (
         <View style={styles.warningBox}>
-          <Text style={styles.warningTitle}>Warnings</Text>
+          <Text style={styles.warningTitle}>{t('COURT_REGISTER_WARNINGS_TITLE')}</Text>
           {warnings.map((w, i) => (
-            <Text key={`${w}-${i}`} style={styles.warningText}>• {w}</Text>
+            <Text key={`${w}-${i}`} style={styles.warningText}>� {w}</Text>
           ))}
         </View>
       )}
 
       {!userid && (
-        <Text style={styles.helpText}>Sign in is required to register a court.</Text>
+        <Text style={styles.helpText}>{t('COURT_REGISTER_SIGN_IN_REQUIRED')}</Text>
       )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1845,7 +1849,7 @@ export default function CourtRegisterPage() {
             style={[styles.submitBtn, !canSubmit && styles.btnDisabled]}
             activeOpacity={0.85}
           >
-            <Text style={styles.submitText}>{submitting ? 'Registering…' : 'Register Court'}</Text>
+            <Text style={styles.submitText}>{submitting ? t('COURT_REGISTER_REGISTERING') : t('COURT_REGISTER_BTN_REGISTER')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1853,8 +1857,8 @@ export default function CourtRegisterPage() {
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirm submission</Text>
-            <Text style={styles.modalBody}>Are you sure you want to submit?</Text>
+            <Text style={styles.modalTitle}>{t('COURT_REGISTER_CONFIRM_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('COURT_REGISTER_CONFIRM_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmVisible(false)}>
                 <Text style={styles.modalBtnText}>Cancel</Text>
@@ -1884,8 +1888,8 @@ export default function CourtRegisterPage() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Remove image</Text>
-            <Text style={styles.modalBody}>Do you want to remove this image?</Text>
+            <Text style={styles.modalTitle}>{t('COURT_REGISTER_REMOVE_IMG_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('COURT_REGISTER_REMOVE_IMG_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalCancel]}
@@ -1907,8 +1911,8 @@ export default function CourtRegisterPage() {
       <Modal visible={submittedVisible} transparent animationType="fade" onRequestClose={() => setSubmittedVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Your request has been submitted</Text>
-            <Text style={styles.modalBody}>We will review your court registration request and contact you later.</Text>
+            <Text style={styles.modalTitle}>{t('COURT_REGISTER_SUBMITTED_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('COURT_REGISTER_SUBMITTED_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirm]}

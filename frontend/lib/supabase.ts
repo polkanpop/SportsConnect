@@ -23,8 +23,10 @@ export const supabase = createClient(
       storage: ExpoSecureStoreAdapter as any,
       autoRefreshToken: true,
       persistSession: true,
-      // Enable detecting the session in AuthSession redirect URLs (we still manually call setSession for robustness).
-      detectSessionInUrl: true,
+      // Disabled: our Zalo OAuth uses a custom backend flow (not Supabase PKCE).
+      // Leaving this true causes Supabase to intercept the Zalo ?code= param and
+      // attempt exchangeCodeForSession → Supabase returns 404 NOT_FOUND.
+      detectSessionInUrl: false,
     },
   },
 );

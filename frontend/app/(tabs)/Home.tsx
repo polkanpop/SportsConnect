@@ -40,7 +40,7 @@ export default function Home() {
   const [reviewsPanelMounted, setReviewsPanelMounted] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [managementPanelExpanded, setManagementPanelExpanded] = useState(false);
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const drawerW = Math.min(320, Math.max(260, Dimensions.get('window').width * 0.78));
   const drawerX = React.useRef(new Animated.Value(-drawerW)).current;
 
@@ -86,7 +86,9 @@ export default function Home() {
   };
 
   const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const dateString = language === 'vi'
+    ? `${now.getDate()} thg ${now.getMonth() + 1}`
+    : now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 
   const categoryLabelStyle = {
@@ -309,9 +311,9 @@ export default function Home() {
       timeRange = `${startTime}–${endTime}`
     }
 
-    const dateLabel = start
-      .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      .replace(',', '')
+    const dateLabel = language === 'vi'
+      ? `${start.getDate()} thg ${start.getMonth() + 1} ${start.getFullYear()}`
+      : start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '')
     return `${timeRange} · ${dateLabel}`
   }
 

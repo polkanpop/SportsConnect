@@ -2282,7 +2282,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 </View>
               )}
 
-              <Text style={styles.label}>Address</Text>
+              <Text style={styles.label}>{t('COMMON_LABEL_ADDRESS')}</Text>
               <View style={styles.addressRow}>
                 <TextInput
                   value={editAddress}
@@ -2290,7 +2290,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     setEditAddress(v)
                     setVerifyError(null)
                   }}
-                  placeholder="Court address"
+                  placeholder={t('COURT_PANEL_PLACEHOLDER_ADDRESS')}
                   style={styles.addressInput}
                 />
               </View>
