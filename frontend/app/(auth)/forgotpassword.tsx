@@ -3,8 +3,10 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image } from 'reac
 import { Stack, router } from 'expo-router'
 import { requestPasswordReset } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 
 const ForgotPasswordScreen = () => {
+  const { t } = useTranslation()
   const [identifier, setIdentifier] = useState('') // email or username
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -13,17 +15,17 @@ const ForgotPasswordScreen = () => {
     setStatusMsg(null)
     const id = identifier.trim()
     if (!id) {
-      setStatusMsg('Enter email or username.')
+      setStatusMsg(t('AUTH_FORGOT_ERR_ENTER'))
       return
     }
     setSubmitting(true)
     try {
       await requestPasswordReset(id)
-      setStatusMsg('If the account exists, a reset link was sent.')
+      setStatusMsg(t('AUTH_FORGOT_SUCCESS'))
       setIdentifier('')
     } catch (e: any) {
       // Backend always returns ok, but handle unexpected transport errors
-      setStatusMsg(e.message || 'Request failed')
+      setStatusMsg(e.message || t('AUTH_FORGOT_ERR_FAILED'))
     } finally {
       setSubmitting(false)
     }
@@ -35,11 +37,11 @@ const ForgotPasswordScreen = () => {
       <View style={styles.container}>
         <View style={styles.logoWrapper}>
           <Image source={ICONS.app_icon} style={styles.logo} />
-          <Text style={styles.title}>Forgot Password</Text>
+          <Text style={styles.title}>{t('AUTH_FORGOT_TITLE')}</Text>
         </View>
-        <Text style={styles.helper}>Enter your email or username and we&apos;ll send a reset link.</Text>
+        <Text style={styles.helper}>{t('AUTH_FORGOT_HELPER')}</Text>
         <TextInput
-          placeholder="Email or Username"
+          placeholder={t('AUTH_FORGOT_PLACEHOLDER')}
           placeholderTextColor={COLORS.dark300}
           value={identifier}
           onChangeText={(t) => { setIdentifier(t); if (statusMsg) setStatusMsg(null); }}
@@ -48,10 +50,10 @@ const ForgotPasswordScreen = () => {
         />
         {statusMsg && <Text style={styles.status}>{statusMsg}</Text>}
         <TouchableOpacity disabled={submitting} onPress={handleSubmit} style={[styles.button, submitting && { opacity: 0.7 }]}>
-          <Text style={styles.buttonText}>{submitting ? 'Submitting...' : 'Send Reset Link'}</Text>
+          <Text style={styles.buttonText}>{submitting ? t('AUTH_FORGOT_BTN_SUBMITTING') : t('AUTH_FORGOT_BTN_SEND')}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.back()} style={styles.backLinkWrap}>
-          <Text style={styles.backLink}>Back to Login</Text>
+          <Text style={styles.backLink}>{t('AUTH_FORGOT_BTN_BACK')}</Text>
         </TouchableOpacity>
       </View>
     </>

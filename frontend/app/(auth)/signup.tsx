@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTranslation } from '@/constants/translations'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { signupSchema, SignupFormData, isPhoneInput } from '@/lib/signupSchema'
@@ -28,16 +29,18 @@ import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboardi
 type FormData = SignupFormData
 
 // ─── Strength display config ──────────────────────────────────────────────────
-const STRENGTH: { label: string; color: string }[] = [
-  { label: 'Very Weak', color: '#dc2626' },
-  { label: 'Weak',      color: '#f97316' },
-  { label: 'Fair',      color: '#eab308' },
-  { label: 'Good',      color: '#84cc16' },
-  { label: 'Strong',    color: '#22c55e' },
-]
+const STRENGTH_COLORS = ['#dc2626', '#f97316', '#eab308', '#84cc16', '#22c55e']
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SignUpScreen() {
+  const { t } = useTranslation()
+  const STRENGTH = [
+    { label: t('AUTH_STRENGTH_VERY_WEAK'), color: STRENGTH_COLORS[0] },
+    { label: t('AUTH_STRENGTH_WEAK'),      color: STRENGTH_COLORS[1] },
+    { label: t('AUTH_STRENGTH_FAIR'),      color: STRENGTH_COLORS[2] },
+    { label: t('AUTH_STRENGTH_GOOD'),      color: STRENGTH_COLORS[3] },
+    { label: t('AUTH_STRENGTH_STRONG'),    color: STRENGTH_COLORS[4] },
+  ]
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [confirmVisible, setConfirmVisible]   = useState(false)
   const [generalError, setGeneralError]       = useState('')
@@ -92,11 +95,11 @@ export default function SignUpScreen() {
       })
       await requestLocationPermissionOnceAfterSignup()
       if (res?.merged) {
-        setSuccessMessage('Google account linked! You can now sign in.')
+        setSuccessMessage(t('AUTH_SIGNUP_SUCCESS_GOOGLE'))
         setTimeout(() => router.replace('/(auth)/login'), 1800)
         return
       }
-      setSuccessMessage('Account created. Please verify your email to continue.')
+      setSuccessMessage(t('AUTH_SIGNUP_SUCCESS_CREATED'))
       if (!AUTO_EMAIL_LOGIN) {
         setTimeout(
           () => router.replace(`/(auth)/waiting?email=${encodeURIComponent(data.emailOrPhone.trim())}` as any),
@@ -104,7 +107,7 @@ export default function SignUpScreen() {
         )
       }
     } catch (err: any) {
-      setGeneralError(err.message || 'Signup failed')
+      setGeneralError(err.message || t('AUTH_SIGNUP_ERR_FAILED'))
     }
   }
 
@@ -117,20 +120,20 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ── Header ── */}
-          <Text style={styles.screenTitle}>Sign Up</Text>
-          <Text style={styles.subtitle}>Create your SportConnect account</Text>
+          <Text style={styles.screenTitle}>{t('AUTH_SIGNUP_TITLE')}</Text>
+          <Text style={styles.subtitle}>{t('AUTH_SIGNUP_SUBTITLE')}</Text>
 
           {generalError   ? <Text style={styles.feedbackError}>{generalError}</Text>   : null}
           {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
 
           {/* ── Display Name ── */}
-          <Text style={styles.label}>Display Name</Text>
+          <Text style={styles.label}>{t('AUTH_LABEL_DISPLAY_NAME')}</Text>
           <Controller
             control={control}
             name="accountName"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="Display Name"
+                placeholder={t('AUTH_LABEL_DISPLAY_NAME')}
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
@@ -143,13 +146,13 @@ export default function SignUpScreen() {
           {errors.accountName && <Text style={styles.fieldError}>{errors.accountName.message}</Text>}
 
           {/* ── Username ── */}
-          <Text style={styles.label}>Username</Text>
+          <Text style={styles.label}>{t('AUTH_LABEL_USERNAME')}</Text>
           <Controller
             control={control}
             name="username"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="Username"
+                placeholder={t('AUTH_LABEL_USERNAME')}
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
@@ -163,13 +166,13 @@ export default function SignUpScreen() {
           {errors.username && <Text style={styles.fieldError}>{errors.username.message}</Text>}
 
           {/* ── Email or Phone Number ── */}
-          <Text style={styles.label}>Email or Phone Number</Text>
+          <Text style={styles.label}>{t('AUTH_LABEL_EMAIL_OR_PHONE')}</Text>
           <Controller
             control={control}
             name="emailOrPhone"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                placeholder="Email or Phone Number"
+                placeholder={t('AUTH_LABEL_EMAIL_OR_PHONE')}
                 placeholderTextColor={COLOR.dark300}
                 value={value}
                 onChangeText={onChange}
@@ -186,21 +189,21 @@ export default function SignUpScreen() {
           {/* Phone mode hint */}
           {isPhone && (
             <Text style={styles.phoneHint}>
-              📱 You'll verify your number via SMS — no password needed.
+              {t('AUTH_SIGNUP_PHONE_HINT')}
             </Text>
           )}
 
           {/* ── Password (email mode only) ── */}
           {!isPhone && (
             <>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>{t('AUTH_LABEL_PASSWORD')}</Text>
               <Controller
                 control={control}
                 name="password"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
                     <TextInput
-                      placeholder="Password"
+                      placeholder={t('AUTH_LABEL_PASSWORD')}
                       placeholderTextColor={COLOR.dark300}
                       secureTextEntry={!passwordVisible}
                       value={value}
@@ -242,14 +245,14 @@ export default function SignUpScreen() {
               {errors.password && <Text style={styles.fieldError}>{errors.password.message}</Text>}
 
               {/* ── Confirm Password ── */}
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={styles.label}>{t('AUTH_LABEL_CONFIRM_PASSWORD')}</Text>
               <Controller
                 control={control}
                 name="confirmPassword"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
                     <TextInput
-                      placeholder="Confirm Password"
+                      placeholder={t('AUTH_LABEL_CONFIRM_PASSWORD')}
                       placeholderTextColor={COLOR.dark300}
                       secureTextEntry={!confirmVisible}
                       value={value}
@@ -280,7 +283,7 @@ export default function SignUpScreen() {
                   {value && <Image source={ICONS.checkSmall} style={styles.checkboxTick} />}
                 </View>
                 <Text style={styles.textDark}>
-                  I agree with{' '}
+                  {t('AUTH_SIGNUP_TERMS_AGREE')}{' '}
                   <Text
                     style={styles.termsLink}
                     onPress={(e) => {
@@ -288,7 +291,7 @@ export default function SignUpScreen() {
                       Linking.openURL('https://sportconnects.org/terms')
                     }}
                   >
-                    Terms of Service
+                    {t('AUTH_SIGNUP_TERMS_LINK')}
                   </Text>
                 </Text>
               </Pressable>
@@ -306,15 +309,15 @@ export default function SignUpScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.submitButtonText}>Sign Up</Text>
+              <Text style={styles.submitButtonText}>{t('AUTH_BTN_SIGN_UP')}</Text>
             )}
           </TouchableOpacity>
 
           {/* ── Footer ── */}
           <View style={styles.footerRow}>
-            <Text style={styles.textDark}>Already have an account?</Text>
+            <Text style={styles.textDark}>{t('AUTH_LABEL_ALREADY_HAVE_ACCOUNT')}</Text>
             <Pressable onPress={() => router.replace('/(auth)/login')}>
-              <Text style={styles.footerLink}> Sign in</Text>
+              <Text style={styles.footerLink}> {t('AUTH_SIGNUP_LINK_SIGN_IN')}</Text>
             </Pressable>
           </View>
         </ScrollView>

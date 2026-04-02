@@ -3,8 +3,10 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image } from 'reac
 import { Stack, useLocalSearchParams, router } from 'expo-router'
 import { resetPassword } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 
 const NewPasswordScreen = () => {
+	const { t } = useTranslation()
 	const { token } = useLocalSearchParams<{ token?: string }>()
 	const [pw1, setPw1] = useState('')
 	const [pw2, setPw2] = useState('')
@@ -15,23 +17,23 @@ const NewPasswordScreen = () => {
 
 	const doReset = async () => {
 		setMsg(null)
-		if (!token) { setMsg('Missing token'); return }
-		if (!pw1 || !pw2) { setMsg('Enter both password fields'); return }
-		if (pw1 !== pw2) { setMsg('Passwords do not match'); return }
-		if (pw1.length < 8) { setMsg('Minimum 8 characters'); return }
+		if (!token) { setMsg(t('AUTH_NEWPASS_ERR_MISSING_TOKEN')); return }
+		if (!pw1 || !pw2) { setMsg(t('AUTH_NEWPASS_ERR_EMPTY_FIELDS')); return }
+		if (pw1 !== pw2) { setMsg(t('AUTH_NEWPASS_ERR_MISMATCH')); return }
+		if (pw1.length < 8) { setMsg(t('AUTH_NEWPASS_ERR_TOO_SHORT')); return }
 		setSubmitting(true)
 		try {
 			const resp = await resetPassword(String(token), pw1)
 			if (resp.reset) {
-				setMsg('Password updated. You can now log in.')
+				setMsg(t('AUTH_NEWPASS_SUCCESS'))
 				setPw1(''); setPw2('')
 				// Optional redirect after short delay
 				setTimeout(() => router.replace('/(auth)/login'), 1200)
 			} else {
-				setMsg('Unexpected response')
+				setMsg(t('AUTH_NEWPASS_ERR_UNEXPECTED'))
 			}
 		} catch (e: any) {
-			setMsg(e.message || 'Reset failed')
+			setMsg(e.message || t('AUTH_NEWPASS_ERR_FAILED'))
 		} finally {
 			setSubmitting(false)
 		}
@@ -43,12 +45,12 @@ const NewPasswordScreen = () => {
 			<View style={styles.container}>
 				<View style={styles.logoWrapper}>
 					<Image source={ICONS.app_icon} style={styles.logo} />
-					<Text style={styles.title}>Set New Password</Text>
+					<Text style={styles.title}>{t('AUTH_NEWPASS_TITLE')}</Text>
 				</View>
-				<Text style={styles.helper}>Create a new password for your account.</Text>
-				<View style={styles.passwordRow}>
-					<TextInput
-						placeholder="New Password"
+			<Text style={styles.helper}>{t('AUTH_NEWPASS_HELPER')}</Text>
+			<View style={styles.passwordRow}>
+				<TextInput
+					placeholder={t('AUTH_NEWPASS_PLACEHOLDER_NEW')}
 						placeholderTextColor={COLORS.dark300}
 						secureTextEntry={!visible}
 						value={pw1}
@@ -61,7 +63,7 @@ const NewPasswordScreen = () => {
 				</View>
 				<View style={styles.passwordRow}>
 					<TextInput
-						placeholder="Confirm Password"
+					placeholder={t('AUTH_LABEL_CONFIRM_PASSWORD')}
 						placeholderTextColor={COLORS.dark300}
 						secureTextEntry={!visible2}
 						value={pw2}
@@ -74,10 +76,10 @@ const NewPasswordScreen = () => {
 				</View>
 				{msg && <Text style={styles.status}>{msg}</Text>}
 				<TouchableOpacity disabled={submitting} onPress={doReset} style={[styles.button, submitting && { opacity: 0.7 }]}>
-					<Text style={styles.buttonText}>{submitting ? 'Updating...' : 'Update Password'}</Text>
+					<Text style={styles.buttonText}>{submitting ? t('AUTH_NEWPASS_BTN_UPDATING') : t('AUTH_NEWPASS_BTN_UPDATE')}</Text>
 				</TouchableOpacity>
 				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLinkWrap}>
-					<Text style={styles.backLink}>Back to Login</Text>
+					<Text style={styles.backLink}>{t('AUTH_NEWPASS_BTN_BACK')}</Text>
 				</TouchableOpacity>
 			</View>
 		</>

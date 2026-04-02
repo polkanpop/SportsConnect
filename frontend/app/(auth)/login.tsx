@@ -11,6 +11,7 @@ import { Link, Stack, router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from '@/constants/translations';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
@@ -29,6 +30,7 @@ function detectMode(v: string): InputMode {
 }
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const [identifier, setIdentifier] = useState('');
@@ -65,7 +67,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setErrorMsg(null);
     if (!identifier.trim() || !password) {
-      setErrorMsg('Enter your email or phone number and password.');
+      setErrorMsg(t('AUTH_LOGIN_ERR_MISSING_FIELDS'));
       return;
     }
     setLoading(true);
@@ -80,14 +82,14 @@ export default function LoginScreen() {
       setPassword('');
       router.replace('/(tabs)/Home');
     } catch (e: any) {
-      const msg = e.message || 'Login failed';
+      const msg = e.message || t('AUTH_LOGIN_ERR_FAILED');
       if (msg === 'EMAIL_NOT_VERIFIED') {
-        setErrorMsg('Email not verified. Please check your inbox or resend.');
+        setErrorMsg(t('AUTH_LOGIN_ERR_EMAIL_NOT_VERIFIED'));
         if (!AUTO_EMAIL_LOGIN && inputMode === 'email') {
           setTimeout(() => router.replace(`/(auth)/waiting?email=${encodeURIComponent(identifier.trim())}` as any), 800);
         }
       } else if (msg === 'PHONE_NOT_VERIFIED') {
-        setErrorMsg('Phone number not verified. Redirecting to OTP verification…');
+        setErrorMsg(t('AUTH_LOGIN_ERR_PHONE_NOT_VERIFIED'));
         setTimeout(() => router.replace(`/(auth)/phone-otp?phone=${encodeURIComponent(identifier.trim())}` as any), 800);
       } else {
         setErrorMsg(msg);
@@ -107,14 +109,14 @@ export default function LoginScreen() {
         >
           <View style={styles.logoWrapper}>
             <ExpoImage source={ICONS.app_icon} style={styles.logo} contentFit="contain" />
-            <Text style={styles.appTitle}>SportConnect</Text>
+            <Text style={styles.appTitle}>{t('AUTH_APP_TITLE')}</Text>
           </View>
 
           <View style={styles.formWrapper}>
-            <Text style={styles.formTitle}>Login</Text>
+            <Text style={styles.formTitle}>{t('AUTH_LOGIN_TITLE')}</Text>
 
             <TextInput
-              placeholder="Email or Phone Number"
+              placeholder={t('AUTH_LOGIN_PLACEHOLDER_EMAIL_PHONE')}
               placeholderTextColor={COLORS.dark300}
               value={identifier}
               onChangeText={handleIdentifierChange}
@@ -125,7 +127,7 @@ export default function LoginScreen() {
 
             <View style={styles.passwordRow}>
               <TextInput
-                placeholder="Password"
+                placeholder={t('AUTH_PLACEHOLDER_PASSWORD')}
                 placeholderTextColor="#6A6B6B"
                 secureTextEntry={!passwordVisible}
                 value={password}
@@ -142,10 +144,10 @@ export default function LoginScreen() {
                 <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
                   {rememberMe && (<ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} />)}
                 </View>
-                <Text style={styles.textDark}>Remember me</Text>
+                <Text style={styles.textDark}>{t('AUTH_LABEL_REMEMBER_ME')}</Text>
               </Pressable>
               <Link href="/(auth)/forgotpassword">
-                <Text style={styles.forgotPassword}>Forgot Password ?</Text>
+                <Text style={styles.forgotPassword}>{t('AUTH_LINK_FORGOT_PASSWORD')}</Text>
               </Link>
             </View>
 
@@ -156,13 +158,13 @@ export default function LoginScreen() {
               onPress={handleLogin}
               style={[styles.loginButton, loading && { opacity: 0.7 }]}
             >
-              <Text style={styles.loginButtonText}>{loading ? 'Signing in…' : 'Login'}</Text>
+              <Text style={styles.loginButtonText}>{loading ? t('AUTH_LOGIN_BTN_SIGNING_IN') : t('AUTH_LOGIN_BTN_LOGIN')}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.dividerRow}>
             <View style={[styles.dividerLine, styles.mr3]} />
-            <Text style={styles.dividerText}>Or Login with</Text>
+            <Text style={styles.dividerText}>{t('AUTH_DIVIDER_OR_LOGIN_WITH')}</Text>
             <View style={[styles.dividerLine, styles.ml3]} />
           </View>
 
@@ -173,8 +175,8 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.signupRow}>
-            <Text style={styles.textDark}>Don&apos;t have an account?</Text>
-            <Link href="/(auth)/signup"><Text style={styles.signUpLink}>Sign up</Text></Link>
+            <Text style={styles.textDark}>{t('AUTH_LOGIN_LINK_NO_ACCOUNT')}</Text>
+            <Link href="/(auth)/signup"><Text style={styles.signUpLink}>{t('AUTH_LINK_SIGN_UP')}</Text></Link>
           </View>
         </ScrollView>
       </SafeAreaView>

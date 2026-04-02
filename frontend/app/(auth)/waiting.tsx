@@ -3,8 +3,10 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getVerificationStatus, resendVerification } from '@/lib/backendApi';
+import { useTranslation } from '@/constants/translations';
 
 export default function WaitingForVerificationScreen() {
+	const { t } = useTranslation();
 	const { email } = useLocalSearchParams<{ email?: string }>();
 	const [statusChecked, setStatusChecked] = useState(false);
 	const [verified, setVerified] = useState(false);
@@ -31,7 +33,7 @@ export default function WaitingForVerificationScreen() {
 				setTimeout(() => router.replace('/(auth)/login'), 900);
 			}
 		} catch (e: any) {
-			setError(e.message || 'Failed checking status');
+			setError(e.message || t('AUTH_WAITING_ERR_CHECK_FAILED'));
 		}
 	};
 
@@ -47,9 +49,9 @@ export default function WaitingForVerificationScreen() {
 		setError(null);
 		try {
 			const r = await resendVerification(email as string);
-			if (!r.resent) setError('Resend failed or limit reached');
+			if (!r.resent) setError(t('AUTH_WAITING_ERR_RESEND_FAILED'));
 		} catch (e: any) {
-			setError(e.message || 'Resend error');
+			setError(e.message || t('AUTH_WAITING_ERR_RESEND_ERROR'));
 		} finally {
 			setResendLoading(false);
 		}
@@ -59,22 +61,22 @@ export default function WaitingForVerificationScreen() {
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
 			<View style={styles.container}>
-				<Text style={styles.title}>Verify Your Email</Text>
-				<Text style={styles.subtitle}>We sent a verification link to:</Text>
+			<Text style={styles.title}>{t('AUTH_WAITING_TITLE')}</Text>
+			<Text style={styles.subtitle}>{t('AUTH_WAITING_SUBTITLE')}</Text>
 				<Text style={styles.email}>{email}</Text>
-				{verified ? <Text style={styles.verified}>Email verified! Redirecting…</Text> : null}
+				{verified ? <Text style={styles.verified}>{t('AUTH_WAITING_VERIFIED')}</Text> : null}
 				{!verified && (
 					<>
-						<Text style={styles.info}>Please open the link in your inbox. This page will auto-update.</Text>
-						<TouchableOpacity onPress={handleResend} disabled={resendLoading} style={[styles.resendBtn, resendLoading && { opacity: 0.7 }]}> 
-							{resendLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.resendText}>Resend Email</Text>}
-						</TouchableOpacity>
-						<TouchableOpacity onPress={poll} style={styles.manualCheck}><Text style={styles.manualCheckText}>I have verified – Check now</Text></TouchableOpacity>
+					<Text style={styles.info}>{t('AUTH_WAITING_INFO')}</Text>
+					<TouchableOpacity onPress={handleResend} disabled={resendLoading} style={[styles.resendBtn, resendLoading && { opacity: 0.7 }]}> 
+						{resendLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.resendText}>{t('AUTH_WAITING_BTN_RESEND')}</Text>}
+					</TouchableOpacity>
+					<TouchableOpacity onPress={poll} style={styles.manualCheck}><Text style={styles.manualCheckText}>{t('AUTH_WAITING_BTN_CHECK')}</Text></TouchableOpacity>
 					</>
 				)}
 				{!statusChecked && !error && <ActivityIndicator style={{ marginTop: 20 }} />}
 				{error && <Text style={styles.error}>{error}</Text>}
-				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLogin}><Text style={styles.backLoginText}>Back to Login</Text></TouchableOpacity>
+				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLogin}><Text style={styles.backLoginText}>{t('AUTH_WAITING_BTN_BACK')}</Text></TouchableOpacity>
 			</View>
 		</>
 	);

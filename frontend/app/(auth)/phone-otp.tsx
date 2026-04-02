@@ -19,6 +19,7 @@ import { authPhoneLogin, persistAuthSession } from '@/lib/backendApi';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
+import { useTranslation } from '@/constants/translations';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
@@ -39,6 +40,7 @@ const COLOR = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PhoneOtpScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string }>();
 
   // Pre-fill from params (signup flow) OR let user type a fresh number
@@ -78,7 +80,7 @@ export default function PhoneOtpScreen() {
   const handleSendOtp = async () => {
     const trimmed = phone.trim();
     if (!VN_PHONE_RE.test(trimmed)) {
-      setError('Enter a valid Vietnamese phone number (e.g. 0912345678).');
+      setError(t('AUTH_OTP_ERR_INVALID_PHONE'));
       return;
     }
     setError(null);
@@ -91,7 +93,7 @@ export default function PhoneOtpScreen() {
       startResendTimer();
     } catch (e: any) {
       console.error('[PhoneOtp] sendOtp error', e);
-      setError(e?.message ?? 'Failed to send OTP. Please try again.');
+      setError(e?.message ?? t('AUTH_OTP_ERR_SEND_FAILED'));
     } finally {
       setSending(false);
     }
@@ -99,18 +101,18 @@ export default function PhoneOtpScreen() {
 
   const handleVerifyOtp = async () => {
     if (otp.length < 6) {
-      setError('Enter the 6-digit code from your SMS.');
+      setError(t('AUTH_OTP_ERR_ENTER_CODE'));
       return;
     }
     if (!confirmRef.current) {
-      setError('Session expired. Please resend the code.');
+      setError(t('AUTH_OTP_ERR_SESSION_EXPIRED'));
       return;
     }
     setError(null);
     setVerifying(true);
     try {
       const credential = await confirmRef.current.confirm(otp);
-      if (!credential?.user) throw new Error('Firebase verification returned no user.');
+      if (!credential?.user) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
 
       const firebaseIdToken = await credential.user.getIdToken();
 
@@ -129,11 +131,11 @@ export default function PhoneOtpScreen() {
       console.error('[PhoneOtp] verify error', e);
       // Firebase invalid-verification-code
       if (e?.code === 'auth/invalid-verification-code') {
-        setError('Incorrect code. Please check your SMS and try again.');
+        setError(t('AUTH_OTP_ERR_WRONG_CODE'));
       } else if (e?.code === 'auth/code-expired') {
-        setError('Code expired. Please request a new one.');
+        setError(t('AUTH_OTP_ERR_CODE_EXPIRED'));
       } else {
-        setError(e?.message ?? 'Verification failed. Please try again.');
+        setError(e?.message ?? t('AUTH_OTP_ERR_FAILED'));
       }
     } finally {
       setVerifying(false);
@@ -155,14 +157,14 @@ export default function PhoneOtpScreen() {
           >
             {/* Back */}
             <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-              <Text style={styles.backText}>← Back</Text>
+              <Text style={styles.backText}>{t('AUTH_OTP_BACK')}</Text>
             </Pressable>
 
-            <Text style={styles.title}>Phone Verification</Text>
+            <Text style={styles.title}>{t('AUTH_OTP_TITLE')}</Text>
             <Text style={styles.subtitle}>
               {otpSent
-                ? `Enter the 6-digit code sent to ${phone}`
-                : 'Enter your phone number to receive a verification code'}
+                ? `${t('AUTH_OTP_SUBTITLE_SENT_PREFIX')}${phone}`
+                : t('AUTH_OTP_SUBTITLE_PRE')}
             </Text>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -170,9 +172,9 @@ export default function PhoneOtpScreen() {
             {/* ── Phone input ── */}
             {!otpSent ? (
               <>
-                <Text style={styles.label}>Phone Number</Text>
+                <Text style={styles.label}>{t('AUTH_OTP_LABEL_PHONE')}</Text>
                 <TextInput
-                  placeholder="e.g. 0912345678"
+                  placeholder={t('AUTH_OTP_PLACEHOLDER_PHONE')}
                   placeholderTextColor={COLOR.dark300}
                   value={phone}
                   onChangeText={(t) => { setPhone(t); setError(null); }}
@@ -190,16 +192,16 @@ export default function PhoneOtpScreen() {
                   {sending ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Send OTP</Text>
+                    <Text style={styles.primaryBtnText}>{t('AUTH_OTP_BTN_SEND')}</Text>
                   )}
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 {/* ── OTP input ── */}
-                <Text style={styles.label}>Verification Code</Text>
+                <Text style={styles.label}>{t('AUTH_OTP_LABEL_CODE')}</Text>
                 <TextInput
-                  placeholder="6-digit code"
+                  placeholder={t('AUTH_OTP_PLACEHOLDER_CODE')}
                   placeholderTextColor={COLOR.dark300}
                   value={otp}
                   onChangeText={(t) => { setOtp(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
@@ -218,24 +220,24 @@ export default function PhoneOtpScreen() {
                   {verifying ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Verify & Continue</Text>
+                    <Text style={styles.primaryBtnText}>{t('AUTH_OTP_BTN_VERIFY')}</Text>
                   )}
                 </TouchableOpacity>
 
                 {/* Resend */}
                 <View style={styles.resendRow}>
                   {resendTimer > 0 ? (
-                    <Text style={styles.resendTimer}>Resend in {resendTimer}s</Text>
+                    <Text style={styles.resendTimer}>{`${t('AUTH_OTP_RESEND_TIMER_PREFIX')}${resendTimer}${t('AUTH_OTP_RESEND_TIMER_SUFFIX')}`}</Text>
                   ) : (
                     <Pressable onPress={handleSendOtp} disabled={sending}>
                       <Text style={styles.resendLink}>
-                        {sending ? 'Sending…' : 'Resend code'}
+                        {sending ? t('AUTH_OTP_BTN_SENDING') : t('AUTH_OTP_BTN_RESEND')}
                       </Text>
                     </Pressable>
                   )}
                   <Text style={styles.separatorDot}> · </Text>
                   <Pressable onPress={() => { setOtpSent(false); setOtp(''); setError(null); }}>
-                    <Text style={styles.resendLink}>Change number</Text>
+                    <Text style={styles.resendLink}>{t('AUTH_OTP_CHANGE_NUMBER')}</Text>
                   </Pressable>
                 </View>
               </>

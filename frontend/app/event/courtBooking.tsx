@@ -942,6 +942,7 @@ export default function CourtBooking() {
                 <>
                   <View style={[styles.scheduleHeaderRow, { marginTop: 16 }]}>
                     <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_SCHEDULE')}</Text>
+                    <View style={styles.weekNavInline}>
                       <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
                         <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
                       </TouchableOpacity>
@@ -1079,6 +1080,7 @@ export default function CourtBooking() {
         <View style={styles.sectionCard}>
           <View style={styles.scheduleHeaderRow}>
             <Text style={styles.sectionTitle}>{t('BOOKING_COURT_SECTION_SCHEDULE')}</Text>
+            <View style={styles.weekNavInline}>
               <TouchableOpacity disabled={weekOffset === 0} onPress={() => { if (weekOffset > 0) setWeekOffset((w) => w - 1) }} style={[styles.navBtn, weekOffset === 0 && styles.navBtnDisabled]}>
                 <Image source={ICONS.arrowright} style={[styles.navIcon, { transform: [{ rotate: '180deg' }] }]} />
               </TouchableOpacity>

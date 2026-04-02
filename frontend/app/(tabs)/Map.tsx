@@ -813,7 +813,7 @@
 
         // Phase 1: load visible courts first using spatial bounds.
         if (forceFresh || !rows.length) {
-          const bounds = regionToBounds(mapRegionRef.current)
+          const bounds = regionToBounds()
           const phaseOneRows = await listCourtInfoSpatial({
             minLat: bounds.minLat,
             maxLat: bounds.maxLat,
