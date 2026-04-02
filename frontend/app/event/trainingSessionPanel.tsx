@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 import { queryKeys } from '@/hooks/query-keys'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -215,6 +216,7 @@ function FreeBadge() {
 export default function TrainingSessionPanel({ coachId }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
   // Subscribe to TQ so new sessions created via tsCreate.tsx appear immediately
   const sessionsQuery = useQuery({
@@ -1223,18 +1225,18 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         contentContainerStyle={{ padding: 12, paddingBottom: 140 }}
         refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={onRefresh} />}
       >
-      <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 10, marginBottom: 8 }}>My Training Session</Text>
+      <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 10, marginBottom: 8 }}>{t('TS_PANEL_TITLE')}</Text>
 
       {disabled && (
         <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
-          <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>Sign in required</Text>
-          <Text style={{ color: '#555' }}>Log in to see training sessions you created.</Text>
+          <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>{t('COMMON_ERR_NOT_SIGNED_IN')}</Text>
+          <Text style={{ color: '#555' }}>{t('TS_PANEL_SIGN_IN_MSG')}</Text>
         </View>
       )}
 
       {!!(sessionsError || sessionsQuery.isError) && (
         <View style={{ padding: 14, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#FECACA', marginBottom: 12 }}>
-          <Text style={{ color: '#B91C1C', fontWeight: '700' }}>Failed loading sessions</Text>
+          <Text style={{ color: '#B91C1C', fontWeight: '700' }}>{t('TS_PANEL_LOAD_ERROR')}</Text>
           <Text style={{ color: '#991B1B', marginTop: 6 }}>{sessionsError ?? String(sessionsQuery.error ?? '')}</Text>
         </View>
       )}
@@ -1255,13 +1257,13 @@ export default function TrainingSessionPanel({ coachId }: Props) {
         </SkeletonPulse>
       ) : sessions.length === 0 ? (
         <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14 }}>
-          <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>No training sessions yet</Text>
-          <Text style={{ color: '#555' }}>Create a training session to manage participants here.</Text>
+          <Text style={{ fontWeight: '700', fontSize: 14, marginBottom: 4 }}>{t('TS_PANEL_EMPTY_TITLE')}</Text>
+          <Text style={{ color: '#555' }}>{t('TS_PANEL_EMPTY_MSG')}</Text>
           <TouchableOpacity
             style={{ marginTop: 10, backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }}
             onPress={() => router.push('/event/tsCreate' as any)}
           >
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Create Training Session</Text>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('TS_PANEL_BTN_CREATE')}</Text>
           </TouchableOpacity>
         </View>
       ) : (

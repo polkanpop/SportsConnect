@@ -3,6 +3,7 @@ import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { HistoryEntry, listHistory, setHistory } from '@/storage/history'
 import {
@@ -18,10 +19,11 @@ function formatLogTime(ts: string) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
-function formatDateHeader(ts: string) {
+function formatDateHeader(ts: string, language: string = 'en') {
   const d = new Date(ts)
   if (Number.isNaN(d.getTime())) return 'Unknown'
-  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' })
+  const locale = language === 'vi' ? 'vi-VN' : 'en-US'
+  return d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' })
 }
 
 function parseLoose(ts?: any): Date {
@@ -341,7 +343,30 @@ function formatScheduleFromTimes(startRaw: any, endRaw: any): { date: string; ti
 
 export default function HistoryPage() {
   const router = useRouter()
+  const { t, language } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
+
+  const tHistoryStatus = (label: string): string => {
+    if (label === 'Rejected') return t('HISTORY_STATUS_REJECTED')
+    if (label === 'Approved') return t('HISTORY_STATUS_APPROVED')
+    if (label === 'Pending') return t('HISTORY_STATUS_PENDING')
+    if (label === 'Missed') return t('HISTORY_STATUS_MISSED')
+    if (label === 'Joined') return t('HISTORY_STATUS_JOINED')
+    if (label === 'Completed') return t('HISTORY_STATUS_COMPLETED')
+    if (label === 'Cancelled') return t('HISTORY_STATUS_CANCELLED')
+    if (label === 'Upcoming') return t('HISTORY_STATUS_UPCOMING')
+    if (label === 'Paid') return t('HISTORY_STATUS_PAID')
+    return label
+  }
+
+  const tKindLabel = (b: string): string => {
+    if (b === 'Court') return t('HISTORY_KIND_COURT')
+    if (b === 'Event') return t('HISTORY_KIND_EVENT')
+    if (b === 'Session') return t('HISTORY_KIND_SESSION')
+    if (b === 'Hosting') return t('HISTORY_KIND_HOSTING')
+    if (b === 'Payment') return t('HISTORY_KIND_PAYMENT')
+    return b
+  }
   const dashboardRaw = dashboard.data
   const [items, setItems] = useState<HistoryEntry[]>([])
   const [refreshing, setRefreshing] = useState(false)
@@ -687,11 +712,11 @@ export default function HistoryPage() {
         >
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text pointerEvents="none" style={styles.headerTitle}>History</Text>
+        <Text pointerEvents="none" style={styles.headerTitle}>{t('HISTORY_HEADER_TITLE')}</Text>
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subHeaderTitle}>Activity Logs:</Text>
+        <Text style={styles.subHeaderTitle}>{t('HISTORY_SUB_ACTIVITY_LOGS')}</Text>
       </View>
 
       <FlatList
@@ -703,12 +728,12 @@ export default function HistoryPage() {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Image source={ICONS.clock} style={styles.emptyIcon} />
-            <Text style={styles.emptyTitle}>No history yet</Text>
+            <Text style={styles.emptyTitle}>{t('HISTORY_EMPTY_TITLE')}</Text>
           </View>
         }
         renderItem={({ item, index }) => {
           const prev = index > 0 ? data[index - 1] : null
-          const showDate = !prev || formatDateHeader(prev.ts) !== formatDateHeader(item.ts)
+          const showDate = !prev || formatDateHeader(prev.ts, language) !== formatDateHeader(item.ts, language)
           const statusRaw = item.toStatus || item.fromStatus || ''
           const isJoin = (item.kind === 'event_booking' || item.kind === 'session_booking') && /^joined\b/i.test(String(item.title || ''))
           const schedule = formatScheduleParts(item)
@@ -749,7 +774,7 @@ export default function HistoryPage() {
                 ev?.address,
                 ebEvent?.address,
               )
-              title = eventName ? `Booked event: ${eventName}` : (cleanTitle || 'Booked event')
+              title = eventName ? `${t('HISTORY_BOOKED_EVENT_PREFIX')} ${eventName}` : (cleanTitle || t('HISTORY_BOOKED_EVENT_PREFIX'))
               venue = venueName
               startRaw = startRaw ?? eb?.start_timestamp ?? ebEvent?.start_timestamp ?? ev?.start_timestamp ?? ebEvent?.time ?? ev?.time ?? null
               endRaw = endRaw ?? eb?.end_timestamp ?? ebEvent?.end_timestamp ?? ev?.end_timestamp ?? null
@@ -780,7 +805,7 @@ export default function HistoryPage() {
                 sess?.address,
                 sbSession?.address,
               )
-              title = sessionName ? `Booked session: ${sessionName}` : (cleanTitle || 'Booked session')
+              title = sessionName ? `${t('HISTORY_BOOKED_SESSION_PREFIX')} ${sessionName}` : (cleanTitle || t('HISTORY_BOOKED_SESSION_PREFIX'))
               venue = venueName
               startRaw = startRaw ?? sb?.start_timestamp ?? sbSession?.start_timestamp ?? sess?.start_timestamp ?? sbSession?.time ?? sess?.time ?? null
               endRaw = endRaw ?? sb?.end_timestamp ?? sbSession?.end_timestamp ?? sess?.end_timestamp ?? null
@@ -788,7 +813,7 @@ export default function HistoryPage() {
               const cb = typeof meta.courtbookingid === 'number' ? linkedRows.courtBookingById.get(meta.courtbookingid) : null
               // Prefer stored venue_name, then live court_name from dashboard
               const venueName = firstNonEmptyText(meta?.venue_name, cb?.court_name, cb?.courtName, meta?.court_name, meta?.courtName)
-              title = venueName ? `Booked venue: ${venueName}` : (cleanTitle || 'Booked venue')
+              title = venueName ? `${t('HISTORY_BOOKED_VENUE_PREFIX')} ${venueName}` : (cleanTitle || t('HISTORY_BOOKED_VENUE_PREFIX'))
               venue = firstNonEmptyText(cb?.address)
               startRaw = startRaw ?? cb?.start_timestamp ?? null
               endRaw = endRaw ?? cb?.end_timestamp ?? null
@@ -796,7 +821,7 @@ export default function HistoryPage() {
               const eventId = Number(meta.eventid)
               const ev = Number.isFinite(eventId) ? linkedRows.eventById.get(eventId) : null
               const eventName = firstNonEmptyText(ev?.title, ev?.event_title)
-              title = eventName ? `Event created: ${eventName}` : (cleanTitle || 'Event created')
+              title = eventName ? `${t('HISTORY_CREATED_EVENT_PREFIX')} ${eventName}` : (cleanTitle || t('HISTORY_CREATED_EVENT_PREFIX'))
               venue = firstNonEmptyText(ev?.court_name, ev?.courtName, ev?.address)
               startRaw = startRaw ?? ev?.start_timestamp ?? ev?.time ?? null
               endRaw = endRaw ?? ev?.end_timestamp ?? null
@@ -804,7 +829,7 @@ export default function HistoryPage() {
               const sessionId = Number(meta.sessionid)
               const sess = Number.isFinite(sessionId) ? linkedRows.sessionById.get(sessionId) : null
               const sessionName = firstNonEmptyText(sess?.title, sess?.session_title)
-              title = sessionName ? `Session created: ${sessionName}` : (cleanTitle || 'Session created')
+              title = sessionName ? `${t('HISTORY_CREATED_SESSION_PREFIX')} ${sessionName}` : (cleanTitle || t('HISTORY_CREATED_SESSION_PREFIX'))
               venue = firstNonEmptyText(sess?.court_name, sess?.courtName, sess?.address)
               startRaw = startRaw ?? sess?.start_timestamp ?? sess?.time ?? null
               endRaw = endRaw ?? sess?.end_timestamp ?? null
@@ -850,13 +875,13 @@ export default function HistoryPage() {
 
           const subtitleRaw = !isNoisySubtitle(item.subtitle ?? null) ? stripAddMe(String(item.subtitle)) : ''
           const subtitleText = subtitleRaw && !(resolvedSchedule && isScheduleLikeSubtitle(subtitleRaw)) ? subtitleRaw : null
-          const venueSubtitle = titleAndVenue.venue ? `Venue: ${titleAndVenue.venue}` : null
+          const venueSubtitle = titleAndVenue.venue ? `${t('HISTORY_VENUE_PREFIX')} ${titleAndVenue.venue}` : null
           const missedSubtitle = displayStatusLabel === 'Missed'
             ? (item.kind === 'event_booking'
-              ? 'You missed this event'
+              ? t('HISTORY_MISSED_EVENT')
               : item.kind === 'session_booking'
-                ? 'You missed this session'
-                : 'You missed this booking')
+                ? t('HISTORY_MISSED_SESSION')
+                : t('HISTORY_MISSED_BOOKING'))
             : null
           const displaySubtitle = missedSubtitle || subtitleText || venueSubtitle
 
@@ -916,7 +941,7 @@ export default function HistoryPage() {
           return (
             <View>
               {showDate && (
-                <Text style={styles.dateHeader}>{formatDateHeader(item.ts)}</Text>
+                <Text style={styles.dateHeader}>{formatDateHeader(item.ts, language)}</Text>
               )}
               <View style={styles.row}>
                 <View style={styles.timelineCol}>
@@ -936,14 +961,14 @@ export default function HistoryPage() {
                         const c = kindBadgeColor(b)
                         return (
                           <View key={b} style={[styles.kindBadge, { backgroundColor: c.bg, borderColor: c.border }]}>
-                            <Text style={[styles.kindBadgeText, { color: c.fg }]}>{b}</Text>
+                            <Text style={[styles.kindBadgeText, { color: c.fg }]}>{tKindLabel(b)}</Text>
                           </View>
                         )
                       })}
 
                       {!!displayStatusLabel && !statusIsDuplicate && (
                         <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
-                          <Text style={[styles.statusBadgeText, { color: statusColors.fg }]}>{displayStatusLabel}</Text>
+                          <Text style={[styles.statusBadgeText, { color: statusColors.fg }]}>{tHistoryStatus(displayStatusLabel)}</Text>
                         </View>
                       )}
                     </View>
@@ -953,33 +978,33 @@ export default function HistoryPage() {
                   <Text style={styles.title}>{titleAndVenue.title}</Text>
                   {!!resolvedSchedule && (
                     <View style={styles.scheduleWrap}>
-                      <Text style={styles.scheduleText}>Time: {resolvedSchedule.time}</Text>
+                      <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TIME')} {resolvedSchedule.time}</Text>
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && (
-                        <Text style={styles.scheduleText}>Type: {createdType}</Text>
+                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TYPE')} {createdType}</Text>
                       )}
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && (
-                        <Text style={styles.scheduleText}>Court: {courtName}</Text>
+                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
                       )}
                     </View>
                   )}
                   {!!displaySubtitle && <Text style={styles.subtitle}>{displaySubtitle}</Text>}
 
                   {(item.kind === 'event_booking' || item.kind === 'session_booking' || item.kind === 'court_booking') && !!paymentMethod && (
-                    <Text style={styles.metaText}>Payment: {paymentMethod}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_META_PAYMENT')} {paymentMethod}</Text>
                   )}
 
                   {item.kind === 'court_booking' && !!courtType && (
-                    <Text style={styles.metaText}>Type: {courtType}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {courtType}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !resolvedSchedule && (
-                    <Text style={styles.metaText}>Type: {createdType}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {createdType}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !resolvedSchedule && (
-                    <Text style={styles.metaText}>Court: {courtName}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
                   )}
 
                   {typeof item.amount === 'number' && (
-                    <Text style={styles.amount}>Amount: {Math.round(item.amount).toLocaleString()}₫</Text>
+                    <Text style={styles.amount}>{t('HISTORY_META_AMOUNT')} {Math.round(item.amount).toLocaleString()}₫</Text>
                   )}
                 </TouchableOpacity>
               </View>

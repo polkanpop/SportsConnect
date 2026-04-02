@@ -1114,6 +1114,7 @@ export default function CourtRegisterPage() {
         value={name}
         onChangeText={setName}
         placeholder="e.g. Some Random Court..."
+        placeholderTextColor="#94a3b8"
         style={styles.input}
       />
 
@@ -1154,6 +1155,7 @@ export default function CourtRegisterPage() {
             if (verifyError) setVerifyError(null)
           }}
           placeholder={t('COURT_REGISTER_PLACEHOLDER_ADDRESS')}
+          placeholderTextColor="#94a3b8"
           style={[styles.input, styles.inputWithIcon, verifyError && styles.inputError, { minHeight: 44 }]}
         />
         {!!verifiedCoord ? (

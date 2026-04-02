@@ -1,4 +1,5 @@
 import { ICONS } from '@/constants/icons'
+import { useTranslation } from '@/constants/translations'
 import { router } from 'expo-router'
 import {
   Image,
@@ -11,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function DataPrivacyScreen() {
+  const { t } = useTranslation()
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
@@ -18,28 +20,28 @@ export default function DataPrivacyScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </Pressable>
-        <Text style={styles.title}>Data &amp; Privacy</Text>
+        <Text style={styles.title}>{t('SETTINGS_ROW_DATA_PRIVACY')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {/* Content */}
       <View style={styles.body}>
         <Text style={styles.bodyText}>
-          Our Terms of Service:{' '}
+          {t('DATA_PRIVACY_TOS_PREFIX')}{' '}
           <Text
             style={styles.link}
             onPress={() => Linking.openURL('https://sportconnects.org/terms')}
           >
-            click here
+            {t('DATA_PRIVACY_CLICK_HERE')}
           </Text>
         </Text>
         <Text style={[styles.bodyText, { marginTop: 12 }]}>
-          Our Policy:{' '}
+          {t('DATA_PRIVACY_POLICY_PREFIX')}{' '}
           <Text
             style={styles.link}
             onPress={() => Linking.openURL('https://sportconnects.org/privacy')}
           >
-            click here
+            {t('DATA_PRIVACY_CLICK_HERE')}
           </Text>
         </Text>
       </View>

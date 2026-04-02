@@ -2256,12 +2256,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     const active = String(selectedVenueCourtBaseName || '').trim().toLowerCase() === base.toLowerCase()
                     return (
                       <View key={`main-${base}`} style={{ marginBottom: 10 }}>
-                        <Text style={styles.label}>{`Court ${idx + 1}:`}</Text>
+                        <Text style={styles.label}>{`${t('COURT_PANEL_TAB_COURT')} ${idx + 1}:`}</Text>
                         {active ? (
                           <TextInput
                             value={venueCourtBaseEditName}
                             onChangeText={setVenueCourtBaseEditName}
-                            placeholder={`Court ${idx + 1} name`}
+                            placeholder={`${t('COURT_PANEL_TAB_COURT')} ${idx + 1} ${t('COURT_REGISTER_LABEL_NAME')}`}
                             style={styles.input}
                           />
                         ) : (

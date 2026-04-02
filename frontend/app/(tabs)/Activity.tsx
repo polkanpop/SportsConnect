@@ -345,7 +345,9 @@ const mergeHosting = (params: {
   });
 };
 
-const getWeekDaysForOffset = (weekOffset: number) => {
+const getWeekDaysForOffset = (weekOffset: number, language: string) => {
+  const VI_DAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+  const EN_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const days = [] as {
     dayLetter: string;
     dateNumber: number;
@@ -364,7 +366,7 @@ const getWeekDaysForOffset = (weekOffset: number) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
     days.push({
-      dayLetter: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
+      dayLetter: (language === 'vi' ? VI_DAYS : EN_DAYS)[i],
       dateNumber: date.getDate(),
       fullDate: toDateStringLocal(date),
       isToday: date.toDateString() === today.toDateString(),
@@ -578,7 +580,7 @@ export default function ActivityPage() {
     sessionBookingsForSync,
   ])
   
-  const weekDays = useMemo(() => getWeekDaysForOffset(weekOffset), [weekOffset]);
+  const weekDays = useMemo(() => getWeekDaysForOffset(weekOffset, language), [weekOffset, language]);
 
   const monthLabel = useMemo(() => {
     if (!weekDays.length) return '';
