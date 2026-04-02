@@ -999,6 +999,7 @@ export default function CourtBooking() {
                       {startSlot && (
                         <>
                           <Text style={[styles.smallText, { marginTop: 12 }]}>{t('BOOKING_COURT_LABEL_END')}</Text>
+                          <View style={styles.slotRow}>
                             {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
                               const disabled = isEndSlotBlocked(ts)
                               return (
@@ -1129,6 +1130,7 @@ export default function CourtBooking() {
               {startSlot && (
                 <>
                   <Text style={[styles.smallText, { marginTop: 12 }]}>{t('BOOKING_COURT_LABEL_END')}</Text>
+                  <View style={styles.slotRow}>
                     {visibleTimeSlots.filter((ts) => ts > startSlot!).map((ts) => {
                       const disabled = isEndSlotBlocked(ts)
                       return (
