@@ -99,11 +99,40 @@ export default function ZaloSignInButton() {
         return;
       }
 
-      // 4. Exchange code at our backend (which holds the app_secret securely)
-      const syncResp = await fetch(`${backendUrl}/api/auth/zalo`, {
+      // 4. Exchange code at our backend (holds app_secret securely) → access_token
+      const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, code_verifier: codeVerifier }),
+      });
+      const tokenJson = await tokenResp.json().catch(() => ({}));
+      if (!tokenResp.ok || !tokenJson?.access_token) {
+        const detail = tokenJson?.detail || JSON.stringify(tokenJson);
+        Alert.alert('Sign-in error', `Zalo token exchange failed (${tokenResp.status}): ${detail}`);
+        setLoading(false);
+        return;
+      }
+      const accessToken: string = tokenJson.access_token;
+
+      // 5. Fetch Zalo user info from the device (Vietnam IP) — graph.zalo.me
+      //    blocks requests from servers hosted outside Vietnam.
+      const userResp = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
+        headers: { access_token: accessToken },
+      });
+      const userJson = await userResp.json().catch(() => ({}));
+      const zaloId: string = String(userJson?.id || '');
+      const zaloName: string = String(userJson?.name || '');
+      if (!zaloId) {
+        Alert.alert('Sign-in error', 'Could not retrieve Zalo user ID from device.');
+        setLoading(false);
+        return;
+      }
+
+      // 6. Authenticate with backend — server verifies token via tokeninfo endpoint
+      const syncResp = await fetch(`${backendUrl}/api/auth/zalo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName }),
       });
       const syncJson = await syncResp.json().catch(() => ({}));
       console.debug('[ZaloSignIn] backend sync', { status: syncResp.status, body: syncJson });

@@ -11,6 +11,7 @@ import { queryKeys } from '@/hooks/query-keys'
 import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
+import { useTranslation } from '@/constants/translations'
 
 type Coord = { latitude: number; longitude: number }
 
@@ -78,6 +79,7 @@ const LIST_ACCENT = '#f97316' // Events
 
 const EventListScreen = () => {
   const router = useRouter()
+  const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const [allEvents, setAllEvents] = useState<CombinedEvent[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -178,7 +180,7 @@ const EventListScreen = () => {
         status = req.status
       }
       if (status !== 'granted') {
-        setLocationError('Location permission is required')
+        setLocationError(t('TS_LIST_ERR_LOCATION_PERM'))
         return null
       }
 
@@ -198,7 +200,7 @@ const EventListScreen = () => {
       void setCachedUserCoord(next)
       return next
     } catch {
-      setLocationError('Unable to get your location')
+      setLocationError(t('TS_LIST_ERR_LOCATION_FAIL'))
       return null
     } finally {
       setLocationLoading(false)
@@ -409,7 +411,7 @@ const EventListScreen = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Event List</Text>
+        <Text style={styles.headerTitle}>{t('EVENT_LIST_HEADER_TITLE')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       {/* Search */}
@@ -417,7 +419,7 @@ const EventListScreen = () => {
         <View style={styles.searchContainer}>
           <Image source={ICONS.search} style={styles.searchIcon} />
           <TextInput
-            placeholder='Search events...'
+            placeholder={t('EVENT_LIST_SEARCH_PLACEHOLDER')}
             placeholderTextColor={COLORS.neutral750}
             value={search}
             onChangeText={setSearch}
@@ -431,12 +433,12 @@ const EventListScreen = () => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>Venue</Text>
+            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('MAP_FILTER_VENUE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
             <Image source={ICONS.freeIcon} style={styles.filterIcon} />
-            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>Free</Text>
+            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.filterButton, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
@@ -444,7 +446,7 @@ const EventListScreen = () => {
             disabled={freeOnly}
           >
             <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor: COLORS.neutral600 }]} />
-            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>Payment</Text>
+            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>{t('MAP_FILTER_PAYMENT')}</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
 
@@ -454,7 +456,7 @@ const EventListScreen = () => {
           >
             <Image source={ICONS.radar} style={styles.filterIcon} />
             <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
-              {selectedDistanceKm != null ? `Distance: ${selectedDistanceKm}km` : (closeToMe ? 'Nearby Location' : 'Distance')}
+              {selectedDistanceKm != null ? `${t('MAP_FILTER_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('MAP_FILTER_NEARBY') : t('MAP_FILTER_DISTANCE'))}
             </Text>
           </TouchableOpacity>
           </ScrollView>
@@ -487,7 +489,7 @@ const EventListScreen = () => {
                   </Pressable>
                 )
               })}
-              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color: COLORS.neutral850 }}>Select payment methods to filter events.</Text>}
+              {paymentSelections.length===0 && <Text style={{ padding:10, fontSize:12, color: COLORS.neutral850 }}>{t('EVENT_LIST_PAYMENT_HINT')}</Text>}
               
             </ScrollView>
           </View>
@@ -501,7 +503,7 @@ const EventListScreen = () => {
                   style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
                   onPress={() => setCloseToMe(v => !v)}
                 >
-                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>Nearby Location</Text>
+                  <Text style={[styles.closeToMeText, closeToMe && styles.closeToMeTextActive]}>{t('MAP_FILTER_NEARBY')}</Text>
                 </TouchableOpacity>
                 {locationLoading && (
                   <View style={styles.locationSpinnerWrap}>
@@ -509,11 +511,11 @@ const EventListScreen = () => {
                   </View>
                 )}
               </View>
-              <Text style={styles.distanceFilterTitle}>Type distance (km)</Text>
+              <Text style={styles.distanceFilterTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
               <TextInput
                 value={distanceKmInput}
-                onChangeText={(t) => {
-                  const cleaned = sanitizeKmInput(t)
+                onChangeText={(rawInput) => {
+                  const cleaned = sanitizeKmInput(rawInput)
                   setDistanceKmInput(cleaned)
                   if (cleaned.trim().length === 0) {
                     setDistanceKmError(null)
@@ -522,13 +524,13 @@ const EventListScreen = () => {
                   }
                   const parsed = parseKmInput(cleaned)
                   if (parsed == null) {
-                    setDistanceKmError('Please type in number')
+                    setDistanceKmError(t('TS_CREATE_ERR_TYPE_NUMBER'))
                     return
                   }
                   setDistanceKmError(null)
                   setSelectedDistanceKm(parsed)
                 }}
-                placeholder="e.g. 2"
+                placeholder={t('MAP_FILTER_DISTANCE_PLACEHOLDER')}
                 placeholderTextColor={COLORS.neutral650}
                 keyboardType="numeric"
                 style={[styles.distanceInput, distanceKmError ? styles.distanceInputError : null]}
@@ -550,13 +552,13 @@ const EventListScreen = () => {
                     setLocationError(null)
                   }}
                 >
-                  <Text style={styles.distanceFooterBtnText}>Clear</Text>
+                  <Text style={styles.distanceFooterBtnText}>{t('COMMON_BTN_CANCEL')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.distanceFooterBtn}
                   onPress={() => setOpenFilter(null)}
                 >
-                  <Text style={styles.distanceFooterBtnText}>Close</Text>
+                  <Text style={styles.distanceFooterBtnText}>{t('COMMON_BTN_CLOSE')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -576,15 +578,17 @@ const EventListScreen = () => {
           {(loading || isFetching) && visibleEvents.length === 0 && (
             <SkeletonList count={6} style={{ paddingTop: 6 }} />
           )}
-          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>Failed: {error}</Text>}
+          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>{t('EVENT_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !isFetching && !error && filteredEvents.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>No matching events.</Text>
+            <Text style={[styles.statusText, { paddingVertical: 30 }]}>{t('EVENT_LIST_NO_RESULTS')}</Text>
           )}
             {visibleEvents.map(ev => {
               const venues = asArray(ev.venue)
               let venueDisplay: string[] = []
               const lowerVenues = venues.map(v => v.toLowerCase())
-              if (lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) venueDisplay=['In/Outdoor']
+              if (lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) venueDisplay=[t('MAP_LABEL_IN_OUTDOOR')]
+              else if (lowerVenues.includes('indoor')) venueDisplay=[t('MAP_LABEL_INDOOR')]
+              else if (lowerVenues.includes('outdoor')) venueDisplay=[t('MAP_LABEL_OUTDOOR')]
               else if (venues.length) venueDisplay=[venues[0]]
               const expanded = expandedIds.has(ev.eventid)
 
@@ -638,7 +642,7 @@ const EventListScreen = () => {
                     <Text style={styles.dateText}>{(() => {
                       const start = ev.start_timestamp || ev.time
                       const end = ev.end_timestamp
-                      if (!start) return 'Unknown date'
+                      if (!start) return t('COMMON_LABEL_UNKNOWN_DATE')
                       const startD = parseMaybeTimestamp(start) || new Date(start)
                       const endD = end ? (parseMaybeTimestamp(end) || new Date(end)) : null
                       const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
@@ -655,7 +659,7 @@ const EventListScreen = () => {
                     {/* Entry fee + payment methods displayed on their own line */}
                     <View style={styles.entryRow}>
                       <View style={[styles.tag, ev.entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
-                        <Text style={[styles.tagText, ev.entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{ev.entry_fee == null ? 'Entry: Free' : `${formatCurrency(ev.entry_fee)}₫/player`}</Text>
+                        <Text style={[styles.tagText, ev.entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{ev.entry_fee == null ? `${t('EVENT_LIST_ENTRY_FREE')}` : `${formatCurrency(ev.entry_fee)}₫/player`}</Text>
                       </View>
                       {ev.entry_fee != null && ev.support_payment_method && (
                         <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
@@ -670,14 +674,14 @@ const EventListScreen = () => {
                     </View>
                     <View style={styles.participantsRow}>
                       <Image source={ICONS.participants} style={styles.participantsIconLarge} />
-                      <Text style={styles.participantsText}>{(ev.numberofpeople ?? 0)}/{(ev.participants_cap ?? 0)} participants</Text>
+                      <Text style={styles.participantsText}>{(ev.numberofpeople ?? 0)}/{(ev.participants_cap ?? 0)} {t('EVENT_LIST_PARTICIPANTS_SUFFIX')}</Text>
                     </View>
                     {expanded && (
                       <View style={styles.expandedContent}>
-                        <Text style={styles.expandedLine}>Organizer: {ev.organizerName || ev.organizerid}</Text>
-                        <Text style={styles.expandedLine}>Address: {ev.address || 'Unknown address'}</Text>
-                        <Text style={styles.expandedDescLabel}>Description:</Text>
-                        <Text style={styles.expandedDesc} numberOfLines={4}>{ev.description || 'No description'}</Text>
+                        <Text style={styles.expandedLine}>{t('EVENT_LIST_EXPANDED_ORGANIZER')} {ev.organizerName || ev.organizerid}</Text>
+                        <Text style={styles.expandedLine}>{t('EVENT_LIST_EXPANDED_ADDRESS')} {ev.address || t('EVENT_LIST_EXPANDED_UNKNOWN_ADDRESS')}</Text>
+                        <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
+                        <Text style={styles.expandedDesc} numberOfLines={4}>{ev.description || t('EVENT_LIST_EXPANDED_NO_DESC')}</Text>
                       </View>
                     )}
                   </View>
@@ -691,7 +695,7 @@ const EventListScreen = () => {
                   <ActivityIndicator size="small" color={COLORS.neutral800} />
                 ) : (
                   <Pressable onPress={handleLoadMore} hitSlop={8}>
-                    <Text style={styles.loadMoreText}>Load more...</Text>
+                    <Text style={styles.loadMoreText}>{t('COMMON_LABEL_LOAD_MORE')}</Text>
                   </Pressable>
                 )}
               </View>
@@ -701,7 +705,7 @@ const EventListScreen = () => {
       {/* Floating Create Button */}
       <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/eventCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
-        <Text style={styles.fabText}>Create</Text>
+        <Text style={styles.fabText}>{t('EVENT_LIST_BTN_CREATE')}</Text>
       </TouchableOpacity>
     </SafeAreaView>
   )

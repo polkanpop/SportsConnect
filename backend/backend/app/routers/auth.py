@@ -935,19 +935,14 @@ def debug_token(authorization: str | None = Query(None, alias="authorization")):
         return {"status": "error", "detail": e.detail, "unverifiedClaims": payload, "header": decoded}
 
 
-@router.post('/zalo')
-def zalo_sign_in(payload: dict):
-    """Exchange a Zalo authorization code for our backend JWT.
+@router.post('/zalo/token')
+def zalo_exchange_token(payload: dict):
+    """Exchange a Zalo PKCE authorization code for an access_token.
 
-    Flow (PKCE, V4):
-      1. Frontend opens Zalo OAuth with code_challenge.
-      2. Zalo redirects to app with ?code=...
-      3. Frontend POSTs { code, code_verifier } here.
-      4. Backend exchanges code+verifier+app_secret for Zalo access_token.
-      5. Backend fetches Zalo user info (id, name, avatar_url).
-      6. Backend creates/syncs user and returns our JWT.
+    The frontend calls this first, then uses the returned access_token to call
+    graph.zalo.me *from the device* (Vietnam IP) to fetch the user's id and name,
+    and finally calls /auth/zalo with {access_token, zalo_id, zalo_name}.
     """
-    t0 = _now_ms()
     code = (payload.get('code') or '').strip()
     code_verifier = (payload.get('code_verifier') or '').strip()
     if not code or not code_verifier:
@@ -956,10 +951,9 @@ def zalo_sign_in(payload: dict):
     zalo_app_id = os.getenv("ZALO_APP_ID", "959402498466634174")
     zalo_app_secret = os.getenv("ZALO_APP_SECRET", "")
     if not zalo_app_secret:
-        logger.error("/auth/zalo ZALO_APP_SECRET not configured")
+        logger.error("/auth/zalo/token ZALO_APP_SECRET not configured")
         raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
 
-    # 1. Exchange code for access_token
     try:
         token_resp = httpx.post(
             "https://oauth.zaloapp.com/v4/access_token",
@@ -975,33 +969,66 @@ def zalo_sign_in(payload: dict):
         )
         token_json = token_resp.json()
     except Exception as e:
-        logger.exception(f"/auth/zalo token exchange error: {e}")
+        logger.exception(f"/auth/zalo/token exchange error: {e}")
         raise HTTPException(status_code=502, detail=f"Zalo token exchange failed: {e}")
 
     access_token = token_json.get("access_token") or ""
     if not access_token:
-        logger.error(f"/auth/zalo token exchange returned no access_token: {token_json}")
-        raise HTTPException(status_code=401, detail=f"Zalo token exchange error: {token_json.get('error_description') or token_json.get('error') or 'unknown'}")
+        logger.error(f"/auth/zalo/token returned no access_token: {token_json}")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Zalo token exchange error: {token_json.get('error_description') or token_json.get('error') or 'unknown'}",
+        )
 
-    # 2. Fetch Zalo user info (id and name only — no picture for privacy)
+    return {"access_token": access_token}
+
+
+@router.post('/zalo')
+def zalo_sign_in(payload: dict):
+    """Authenticate using a Zalo access_token + verified user identity.
+
+    Flow (PKCE, V4):
+      1. Frontend opens Zalo OAuth with code_challenge.
+      2. Zalo redirects to app with ?code=...
+      3. Frontend calls POST /auth/zalo/token { code, code_verifier } → { access_token }.
+      4. Frontend calls GET graph.zalo.me/v2.0/me from the device (Vietnam IP) → { id, name }.
+      5. Frontend POSTs { access_token, zalo_id, zalo_name } here.
+      6. Backend verifies the token via oauth.zaloapp.com/v4/tokeninfo (geographically unrestricted).
+      7. Backend creates/syncs user and returns our JWT.
+    """
+    t0 = _now_ms()
+    access_token = (payload.get('access_token') or '').strip()
+    zalo_id = str(payload.get('zalo_id') or '').strip()
+    zalo_name = str(payload.get('zalo_name') or '').strip()
+
+    if not access_token or not zalo_id:
+        raise HTTPException(status_code=400, detail="Missing access_token or zalo_id")
+
+    zalo_app_secret = os.getenv("ZALO_APP_SECRET", "")
+    if not zalo_app_secret:
+        logger.error("/auth/zalo ZALO_APP_SECRET not configured")
+        raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
+
+    # Verify the access_token belongs to the claimed zalo_id via tokeninfo endpoint.
+    # oauth.zaloapp.com is accessible outside Vietnam, unlike graph.zalo.me.
     try:
-        user_resp = httpx.get(
-            "https://graph.zalo.me/v2.0/me",
-            params={"fields": "id,name"},
-            headers={"access_token": access_token},
+        verify_resp = httpx.get(
+            "https://oauth.zaloapp.com/v4/tokeninfo",
+            params={"access_token": access_token, "secret_key": zalo_app_secret},
             timeout=10.0,
         )
-        user_json = user_resp.json()
+        verify_json = verify_resp.json()
     except Exception as e:
-        logger.exception(f"/auth/zalo user info error: {e}")
-        raise HTTPException(status_code=502, detail=f"Zalo user info fetch failed: {e}")
+        logger.exception(f"/auth/zalo tokeninfo error: {e}")
+        raise HTTPException(status_code=502, detail=f"Zalo token verification failed: {e}")
 
-    zalo_id = str(user_json.get("id") or "")
-    zalo_name = str(user_json.get("name") or "")
-
-    if not zalo_id:
-        logger.error(f"/auth/zalo user info missing id: {user_json}")
-        raise HTTPException(status_code=401, detail="Zalo did not return a user id")
+    verified_uid = str(verify_json.get("uid") or "")
+    if not verified_uid:
+        logger.error(f"/auth/zalo tokeninfo returned no uid: {verify_json}")
+        raise HTTPException(status_code=401, detail="Zalo token verification failed: no uid in response")
+    if verified_uid != zalo_id:
+        logger.error(f"/auth/zalo uid mismatch: token uid={verified_uid} claimed={zalo_id}")
+        raise HTTPException(status_code=401, detail="Zalo token uid does not match claimed zalo_id")
 
     display_name = zalo_name or f"Zalo User {zalo_id}"
 

@@ -32,6 +32,7 @@ import { queryKeys } from '@/hooks/query-keys'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { useFocusEffect } from 'expo-router'
 import { appendHistory } from '@/storage/history'
+import { useTranslation } from '@/constants/translations'
 
 // Lightweight enrichment mapping booking -> court info
 interface EnrichedBooking extends CourtBookingRow { courtName?: string; address?: string; courtid?: number }
@@ -75,6 +76,7 @@ const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)
 
 export default function EventCreateScreen() {
   const router = useRouter()
+  const { t } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
   const qc = useQueryClient()
 
@@ -207,12 +209,12 @@ export default function EventCreateScreen() {
   const pickImages = useCallback(async () => {
     if (imageUploading) return
     if (typeof userId !== 'number') {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ERR_NOT_SIGNED_IN'), t('COMMON_ERR_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ERR_PERMISSION'), t('COMMON_ERR_PHOTO_ACCESS'))
       return
     }
 
@@ -233,7 +235,7 @@ export default function EventCreateScreen() {
       const uploadedUrl = await uploadOneToCloudinary(picked[0], remoteImageUrls.length)
       setRemoteImageUrls((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ERR_UPLOAD'), e?.message || t('COMMON_ERR_TRY_AGAIN'))
     } finally {
       setImageUploading(false)
     }
@@ -252,7 +254,7 @@ export default function EventCreateScreen() {
   
   // Shared time formatter (weekday, month day, start - end) matching eventList
   const formatRange = useCallback((start?: string | null, end?: string | null) => {
-    if (!start) return 'Unknown date'
+    if (!start) return t('COMMON_LABEL_UNKNOWN_DATE')
     try {
       const s = new Date(start)
       const e = end ? new Date(end) : null
@@ -260,8 +262,8 @@ export default function EventCreateScreen() {
       const st = s.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
       const et = e ? e.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
       return `${day}, ${st}${et?` - ${et}`:''}`
-    } catch { return 'Unknown date' }
-  }, [])
+    } catch { return t('COMMON_LABEL_UNKNOWN_DATE') }
+  }, [t])
 
   // Enrich bookings with court name/address by fetching availability -> courtid (simple sequential fetch)
   const { data: enrichedBookings, isLoading: enriching } = useQuery({
@@ -587,7 +589,7 @@ export default function EventCreateScreen() {
       }, 900)
     },
     onError: (err: any) => {
-      setSubmitError(err?.message || 'Create failed')
+      setSubmitError(err?.message || t('COMMON_ERR_CREATE_FAILED'))
     },
     onSettled: () => setSubmitting(false)
   })
@@ -639,17 +641,17 @@ export default function EventCreateScreen() {
         bookingToUseId = availableEnrichedBookings[0].courtbookingid
         setSelectedBookingId(bookingToUseId)
       } else {
-        setSubmitError('No available bookings to create an event.')
+        setSubmitError(t('EVENT_CREATE_ERR_NO_BOOKINGS'))
         return
       }
     }
 
     // Now validate other form fields using the booking we will use
-    if (!title.trim()) { setSubmitError('Please enter a title'); return }
-    if (participantsCapNum <= 0) { setSubmitError('Please set max participants'); return }
+    if (!title.trim()) { setSubmitError(t('TS_CREATE_ERR_NO_TITLE')); return }
+    if (participantsCapNum <= 0) { setSubmitError(t('TS_CREATE_ERR_NO_CAP')); return }
     if (monetize) {
-      if (entryFeeNum <= 0) { setSubmitError('Please set a valid entry fee'); return }
-      if (!paymentMethodsValue || paymentMethodsValue.length === 0) { setSubmitError('Please select a payment method'); return }
+      if (entryFeeNum <= 0) { setSubmitError(t('TS_CREATE_ERR_NO_FEE')); return }
+      if (!paymentMethodsValue || paymentMethodsValue.length === 0) { setSubmitError(t('TS_CREATE_ERR_NO_PAYMENT')); return }
     }
 
     setSubmitError(null); setSuccessData(null); setSubmitting(true)
@@ -663,7 +665,7 @@ export default function EventCreateScreen() {
     const bStatus = String((item as any)?.status ?? '').toLowerCase()
     const isPending = bStatus === 'pending'
     const disabled = isEvent || isTraining || isPending
-    const tag = isEvent ? 'Event' : (isTraining ? 'Training' : (isPending ? 'Pending' : null))
+    const tag = isEvent ? t('COMMON_TAG_EVENT') : (isTraining ? t('COMMON_TAG_TRAINING') : (isPending ? t('COMMON_TAG_PENDING') : null))
     return (
       <TouchableOpacity
         style={[styles.bookingItem, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
@@ -721,32 +723,32 @@ export default function EventCreateScreen() {
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <Image source={ICONS.arrowLeft} style={styles.backIcon} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create Event</Text>
+            <Text style={styles.headerTitle}>{t('EVENT_CREATE_HEADER_TITLE')}</Text>
           </View>
 
           {/* Court Selection */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Court Booking</Text>
+              <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_COURT_BOOKING')}</Text>
               <TouchableOpacity onPress={() => setExpandedCourts(e => !e)} style={styles.expandBtn}>
                 <Image source={ICONS.arrowdown} style={[styles.expandIcon, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
               </TouchableOpacity>
             </View>
             {bookingSelectionLoading && <ActivityIndicator size="small" color="#555" />}
-            {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || 'Failed loading bookings'}</Text>}
-            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>You have no court bookings yet.</Text>}
+            {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || t('COMMON_ERR_FAILED_LOADING')}</Text>}
+            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>{t('TS_CREATE_NO_BOOKINGS')}</Text>}
             {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
-              <Text style={styles.smallText}>No available courts for event booking.</Text>
+              <Text style={styles.smallText}>{t('EVENT_CREATE_NO_AVAILABLE_COURTS')}</Text>
             )}
             {!bookingSelectionLoading && !bookingsError && availableEnrichedBookings.length > 0 && availableEnrichedBookings.every(b => String((b as any)?.status ?? '').toLowerCase() === 'pending') && (
-              <Text style={styles.smallText}>Your court booking is awaiting approval — no approved court available yet.</Text>
+              <Text style={styles.smallText}>{t('EVENT_CREATE_BOOKING_AWAITING_APPROVAL')}</Text>
             )}
             {selectedBooking && (
               <View style={styles.selectedBookingBox}>
                 <View style={styles.bookingTitleRow}>
-                  <Text style={styles.selectedBookingTitle}>{selectedBooking.courtName || 'Selected Booking'}</Text>
-                  {usedEventBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>Event</Text></View>}
-                  {usedSessionBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>Training</Text></View>}
+                  <Text style={styles.selectedBookingTitle}>{selectedBooking.courtName || t('TS_CREATE_SELECTED_BOOKING_FALLBACK')}</Text>
+                  {usedEventBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>{t('COMMON_TAG_EVENT')}</Text></View>}
+                  {usedSessionBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>{t('COMMON_TAG_TRAINING')}</Text></View>}
                 </View>
                 {selectedBooking.address && <Text style={styles.selectedBookingMeta}>{selectedBooking.address}</Text>}
                 <Text style={styles.selectedBookingMeta}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
@@ -765,10 +767,10 @@ export default function EventCreateScreen() {
 
           {/* Event Details */}
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Details</Text>
-            <Text style={styles.fieldLabel}>Title</Text>
-            <TextInput value={title} onChangeText={setTitle} placeholder="Event title" placeholderTextColor="#777" style={styles.input} />
-            <Text style={styles.fieldLabel}>Max participants</Text>
+            <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_DETAILS')}</Text>
+            <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_TITLE')}</Text>
+            <TextInput value={title} onChangeText={setTitle} placeholder={t('EVENT_CREATE_PLACEHOLDER_TITLE')} placeholderTextColor="#777" style={styles.input} />
+            <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_MAX_PARTICIPANTS')}</Text>
             <TextInput
               value={participantsCap}
               onChangeText={(raw) => {
@@ -780,18 +782,18 @@ export default function EventCreateScreen() {
                 const digits = raw.replace(/[^\d]/g, '')
                 setParticipantsCap(digits)
                 const hasLetters = /[A-Za-z]/.test(raw)
-                setParticipantsCapError(hasLetters ? 'Please type in number' : null)
+                setParticipantsCapError(hasLetters ? t('TS_CREATE_ERR_TYPE_NUMBER') : null)
               }}
               keyboardType="number-pad"
-              placeholder="e.g. 10"
+              placeholder={t('TS_CREATE_PLACEHOLDER_CAP')}
               placeholderTextColor="#777"
               style={[styles.input, participantsCapError && styles.inputError]}
             />
             {!!participantsCapError && <Text style={styles.inlineErrorText}>{participantsCapError}</Text>}
-            <Text style={styles.fieldLabel}>Description</Text>
-            <TextInput value={description} onChangeText={setDescription} placeholder="Describe the event details..." placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
+            <Text style={styles.fieldLabel}>{t('COMMON_LABEL_DESCRIPTION')}</Text>
+            <TextInput value={description} onChangeText={setDescription} placeholder={t('EVENT_CREATE_PLACEHOLDER_DESC')} placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
 
-            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Images</Text>
+            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('COMMON_LABEL_IMAGES')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
               {remoteImageUrls.map((uri) => (
                 <View key={uri} style={styles.coverFrame}>
@@ -830,28 +832,28 @@ export default function EventCreateScreen() {
               <View style={[styles.checkboxBox, autoApprove && styles.checkboxBoxChecked]}>
                 {autoApprove && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
-              <Text style={styles.checkboxLabel}>Auto-approved (event participants will be automatically accepted)</Text>
+              <Text style={styles.checkboxLabel}>{t('EVENT_CREATE_AUTO_APPROVE_LABEL')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Monetization */}
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Monetization</Text>
+            <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_MONETIZATION')}</Text>
             <View style={styles.toggleRow}>
               <TouchableOpacity onPress={() => setMonetize(false)} style={[styles.toggleBtn, !monetize && styles.toggleBtnActive]}>
                 <Image source={ICONS.free} style={styles.toggleIcon} />
-                <Text style={[styles.toggleText, !monetize && styles.toggleTextActive]}>Free</Text>
+                <Text style={[styles.toggleText, !monetize && styles.toggleTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setMonetize(true)} style={[styles.toggleBtn, monetize && styles.toggleBtnActive]}>
                 <Image source={ICONS.charge} style={styles.toggleIcon} />
-                <Text style={[styles.toggleText, monetize && styles.toggleTextActive]}>Charge</Text>
+                <Text style={[styles.toggleText, monetize && styles.toggleTextActive]}>{t('TS_CREATE_MONETIZE_CHARGE')}</Text>
               </TouchableOpacity>
             </View>
             {/* Monetization note */}
-            <Text style={styles.monetizeNote}>{monetize ? 'Note: Each player entering the event will be charged the amount below; please select the price and payment methods carefully.' : 'Note: All players enter the event at no cost!'}</Text>
+            <Text style={styles.monetizeNote}>{monetize ? t('EVENT_CREATE_MONETIZE_NOTE_PAID') : t('EVENT_CREATE_MONETIZE_NOTE_FREE')}</Text>
             {monetize && (
               <View style={{ marginTop: 12 }}>
-                <Text style={styles.fieldLabel}>Entry Fee (VND)</Text>
+                <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_ENTRY_FEE')}</Text>
                 <TextInput
                   value={entryFee}
                   onChangeText={(raw) => {
@@ -863,23 +865,23 @@ export default function EventCreateScreen() {
                     const digits = raw.replace(/[^\d]/g, '')
                     setEntryFee(digits)
                     const hasLetters = /[A-Za-z]/.test(raw)
-                    setEntryFeeError(hasLetters ? 'Please type in number' : null)
+                    setEntryFeeError(hasLetters ? t('TS_CREATE_ERR_TYPE_NUMBER') : null)
                   }}
                   keyboardType="number-pad"
-                  placeholder="e.g. 30000"
+                  placeholder={t('TS_CREATE_PLACEHOLDER_ENTRY_FEE')}
                   placeholderTextColor="#777"
                   style={[styles.input, entryFeeError && styles.inputError]}
                 />
                 {!!entryFeeError && <Text style={styles.inlineErrorText}>{entryFeeError}</Text>}
-                <Text style={[styles.fieldLabel,{marginTop:12}]}>Payment Methods</Text>
+                <Text style={[styles.fieldLabel,{marginTop:12}]}>{t('TS_CREATE_FIELD_PAYMENT_METHODS')}</Text>
                 <View style={styles.paymentRow}>
                   <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, payCash && styles.payMethodActive]}>
                     <Image source={ICONS.cashIcon} style={styles.payIcon} />
-                    <Text style={styles.payText}>Cash</Text>
+                    <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_CASH')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setPayVnPay(v => !v)} style={[styles.payMethodBtn, payVnPay && styles.payMethodActive]}>
                     <Image source={ICONS.vnpayIcon} style={styles.payIcon} />
-                    <Text style={styles.payText}>VNPay</Text>
+                    <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -889,26 +891,26 @@ export default function EventCreateScreen() {
           {/* Status / Preview */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Preview</Text>
+              <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_PREVIEW')}</Text>
               <TouchableOpacity onPress={() => setPreviewOpen(p => !p)} style={styles.expandBtn}>
                 <Image source={ICONS.arrowdown} style={[styles.expandIcon, previewOpen && { transform: [{ rotate: '180deg' }] }]} />
               </TouchableOpacity>
             </View>
             {previewOpen && (
               <>
-                <Text style={styles.previewLine}>Status: upcoming</Text>
-                <Text style={styles.previewLine}>Location: {selectedBooking ? (selectedBooking.courtName || selectedBooking.courtbookingid) : 'None'}</Text>
-                <Text style={styles.previewLine}>Time: {selectedBooking ? formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any) : 'N/A'}</Text>
-                <Text style={styles.previewLine}>Max participants: {participantsCapNum || 'N/A'}</Text>
+                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_STATUS')}</Text>
+                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_LOCATION')} {selectedBooking ? (selectedBooking.courtName || selectedBooking.courtbookingid) : t('TS_CREATE_PREVIEW_NONE')}</Text>
+                <Text style={styles.previewLine}>Time: {selectedBooking ? formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any) : t('TS_CREATE_PREVIEW_NA')}</Text>
+                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_MAX_PARTICIPANTS')} {participantsCapNum || t('TS_CREATE_PREVIEW_NA')}</Text>
                 {monetize ? (
-                  <Text style={styles.previewLine}>Entry Fee: {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' VND' : 'N/A'} | Methods: {paymentMethodsValue?.join(', ') || 'None'}</Text>
+                  <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_ENTRY_FEE')} {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' ' + t('TS_CREATE_PREVIEW_VND') : t('TS_CREATE_PREVIEW_NA')} | {t('TS_CREATE_PREVIEW_METHODS')} {paymentMethodsValue?.join(', ') || t('TS_CREATE_PREVIEW_NONE')}</Text>
                 ) : (
-                  <Text style={styles.previewLine}>Entry Fee: Free</Text>
+                  <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_ENTRY_FREE')}</Text>
                 )}
                 {submitError && <Text style={styles.errorText}>{submitError}</Text>}
                 {successData && (
                   <View style={styles.successBox}>
-                    <Text style={styles.successTitle}>Event Created!</Text>
+                    <Text style={styles.successTitle}>{t('EVENT_CREATE_SUCCESS_TITLE')}</Text>
                     <Text style={styles.successLine}>ID: {successData.event.eventid}</Text>
                     <Text style={styles.successLine}>Title: {successData.eventinfo.title}</Text>
                   </View>
@@ -926,7 +928,7 @@ export default function EventCreateScreen() {
               onPress={() => setConfirmModalVisible(true)}
               style={[styles.confirmUnifiedBtn, (!formValid || submitting) && styles.confirmBtnDisabled]}
             >
-              <Text style={styles.confirmUnifiedText}>{submitting ? 'Creating...' : 'Create Event'}</Text>
+              <Text style={styles.confirmUnifiedText}>{submitting ? t('EVENT_CREATE_BTN_SUBMITTING') : t('EVENT_CREATE_BTN_SUBMIT')}</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -940,17 +942,17 @@ export default function EventCreateScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirm Creation</Text>
-            <Text style={styles.modalBody}>Are you sure you want to create this event?</Text>
+            <Text style={styles.modalTitle}>{t('EVENT_CREATE_MODAL_CONFIRM_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('EVENT_CREATE_MODAL_CONFIRM_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.modalBtnText}>Cancel</Text>
+                <Text style={styles.modalBtnText}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
                 setConfirmModalVisible(false)
                 onSubmit()
               }}>
-                <Text style={[styles.modalBtnText, {color: '#fff'}]}>Confirm</Text>
+                <Text style={[styles.modalBtnText, {color: '#fff'}]}>{t('COMMON_BTN_CONFIRM')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -968,8 +970,8 @@ export default function EventCreateScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Remove image</Text>
-            <Text style={styles.modalBody}>Do you want to remove this image?</Text>
+            <Text style={styles.modalTitle}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalCancel]}
@@ -978,10 +980,10 @@ export default function EventCreateScreen() {
                   setRemoveImageCandidateUri(null)
                 }}
               >
-                <Text style={styles.modalBtnText}>Cancel</Text>
+                <Text style={styles.modalBtnText}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={onConfirmRemoveImage}>
-                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Remove</Text>
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>{t('COMMON_BTN_REMOVE')}</Text>
               </TouchableOpacity>
             </View>
           </View>

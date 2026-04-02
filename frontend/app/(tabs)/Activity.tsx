@@ -627,6 +627,16 @@ export default function ActivityPage() {
 
   const isFadedStatus = (status: UnifiedBooking["status"]) => status === 'Cancelled' || status === 'Completed' || status === 'Missed';
 
+  const translateStatus = (status: UnifiedBooking['status']): string => {
+    switch (status) {
+      case 'Upcoming': return t('ACTIVITY_FILTER_UPCOMING');
+      case 'Completed': return t('ACTIVITY_FILTER_COMPLETED');
+      case 'Cancelled': return t('ACTIVITY_FILTER_CANCELLED');
+      case 'Missed': return t('ACTIVITY_FILTER_MISSED');
+      default: return status;
+    }
+  };
+
   const recordTitlePrefix = (activity: UnifiedBooking['activity']): string => {
     if (activity === 'court') return t('ACTIVITY_PREFIX_VENUE');
     if (activity === 'event') return t('ACTIVITY_PREFIX_EVENT');
@@ -699,7 +709,7 @@ export default function ActivityPage() {
             </View>
           ) : (
             <View style={[styles.statusPill, getStatusStyle(item.status)]}>
-              <Text style={styles.statusText}>{item.status}</Text>
+              <Text style={styles.statusText}>{translateStatus(item.status)}</Text>
             </View>
           )}
         </View>

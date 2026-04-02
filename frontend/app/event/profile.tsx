@@ -10,9 +10,11 @@ import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
+import { useTranslation } from '@/constants/translations'
 
 export default function Profile() {
   const router = useRouter()
+  const { t } = useTranslation()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
   const userInfo = userInfoQuery.data
   
@@ -159,9 +161,9 @@ export default function Profile() {
   const handleChangeProfilePictureFromResult = async (result: ImagePicker.ImagePickerResult) => {
     if (!userid) {
       openActionModal({
-        title: 'Not signed in',
-        message: 'Please log in again.',
-        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+        title: t('COMMON_ERR_NOT_SIGNED_IN'),
+        message: t('PROFILE_ERR_LOGIN_AGAIN'),
+        buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
       })
       return
     }
@@ -180,9 +182,9 @@ export default function Profile() {
         } catch (e: any) {
           console.error('Delete previous PFP failed', e)
           openActionModal({
-            title: 'Failed',
-            message: e?.message || 'Could not delete previous profile picture',
-            buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+            title: t('PROFILE_PFP_ERR_FAILED_TITLE'),
+            message: e?.message || t('PROFILE_PFP_ERR_DELETE_PREV'),
+            buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
           })
           setPfpOverrideUri(null)
           return
@@ -195,9 +197,9 @@ export default function Profile() {
     } catch (e: any) {
       console.error('PFP upload failed', e)
       openActionModal({
-        title: 'Upload failed',
-        message: e?.message || 'Please try again',
-        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+        title: t('COMMON_ERR_UPLOAD'),
+        message: e?.message || t('COMMON_ERR_TRY_AGAIN'),
+        buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
       })
       // Revert to server value
       setPfpOverrideUri(null)
@@ -210,9 +212,9 @@ export default function Profile() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
       openActionModal({
-        title: 'Permission needed',
-        message: 'Please allow photo library access to select a profile picture.',
-        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+        title: t('COMMON_ERR_PERMISSION'),
+        message: t('PROFILE_PFP_ERR_PHOTO_PERM'),
+        buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
       })
       return
     }
@@ -229,9 +231,9 @@ export default function Profile() {
     const perm = await ImagePicker.requestCameraPermissionsAsync()
     if (!perm.granted) {
       openActionModal({
-        title: 'Permission needed',
-        message: 'Please allow camera access to take a profile picture.',
-        buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+        title: t('COMMON_ERR_PERMISSION'),
+        message: t('PROFILE_PFP_ERR_CAMERA_PERM'),
+        buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
       })
       return
     }
@@ -249,11 +251,11 @@ export default function Profile() {
 
     const openChangePicker = () => {
       openActionModal({
-        title: 'Change profile picture',
-        message: 'Choose a photo from your library or take a new one.',
+        title: t('PROFILE_PFP_CHANGE_TITLE'),
+        message: t('PROFILE_PFP_PICK_HINT'),
         buttons: [
           {
-            text: 'Take photo',
+            text: t('PROFILE_PFP_BTN_TAKE_PHOTO'),
             variant: 'confirm',
             onPress: () => {
               closeActionModal()
@@ -261,7 +263,7 @@ export default function Profile() {
             },
           },
           {
-            text: 'Choose from library',
+            text: t('PROFILE_PFP_BTN_LIBRARY'),
             variant: 'cancel',
             onPress: () => {
               closeActionModal()
@@ -280,12 +282,12 @@ export default function Profile() {
 
     // Existing photo: only show the two required options
     openActionModal({
-      title: 'Profile picture',
+      title: t('PROFILE_PFP_TITLE'),
       message: null,
       layout: 'column',
       buttons: [
         {
-          text: 'Change profile picture',
+          text: t('PROFILE_PFP_CHANGE_TITLE'),
           variant: 'confirm',
           onPress: () => {
             closeActionModal()
@@ -293,16 +295,16 @@ export default function Profile() {
           },
         },
         {
-          text: 'Delete profile picture',
+          text: t('PROFILE_PFP_BTN_DELETE'),
           variant: 'cancel',
           onPress: () => {
             closeActionModal()
             void (async () => {
               if (!userid) {
                 openActionModal({
-                  title: 'Not signed in',
-                  message: 'Please log in again.',
-                  buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+                  title: t('COMMON_ERR_NOT_SIGNED_IN'),
+                  message: t('PROFILE_ERR_LOGIN_AGAIN'),
+                  buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
                 })
                 return
               }
@@ -314,9 +316,9 @@ export default function Profile() {
               } catch (e: any) {
                 console.error('Delete PFP failed', e)
                 openActionModal({
-                  title: 'Failed',
-                  message: e?.message || 'Could not delete profile picture',
-                  buttons: [{ text: 'OK', variant: 'cancel', onPress: closeActionModal }],
+                  title: t('PROFILE_PFP_ERR_FAILED_TITLE'),
+                  message: e?.message || t('PROFILE_PFP_ERR_DELETE'),
+                  buttons: [{ text: t('COMMON_BTN_OK'), variant: 'cancel', onPress: closeActionModal }],
                 })
               } finally {
                 setUploadingPfp(false)
@@ -335,7 +337,7 @@ export default function Profile() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={styles.backIcon} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Your Profile</Text>
+        <Text style={styles.headerTitle}>{t('PROFILE_HEADER_TITLE')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -356,9 +358,9 @@ export default function Profile() {
               )}
             </TouchableOpacity>
           </View>
-          <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
+          <Text style={styles.username}>{userInfo?.name || t('PROFILE_USERNAME_FALLBACK')}</Text>
           <TouchableOpacity activeOpacity={1} disabled>
-            <Text style={styles.changeThemeLink}>Change Theme</Text>
+            <Text style={styles.changeThemeLink}>{t('PROFILE_LINK_CHANGE_THEME')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -367,7 +369,7 @@ export default function Profile() {
         {/* Biography */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>Biography</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>{t('PROFILE_SECTION_BIOGRAPHY')}</Text>
             <TouchableOpacity onPress={isEditingBio ? handleCancelEdit : handleEditBio}>
               <Image 
                 source={isEditingBio ? ICONS.cancelEdit : ICONS.edit} 
@@ -376,7 +378,7 @@ export default function Profile() {
             </TouchableOpacity>
             {showBioSuccess && (
               <Text style={{ marginLeft: 10, fontSize: 12, color: 'green', fontStyle: 'italic' }}>
-                change successfully
+                {t('PROFILE_BIO_SAVE_SUCCESS')}
               </Text>
             )}
           </View>
@@ -386,7 +388,7 @@ export default function Profile() {
               <TextInput
                 style={styles.bioInput}
                 multiline
-                placeholder="Something about myself..."
+                placeholder={t('PROFILE_BIO_PLACEHOLDER')}
                 value={bio}
                 onChangeText={setBio}
                 autoFocus
@@ -401,7 +403,7 @@ export default function Profile() {
           ) : (
             <View style={{ padding: 4 }}>
               <Text style={{ fontSize: 14, color: bio ? '#333' : '#999' }}>
-                {bio || "Something about myself..."}
+                {bio || t('PROFILE_BIO_PLACEHOLDER')}
               </Text>
             </View>
           )}
@@ -410,7 +412,7 @@ export default function Profile() {
         {/* Contact */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>Contact</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>{t('PROFILE_SECTION_CONTACT')}</Text>
             <TouchableOpacity onPress={handleToggleContact}>
               <Image 
                 source={contactVisible ? ICONS.eye : ICONS.notEye} 
@@ -419,20 +421,20 @@ export default function Profile() {
             </TouchableOpacity>
             {showContactLog && (
               <Text style={{ marginLeft: 10, fontSize: 12, color: '#888', flex: 1, fontStyle: 'italic' }}>
-                {contactVisible 
-                  ? "Your contact information is now visible" 
-                  : "Your contact information is now hidden"}
+                {contactVisible
+                  ? t('PROFILE_CONTACT_NOW_VISIBLE')
+                  : t('PROFILE_CONTACT_NOW_HIDDEN')}
               </Text>
             )}
           </View>
           <View style={styles.contactRow}>
-            <Text style={styles.contactText}>{userInfo?.email || 'email/phone'}</Text>
+            <Text style={styles.contactText}>{userInfo?.email || t('PROFILE_CONTACT_FALLBACK')}</Text>
           </View>
         </View>
 
         {/* Achievements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
+          <Text style={styles.sectionTitle}>{t('PROFILE_SECTION_ACHIEVEMENTS')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.achievementsScroll}>
              {/* Placeholder 1 */}
              <View style={styles.achievementPlaceholder}>
@@ -467,21 +469,21 @@ export default function Profile() {
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Your changes have not been saved. Are you sure you want to exit?</Text>
+            <Text style={styles.modalTitle}>{t('PROFILE_MODAL_UNSAVED_CHANGES')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
                 onPress={() => setShowUnsavedModal(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>Return</Text>
+                <Text style={styles.modalButtonCancelText}>{t('PROFILE_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleConfirmExit}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonConfirmText}>Exit</Text>
+                <Text style={styles.modalButtonConfirmText}>{t('PROFILE_MODAL_BTN_EXIT')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -9,10 +9,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { postReview } from '@/lib/backendApi'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 
 // Route params: targettype (court|event|trainingsession), targetid (string number), title (display name)
 export default function ReviewForm() {
   const router = useRouter()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { targettype, targetid, title, venueName, contextLabel } = useLocalSearchParams<{
     targettype: string
@@ -32,8 +34,8 @@ export default function ReviewForm() {
     const rawTitle = title ? decodeURIComponent(String(title)) : ''
     const rawVenueName = venueName ? decodeURIComponent(String(venueName)) : ''
     const tt = String(targettype ?? '').toLowerCase()
-    if (tt === 'court') return rawVenueName || rawTitle || 'this booking'
-    return rawTitle || rawVenueName || 'this booking'
+    if (tt === 'court') return rawVenueName || rawTitle || t('REVIEW_TARGET_FALLBACK')
+    return rawTitle || rawVenueName || t('REVIEW_TARGET_FALLBACK')
   }, [title, venueName, targettype])
 
   const mutation = useMutation({
@@ -51,14 +53,14 @@ export default function ReviewForm() {
     },
     onError: (err: any) => {
       setConfirmVisible(false)
-      alert(err?.message ?? 'Failed to submit review. You may have already reviewed this booking.')
+      alert(err?.message ?? t('REVIEW_ERR_SUBMIT_FAILED'))
     },
   })
 
   const handleSubmit = () => {
-    if (rating === 0) { alert('Please select a star rating.'); return }
-    if (!comment.trim()) { alert('Please enter a comment.'); return }
-    if (!Number.isFinite(numericId)) { alert('Invalid booking target.'); return }
+    if (rating === 0) { alert(t('REVIEW_ERR_NO_RATING')); return }
+    if (!comment.trim()) { alert(t('REVIEW_ERR_NO_COMMENT')); return }
+    if (!Number.isFinite(numericId)) { alert(t('REVIEW_ERR_INVALID_TARGET')); return }
     setConfirmVisible(true)
   }
 
@@ -80,7 +82,7 @@ export default function ReviewForm() {
               <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
                 <Image source={ICONS.arrowLeft} style={styles.backIcon} />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Review</Text>
+              <Text style={styles.headerTitle}>{t('REVIEW_HEADER_TITLE')}</Text>
               <View style={{ width: 44 }} />
             </View>
           </SafeAreaView>
@@ -93,7 +95,7 @@ export default function ReviewForm() {
 
           {/* Star Rating */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Your rating</Text>
+            <Text style={styles.sectionLabel}>{t('REVIEW_SECTION_RATING')}</Text>
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.starBtn}>
@@ -105,17 +107,17 @@ export default function ReviewForm() {
             </View>
             {rating > 0 && (
               <Text style={styles.ratingLabel}>
-                {['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'][rating]}
+                {(['', t('REVIEW_RATING_POOR'), t('REVIEW_RATING_FAIR'), t('REVIEW_RATING_GOOD'), t('REVIEW_RATING_VERY_GOOD'), t('REVIEW_RATING_EXCELLENT')] as string[])[rating]}
               </Text>
             )}
           </View>
 
           {/* Comment Input */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Your comment</Text>
+            <Text style={styles.sectionLabel}>{t('REVIEW_SECTION_COMMENT')}</Text>
             <TextInput
               style={styles.commentInput}
-              placeholder="Share your experience..."
+              placeholder={t('REVIEW_COMMENT_PLACEHOLDER')}
               placeholderTextColor={COLORS.neutral600}
               multiline
               numberOfLines={5}
@@ -133,7 +135,7 @@ export default function ReviewForm() {
             onPress={handleSubmit}
             activeOpacity={0.8}
           >
-            <Text style={styles.submitBtnText}>Submit Review</Text>
+            <Text style={styles.submitBtnText}>{t('REVIEW_BTN_SUBMIT')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -142,9 +144,9 @@ export default function ReviewForm() {
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Submit this review?</Text>
+            <Text style={styles.modalTitle}>{t('REVIEW_MODAL_CONFIRM_TITLE')}</Text>
             <Text style={styles.modalBody}>
-              You cannot edit it later once submitted.
+              {t('REVIEW_MODAL_CONFIRM_BODY')}
             </Text>
             <View style={styles.starsRowSmall}>
               {[1, 2, 3, 4, 5].map(star => (
@@ -160,7 +162,7 @@ export default function ReviewForm() {
                 onPress={() => setConfirmVisible(false)}
                 disabled={mutation.isPending}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={styles.modalCancelBtnText}>{t('REVIEW_MODAL_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirmBtn]}
@@ -169,7 +171,7 @@ export default function ReviewForm() {
               >
                 {mutation.isPending
                   ? <ActivityIndicator size="small" color={COLORS.white} />
-                  : <Text style={styles.modalConfirmBtnText}>Submit</Text>
+                  : <Text style={styles.modalConfirmBtnText}>{t('REVIEW_MODAL_BTN_SUBMIT')}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -182,10 +184,10 @@ export default function ReviewForm() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.successIcon}>✓</Text>
-            <Text style={styles.modalTitle}>Review Submitted!</Text>
-            <Text style={styles.modalBody}>Thank you for your feedback.</Text>
+            <Text style={styles.modalTitle}>{t('REVIEW_MODAL_SUCCESS_TITLE')}</Text>
+            <Text style={styles.modalBody}>{t('REVIEW_MODAL_SUCCESS_BODY')}</Text>
             <TouchableOpacity style={[styles.modalBtn, styles.modalConfirmBtn, { width: '100%' }]} onPress={handleGoBack}>
-              <Text style={styles.modalConfirmBtnText}>Done</Text>
+              <Text style={styles.modalConfirmBtnText}>{t('REVIEW_MODAL_BTN_DONE')}</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -94,9 +94,9 @@ const formatTimeHHMM = (dt: Date) => {
   return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
 }
 
-const formatEntryFee = (fee: any) => {
+const formatEntryFee = (fee: any, tFn?: (key: any) => string) => {
   const n = typeof fee === 'number' ? fee : (fee == null ? null : Number(fee))
-  if (n == null || !Number.isFinite(n) || n <= 0) return 'Free'
+  if (n == null || !Number.isFinite(n) || n <= 0) return tFn ? tFn('COMMON_LABEL_FREE') : 'Free'
   // Keep it simple: display as a number (existing app often uses raw numeric fee)
   return String(n)
 }
@@ -1844,7 +1844,7 @@ export default function DetailsPage() {
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />
                   <Row label={t('DETAILS_ROW_PARTICIPANTS_CAP')} value={(meta as any)?.participants_cap ?? '—'} />
-                  <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee)} />
+                  <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee, t)} />
                   <Row label={t('COMMON_LABEL_DESCRIPTION')} value={meta?.description || '—'} />
                 </Section>
               </>
@@ -1864,7 +1864,7 @@ export default function DetailsPage() {
                   <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />
                   <Row label={t('DETAILS_ROW_PARTICIPANTS_CAP')} value={(meta as any)?.participants_cap ?? '—'} />
-                  <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee)} />
+                  <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee, t)} />
                   <Row label={t('COMMON_LABEL_DESCRIPTION')} value={meta?.description || '—'} />
                 </Section>
               </>

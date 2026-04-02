@@ -228,11 +228,20 @@ export default function CourtBooking() {
     const dayIdx = today.getDay() // Sun=0
     const offsetToMonday = ((dayIdx + 6) % 7)
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + weekOffset * 7)
-    return WEEK_DAYS.map((wd, i) => {
+    const dayKeys: Array<[string, string]> = [
+      ['Mon', 'MAP_DAY_MON'],
+      ['Tue', 'MAP_DAY_TUE'],
+      ['Wed', 'MAP_DAY_WED'],
+      ['Thu', 'MAP_DAY_THU'],
+      ['Fri', 'MAP_DAY_FRI'],
+      ['Sat', 'MAP_DAY_SAT'],
+      ['Sun', 'MAP_DAY_SUN'],
+    ]
+    return dayKeys.map(([key, transKey], i) => {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
-      return { ...wd, date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
+      return { key, label: t(transKey as any), date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
     })
-  }, [weekOffset])
+  }, [weekOffset, t])
 
   const servicesData: ServiceRow[] = Array.isArray(bundle?.services) ? bundle!.services : []
   const servicesLoading = bundleLoading

@@ -548,7 +548,11 @@ const CourtListScreen = () => {
             let venueDisplay: string[] = []
             const lowerVenues = venues.map(v => v.toLowerCase())
             if (lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) {
-              venueDisplay = ['In/Outdoor']
+              venueDisplay = [t('MAP_LABEL_IN_OUTDOOR')]
+            } else if (lowerVenues.includes('indoor')) {
+              venueDisplay = [t('MAP_LABEL_INDOOR')]
+            } else if (lowerVenues.includes('outdoor')) {
+              venueDisplay = [t('MAP_LABEL_OUTDOOR')]
             } else if (venues.length) {
               venueDisplay = [venues[0]]
             }

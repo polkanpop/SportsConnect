@@ -1396,7 +1396,7 @@ export default function CourtRegisterPage() {
                             activeOpacity={0.85}
                             style={styles.dropdownModalItem}
                           >
-                            <Text style={styles.dropdownItemText}>{opt}</Text>
+                            <Text style={styles.dropdownItemText}>{opt === 'consumable' ? t('COURT_PANEL_CATEGORY_CONSUMABLE') : t('COURT_PANEL_CATEGORY_RENTAL')}</Text>
                             <Image source={selected ? ICONS.tick : ''} style={styles.dropdownCheck} />
                           </TouchableOpacity>
                         )

@@ -534,7 +534,9 @@ const TrainingSessionListScreen = () => {
             const venues = asArray(s.venue)
             let venueDisplay:string[]=[]
             const lowerVenues = venues.map(v=>v.toLowerCase())
-            if(lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) venueDisplay=['In/Outdoor']
+            if(lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')) venueDisplay=[t('MAP_LABEL_IN_OUTDOOR')]
+            else if(lowerVenues.includes('indoor')) venueDisplay=[t('MAP_LABEL_INDOOR')]
+            else if(lowerVenues.includes('outdoor')) venueDisplay=[t('MAP_LABEL_OUTDOOR')]
             else if(venues.length) venueDisplay=[venues[0]]
             const expanded = expandedIds.has(s.sessionid)
 
