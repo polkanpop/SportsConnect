@@ -146,7 +146,7 @@ export default function ZaloSignInButton() {
 
 const styles = StyleSheet.create({
   icon: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
   },
 });
