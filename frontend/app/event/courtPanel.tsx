@@ -9,6 +9,7 @@ import { Image as ExpoImage } from 'expo-image'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 
+import { useTranslation } from '@/constants/translations'
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
@@ -169,7 +170,7 @@ function formatYmdToDmy(value: string | null | undefined): string {
   return `${m[3]}-${m[2]}-${m[1]}`
 }
 
-function formatBookingTimeOnly(startRaw: string | null | undefined, endRaw: string | null | undefined): string {
+function formatBookingTimeOnly(startRaw: string | null | undefined, endRaw: string | null | undefined, fallback = 'Unknown time'): string {
   const start = String(startRaw || '')
   const end = String(endRaw || '')
   const sm = start.match(/(?:T|\s)(\d{2}:\d{2})/)
@@ -179,7 +180,7 @@ function formatBookingTimeOnly(startRaw: string | null | undefined, endRaw: stri
   if (startHm && endHm) return `${startHm} - ${endHm}`
   if (startHm) return startHm
   if (endHm) return endHm
-  return 'Unknown time'
+  return fallback
 }
 
 // Builds the main baseline snapshot from raw loaded values (NOT from React state).
@@ -219,6 +220,7 @@ function buildMainSnapshotFromRaw(args: {
 export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null; deeplinkToken?: string | null }) {
   const { ownerId, deeplinkCourtId, deeplinkCourtBookingId, deeplinkToken } = props
   const router = useRouter()
+  const { t } = useTranslation()
 
   const [rows, setRows] = useState<Array<{ court: CourtRow; info: CourtInfoRow | null }>>([])
   const [loading, setLoading] = useState(false)
@@ -585,7 +587,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       setBookingUserNames(names)
       setBookingUserPfps(pfps)
     } catch (err: any) {
-      setBookingError(err?.message || 'Failed to load bookings')
+      setBookingError(err?.message || t('COURT_PANEL_LOAD_ERROR'))
     } finally {
       setBookingLoading(false)
     }
@@ -768,7 +770,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     const dayIdx = today.getDay()
     const offsetToMonday = (dayIdx + 6) % 7
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + bookingWeekOffset * 7)
-    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => {
+    return [t('MAP_DAY_MON'), t('MAP_DAY_TUE'), t('MAP_DAY_WED'), t('MAP_DAY_THU'), t('MAP_DAY_FRI'), t('MAP_DAY_SAT'), t('MAP_DAY_SUN')].map((label, i) => {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
       const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       return { label, d, dateStr: ds }
@@ -1095,7 +1097,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const handleVerifyLocation = useCallback(async () => {
     const a = editAddress.trim()
     if (!a) {
-      setVerifyError('You must fill address first.')
+      setVerifyError(t('COURT_PANEL_ERR_FILL_ADDRESS'))
       return
     }
 
@@ -1152,7 +1154,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         },
       })
     } catch (e: any) {
-      Alert.alert('Geocode failed', e?.message || 'Please try again')
+      Alert.alert(t('COURT_PANEL_ERR_GEOCODE'), e?.message || t('COMMON_ERR_TRY_AGAIN'))
     }
   }, [editAddress, lastGeocode, router, selectedPlaceId, verifiedCoord])
 
@@ -1200,12 +1202,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const pickImage = useCallback(async () => {
     if (imageUploading) return
     if (typeof ownerId !== 'number') {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ERR_NOT_SIGNED_IN'), t('COMMON_ERR_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ERR_PERMISSION'), t('COMMON_ERR_PHOTO_ACCESS'))
       return
     }
 
@@ -1226,7 +1228,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       const uploadedUrl = await uploadOneToCloudinary(picked[0], editImages.length)
       setEditImages((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 3))
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || String(e))
+      Alert.alert(t('COMMON_ERR_UPLOAD'), e?.message || String(e))
     } finally {
       setImageUploading(false)
     }
@@ -1235,12 +1237,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const pickSubCourtImage = useCallback(async () => {
     if (imageUploading) return
     if (typeof ownerId !== 'number') {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ERR_NOT_SIGNED_IN'), t('COMMON_ERR_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ERR_PERMISSION'), t('COMMON_ERR_PHOTO_ACCESS'))
       return
     }
 
@@ -1261,7 +1263,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       const uploadedUrl = await uploadOneToCloudinary(picked[0], subEditImages.length)
       setSubEditImages((prev) => dedupeStrings([...(prev || []), uploadedUrl]).slice(0, 1))
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || String(e))
+      Alert.alert(t('COMMON_ERR_UPLOAD'), e?.message || String(e))
     } finally {
       setImageUploading(false)
     }
@@ -1325,12 +1327,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     async (localId: string) => {
       if (imageUploading) return
       if (typeof ownerId !== 'number') {
-        Alert.alert('Not signed in', 'Please sign in first.')
+        Alert.alert(t('COMMON_ERR_NOT_SIGNED_IN'), t('COMMON_ERR_SIGN_IN_FIRST'))
         return
       }
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (!perm.granted) {
-        Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+        Alert.alert(t('COMMON_ERR_PERMISSION'), t('COMMON_ERR_PHOTO_ACCESS'))
         return
       }
 
@@ -1357,7 +1359,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           )
         )
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message || String(e))
+        Alert.alert(t('COMMON_ERR_UPLOAD'), e?.message || String(e))
       } finally {
         setImageUploading(false)
       }
@@ -1374,11 +1376,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (!selected) return
 
     if (editMode === 'main' && (loading || availabilityLoading || servicesLoading || playingCourtsLoading)) {
-      Alert.alert('Please wait', 'Court data is still loading.')
+      Alert.alert(t('COMMON_ERR_PLEASE_WAIT'), t('COURT_PANEL_ERR_COURT_LOADING'))
       return
     }
     if (editMode === 'sub' && subInfoLoading) {
-      Alert.alert('Please wait', 'Court info is still loading.')
+      Alert.alert(t('COMMON_ERR_PLEASE_WAIT'), t('COURT_PANEL_ERR_INFO_LOADING'))
       return
     }
 
@@ -1398,14 +1400,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         const addr = editAddress.trim()
 
         if (!nm || !addr) {
-          Alert.alert('Missing info', 'Please fill in name and address.')
+          Alert.alert(t('COMMON_ERR_MISSING_INFO'), t('COURT_PANEL_ERR_FILL_NAME_ADDR'))
           return
         }
 
         const originalAddr = originalAddressRef.current
         const addressChanged = canonicalizeAddress(addr) !== canonicalizeAddress(originalAddr)
         if (addressChanged && !verifiedCoord) {
-          Alert.alert('Verify location', 'Please verify location after changing address.')
+          Alert.alert(t('COURT_PANEL_ERR_VERIFY_LOC_TITLE'), t('COURT_PANEL_ERR_VERIFY_LOC_MSG'))
           return
         }
 
@@ -1547,15 +1549,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         }
       } else {
         if (!selectedSubBaseName || selectedSubPlayingCourtIds.length === 0) {
-          Alert.alert('Select court', 'Please choose a court to edit.')
+          Alert.alert(t('COURT_PANEL_ERR_SELECT_COURT_TITLE'), t('COURT_PANEL_ERR_SELECT_COURT_MSG'))
           return
         }
         if (!selectedSubPlayingCourtId) {
-          Alert.alert('Select half', 'Please choose which half to edit.')
+          Alert.alert(t('COURT_PANEL_ERR_SELECT_HALF_TITLE'), t('COURT_PANEL_ERR_SELECT_HALF_MSG'))
           return
         }
         if (!subEditName.trim()) {
-          Alert.alert('Missing info', 'Please enter a court name.')
+          Alert.alert(t('COMMON_ERR_MISSING_INFO'), t('COURT_PANEL_ERR_ENTER_NAME'))
           return
         }
 
@@ -1618,10 +1620,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         setSubBaselineSnapshot(currentSubSnapshot)
       }
 
-      setSaveSuccessMessage('Court updated successfully.')
+      setSaveSuccessMessage(t('COURT_PANEL_SAVE_SUCCESS'))
     } catch (e: any) {
       setSaveSuccessMessage(null)
-      Alert.alert('Save failed', e?.message || String(e))
+      Alert.alert(t('COURT_PANEL_ERR_SAVE'), e?.message || String(e))
     } finally {
       setSaving(false)
     }
@@ -1721,7 +1723,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     return rows.map((r) => {
       const courtid = r.court.courtid
       const selectedCard = selectedCourtId === courtid
-      const name = String(r.info?.name || '').trim() || 'Unnamed court'
+      const name = String(r.info?.name || '').trim() || t('COURT_PANEL_UNNAMED_COURT')
       const images = Array.isArray(r.info?.images) ? (r.info!.images as string[]) : []
       const imageUri = images.find((u) => typeof u === 'string' && u.trim()) || null
 
@@ -1762,7 +1764,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   if (typeof ownerId !== 'number') {
     return (
       <View style={styles.screen}>
-        <Text style={styles.emptyText}>Please sign in to manage courts.</Text>
+        <Text style={styles.emptyText}>{t('COURT_PANEL_SIGN_IN_MSG')}</Text>
       </View>
     )
   }
@@ -1775,7 +1777,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       refreshControl={<RefreshControl refreshing={pullRefreshing} onRefresh={onRefresh} />}
     >
       <View style={{ paddingHorizontal: 12, paddingTop: 12 }}>
-        <Text style={styles.sectionTitle}>My Venue</Text>
+        <Text style={styles.sectionTitle}>{t('COURT_PANEL_MY_VENUE')}</Text>
       </View>
 
       {loading ? (
@@ -1804,13 +1806,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
       {!!selected && (
         <View style={{ paddingHorizontal: 12, paddingTop: 6 }}>
-          <Text style={styles.sectionTitle}>Management</Text>
+          <Text style={styles.sectionTitle}>{t('COURT_PANEL_MANAGEMENT')}</Text>
 
           <View style={[styles.segmented, { marginTop: 10 }]}>
             {([
-              { key: 'main', label: 'Venue' },
-              { key: 'sub', label: 'Court' },
-              { key: 'booking', label: 'Booking' },
+              { key: 'main', label: t('COURT_PANEL_TAB_VENUE') },
+              { key: 'sub', label: t('COURT_PANEL_TAB_COURT') },
+              { key: 'booking', label: t('COURT_PANEL_TAB_BOOKING') },
             ] as const).map((opt) => {
               const active = editMode === opt.key
               return (
@@ -1955,20 +1957,20 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{displayName}</Text>
-                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp)}</Text>
+                          <Text style={{ color: '#555', fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp, t('COURT_PANEL_UNKNOWN_TIME'))}</Text>
                           <Text style={{ color: '#888', fontSize: 12, marginTop: 1 }}>
-                            <Text style={{ fontWeight: '700', color: '#666' }}>Status: </Text>
-                            <Text>{statusRaw || 'pending'}</Text>
+                            <Text style={{ fontWeight: '700', color: '#666' }}>{t('COURT_PANEL_STATUS_PREFIX')}</Text>
+                            <Text>{statusRaw || t('COURT_PANEL_STATUS_PENDING')}</Text>
                           </Text>
                         </View>
                       </TouchableOpacity>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         {showActions && (
                           <>
-                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'approve' })); try { await updateCourtBooking(b.courtbookingid, { status: 'approved', bookingstatus: 'upcoming' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'approved', bookingstatus: 'upcoming' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || 'Failed to approve') } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FED7AA', alignItems: 'center', justifyContent: 'center', marginRight: 10, opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1 }}>
+                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'approve' })); try { await updateCourtBooking(b.courtbookingid, { status: 'approved', bookingstatus: 'upcoming' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'approved', bookingstatus: 'upcoming' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || t('COURT_PANEL_ERR_APPROVE')) } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FED7AA', alignItems: 'center', justifyContent: 'center', marginRight: 10, opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1 }}>
                               {mutatingBookingIds[b.courtbookingid] === 'approve' ? <ActivityIndicator size={14} /> : <Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
-                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'reject' })); try { await updateCourtBooking(b.courtbookingid, { status: 'rejected', bookingstatus: 'cancelled' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'rejected', bookingstatus: 'cancelled' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || 'Failed to reject') } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1, marginRight: 8 }}>
+                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'reject' })); try { await updateCourtBooking(b.courtbookingid, { status: 'rejected', bookingstatus: 'cancelled' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'rejected', bookingstatus: 'cancelled' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || t('COURT_PANEL_ERR_REJECT')) } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1, marginRight: 8 }}>
                               {mutatingBookingIds[b.courtbookingid] === 'reject' ? <ActivityIndicator size={14} /> : <Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
                           </>
@@ -1983,7 +1985,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                   // 'completed' is not a valid courtbookingstatus enum value; keep bookingstatus as 'approved'
                                   await updateCourtBooking(b.courtbookingid, { status: 'completed', bookingstatus: 'approved' })
                                   setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'completed', bookingstatus: 'approved' } : x))
-                                } catch (e: any) { Alert.alert('Error', e?.message || 'Failed') }
+                                } catch (e: any) { Alert.alert('Error', e?.message || t('COMMON_LABEL_ERROR')) }
                                 finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
                               }}
                               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
@@ -1997,7 +1999,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 try {
                                   await updateCourtBooking(b.courtbookingid, { status: 'missed', bookingstatus: 'missed' })
                                   setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'missed', bookingstatus: 'missed' } : x))
-                                } catch (e: any) { Alert.alert('Error', e?.message || 'Failed') }
+                                } catch (e: any) { Alert.alert('Error', e?.message || t('COMMON_LABEL_ERROR')) }
                                 finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
                               }}
                               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isNotAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
@@ -2013,8 +2015,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     </View>
                     {noteExp && (
                       <View style={{ marginTop: 8, backgroundColor: '#f9fafb', borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: COLORS.neutral400 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>Note</Text>
-                        <Text style={{ fontSize: 13, color: '#555' }}>{b.note?.trim() ? b.note : 'No note provided.'}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 4 }}>{t('COMMON_LABEL_NOTE')}</Text>
+                        <Text style={{ fontSize: 13, color: '#555' }}>{b.note?.trim() ? b.note : t('COMMON_EMPTY_NOTE')}</Text>
                       </View>
                     )}
                   </View>
@@ -2057,7 +2059,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   {bookingSelectedPcId != null && (
                     <View style={{ marginTop: 14 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#111' }}>Schedule</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#111' }}>{t('COURT_PANEL_SCHEDULE')}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <TouchableOpacity disabled={bookingWeekOffset === 0} onPress={() => setBookingWeekOffset((w) => w - 1)} style={{ padding: 6, borderRadius: 8, backgroundColor: '#e0e0e0', opacity: bookingWeekOffset === 0 ? 0.35 : 1 }}>
                             <Image source={ICONS.arrowright} style={{ width: 18, height: 18, tintColor: '#333', transform: [{ rotate: '180deg' }] }} resizeMode="contain" />
@@ -2102,11 +2104,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         <View style={{ marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
                           <Text style={{ fontSize: 14, fontWeight: '700', color: '#9a3412', marginBottom: 8 }}>
                             {slotSelectedBooking
-                              ? `Booking: ${formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp)}`
-                              : `Open: ${String(pcAvailRow.start_time || '').slice(0, 5)} \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
+                              ? `${t('COURT_PANEL_BOOKING_PREFIX')}${formatBookingTimeOnly(slotSelectedBooking.start_timestamp, slotSelectedBooking.end_timestamp, t('COURT_PANEL_UNKNOWN_TIME'))}`
+                              : `${t('COURT_PANEL_OPEN_PREFIX')}${String(pcAvailRow.start_time || '').slice(0, 5)} \u2013 ${String(pcAvailRow.end_time || '').slice(0, 5)}`}
                           </Text>
                           {pcTimeSlotsList.length === 0 ? (
-                            <Text style={{ color: '#888', fontSize: 13 }}>No time slots available.</Text>
+                            <Text style={{ color: '#888', fontSize: 13 }}>{t('COURT_PANEL_NO_TIME_SLOTS')}</Text>
                           ) : (
                             <View>
                               {pcTimeSlotsList.map((slot, idx) => {
@@ -2179,32 +2181,32 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       )}
                       {bookingSelectedDate && !pcAvailRow && dateBookings.length === 0 && (
                         <View style={{ marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#FED7AA' }}>
-                          <Text style={{ color: '#888', fontSize: 13 }}>No bookings for this date.</Text>
+                          <Text style={{ color: '#888', fontSize: 13 }}>{t('COURT_PANEL_NO_BOOKINGS_DATE')}</Text>
                         </View>
                       )}
                     </View>
                   )}
 
                   {/* Booking error / loading */}
-                  {bookingError && <Text style={{ color: 'red', marginBottom: 8, marginTop: 10 }}>Failed to load: {bookingError}</Text>}
+                  {bookingError && <Text style={{ color: 'red', marginBottom: 8, marginTop: 10 }}>{t('COURT_PANEL_LOAD_ERROR_PREFIX')}{bookingError}</Text>}
                   {bookingLoading && <View style={{ paddingVertical: 16, alignItems: 'center' }}><ActivityIndicator size="small" color={COLORS.neutral800} /></View>}
 
                   {/* Applicant List */}
-                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 16, marginBottom: 6, color: '#111' }}>Applicant List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 16, marginBottom: 6, color: '#111' }}>{t('COURT_PANEL_APPLICANT_LIST')}</Text>
                   {bookingApplicants.length === 0 ? (
-                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No applicants.</Text></View>
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>{t('COURT_PANEL_NO_APPLICANTS')}</Text></View>
                   ) : bookingApplicants.map((b) => renderBookingRow(b, true))}
 
                   {/* Owner List */}
-                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Participants List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>{t('COURT_PANEL_PARTICIPANT_LIST')}</Text>
                   {mergedParticipants.length === 0 ? (
-                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No participants yet.</Text></View>
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>{t('COURT_PANEL_NO_PARTICIPANTS')}</Text></View>
                   ) : mergedParticipants.map(({ row, timeDisplay }) => renderBookingRow(row, false, timeDisplay, false))}
 
                   {/* Owner List */}
-                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Owner List</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>{t('COURT_PANEL_OWNER_LIST')}</Text>
                   {!bookingOwner ? (
-                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No owner profile found.</Text></View>
+                    <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>{t('COURT_PANEL_NO_OWNER')}</Text></View>
                   ) : (
                     <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 }}>
                       <TouchableOpacity
@@ -2219,15 +2221,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         )}
                         <View style={{ marginLeft: 10, flex: 1 }}>
                           <Text style={{ fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{bookingOwner.name}</Text>
-                          <Text style={{ color: '#555', marginTop: 2 }} numberOfLines={1}>Owner</Text>
+                          <Text style={{ color: '#555', marginTop: 2 }} numberOfLines={1}>{t('COURT_PANEL_ROLE_OWNER')}</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
                   )}
 
                   {/* Administrator List */}
-                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>Administrator List</Text>
-                  <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>No administrators yet.</Text></View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', marginTop: 14, marginBottom: 6, color: '#111' }}>{t('COURT_PANEL_ADMIN_LIST')}</Text>
+                  <View style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 8 }}><Text style={{ color: '#888' }}>{t('COURT_PANEL_NO_ADMINS')}</Text></View>
 
 
                 </>
@@ -2235,8 +2237,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             })()
           ) : editMode === 'main' ? (
             <>
-              <Text style={styles.label}>Venue Name</Text>
-              <TextInput value={editName} onChangeText={setEditName} placeholder="Venue name" style={styles.input} />
+              <Text style={styles.label}>{t('COURT_PANEL_LABEL_VENUE_NAME')}</Text>
+              <TextInput value={editName} onChangeText={setEditName} placeholder={t('COURT_PANEL_PLACEHOLDER_VENUE_NAME')} style={styles.input} />
 
               {playingCourtsLoading ? (
                 <SkeletonPulse>
@@ -2247,7 +2249,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   </View>
                 </SkeletonPulse>
               ) : subCourtOptions.length === 0 ? (
-                <Text style={styles.helperText}>No courts found.</Text>
+                <Text style={styles.helperText}>{t('COURT_PANEL_NO_COURTS_FOUND')}</Text>
               ) : (
                 <View style={{ marginBottom: 6 }}>
                   {subCourtOptions.map((base, idx) => {
@@ -2293,7 +2295,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 />
               </View>
 
-              {addressLoading ? <Text style={{ color: COLORS.neutral600, marginTop: 6 }}>Searching…</Text> : null}
+              {addressLoading ? <Text style={{ color: COLORS.neutral600, marginTop: 6 }}>{t('COURT_PANEL_SEARCHING')}</Text> : null}
 
               {addressSuggestions.length > 0 ? (
                 <View style={styles.suggestBox}>
@@ -2330,7 +2332,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   activeOpacity={0.85}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={styles.smallBtnText}>Verify Location</Text>
+                    <Text style={styles.smallBtnText}>{t('COURT_PANEL_BTN_VERIFY')}</Text>
                     {verifiedCoord ? (
                       <Image source={ICONS.tick} style={{ width: 18, height: 18, marginLeft: 8, tintColor: '#fff' }} resizeMode="contain" />
                     ) : null}
@@ -2348,23 +2350,24 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 </View>
               ) : null}
 
-              <Text style={styles.label}>Venue</Text>
+              <Text style={styles.label}>{t('COMMON_LABEL_VENUE')}</Text>
               <View style={styles.segmented}>
                 {(['Indoor', 'Outdoor', 'Both'] as const).map((v) => {
                   const active = editVenue === v
+                  const label = v === 'Indoor' ? t('MAP_LABEL_INDOOR') : v === 'Outdoor' ? t('MAP_LABEL_OUTDOOR') : t('COURT_PANEL_VENUE_BOTH')
                   return (
                     <TouchableOpacity key={v} onPress={() => setEditVenue(v)} style={[styles.segment, active && styles.segmentActive]} activeOpacity={0.8}>
-                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v}</Text>
+                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
                     </TouchableOpacity>
                   )
                 })}
               </View>
 
-              <Text style={styles.label}>Services</Text>
+              <Text style={styles.label}>{t('COURT_PANEL_SERVICES')}</Text>
             </>
           ) : (
             <>
-              <Text style={styles.label}>Select Court</Text>
+              <Text style={styles.label}>{t('COURT_PANEL_SELECT_COURT')}</Text>
               {playingCourtsLoading ? (
                 <SkeletonPulse>
                   <View style={styles.subCourtRow}>
@@ -2374,7 +2377,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   </View>
                 </SkeletonPulse>
               ) : subCourtOptions.length === 0 ? (
-                <Text style={styles.helperText}>No courts found.</Text>
+                <Text style={styles.helperText}>{t('COURT_PANEL_NO_COURTS_FOUND')}</Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subCourtRow}>
                   {subCourtOptions.map((base) => {
@@ -2398,12 +2401,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 </ScrollView>
               )}
 
-              <Text style={styles.label}>Select Half</Text>
+              <Text style={styles.label}>{t('COURT_PANEL_SELECT_HALF')}</Text>
               <View style={styles.segmented}>
                 {([
-                  { key: 'full', label: 'Full' },
-                  { key: 'half_a', label: 'Half A' },
-                  { key: 'half_b', label: 'Half B' },
+                  { key: 'full', label: t('COURT_PANEL_HALF_FULL') },
+                  { key: 'half_a', label: t('COURT_PANEL_HALF_A') },
+                  { key: 'half_b', label: t('COURT_PANEL_HALF_B') },
                 ] as const).map((opt) => {
                   const active = selectedSubPart === opt.key
                   return (
@@ -2419,10 +2422,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 })}
               </View>
 
-              <Text style={styles.label}>Court Name</Text>
-              <TextInput value={subEditName} onChangeText={setSubEditName} placeholder="Court name" style={styles.input} />
+              <Text style={styles.label}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
+              <TextInput value={subEditName} onChangeText={setSubEditName} placeholder={t('COURT_PANEL_PLACEHOLDER_COURT_NAME')} style={styles.input} />
 
-              <Text style={styles.label}>Images</Text>
+              <Text style={styles.label}>{t('COMMON_LABEL_IMAGES')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {(subEditImages || []).map((uri) => (
                   <View key={uri} style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
@@ -2451,13 +2454,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
               {selectedSubPart === 'full' && (
                 <>
-                  <Text style={styles.label}>Availability</Text>
+                  <Text style={styles.label}>{t('COURT_PANEL_AVAILABILITY')}</Text>
                   <View style={styles.segmented}>
                     {(['available', 'unavailable'] as const).map((v) => {
                       const active = availabilityStatus === v
+                      const label = v === 'available' ? t('COURT_PANEL_STATUS_AVAILABLE') : t('COURT_PANEL_STATUS_UNAVAILABLE')
                       return (
                         <TouchableOpacity key={v} onPress={() => setAvailabilityStatus(v)} style={[styles.segment, active && styles.segmentActive]} activeOpacity={0.8}>
-                          <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{v === 'available' ? 'Available' : 'Unavailable'}</Text>
+                          <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
                         </TouchableOpacity>
                       )
                     })}
@@ -2480,7 +2484,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   </View>
                   <View style={styles.timeRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Start Time</Text>
+                      <Text style={styles.label}>{t('COURT_PANEL_LABEL_START_TIME')}</Text>
                       <TextInput
                         value={startTime}
                         onChangeText={(v) => setStartTime(normalizeTimeInput(v))}
@@ -2492,7 +2496,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>End Time</Text>
+                      <Text style={styles.label}>{t('COURT_PANEL_LABEL_END_TIME')}</Text>
                       <TextInput
                         value={endTime}
                         onChangeText={(v) => setEndTime(normalizeTimeInput(v))}
@@ -2528,7 +2532,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   <View key={d.localId} style={styles.serviceCard}>
                     <View style={styles.serviceCardHeader}>
                       <Text style={styles.serviceCardTitle} numberOfLines={1}>
-                        {d.name.trim() ? d.name.trim() : 'New service'}
+                        {d.name.trim() ? d.name.trim() : t('COURT_PANEL_SERVICE_NEW')}
                       </Text>
                       <View style={styles.serviceHeaderActions}>
                         <TouchableOpacity
@@ -2539,14 +2543,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           activeOpacity={0.85}
                           style={styles.serviceHeaderDeleteBtn}
                         >
-                          <Text style={styles.serviceHeaderDeleteText}>Delete</Text>
+                          <Text style={styles.serviceHeaderDeleteText}>{t('COMMON_BTN_DELETE')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? true) }))}
                           activeOpacity={0.85}
                           style={styles.serviceHeaderBtn}
                         >
-                          <Text style={styles.serviceHeaderBtnText}>{(serviceExpanded[d.localId] ?? true) ? 'Close' : 'Open'}</Text>
+                          <Text style={styles.serviceHeaderBtnText}>{(serviceExpanded[d.localId] ?? true) ? t('COMMON_BTN_CLOSE') : t('COMMON_BTN_OPEN')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2554,7 +2558,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     {(serviceExpanded[d.localId] ?? true) ? (
                       <>
 
-                    <Text style={styles.label}>Name</Text>
+                    <Text style={styles.label}>{t('COMMON_LABEL_NAME')}</Text>
                     <TextInput
                       value={d.name}
                       onChangeText={(v) => updateServiceDraft(d.localId, { name: v })}
@@ -2562,10 +2566,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       style={styles.input}
                     />
 
-                    <Text style={styles.label}>Category</Text>
+                    <Text style={styles.label}>{t('COURT_PANEL_LABEL_CATEGORY')}</Text>
                     <View style={styles.segmented}>
                       {(['consumable', 'rental'] as const).map((v) => {
                         const active = d.category === v
+                        const catLabel = v === 'consumable' ? t('COURT_PANEL_CATEGORY_CONSUMABLE') : t('COURT_PANEL_CATEGORY_RENTAL')
                         return (
                           <TouchableOpacity
                             key={v}
@@ -2574,7 +2579,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             activeOpacity={0.8}
                           >
                             <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                              {v === 'consumable' ? 'Consumable' : 'Rental'}
+                              {catLabel}
                             </Text>
                           </TouchableOpacity>
                         )
@@ -2583,7 +2588,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
                     <View style={styles.timeRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Price</Text>
+                        <Text style={styles.label}>{t('COMMON_LABEL_PRICE')}</Text>
                         <TextInput
                           value={d.price}
                           onChangeText={(v) => updateServiceDraft(d.localId, { price: digitsOnly(v) })}
@@ -2594,7 +2599,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Stock</Text>
+                        <Text style={styles.label}>{t('COMMON_LABEL_STOCK')}</Text>
                         <TextInput
                           value={d.stock}
                           onChangeText={(v) => updateServiceDraft(d.localId, { stock: digitsOnly(v) })}
@@ -2606,10 +2611,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       </View>
                     </View>
 
-                    <Text style={styles.label}>Status</Text>
+                    <Text style={styles.label}>{t('COMMON_LABEL_STATUS')}</Text>
                     <View style={styles.segmented}>
                       {(['active', 'inactive'] as const).map((v) => {
                         const active = d.status === v
+                        const statusLabel = v === 'active' ? t('COURT_PANEL_STATUS_ACTIVE') : t('COURT_PANEL_STATUS_INACTIVE')
                         return (
                           <TouchableOpacity
                             key={v}
@@ -2618,14 +2624,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             activeOpacity={0.8}
                           >
                             <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                              {v === 'active' ? 'Active' : 'Inactive'}
+                              {statusLabel}
                             </Text>
                           </TouchableOpacity>
                         )
                       })}
                     </View>
 
-                    <Text style={styles.label}>Images</Text>
+                    <Text style={styles.label}>{t('COMMON_LABEL_IMAGES')}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                       {(d.images || []).map((uri) => (
                         <View key={uri} style={[styles.serviceCoverFrame, imageUploading && styles.btnDisabled]}>
@@ -2668,11 +2674,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             activeOpacity={0.85}
             style={[styles.smallBtn, styles.smallBtnRed, { marginTop: 10 }]}
           >
-            <Text style={styles.smallBtnText}>Add Service</Text>
+            <Text style={styles.smallBtnText}>{t('COURT_PANEL_BTN_ADD_SERVICE')}</Text>
           </TouchableOpacity>
 
             <View style={styles.rowBetween}>
-              <Text style={styles.label}>Images</Text>
+              <Text style={styles.label}>{t('COMMON_LABEL_IMAGES')}</Text>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
@@ -2705,8 +2711,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 {editAutoApprove ? <Image source={ICONS.tick} style={styles.autoApproveTick} resizeMode="contain" /> : null}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.autoApproveTitle}>Auto-approve bookings</Text>
-                <Text style={styles.autoApproveHint}>When enabled, new booking requests are approved automatically.</Text>
+                <Text style={styles.autoApproveTitle}>{t('COURT_PANEL_AUTO_APPROVE_TITLE')}</Text>
+                <Text style={styles.autoApproveHint}>{t('COURT_PANEL_AUTO_APPROVE_HINT')}</Text>
               </View>
             </TouchableOpacity>
           </>
@@ -2723,12 +2729,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             ]}
             activeOpacity={0.85}
           >
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
+            <Text style={styles.saveBtnText}>{saving ? t('COURT_PANEL_BTN_SAVING') : t('COURT_PANEL_BTN_SAVE_CHANGES')}</Text>
           </TouchableOpacity>
 
           {saveSuccessMessage ? <Text style={styles.saveSuccessText}>{saveSuccessMessage}</Text> : null}
 
-          {availabilityLoading ? <Text style={{ marginTop: 8, color: COLORS.neutral600 }}>Loading schedule…</Text> : null}
+          {availabilityLoading ? <Text style={{ marginTop: 8, color: COLORS.neutral600 }}>{t('COURT_PANEL_LOADING_SCHEDULE')}</Text> : null}
             </>
           )}
         </View>
@@ -2737,9 +2743,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       <Modal visible={removeImageConfirmVisible} transparent animationType="fade" onRequestClose={() => setRemoveImageConfirmVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Remove image?</Text>
+            <Text style={styles.modalTitle}>{t('COURT_PANEL_MODAL_REMOVE_IMAGE')}</Text>
             <Text style={styles.modalText}>
-              {removeImageContext === 'sub' ? 'This will remove the image from the court.' : 'This will remove the image from the venue.'}
+              {removeImageContext === 'sub' ? t('COURT_PANEL_MODAL_REMOVE_IMAGE_COURT') : t('COURT_PANEL_MODAL_REMOVE_IMAGE_VENUE')}
             </Text>
             <View style={styles.modalRow}>
               <TouchableOpacity
@@ -2750,10 +2756,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   setRemoveImageCandidateUri(null)
                 }}
               >
-                <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                <Text style={styles.modalBtnGhostText}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalBtnDanger]} activeOpacity={0.85} onPress={onConfirmRemoveImage}>
-                <Text style={styles.modalBtnDangerText}>Remove</Text>
+                <Text style={styles.modalBtnDangerText}>{t('COMMON_BTN_REMOVE')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2763,8 +2769,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       <Modal visible={confirmServiceDeleteVisible} transparent animationType="fade" onRequestClose={() => setConfirmServiceDeleteVisible(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Delete service?</Text>
-            <Text style={styles.modalText}>This will delete the service after you save changes.</Text>
+            <Text style={styles.modalTitle}>{t('COURT_PANEL_MODAL_DELETE_SERVICE_TITLE')}</Text>
+            <Text style={styles.modalText}>{t('COURT_PANEL_MODAL_DELETE_SERVICE_BODY')}</Text>
             <View style={styles.modalRow}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnGhost]}
@@ -2774,7 +2780,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   setServiceDeleteCandidateLocalId(null)
                 }}
               >
-                <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                <Text style={styles.modalBtnGhostText}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnDanger]}
@@ -2785,7 +2791,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   setServiceDeleteCandidateLocalId(null)
                 }}
               >
-                <Text style={styles.modalBtnDangerText}>Delete</Text>
+                <Text style={styles.modalBtnDangerText}>{t('COMMON_BTN_DELETE')}</Text>
               </TouchableOpacity>
             </View>
           </View>

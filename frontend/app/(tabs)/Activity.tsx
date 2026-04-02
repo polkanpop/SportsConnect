@@ -131,7 +131,7 @@ const pickVenueLabel = (row: any): string | null => {
 
 const formatDateWeekdayDDMMYYYY = (dt: Date) => {
   if (Number.isNaN(dt.getTime())) return '';
-  const wd = dt.toLocaleDateString(undefined, { weekday: 'short' });
+  const wd = dt.toLocaleDateString('en-US', { weekday: 'short' });
   const dd = pad2(dt.getDate());
   const mm = pad2(dt.getMonth() + 1);
   const yyyy = dt.getFullYear();
@@ -364,7 +364,7 @@ const getWeekDaysForOffset = (weekOffset: number) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
     days.push({
-      dayLetter: ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i],
+      dayLetter: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
       dateNumber: date.getDate(),
       fullDate: toDateStringLocal(date),
       isToday: date.toDateString() === today.toDateString(),

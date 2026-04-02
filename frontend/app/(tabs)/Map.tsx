@@ -276,7 +276,7 @@
 
   export default function App() {
     const router = useRouter();
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
     // Favorite state for selected marker
     const [isFavorite, setIsFavorite] = useState(false);
     // Image zoom
@@ -623,11 +623,15 @@
       const dayIdx = today.getDay() // Sun=0
       const offsetToMonday = ((dayIdx + 6) % 7)
       const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + weekOffset * 7)
+      const dayLabels = [
+        t('MAP_DAY_MON'), t('MAP_DAY_TUE'), t('MAP_DAY_WED'), t('MAP_DAY_THU'),
+        t('MAP_DAY_FRI'), t('MAP_DAY_SAT'), t('MAP_DAY_SUN'),
+      ]
       return WEEK_DAYS.map((wd, i) => {
         const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
-        return { ...wd, date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
+        return { ...wd, label: dayLabels[i], date: d, dateStr: toDateString(d), isToday: weekOffset === 0 && toDateString(d) === toDateString(today) }
       })
-    }, [weekOffset])
+    }, [weekOffset, language])
 
     // 30-min time slots derived from availability window (view-only in Map)
     const mapTimeSlots = useMemo((): string[] => {
@@ -1905,7 +1909,9 @@
                             const venues = venueRaw.filter(Boolean).map(v => String(v))
                             const lower = venues.map(v => v.toLowerCase())
                             let venueDisplay: string[] = []
-                            if (lower.includes('indoor') && lower.includes('outdoor')) venueDisplay = ['In/Outdoor']
+                            if (lower.includes('indoor') && lower.includes('outdoor')) venueDisplay = [t('MAP_LABEL_IN_OUTDOOR')]
+                            else if (lower.includes('indoor')) venueDisplay = [t('MAP_LABEL_INDOOR')]
+                            else if (lower.includes('outdoor')) venueDisplay = [t('MAP_LABEL_OUTDOOR')]
                             else if (venues.length) venueDisplay = [venues[0]]
                             return venueDisplay.map(v => (
                               <View key={v} style={[styles.sheetTag, styles.sheetVenueTag]}>

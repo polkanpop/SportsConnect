@@ -19,6 +19,7 @@ import {
 } from "@/lib/backendApi";
 import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
 import { COLORS } from "@/constants/colors";
+import { useTranslation } from '@/constants/translations'
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -205,7 +206,7 @@ function FreeBadge() {
 				elevation: 2,
 			}}
 		>
-			<Text style={{ color: "#fff", fontWeight: "700", fontSize: 11, letterSpacing: 0.8 }}>FREE</Text>
+			<Text style={{ color: "#fff", fontWeight: "700", fontSize: 11, letterSpacing: 0.8 }}>{t('EVENT_PANEL_FREE_BADGE')}</Text>
 		</View>
 	);
 }
@@ -213,6 +214,7 @@ function FreeBadge() {
 export default function EventPanel({ organizerId }: Props) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
+	const { t } = useTranslation();
 
 	// Subscribe to TQ so new events created via eventCreate.tsx appear immediately
 	const hostEventsQuery = useQuery({
@@ -445,12 +447,12 @@ export default function EventPanel({ organizerId }: Props) {
 	const pickImage = useCallback(async () => {
 		if (imageUploading) return;
 		if (typeof organizerId !== "number") {
-			Alert.alert("Not signed in", "Please sign in first.");
+			Alert.alert(t('COMMON_ERR_NOT_SIGNED_IN'), t('COMMON_ERR_SIGN_IN_FIRST'));
 			return;
 		}
 		const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
 		if (!perm.granted) {
-			Alert.alert("Permission needed", "Please allow photo library access to select images.");
+			Alert.alert(t('COMMON_ERR_PERMISSION'), t('COMMON_ERR_PHOTO_ACCESS'));
 			return;
 		}
 
@@ -472,7 +474,7 @@ export default function EventPanel({ organizerId }: Props) {
 			setEditImages((prev) => dedupeStrings([...prev, uploadedUrl]).slice(0, 6));
 			setPendingCloudinaryDeletes((prev) => prev.filter((u) => u !== uploadedUrl));
 		} catch (e: any) {
-			Alert.alert("Upload failed", e?.message || String(e));
+			Alert.alert(t('COMMON_ERR_UPLOAD'), e?.message || String(e));
 		} finally {
 			setImageUploading(false);
 		}
@@ -1180,7 +1182,7 @@ export default function EventPanel({ organizerId }: Props) {
 			initialEditSnapshotRef.current = currentEditSnapshot;
 			setEditBaselineSnapshot(currentEditSnapshot);
 			setPendingCloudinaryDeletes([]);
-			setSaveSuccessMessage("Event updated successfully.");
+			setSaveSuccessMessage(t('EVENT_PANEL_SAVE_SUCCESS'));
 		} catch (e: any) {
 			setHostEventsError(e?.message || String(e));
 		} finally {
@@ -1265,7 +1267,7 @@ export default function EventPanel({ organizerId }: Props) {
 						backgroundColor: managementMode === 'event' ? COLORS.brandOrangeYellow : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'event' ? COLORS.white : COLORS.brandOrangeYellow }}>Event</Text>
+					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'event' ? COLORS.white : COLORS.brandOrangeYellow }}>{t('EVENT_PANEL_TAB_EVENT')}</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
 					activeOpacity={0.85}
@@ -1279,7 +1281,7 @@ export default function EventPanel({ organizerId }: Props) {
 						backgroundColor: managementMode === 'trainingSession' ? COLORS.purple : 'transparent',
 					}}
 				>
-					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'trainingSession' ? COLORS.white : COLORS.purple }}>Training Session</Text>
+					<Text style={{ fontWeight: '700', fontSize: 14, color: managementMode === 'trainingSession' ? COLORS.white : COLORS.purple }}>{t('EVENT_PANEL_TAB_TRAINING')}</Text>
 				</TouchableOpacity>
 			</View>
 		</View>
@@ -1309,17 +1311,17 @@ export default function EventPanel({ organizerId }: Props) {
 				}} />}
 				keyboardShouldPersistTaps="handled"
 					>
-				<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>My Event</Text>
+				<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 10, marginBottom: 8 }}>{t('EVENT_PANEL_MY_EVENT')}</Text>
 
 			{organizerId == null && (
 				<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
-					<Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 4 }}>Sign in required</Text>
-					<Text style={{ color: "#555" }}>Log in to see events you created.</Text>
+					<Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 4 }}>{t('EVENT_PANEL_SIGN_IN_TITLE')}</Text>
+					<Text style={{ color: "#555" }}>{t('EVENT_PANEL_SIGN_IN_MSG')}</Text>
 				</View>
 			)}
 
 			{hostEvents.length === 0 && !!(hostEventsError || hostEventsQuery.isError) && (
-				<Text style={{ color: "red", marginBottom: 8 }}>Failed to load your events: {hostEventsError ?? String(hostEventsQuery.error ?? '')}</Text>
+				<Text style={{ color: "red", marginBottom: 8 }}>{t('EVENT_PANEL_LOAD_ERROR')}{hostEventsError ?? String(hostEventsQuery.error ?? '')}</Text>
 			)}
 
 			{(hostEventsQuery.isLoading || hostEventsLoading) ? (
@@ -1344,13 +1346,13 @@ export default function EventPanel({ organizerId }: Props) {
 				</SkeletonPulse>
 			) : hostEvents.length === 0 ? (
 				<View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }}>
-					<Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 4 }}>No events yet</Text>
-					<Text style={{ color: "#555" }}>Create an event to manage applicants here.</Text>
+					<Text style={{ fontWeight: "700", fontSize: 14, marginBottom: 4 }}>{t('EVENT_PANEL_EMPTY_TITLE')}</Text>
+					<Text style={{ color: "#555" }}>{t('EVENT_PANEL_EMPTY_BODY')}</Text>
 					<TouchableOpacity
 						style={{ marginTop: 10, backgroundColor: COLORS.brandOrangeDeep, paddingVertical: 10, borderRadius: 10, alignItems: "center" }}
 						onPress={() => router.push("/event/eventCreate" as any)}
 					>
-						<Text style={{ color: "#fff", fontWeight: "700" }}>Create Event</Text>
+						<Text style={{ color: "#fff", fontWeight: "700" }}>{t('EVENT_PANEL_BTN_CREATE')}</Text>
 					</TouchableOpacity>
 				</View>
 			) : (
@@ -1497,7 +1499,7 @@ export default function EventPanel({ organizerId }: Props) {
 													lineHeight: 16,
 												}}
 											>
-												Venue: {Array.isArray(ev.venue) ? ev.venue[0] : ev.venue}
+											Venue: {Array.isArray(ev.venue) ? ev.venue[0] : ev.venue}
 											</Text>
 										)}
 										<Text
@@ -1510,7 +1512,7 @@ export default function EventPanel({ organizerId }: Props) {
 												letterSpacing: 0.6,
 											}}
 										>
-											PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
+										PARTICIPANTS: {ev.numberofpeople ?? 0}/{ev.participants_cap ?? "-"}
 										</Text>
 									</View>
 								</TouchableOpacity>
