@@ -148,6 +148,6 @@ const styles = StyleSheet.create({
   icon: {
     width: 28,
     height: 28,
-    bottom: 2,
+    bottom: 1,
   },
 });
