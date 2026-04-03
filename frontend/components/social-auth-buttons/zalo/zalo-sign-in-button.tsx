@@ -35,12 +35,12 @@ export default function ZaloSignInButton() {
       const zaloModule = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
       const { login, getUserProfile } = zaloModule;
 
-      // 1. Use AUTH_VIA_WEB to bypass the Zalo app version check entirely.
-      //    APP_OR_WEB shows "incompatible version" dialog and when user presses Skip,
-      //    the newer Zalo native SDK fails to launch the web fallback (known regression).
-      //    AUTH_VIA_WEB goes directly to BrowserLoginActivity (already wired in manifest).
+      // 1. AUTH_VIA_APP deep-links directly into the installed Zalo app — user approves there
+      //    and is returned via the zalo-{appId}:// scheme (BrowserLoginActivity handles redirect).
+      //    APP_OR_WEB triggered a "version incompatible" version-gate dialog that broke the flow.
+      //    AUTH_VIA_WEB opens a browser which is unwanted — APP bypasses both issues.
       const loginResult = await Promise.race([
-        login('AUTH_VIA_WEB'),
+        login('AUTH_VIA_APP'),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Zalo login timed out after 60s')), 60000),
         ),
