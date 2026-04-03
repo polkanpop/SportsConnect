@@ -330,7 +330,7 @@ export default function AccountSettingsScreen() {
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
     try {
-      const authResult = await zaloLogin('AUTH_VIA_WEB')
+      const authResult = await zaloLogin('AUTH_VIA_APP')
       const { accessToken } = authResult
       const profile = await zaloGetProfile()
       await linkZaloProvider({
