@@ -9,10 +9,10 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-from fastapi import FastAPI, Response, Request
+from fastapi import FastAPI, Query, Response, Request
 from fastapi.exceptions import RequestValidationError
 from pathlib import Path
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -250,6 +250,30 @@ async def legal_privacy_vi():
 @app.get("/terms-vi", include_in_schema=False)
 async def legal_terms_vi():
     return FileResponse(_HTML_DIR / "terms_vi.html", media_type="text/html")
+
+
+@app.get("/zalo-callback", include_in_schema=False)
+def zalo_oauth_callback(
+    code: str = Query(default=''),
+    state: str = Query(default=''),
+    error: str = Query(default=''),
+):
+    """Relay Zalo's web OAuth redirect back to the mobile app via deep link.
+
+    After the user approves (or denies) on Zalo's consent screen, Zalo redirects
+    to https://sportconnects.org/zalo-callback with ?code=... (registered in Zalo
+    console → Web tab → Callback URL). This endpoint immediately issues a 302 to
+    sportconnect://zalo-code so that expo-web-browser.openAuthSessionAsync can
+    intercept the custom-scheme redirect and close the Chrome Custom Tab.
+    """
+    from urllib.parse import urlencode
+    if error or not code:
+        params = urlencode({'error': error or 'no_code'})
+        return RedirectResponse(url=f"sportconnect://zalo-code?{params}", status_code=302)
+    params_dict: dict = {'code': code}
+    if state:
+        params_dict['state'] = state
+    return RedirectResponse(url=f"sportconnect://zalo-code?{urlencode(params_dict)}", status_code=302)
 
 
 @app.on_event("startup")
