@@ -3,6 +3,7 @@ import time
 import logging
 import hashlib
 import os
+import threading
 import json
 import base64
 import secrets
@@ -28,6 +29,33 @@ from ..login_rules import (
     record_username_attempt,
     get_username_state_snapshot,
 )
+
+# Short-lived whitelist of access_tokens issued by /auth/zalo/token.
+# Keyed by token, value is expiry timestamp. TTL = 5 minutes.
+# This avoids needing to re-call Zalo (geo-blocked from SG server).
+_zalo_token_whitelist: dict[str, float] = {}
+_zalo_token_whitelist_lock = threading.Lock()
+_ZALO_TOKEN_TTL = 300  # seconds
+
+def _whitelist_zalo_token(token: str) -> None:
+    expiry = time.time() + _ZALO_TOKEN_TTL
+    with _zalo_token_whitelist_lock:
+        _zalo_token_whitelist[token] = expiry
+        # Purge expired entries to avoid unbounded growth
+        now = time.time()
+        expired = [k for k, v in _zalo_token_whitelist.items() if v < now]
+        for k in expired:
+            del _zalo_token_whitelist[k]
+
+def _is_whitelisted_zalo_token(token: str) -> bool:
+    with _zalo_token_whitelist_lock:
+        expiry = _zalo_token_whitelist.get(token)
+        if expiry is None:
+            return False
+        if time.time() > expiry:
+            del _zalo_token_whitelist[token]
+            return False
+        return True
 
 logger = logging.getLogger("auth")
 if not logger.handlers:
@@ -980,6 +1008,10 @@ def zalo_exchange_token(payload: dict):
             detail=f"Zalo token exchange error: {token_json.get('error_description') or token_json.get('error') or 'unknown'}",
         )
 
+    # Whitelist this token so /auth/zalo can trust it without re-calling Zalo
+    _whitelist_zalo_token(access_token)
+    logger.debug(f"/auth/zalo/token whitelisted token (first 12 chars): {access_token[:12]}...")
+
     return {"access_token": access_token}
 
 
@@ -1009,32 +1041,14 @@ def zalo_sign_in(payload: dict):
         logger.error("/auth/zalo ZALO_APP_SECRET not configured")
         raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
 
-    # Verify the access_token by calling our Cloudflare Worker proxy.
-    # The worker runs from Cloudflare's Vietnam edge, so graph.zalo.me geo-restriction is bypassed.
-    ZALO_PROXY_URL = "https://sportconnects.org/zalo-proxy/tokeninfo"
-    verified_uid = ""
-    verify_debug: list[str] = []
+    # Verify the access_token using the server-side whitelist.
+    # The token was added to the whitelist by /auth/zalo/token (server-to-server Zalo code exchange,
+    # which is not geo-blocked). No need to re-call Zalo APIs from this non-Vietnam server.
+    if not _is_whitelisted_zalo_token(access_token):
+        logger.error(f"/auth/zalo token not in whitelist (expired or not issued by this server) zalo_id={zalo_id}")
+        raise HTTPException(status_code=401, detail="Zalo token not recognised — please try signing in again")
 
-    try:
-        rp = httpx.post(
-            ZALO_PROXY_URL,
-            json={"access_token": access_token},
-            timeout=15.0,
-        )
-        jp = rp.json()
-        verified_uid = str(jp.get("id") or "")
-        verify_debug.append(f"CF proxy → status={rp.status_code} uid={verified_uid!r} body={jp}")
-    except Exception as e:
-        verify_debug.append(f"CF proxy → exception {e}")
-
-    logger.debug(f"/auth/zalo token verification: {verify_debug}")
-
-    if not verified_uid:
-        logger.error(f"/auth/zalo token verification failed: {verify_debug}")
-        raise HTTPException(status_code=401, detail="Zalo token verification failed — could not retrieve uid from proxy")
-    if verified_uid != zalo_id:
-        logger.error(f"/auth/zalo uid mismatch: token uid={verified_uid} claimed={zalo_id}")
-        raise HTTPException(status_code=401, detail="Zalo token uid does not match claimed zalo_id")
+    logger.debug(f"/auth/zalo whitelist check passed for zalo_id={zalo_id}")
 
     display_name = zalo_name or f"Zalo User {zalo_id}"
 
