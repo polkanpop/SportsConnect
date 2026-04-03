@@ -11,4 +11,9 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# Zalo SDK
+-keep class com.zing.zalo.** { *; }
+-keep enum com.zing.zalo.** { *; }
+-keep interface com.zing.zalo.** { *; }
+
 # Add any project specific keep options here:
