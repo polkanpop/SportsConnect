@@ -70,10 +70,9 @@ class MainActivity : ReactActivity() {
     ZaloSDK.Instance.onActivityResult(this, requestCode, resultCode, data)
   }
 
-  // Required for singleTask launchMode: when Zalo app-to-app IPC returns the
-  // OAuth callback via a new intent (instead of onActivityResult on Android 12+).
+  // Required for singleTask launchMode so React Native correctly processes
+  // deep-link / IPC intents when the activity is already running.
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
-    ZaloSDK.Instance.onNewIntent(intent)
   }
 }
