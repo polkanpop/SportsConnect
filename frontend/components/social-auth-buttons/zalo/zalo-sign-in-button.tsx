@@ -1,28 +1,25 @@
 ﻿/**
  * Zalo sign-in via custom OAuth 2.0 PKCE — no react-native-zalo-kit SDK.
  *
- * Why the SDK is NOT used:
- *   me.zalo:sdk-auth (last updated Nov 2024) is permanently abandoned.
- *   AUTH_VIA_APP → "Bản Zalo không tương thích" dialog baked into the SDK AAR.
- *   AUTH_VIA_WEB → now requires QR code scan from a different physical device.
- *   No rebuild can fix this; Zalo stopped maintaining the library.
+ * Auth routing:
+ *   - Zalo installed  → Linking.openURL (system intent, respects Android App Links)
+ *                        Android App Links route oauth.zaloapp.com to the Zalo app if Zalo
+ *                        has registered that domain (which it does in Vietnam builds).
+ *                        The user approves natively inside the Zalo app.
+ *   - Zalo NOT installed → WebBrowser.openAuthSessionAsync (Chrome Custom Tab web fallback)
  *
- * This implementation:
- *   1. Generates a PKCE pair (expo-crypto, pure JS — no native SDK).
- *   2. Opens Zalo's standard developer OAuth consent URL in a Chrome Custom Tab
- *      via expo-web-browser.openAuthSessionAsync.
- *      → If Zalo is installed, Android App Links may route oauth.zaloapp.com to
- *        the Zalo app directly so the user approves natively (no web form).
- *      → If Zalo is NOT installed, the web consent page is shown instead.
- *   3. Zalo redirects to https://sportconnects.org/zalo-callback (registered in
- *      Zalo console → Web tab → Callback URL).
- *   4. The backend /zalo-callback endpoint issues a 302 to sportconnect://zalo-code
- *      so openAuthSessionAsync catches the custom-scheme redirect and closes the tab.
- *   5. Frontend exchanges code + verifier via existing POST /api/auth/zalo/token.
- *   6. Frontend fetches Zalo user profile (device has Vietnam IP) via graph.zalo.me.
- *   7. Frontend authenticates with our backend via existing POST /api/auth/zalo.
+ * NOTE: openAuthSessionAsync was the previous approach but Chrome Custom Tabs bypass Android
+ * App Links entirely (they run inside Chrome's context). Linking.openURL uses the normal
+ * Android intent system which checks App Links before opening any browser, so the Zalo app
+ * intercepts oauth.zaloapp.com and handles auth natively.
+ *
+ * Redirect chain:
+ *   Zalo/web → https://sportconnects.org/zalo-callback?code=...
+ *            → 302 → sportconnect://zalo-code?code=...&state=...
+ *            → our Linking listener resolves → we exchange code for JWT
  */
 import * as Crypto from 'expo-crypto';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { ICONS } from '@/constants/icons';
 import { persistAuthSession } from '@/lib/backendApi';
@@ -30,12 +27,11 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { AppState, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
 const ZALO_APP_ID = '959402498466634174';
-// Registered in Zalo console → Web tab → Callback URL
 const ZALO_REDIRECT_URI = 'https://sportconnects.org/zalo-callback';
 
 // ─── PKCE helpers (pure JS) ──────────────────────────────────────────────────
@@ -60,7 +56,6 @@ async function randomState(): Promise<string> {
   return Array.from(raw).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Parse key=value pairs from a URL query string (works with custom schemes). */
 function parseQueryParams(url: string): Record<string, string> {
   const idx = url.indexOf('?');
   if (idx === -1) return {};
@@ -71,6 +66,52 @@ function parseQueryParams(url: string): Record<string, string> {
       return [[decodeURIComponent(kv.slice(0, eq)), decodeURIComponent(kv.slice(eq + 1))]];
     }),
   );
+}
+
+// ─── System-intent auth opener ───────────────────────────────────────────────
+// Used when Zalo is installed. Launches oauth.zaloapp.com via Android's normal
+// intent system so App Links can route it to the native Zalo app. Waits for the
+// sportconnect://zalo-code deep link to come back, or null on cancel/timeout.
+
+function openWithSystemIntent(url: string, callbackPrefix: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let appWentBackground = false;
+    let returnTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = (result: string | null) => {
+      if (resolved) return;
+      resolved = true;
+      urlSub.remove();
+      appStateSub.remove();
+      clearTimeout(masterTimeout);
+      if (returnTimeoutId) clearTimeout(returnTimeoutId);
+      resolve(result);
+    };
+
+    // Listen for the deep link callback (sportconnect://zalo-code?code=...)
+    const urlSub = Linking.addEventListener('url', (event) => {
+      if (event.url.startsWith(callbackPrefix)) {
+        cleanup(event.url);
+      }
+    });
+
+    // Detect cancellation: app came back to foreground but no url event fired
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        appWentBackground = true;
+        if (returnTimeoutId) clearTimeout(returnTimeoutId);
+      } else if (state === 'active' && appWentBackground) {
+        // Give Linking 2 s to fire the url event before declaring cancelled
+        returnTimeoutId = setTimeout(() => cleanup(null), 2000);
+      }
+    });
+
+    // Hard safety timeout (2 min)
+    const masterTimeout = setTimeout(() => cleanup(null), 120_000);
+
+    Linking.openURL(url).catch(() => cleanup(null));
+  });
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -100,31 +141,42 @@ export default function ZaloSignInButton() {
         `&code_challenge_method=S256` +
         `&state=${state}`;
 
-      // 3. Open consent in Chrome Custom Tab; watch for sportconnect:// redirect
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sportconnect://');
+      // 3. Route based on whether Zalo app is installed
+      //    canOpenURL('zalo://') is reliable because <package android:name="com.zing.zalo"/>
+      //    is declared in AndroidManifest.xml queries, satisfying Android 11+ visibility rules.
+      let returnUrl: string | null;
+      const zaloInstalled = await Linking.canOpenURL('zalo://');
+      if (zaloInstalled) {
+        // System intent: Android App Links may redirect oauth.zaloapp.com to Zalo native app
+        returnUrl = await openWithSystemIntent(authUrl, 'sportconnect://zalo-code');
+      } else {
+        // Web fallback via Chrome Custom Tab
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sportconnect://');
+        returnUrl = result.type === 'success' ? result.url : null;
+      }
 
-      if (result.type !== 'success') {
-        // User cancelled or dismissed the browser — not an error
+      if (!returnUrl) {
+        // User cancelled (pressed back, or timed out)
         return;
       }
 
-      // 4. Parse the code from sportconnect://zalo-code?code=...&state=...
-      const params = parseQueryParams(result.url);
+      // 4. Parse code + validate state
+      const params = parseQueryParams(returnUrl);
       if (params.error) {
-        Alert.alert('Đăng nhập lỗi', `Zalo không xác thực: ${params.error}`);
+        Alert.alert('Dong Zalo that bai', `Zalo tra ve loi: ${params.error}`);
         return;
       }
       if (params.state !== state) {
-        Alert.alert('Đăng nhập lỗi', 'State mismatch — yêu cầu không hợp lệ.');
+        Alert.alert('Dong Zalo that bai', 'State mismatch — yeu cau khong hop le.');
         return;
       }
       const { code } = params;
       if (!code) {
-        Alert.alert('Đăng nhập lỗi', 'Không nhận được mã xác thực từ Zalo.');
+        Alert.alert('Dong Zalo that bai', 'Khong nhan duoc ma xac thuc tu Zalo.');
         return;
       }
 
-      // 5. Exchange auth code for Zalo access_token (backend uses app_secret)
+      // 5. Exchange auth code for Zalo access_token via backend (holds app_secret)
       const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,12 +185,12 @@ export default function ZaloSignInButton() {
       const tokenJson = await tokenResp.json().catch(() => ({}));
       if (!tokenResp.ok || !tokenJson?.access_token) {
         const detail = tokenJson?.detail || JSON.stringify(tokenJson);
-        Alert.alert('Đăng nhập lỗi', `Trao đổi token thất bại: ${detail}`);
+        Alert.alert('Dong Zalo that bai', `Trao doi token that bai: ${detail}`);
         return;
       }
       const { access_token } = tokenJson;
 
-      // 6. Fetch Zalo user profile from device (Vietnam IP satisfies Zalo's geo requirement)
+      // 6. Fetch Zalo user profile from device (Vietnam IP satisfies geo requirement)
       const profileResp = await fetch(
         'https://graph.zalo.me/v2.0/me?fields=id,name,picture',
         { headers: { access_token } },
@@ -147,11 +199,11 @@ export default function ZaloSignInButton() {
       const zaloId = String(profile?.id ?? '');
       const zaloName = String(profile?.name ?? '');
       if (!zaloId) {
-        Alert.alert('Đăng nhập lỗi', 'Không lấy được thông tin người dùng Zalo.');
+        Alert.alert('Dong Zalo that bai', 'Khong lay duoc thong tin nguoi dung Zalo.');
         return;
       }
 
-      // 7. Sync with our backend and receive JWT
+      // 7. Sync with our backend → receive JWT
       const authResp = await fetch(`${backendUrl}/api/auth/zalo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,7 +212,7 @@ export default function ZaloSignInButton() {
       const authJson = await authResp.json().catch(() => ({}));
       if (!authResp.ok || !authJson?.userid) {
         const detail = authJson?.detail || JSON.stringify(authJson);
-        Alert.alert('Đăng nhập lỗi', `Xác thực thất bại (${authResp.status}): ${detail}`);
+        Alert.alert('Dong Zalo that bai', `Xac thuc that bai (${authResp.status}): ${detail}`);
         return;
       }
 
@@ -171,7 +223,7 @@ export default function ZaloSignInButton() {
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? '';
       if (__DEV__) console.error('[ZaloSignIn]', e);
-      Alert.alert('Đăng nhập lỗi', `Không thể đăng nhập Zalo: ${msg}`);
+      Alert.alert('Loi', `Khong the dang nhap Zalo: ${msg}`);
     } finally {
       setLoading(false);
     }

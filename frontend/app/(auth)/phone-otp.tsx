@@ -93,7 +93,12 @@ export default function PhoneOtpScreen() {
       startResendTimer();
     } catch (e: any) {
       console.error('[PhoneOtp] sendOtp error', e);
-      setError(e?.message ?? t('AUTH_OTP_ERR_SEND_FAILED'));
+      const msg: string = e?.message ?? '';
+      if (/BILLING_NOT_ENABLED|billing[\-_]not/i.test(msg)) {
+        setError('Dịch vụ xác thực SMS chưa sẵn sàng. Vui lòng đăng nhập bằng mật khẩu hoặc Zalo.');
+      } else {
+        setError(msg || t('AUTH_OTP_ERR_SEND_FAILED'));
+      }
     } finally {
       setSending(false);
     }
