@@ -425,9 +425,9 @@ export default function AccountSettingsScreen() {
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
           {phoneEditError && <Text style={styles.errorText}>{phoneEditError}</Text>}
-          {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && !(account?.phone_verified) && (
+          {!loadingMeta && originalPhone.trim() && !(account?.phone_verified) && (
             <TouchableOpacity
-              onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(phoneEdit.trim())}&mode=add_phone` as any)}
+              onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(originalPhone.trim())}&mode=add_phone` as any)}
               style={styles.linkBtn}
             >
               <Text style={styles.linkText}>{t('ACCT_BTN_VERIFY_OTP')}</Text>
@@ -732,11 +732,9 @@ const styles = StyleSheet.create({
   eyeIcon: { width: 18, height: 18, tintColor: '#888' },
 
   badge: {
-    alignSelf: 'flex-start',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    marginTop: 2,
   },
   badgeVerified: { backgroundColor: '#dcfce7' },
   badgeUnverified: { backgroundColor: '#fef9c3' },

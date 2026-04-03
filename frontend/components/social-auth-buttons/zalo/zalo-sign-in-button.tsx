@@ -4,7 +4,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, TurboModuleRegistry } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
@@ -14,25 +14,25 @@ export default function ZaloSignInButton() {
 
   const signIn = useCallback(async () => {
     if (loading) return;
-    setLoading(true);
 
+    // Must check native availability BEFORE any require(). TurboModuleRegistry.get() returns null
+    // safely, while the package's internal TurboModuleRegistry.getEnforcing() throws a fatal
+    // Invariant Violation that the new RN arch cannot recover from even inside try-catch.
+    const isZaloAvailable = TurboModuleRegistry.get('ZaloKit') !== null;
+    if (!isZaloAvailable) {
+      Alert.alert(
+        'Zalo sign-in unavailable',
+        'Zalo login requires a full app update. Please update the app from the store.',
+      );
+      return;
+    }
+
+    setLoading(true);
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
-      // Lazy-load to prevent the app from crashing on OTA builds where
-      // the ZaloKit native module has not yet been compiled into the binary.
-      let zaloModule: typeof import('react-native-zalo-kit') | null = null;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        zaloModule = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
-      } catch {
-        Alert.alert('Zalo sign-in unavailable', 'Zalo login requires a full app update. Please update the app from the store.');
-        return;
-      }
-      if (!zaloModule || typeof (zaloModule as any).login !== 'function') {
-        Alert.alert('Zalo sign-in unavailable', 'Zalo login requires a full app update. Please update the app from the store.');
-        return;
-      }
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const zaloModule = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
       const { login, getUserProfile } = zaloModule;
 
       // 1. Native SDK opens the installed Zalo app (falls back to Zalo web if not installed).
