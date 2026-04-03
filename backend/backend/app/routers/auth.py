@@ -1138,25 +1138,9 @@ def zalo_sign_in(payload: dict):
     # Register Zalo auth provider for this new user
     ensure_auth_provider(userid, "Zalo", zalo_id)
 
-    # Create unverified_users record — Zalo provides no email or phone,
-    # so both fields are null and verification flags start as false.
-    try:
-        max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
-        next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
-        placeholder_hash = f"ZALO:{hashlib.sha256(f'zalo:{zalo_id}'.encode()).hexdigest()[:32]}"
-        rest_upsert("unverified_users", {
-            "unverifiedid": next_unver_id,
-            "userid": userid,
-            "email": None,
-            "phone": None,
-            "token_hash": placeholder_hash,
-            "token_expires_at": "2126-01-01T00:00:00+00:00",
-            "resend_count": 0,
-            "email_verified": False,
-            "phone_verified": False,
-        })
-    except Exception as e:
-        logger.warning(f"/auth/zalo unverified_users insert failed userid={userid} err={e}")
+    # Zalo provides no email or phone — no unverified_users record is needed.
+    # The unverified_users table is for the local email-signup verification flow only.
+    # Social-login users (Zalo, Google) are already identity-verified by the OAuth provider.
 
     try:
         tokens = create_user_tokens(userid, None, None, remember_me=True)
