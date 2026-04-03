@@ -42,6 +42,14 @@ module.exports = () => {
     },
   ])
 
+  // react-native-zalo-kit native SDK wiring (auto-configures Android + iOS)
+  ensurePlugin(plugins, [
+    './plugins/withZaloSDK',
+    {
+      appId: process.env.EXPO_PUBLIC_ZALO_APP_ID || '959402498466634174',
+    },
+  ])
+
   if (hasPackage('@rnmapbox/maps')) {
     ensurePlugin(plugins, [
       '@rnmapbox/maps',

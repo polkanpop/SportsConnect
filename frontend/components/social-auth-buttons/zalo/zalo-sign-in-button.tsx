@@ -1,4 +1,4 @@
-import { ICONS } from '@/constants/icons';
+﻿import { ICONS } from '@/constants/icons';
 import { persistAuthSession } from '@/lib/backendApi';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
@@ -6,46 +6,12 @@ import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import * as Crypto from 'expo-crypto';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import { expo } from '@/app.json';
+import { login, getUserProfile } from 'react-native-zalo-kit';
 import { API_BASE_URL } from '@/env';
-
-// ── PKCE helpers ─────────────────────────────────────────────────────────────
-
-function uint8ArrayToBase64Url(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-async function generateCodeVerifier(): Promise<string> {
-  // 43–128 char unreserved ASCII string
-  const bytes = await Crypto.getRandomBytesAsync(32);
-  return uint8ArrayToBase64Url(bytes);
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const digest = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    verifier,
-    { encoding: Crypto.CryptoEncoding.BASE64 }
-  );
-  return digest.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-
-const ZALO_APP_ID = process.env.EXPO_PUBLIC_ZALO_APP_ID ?? '959402498466634174';
 
 export default function ZaloSignInButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-
-  WebBrowser.maybeCompleteAuthSession();
 
   const signIn = useCallback(async () => {
     if (loading) return;
@@ -53,105 +19,51 @@ export default function ZaloSignInButton() {
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
-    // HTTPS URL registered in Zalo Developer Console → Web tab → Callback URL.
-    // Zalo only accepts HTTPS here; our Cloudflare worker at sportconnects.org
-    // bridges this to the app deep link (sportconnect://auth/zalo-callback).
-    const zaloCallbackHttps = 'https://sportconnects.org/zalo-callback';
-
-    // Deep link the app's intent-filter listens on — used as the second arg to
-    // openAuthSessionAsync so it knows when to close the browser tab.
-    const appDeepLink = Linking.createURL('auth/zalo-callback', { scheme: expo.scheme });
-
     try {
-      // 1. PKCE
-      const codeVerifier = await generateCodeVerifier();
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-
-      // 2. Open Zalo auth page — redirect_uri must match Zalo dev console registration
-      const authUrl =
-        `https://oauth.zaloapp.com/v4/permission?` +
-        `app_id=${ZALO_APP_ID}` +
-        `&redirect_uri=${encodeURIComponent(zaloCallbackHttps)}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&state=sportconnect`;
-
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, appDeepLink, {
-        showInRecents: true,
-      });
-
-      if (result.type !== 'success') {
-        if (result.type === 'dismiss') {
-          console.warn('[ZaloSignIn] user dismissed');
-        } else {
-          console.error('[ZaloSignIn] unexpected result', result.type);
-        }
-        setLoading(false);
+      // 1. Native SDK opens the installed Zalo app (falls back to Zalo web if not installed).
+      //    The SDK handles the full OAuth + code-exchange and returns the access token directly.
+      const { accessToken } = await login('AUTH_VIA_APP_OR_WEB');
+      if (!accessToken) {
+        Alert.alert('Sign-in error', 'Zalo did not return an access token.');
         return;
       }
 
-      // 3. Parse authorization code from redirect URL
-      const parsed = Linking.parse(result.url);
-      const code = (parsed.queryParams?.code as string | undefined) ?? '';
-      if (!code) {
-        console.error('[ZaloSignIn] missing code in redirect', result.url);
-        Alert.alert('Sign-in error', 'Zalo did not return an authorization code.');
-        setLoading(false);
-        return;
-      }
-
-      // 4. Exchange code at our backend (holds app_secret securely) → access_token
-      const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, code_verifier: codeVerifier }),
-      });
-      const tokenJson = await tokenResp.json().catch(() => ({}));
-      if (!tokenResp.ok || !tokenJson?.access_token) {
-        const detail = tokenJson?.detail || JSON.stringify(tokenJson);
-        Alert.alert('Sign-in error', `Zalo token exchange failed (${tokenResp.status}): ${detail}`);
-        setLoading(false);
-        return;
-      }
-      const accessToken: string = tokenJson.access_token;
-
-      // 5. Fetch Zalo user info from the device (Vietnam IP) — graph.zalo.me
-      //    blocks requests from servers hosted outside Vietnam.
-      const userResp = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
-        headers: { access_token: accessToken },
-      });
-      const userJson = await userResp.json().catch(() => ({}));
-      const zaloId: string = String(userJson?.id || '');
-      const zaloName: string = String(userJson?.name || '');
+      // 2. Fetch the Zalo user profile from the device (Vietnam IP — geo-requirement met).
+      const profile = await getUserProfile();
+      const zaloId = String(profile?.id ?? '');
+      const zaloName = String(profile?.name ?? '');
+      // phoneNumber is available from the Zalo SDK profile — Zalo accounts are phone-tied.
+      const zaloPhone = String(profile?.phoneNumber ?? '');
       if (!zaloId) {
         Alert.alert('Sign-in error', 'Could not retrieve Zalo user ID from device.');
-        setLoading(false);
         return;
       }
 
-      // 6. Authenticate with backend — server verifies token via tokeninfo endpoint
-      const syncResp = await fetch(`${backendUrl}/api/auth/zalo`, {
+      // 3. Authenticate with our backend — creates / syncs the user record and returns our JWT.
+      const authResp = await fetch(`${backendUrl}/api/auth/zalo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName }),
+        body: JSON.stringify({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName, zalo_phone: zaloPhone }),
       });
-      const syncJson = await syncResp.json().catch(() => ({}));
-      console.debug('[ZaloSignIn] backend sync', { status: syncResp.status, body: syncJson });
+      const authJson = await authResp.json().catch(() => ({}));
 
-      if (!syncResp.ok || !syncJson?.userid) {
-        console.error('[ZaloSignIn] backend sync failed', syncResp.status, syncJson);
-        const detail = syncJson?.detail || JSON.stringify(syncJson);
-        Alert.alert('Sign-in error', `Zalo sign-in failed (${syncResp.status}): ${detail}`);
-        setLoading(false);
+      if (!authResp.ok || !authJson?.userid) {
+        const detail = authJson?.detail || JSON.stringify(authJson);
+        Alert.alert('Sign-in error', `Zalo sign-in failed (${authResp.status}): ${detail}`);
         return;
       }
 
-      await persistAuthSession(syncJson, { rememberMe: true });
+      await persistAuthSession(authJson, { rememberMe: true });
       queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
       router.replace('/(tabs)/Home');
     } catch (e: any) {
-      console.error('[ZaloSignIn] error', e);
-      const errMsg = e?.message || String(e) || 'Unknown error';
-      Alert.alert('Sign-in error', `Could not complete Zalo sign-in: ${errMsg}`);
+      const msg: string = e?.message ?? String(e) ?? '';
+      // ZaloSDK throws when the user cancels â€” do not show an error in that case.
+      const isCancelled = /cancel|dismiss|user_denied/i.test(msg);
+      if (!isCancelled) {
+        if (__DEV__) console.error('[ZaloSignIn] error', e);
+        Alert.alert('Sign-in error', `Could not complete Zalo sign-in: ${msg}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -180,3 +92,4 @@ const styles = StyleSheet.create({
     bottom: 1,
   },
 });
+

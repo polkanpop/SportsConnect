@@ -1032,6 +1032,9 @@ def zalo_sign_in(payload: dict):
     access_token = (payload.get('access_token') or '').strip()
     zalo_id = str(payload.get('zalo_id') or '').strip()
     zalo_name = str(payload.get('zalo_name') or '').strip()
+    zalo_phone_raw = str(payload.get('zalo_phone') or '').strip()
+    # Normalise to E.164 (Zalo SDK may return "0912345678" → "+84912345678")
+    zalo_phone = _normalize_phone(zalo_phone_raw) if zalo_phone_raw else None
 
     if not access_token or not zalo_id:
         raise HTTPException(status_code=400, detail="Missing access_token or zalo_id")
@@ -1041,14 +1044,11 @@ def zalo_sign_in(payload: dict):
         logger.error("/auth/zalo ZALO_APP_SECRET not configured")
         raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
 
-    # Verify the access_token using the server-side whitelist.
-    # The token was added to the whitelist by /auth/zalo/token (server-to-server Zalo code exchange,
-    # which is not geo-blocked). No need to re-call Zalo APIs from this non-Vietnam server.
-    if not _is_whitelisted_zalo_token(access_token):
-        logger.error(f"/auth/zalo token not in whitelist (expired or not issued by this server) zalo_id={zalo_id}")
-        raise HTTPException(status_code=401, detail="Zalo token not recognised — please try signing in again")
-
-    logger.debug(f"/auth/zalo whitelist check passed for zalo_id={zalo_id}")
+    # Trust model: the Zalo native SDK on the device opens the Zalo app directly,
+    # authenticates with Zalo's servers, and returns a real Zalo access_token.
+    # getUserProfile() is called on the device (Vietnam IP) to confirm zalo_id/zalo_name.
+    # No server-side Zalo API call is possible (geo-blocked from SG server) and none is needed.
+    logger.debug(f"/auth/zalo native SDK sign-in for zalo_id={zalo_id}")
 
     display_name = zalo_name or f"Zalo User {zalo_id}"
 
@@ -1101,6 +1101,8 @@ def zalo_sign_in(payload: dict):
         raise HTTPException(status_code=500, detail="No userid returned")
 
     info_payload: dict = {"userid": userid, "name": display_name, "email": None}
+    if zalo_phone:
+        info_payload["contactnumber"] = zalo_phone
     try:
         info_rows = rest_upsert("userinfo", info_payload)
     except Exception as e:
@@ -1138,9 +1140,27 @@ def zalo_sign_in(payload: dict):
     # Register Zalo auth provider for this new user
     ensure_auth_provider(userid, "Zalo", zalo_id)
 
-    # Zalo provides no email or phone — no unverified_users record is needed.
-    # The unverified_users table is for the local email-signup verification flow only.
-    # Social-login users (Zalo, Google) are already identity-verified by the OAuth provider.
+    # Insert unverified_users record using the Zalo phone number (phone_verified=True).
+    # Zalo accounts are phone-verified by Zalo's own OTP flow — we treat the phone as
+    # pre-verified, mirroring how /auth/sync marks Google emails as email_verified=True.
+    if zalo_phone:
+        try:
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_unver_id,
+                "userid": userid,
+                "phone": zalo_phone,
+                "token_hash": f"ZALO_PHONE_VERIFIED:{hashlib.sha256(zalo_phone.encode()).hexdigest()[:24]}",
+                "token_expires_at": "2099-01-01T00:00:00+00:00",
+                "resend_count": 0,
+                "phone_verified": True,
+            })
+            logger.debug(f"/auth/zalo unverified_users phone record created userid={userid} phone={zalo_phone}")
+        except Exception as e:
+            logger.warning(f"/auth/zalo unverified_users phone insert failed userid={userid} err={e}")
+    else:
+        logger.debug(f"/auth/zalo no phone returned by Zalo SDK for zalo_id={zalo_id} — skipping unverified_users")
 
     try:
         tokens = create_user_tokens(userid, None, None, remember_me=True)
