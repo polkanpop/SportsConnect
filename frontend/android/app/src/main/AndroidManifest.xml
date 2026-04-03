@@ -25,15 +25,7 @@
         <data android:scheme="sportconnect"/>
       </intent-filter>
     </activity>
-    <meta-data android:name="com.zing.zalo.zalosdk.appID" android:value="@string/appID"/>
-    <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
-    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
-    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/72bf906e-3a54-4c90-a272-bc5def1b8642"/>
-    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
-    <activity
-      android:name="com.zing.zalo.zalosdk.oauth.BrowserLoginActivity"
-      android:exported="true">
+    <activity android:name="com.zing.zalo.zalosdk.oauth.BrowserLoginActivity" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
@@ -41,5 +33,11 @@
         <data android:scheme="zalo-959402498466634174"/>
       </intent-filter>
     </activity>
+    <meta-data android:name="com.zing.zalo.zalosdk.appID" android:value="@string/appID"/>
+    <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/72bf906e-3a54-4c90-a272-bc5def1b8642"/>
+    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
   </application>
 </manifest>
