@@ -813,6 +813,19 @@ def verify_email(token: str = Query(..., description="Plaintext email verificati
     except Exception as e:
         logger.exception(f"Failed updating verification status err={e}")
         raise HTTPException(status_code=500, detail="Failed marking verified")
+
+    # ── Pending email-change: update userinfo.email to the just-verified address ──
+    # If the verified email differs from the user's current userinfo.email it means
+    # the user initiated an email change via /auth/register-pending-email.
+    if row.get("userid"):
+        try:
+            current_info = rest_select("userinfo", "infoid, userid, email", {"userid": row.get("userid")}, single=True)
+            if current_info and current_info.get("email") != row.get("email"):
+                rest_update("userinfo", {"userid": row.get("userid")}, {"email": row.get("email")})
+                logger.info(f"/verify-email updated userinfo.email={row.get('email')} for userid={row.get('userid')}")
+        except Exception as e:
+            logger.warning(f"/verify-email could not update userinfo.email: {e}")
+
     redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
     auto_login = os.getenv("EMAIL_VERIFY_AUTO_LOGIN", "").lower() == "true"
     if redirect_url:
@@ -1746,3 +1759,111 @@ def phone_login(payload: dict):
         "refreshToken": tokens.get('refresh_token'),
         "refreshTokenExpiresAt": tokens.get('refresh_token_expires_at'),
     }
+
+
+@router.post('/register-pending-email')
+def register_pending_email(payload: dict, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
+    """Register a new email address for the currently authenticated user (pending verification).
+
+    This does NOT update userinfo.email immediately.  Instead it:
+      1. Validates the new email is not taken by another account.
+      2. Creates/updates an unverified_users row with email_verified=False.
+      3. Emails the user a verification link.
+
+    When the user clicks the link, /auth/verify-email marks email_verified=True
+    AND updates userinfo.email to the new address.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token_raw = authorization[7:]
+    try:
+        token_payload = decode_token(access_token_raw)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    new_email = (payload.get('email') or '').strip()
+    if not new_email or '@' not in new_email:
+        raise HTTPException(status_code=400, detail="Missing or invalid email")
+
+    # Reject if taken by a DIFFERENT user
+    existing_info = find_user_by_email(new_email)
+    if existing_info and existing_info.get('userid') != userid:
+        raise HTTPException(status_code=409, detail="Email already in use by another account")
+
+    cfg = _email_settings()
+    token_plain = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token_plain.encode('utf-8')).hexdigest()
+    expires_at = (datetime.utcnow() + timedelta(hours=cfg['expiry_hours'])).isoformat()
+
+    # Lookup existing unverified_users record for this email
+    existing_pending = find_unverified_by_email(new_email)
+    if existing_pending:
+        if existing_pending.get('userid') not in (userid, None):
+            raise HTTPException(status_code=409, detail="Email already pending verification for another account")
+        try:
+            rest_update("unverified_users", {"unverifiedid": existing_pending.get("unverifiedid")}, {
+                "userid": userid,
+                "token_hash": token_hash,
+                "token_expires_at": expires_at,
+                "email_verified": False,
+                "resend_count": 0,
+            })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed updating verification record: {e}")
+    else:
+        try:
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_id,
+                "userid": userid,
+                "email": new_email,
+                "token_hash": token_hash,
+                "token_expires_at": expires_at,
+                "resend_count": 0,
+                "email_verified": False,
+            })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed creating verification record: {e}")
+
+    email_sent = False
+    if _can_send_verification_email():
+        background_tasks.add_task(_deliver_verification_email_task, new_email, token_plain)
+        email_sent = True
+    else:
+        logger.warning("/auth/register-pending-email: SMTP not configured; verification email not queued")
+
+    logger.info(f"/auth/register-pending-email SUCCESS userid={userid} email={new_email} emailSent={email_sent}")
+    return {"status": "ok", "emailSent": email_sent}
+
+
+@router.post('/link-zalo')
+def link_zalo(payload: dict, authorization: Optional[str] = Header(None)):
+    """Link a Zalo account to the currently authenticated user.
+
+    Called from Account Settings after a successful login('AUTH_VIA_APP') + getUserProfile()
+    call on the device.  The backend records the provider association in user_auth_providers.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token_raw = authorization[7:]
+    try:
+        token_payload = decode_token(access_token_raw)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    zalo_id = str(payload.get('zalo_id') or '').strip()
+    zalo_name = str(payload.get('zalo_name') or '').strip()
+    if not zalo_id:
+        raise HTTPException(status_code=400, detail="Missing zalo_id")
+
+    # Reject if this Zalo ID already belongs to a DIFFERENT user
+    existing = find_user_by_provider("Zalo", zalo_id)
+    if existing and existing.get("userid") != userid:
+        raise HTTPException(status_code=409, detail="This Zalo account is already linked to a different user")
+
+    ensure_auth_provider(userid, "Zalo", zalo_id)
+    logger.info(f"/auth/link-zalo SUCCESS userid={userid} zalo_id={zalo_id}")
+    return {"status": "ok", "linked": True}

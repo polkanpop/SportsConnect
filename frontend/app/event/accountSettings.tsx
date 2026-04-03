@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -22,11 +23,15 @@ import {
   updateUserInfo,
   addLocalCredentials,
   registerPendingPhone,
+  registerPendingEmail,
+  linkZaloProvider,
   type MyAccountInfo,
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import { login as zaloLogin, getUserProfile as zaloGetProfile } from 'react-native-zalo-kit'
 
 // ─── Password strength ────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -127,6 +132,9 @@ export default function AccountSettingsScreen() {
   const [sendingReset, setSendingReset] = useState(false)
   const [resetSent, setResetSent] = useState(false)
 
+  // ── Zalo account linking ───────────────────────────────────────────────────
+  const [linkingZalo, setLinkingZalo] = useState(false)
+
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Sync visibility from bootstrap data ──────────────────────────────────
@@ -197,13 +205,21 @@ export default function AccountSettingsScreen() {
   // ── Save contact edits ────────────────────────────────────────────────────
   const handleSaveEmail = async () => {
     if (!userid || !emailEdit.trim()) return
+    const trimmed = emailEdit.trim()
+    if (!trimmed.includes('@')) {
+      setEmailEditError(t('ACCT_ERR_INVALID_EMAIL'))
+      return
+    }
     setEmailSaving(true); setEmailEditError(null); setEmailSuccess(false)
     try {
-      await updateUserInfo(userid, { email: emailEdit.trim() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      await registerPendingEmail(trimmed)
+      // Reset field back to original — userinfo.email only updates after the user
+      // clicks the verification link that was just emailed.
+      setEmailEdit(originalEmail)
+      setVerifSent(true)
       setEmailSuccess(true)
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
-      successTimerRef.current = setTimeout(() => setEmailSuccess(false), 3000)
+      successTimerRef.current = setTimeout(() => setEmailSuccess(false), 5000)
     } catch (e: any) {
       setEmailEditError(e?.message || t('ACCT_ERR_GENERIC'))
     } finally {
@@ -292,6 +308,29 @@ export default function AccountSettingsScreen() {
       else setPwError(t('ACCT_ERR_GENERIC'))
     } finally {
       setPwSaving(false)
+    }
+  }
+
+  // ── Link Zalo account ─────────────────────────────────────────────────────
+  const handleLinkZalo = async () => {
+    setLinkingZalo(true)
+    try {
+      const authResult = await zaloLogin('AUTH_VIA_APP')
+      const { accessToken } = authResult
+      const profile = await zaloGetProfile()
+      await linkZaloProvider({
+        access_token: accessToken,
+        zalo_id: String(profile?.id ?? ''),
+        zalo_name: String(profile?.name ?? ''),
+      })
+      void loadMeta()
+    } catch (e: any) {
+      const msg: string = e?.message ?? String(e) ?? ''
+      if (!msg.includes('-201') && !msg.toLowerCase().includes('cancel')) {
+        Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), msg || t('ACCT_ERR_GENERIC'))
+      }
+    } finally {
+      setLinkingZalo(false)
     }
   }
 
@@ -635,6 +674,8 @@ export default function AccountSettingsScreen() {
                 icon={ICONS.zaloIcon}
                 label="Zalo"
                 linked={providers.includes('Zalo')}
+                onLink={!providers.includes('Zalo') ? handleLinkZalo : undefined}
+                linking={linkingZalo}
               />
               {providers.includes('Local') && (
                 <>
@@ -656,16 +697,43 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked }: { icon: any; label: string; linked: boolean }) {
+function LinkedAccountRow({ icon, label, linked, onLink, linking }: {
+  icon: any
+  label: string
+  linked: boolean
+  onLink?: () => void
+  linking?: boolean
+}) {
   return (
     <View style={styles.linkedRow}>
-      <Image source={icon} style={styles.linkedIcon} resizeMode="contain" />
-      <Text style={styles.linkedLabel}>{label}</Text>
-      <View style={[styles.linkedBadge, linked ? styles.linkedBadgeOn : styles.linkedBadgeOff]}>
-        <Text style={[styles.linkedBadgeText, linked ? styles.linkedBadgeTextOn : styles.linkedBadgeTextOff]}>
-          {linked ? '✓ Linked' : 'Not linked'}
-        </Text>
+      <View style={{ position: 'relative', marginRight: 12 }}>
+        <Image source={icon} style={styles.linkedIcon} resizeMode="contain" />
+        {linked && (
+          <View style={styles.linkedCheckBadge}>
+            <Text style={styles.linkedCheckText}>✓</Text>
+          </View>
+        )}
       </View>
+      <Text style={styles.linkedLabel}>{label}</Text>
+      {linked ? (
+        <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
+          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
+        </View>
+      ) : onLink ? (
+        <TouchableOpacity
+          style={styles.linkedLinkBtn}
+          onPress={onLink}
+          disabled={linking}
+        >
+          {linking
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={styles.linkedLinkBtnText}>Link</Text>}
+        </TouchableOpacity>
+      ) : (
+        <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
+          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Not linked</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -765,7 +833,7 @@ const styles = StyleSheet.create({
   mutedText: { fontSize: 14, color: '#888', fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
 
   linkedRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
-  linkedIcon: { width: 24, height: 24, marginRight: 12 },
+  linkedIcon: { width: 24, height: 24 },
   linkedLabel: { flex: 1, fontSize: 15, color: '#111', fontWeight: '500' },
   linkedBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   linkedBadgeOn: { backgroundColor: '#dcfce7' },
@@ -773,6 +841,27 @@ const styles = StyleSheet.create({
   linkedBadgeText: { fontSize: 12, fontWeight: '600' },
   linkedBadgeTextOn: { color: '#15803d' },
   linkedBadgeTextOff: { color: '#6b7280' },
+  linkedCheckBadge: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: '#22c55e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  linkedCheckText: { color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 10 },
+  linkedLinkBtn: {
+    backgroundColor: '#FF6017',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  linkedLinkBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   successText: { fontSize: 13, color: '#15803d', marginTop: 6, fontWeight: '500' },
   errorText: { fontSize: 13, color: '#dc2626', marginTop: 6 },

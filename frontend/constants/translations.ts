@@ -483,6 +483,9 @@ export const en = {
   ACCT_SET_CRED_SUCCESS: 'Credentials set successfully!',
   ACCT_ERR_USERNAME_TAKEN: 'Username is already taken',
   ACCT_ERR_USERNAME_TOO_SHORT: 'Username must be at least 3 characters',
+  ACCT_ERR_INVALID_EMAIL: 'Please enter a valid email address',
+  ACCT_EMAIL_PENDING_SENT: 'Verification email sent to new address. Click the link to confirm the change.',
+  ACCT_LINK_ZALO_ERR_TITLE: 'Failed to link Zalo',
 
   // Review
   REVIEW_HEADER_TITLE: 'Review',
@@ -1398,6 +1401,9 @@ export const vi: Record<TranslationKey, string> = {
   ACCT_SET_CRED_SUCCESS: 'Đã đặt thông tin đăng nhập!',
   ACCT_ERR_USERNAME_TAKEN: 'Tên người dùng đã được sử dụng',
   ACCT_ERR_USERNAME_TOO_SHORT: 'Tên người dùng phải có ít nhất 3 ký tự',
+  ACCT_ERR_INVALID_EMAIL: 'Vui lòng nhập địa chỉ email hợp lệ',
+  ACCT_EMAIL_PENDING_SENT: 'Đã gửi email xác thực đến địa chỉ mới. Nhấn vào liên kết để xác nhận thay đổi.',
+  ACCT_LINK_ZALO_ERR_TITLE: 'Liên kết Zalo thất bại',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',

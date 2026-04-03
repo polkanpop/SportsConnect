@@ -1094,6 +1094,25 @@ export async function registerPendingPhone(phone: string): Promise<void> {
 	if (!res || res.status !== 'ok') throw new Error('Failed to register phone')
 }
 
+export async function registerPendingEmail(email: string): Promise<{ emailSent: boolean }> {
+	const res = await request('/auth/register-pending-email', {
+		method: 'POST',
+		body: JSON.stringify({ email }),
+		debugLabel: 'registerPendingEmail',
+	}) as { status?: string; emailSent?: boolean } | null
+	if (!res || res.status !== 'ok') throw new Error('Failed to register pending email')
+	return { emailSent: res.emailSent ?? false }
+}
+
+export async function linkZaloProvider(data: { access_token: string; zalo_id: string; zalo_name: string }): Promise<void> {
+	const res = await request('/auth/link-zalo', {
+		method: 'POST',
+		body: JSON.stringify(data),
+		debugLabel: 'linkZaloProvider',
+	}) as { status?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Failed to link Zalo account')
+}
+
 export async function verifyPhoneAddition(firebaseIdToken: string): Promise<{ phone: string }> {
 	const res = await request('/auth/verify-phone', {
 		method: 'POST',
