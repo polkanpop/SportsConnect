@@ -438,22 +438,30 @@ async def get_account(user_sub: str = Depends(get_current_user)):
         )
 
     login_row = rest_select("userlogin", "loginid, username, logintype", {"userid": userid}, single=True)
-    unver_rows = rest_select("unverified_users", "email_verified, phone_verified", {"userid": userid})
+    unver_rows = rest_select("unverified_users", "email, phone, email_verified, phone_verified", {"userid": userid})
 
     email_verified = False
     phone_verified = False
+    unverified_email = None
+    unverified_phone = None
     if isinstance(unver_rows, list):
         for row in unver_rows:
             if row.get("email_verified"):
                 email_verified = True
             if row.get("phone_verified"):
                 phone_verified = True
+            if row.get("email") and not unverified_email:
+                unverified_email = row.get("email")
+            if row.get("phone") and not unverified_phone:
+                unverified_phone = row.get("phone")
 
     return {
         "username": (login_row or {}).get("username"),
         "logintype": (login_row or {}).get("logintype"),
         "email_verified": email_verified,
         "phone_verified": phone_verified,
+        "unverified_email": unverified_email,
+        "unverified_phone": unverified_phone,
     }
 
 

@@ -159,6 +159,17 @@ export default function AccountSettingsScreen() {
       const [acct, provs] = await Promise.all([getMyAccount(), getMyProviders()])
       setAccount(acct)
       setProviders(provs)
+      // Source email/phone from unverified_users — always reflects the pending/current state.
+      // unverified_users.email is set on signup and updated by registerPendingEmail.
+      // unverified_users.phone is set by registerPendingPhone.
+      if (acct?.unverified_email) {
+        setOriginalEmail(acct.unverified_email)
+        setEmailEdit(acct.unverified_email)
+      }
+      if (acct?.unverified_phone) {
+        setOriginalPhone(acct.unverified_phone)
+        setPhoneEdit(acct.unverified_phone)
+      }
     } catch {
       // silent — screen is still usable without this
     } finally {
@@ -213,9 +224,10 @@ export default function AccountSettingsScreen() {
     setEmailSaving(true); setEmailEditError(null); setEmailSuccess(false)
     try {
       await registerPendingEmail(trimmed)
-      // Reset field back to original — userinfo.email only updates after the user
-      // clicks the verification link that was just emailed.
-      setEmailEdit(originalEmail)
+      // Show the new pending email immediately; badge switches to Unverified.
+      // loadMeta will confirm by reading unverified_users on next focus.
+      setOriginalEmail(trimmed)
+      setEmailEdit(trimmed)
       setVerifSent(true)
       setEmailSuccess(true)
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
@@ -273,12 +285,15 @@ export default function AccountSettingsScreen() {
 
   // ── Resend email verification ─────────────────────────────────────────────
   const handleSendVerification = async () => {
-    if (!userInfo?.email) return
+    // Use the pending email from unverified_users (originalEmail) as the target,
+    // not userInfo.email which is only updated after clicking the link.
+    const emailToVerify = originalEmail.trim() || userInfo?.email
+    if (!emailToVerify) return
     setSendingVerif(true)
     setVerifError(null)
     setVerifSent(false)
     try {
-      await resendVerification(userInfo.email)
+      await resendVerification(emailToVerify)
       setVerifSent(true)
     } catch (e: any) {
       setVerifError(e?.message || t('ACCT_ERR_GENERIC'))
@@ -315,7 +330,7 @@ export default function AccountSettingsScreen() {
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
     try {
-      const authResult = await zaloLogin('AUTH_VIA_APP')
+      const authResult = await zaloLogin('AUTH_VIA_WEB')
       const { accessToken } = authResult
       const profile = await zaloGetProfile()
       await linkZaloProvider({

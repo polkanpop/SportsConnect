@@ -31,6 +31,24 @@ function normalizeVNPhone(raw: string): string {
   return '+84' + raw.slice(1);
 }
 
+// ─── Module-level OTP cache ──────────────────────────────────────────────────
+// Survives navigation (component unmount/remount) within the same JS process.
+// Prevents users having to re-send OTP if they accidentally navigate away.
+// Cleared after successful verification or when TTL expires.
+const OTP_CACHE_TTL = 5 * 60 * 1000 // 5 min — Firebase SMS code lifetime
+interface _PendingOtp {
+  confirmation: FirebaseAuthTypes.ConfirmationResult
+  e164Phone: string
+  sentAt: number
+}
+let _pendingOtp: _PendingOtp | null = null
+function _getCachedOtp(e164Phone: string): _PendingOtp | null {
+  if (!_pendingOtp) return null
+  if (_pendingOtp.e164Phone !== e164Phone) return null
+  if (Date.now() - _pendingOtp.sentAt > OTP_CACHE_TTL) { _pendingOtp = null; return null }
+  return _pendingOtp
+}
+
 // ─── Colors ──────────────────────────────────────────────────────────────────
 const COLOR = {
   brand:    '#FF6017',
@@ -52,15 +70,26 @@ export default function PhoneOtpScreen() {
   // Restore persisted draft phone number when navigating back without params
   useEffect(() => {
     if (params.phone) {
-      // Persist the param-provided phone immediately so it survives if the user
-      // navigates away before typing (onChangeText would never fire otherwise).
       AsyncStorage.setItem(OTP_DRAFT_KEY, params.phone).catch(() => {});
+      // Restore cached confirmation so user can resume without re-sending OTP
+      const rawPhone = params.phone.trim();
+      if (VN_PHONE_RE.test(rawPhone)) {
+        const e164 = normalizeVNPhone(rawPhone);
+        const cached = _getCachedOtp(e164);
+        if (cached) {
+          confirmRef.current = cached.confirmation;
+          setOtpSent(true);
+          const elapsed = Math.floor((Date.now() - cached.sentAt) / 1000);
+          const remaining = Math.max(0, 60 - elapsed);
+          if (remaining > 0) startResendTimer(remaining);
+        }
+      }
     } else {
       AsyncStorage.getItem(OTP_DRAFT_KEY)
         .then(val => { if (val) setPhone(val); })
         .catch(() => {});
     }
-  }, []);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const [displayName]               = useState(params.name ?? '');
   const [otpSent, setOtpSent]       = useState(false);
   const [otp, setOtp]               = useState('');
@@ -79,8 +108,8 @@ export default function PhoneOtpScreen() {
     };
   }, []);
 
-  const startResendTimer = () => {
-    setResendTimer(60);
+  const startResendTimer = (startAt = 60) => {
+    setResendTimer(startAt);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setResendTimer((t) => {
@@ -105,6 +134,7 @@ export default function PhoneOtpScreen() {
       const e164 = normalizeVNPhone(trimmed);
       const confirmation = await auth().signInWithPhoneNumber(e164);
       confirmRef.current = confirmation;
+      _pendingOtp = { confirmation, e164Phone: e164, sentAt: Date.now() };
       setOtpSent(true);
       startResendTimer();
     } catch (e: any) {
@@ -142,6 +172,7 @@ export default function PhoneOtpScreen() {
         await verifyPhoneAddition(firebaseIdToken);
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
+        _pendingOtp = null;
         router.back();
       } else {
         // Login flow: exchange Firebase ID token for our backend session
@@ -154,6 +185,7 @@ export default function PhoneOtpScreen() {
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         try { await initFavoritesForCurrentUser(); } catch {}
         AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
+        _pendingOtp = null;
         router.replace('/(tabs)/Home');
       }
     } catch (e: any) {
