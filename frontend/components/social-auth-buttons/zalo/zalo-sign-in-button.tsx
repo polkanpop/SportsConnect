@@ -27,6 +27,18 @@ export default function ZaloSignInButton() {
       return;
     }
 
+    // ── TEMPORARY DEBUG: show Android hash key so we can register it in Zalo console ──
+    try {
+      const { getApplicationHashKey } = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
+      const hashKey = getApplicationHashKey();
+      Alert.alert(
+        'Zalo Hash Key (Debug)',
+        `Copy this value into the Zalo Developer Console → Đăng nhập bằng Zalo → Android → Hash key:\n\n${hashKey}`,
+        [{ text: 'OK — got it' }],
+      );
+    } catch (_) {}
+    // ── END TEMPORARY DEBUG ───────────────────────────────────────────────────────────
+
     setLoading(true);
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
