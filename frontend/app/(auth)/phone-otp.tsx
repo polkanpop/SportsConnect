@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { authPhoneLogin, persistAuthSession } from '@/lib/backendApi';
+import { authPhoneLogin, persistAuthSession, verifyPhoneAddition } from '@/lib/backendApi';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
@@ -41,7 +41,7 @@ const COLOR = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PhoneOtpScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string }>();
+  const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string; mode?: string }>();
 
   // Pre-fill from params (signup flow) OR let user type a fresh number
   const [phone, setPhone]           = useState(params.phone ?? '');
@@ -116,17 +116,24 @@ export default function PhoneOtpScreen() {
 
       const firebaseIdToken = await credential.user.getIdToken();
 
-      // Exchange Firebase ID token for our backend session
-      const res = await authPhoneLogin({
-        firebase_id_token: firebaseIdToken,
-        display_name: displayName || undefined,
-      });
+      if (params.mode === 'add_phone') {
+        // Authenticated user adding/verifying their phone — do NOT re-login
+        await verifyPhoneAddition(firebaseIdToken);
+        queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+        router.back();
+      } else {
+        // Login flow: exchange Firebase ID token for our backend session
+        const res = await authPhoneLogin({
+          firebase_id_token: firebaseIdToken,
+          display_name: displayName || undefined,
+        });
 
-      await persistAuthSession(res, { rememberMe: true });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
-      try { await initFavoritesForCurrentUser(); } catch {}
+        await persistAuthSession(res, { rememberMe: true });
+        queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+        try { await initFavoritesForCurrentUser(); } catch {}
 
-      router.replace('/(tabs)/Home');
+        router.replace('/(tabs)/Home');
+      }
     } catch (e: any) {
       console.error('[PhoneOtp] verify error', e);
       // Firebase invalid-verification-code

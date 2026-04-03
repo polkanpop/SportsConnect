@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import {
@@ -21,6 +21,7 @@ import {
   requestPasswordReset,
   updateUserInfo,
   addLocalCredentials,
+  registerPendingPhone,
   type MyAccountInfo,
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
@@ -103,6 +104,8 @@ export default function AccountSettingsScreen() {
   // ── Contact edit ─────────────────────────────────────────────────────────
   const [emailEdit, setEmailEdit] = useState('')
   const [phoneEdit, setPhoneEdit] = useState('')
+  const [originalEmail, setOriginalEmail] = useState('')
+  const [originalPhone, setOriginalPhone] = useState('')
   const [emailSaving, setEmailSaving] = useState(false)
   const [phoneSaving, setPhoneSaving] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState(false)
@@ -130,8 +133,12 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     if (userInfo) {
       setNameValue(userInfo.name ?? '')
-      setEmailEdit(userInfo.email ?? '')
-      setPhoneEdit(userInfo.contactnumber ?? '')
+      const em = userInfo.email ?? ''
+      const ph = userInfo.contactnumber ?? ''
+      setEmailEdit(em)
+      setOriginalEmail(em)
+      setPhoneEdit(ph)
+      setOriginalPhone(ph)
       if (typeof userInfo.emailvisiblestatus === 'boolean') setEmailVisible(userInfo.emailvisiblestatus)
       if (typeof userInfo.phonevisiblestatus === 'boolean') setPhoneVisible(userInfo.phonevisiblestatus)
     }
@@ -151,7 +158,7 @@ export default function AccountSettingsScreen() {
     }
   }, [])
 
-  useEffect(() => { void loadMeta() }, [loadMeta])
+  useFocusEffect(useCallback(() => { void loadMeta() }, [loadMeta]))
 
   // ── Name save ─────────────────────────────────────────────────────────────
   const handleSaveName = async () => {
@@ -206,13 +213,16 @@ export default function AccountSettingsScreen() {
 
   const handleSavePhone = async () => {
     if (!userid || !phoneEdit.trim()) return
+    const trimmed = phoneEdit.trim()
+    const VN_PHONE_RE = /^0[3-9]\d{8}$/
+    if (!VN_PHONE_RE.test(trimmed)) {
+      setPhoneEditError(t('AUTH_OTP_ERR_INVALID_PHONE'))
+      return
+    }
     setPhoneSaving(true); setPhoneEditError(null); setPhoneSuccess(false)
     try {
-      await updateUserInfo(userid, { contactnumber: phoneEdit.trim() })
-      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
-      setPhoneSuccess(true)
-      if (successTimerRef.current) clearTimeout(successTimerRef.current)
-      successTimerRef.current = setTimeout(() => setPhoneSuccess(false), 3000)
+      await registerPendingPhone(trimmed)
+      router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(trimmed)}&mode=add_phone` as any)
     } catch (e: any) {
       setPhoneEditError(e?.message || t('ACCT_ERR_GENERIC'))
     } finally {
@@ -337,14 +347,14 @@ export default function AccountSettingsScreen() {
           <View style={styles.contactHeaderRow}>
             <Text style={styles.fieldLabel}>{t('ACCT_LABEL_EMAIL')}</Text>
             <View style={styles.contactHeaderRight}>
-              {!loadingMeta && emailEdit.trim() && (
+              {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && (
                 <StatusBadge
                   verified={account?.email_verified ?? false}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              {emailEdit.trim() ? (
+              {emailEdit.trim() && emailEdit === originalEmail ? (
                 <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
                   <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
                 </TouchableOpacity>
@@ -367,7 +377,7 @@ export default function AccountSettingsScreen() {
           </View>
           {emailSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
           {emailEditError && <Text style={styles.errorText}>{emailEditError}</Text>}
-          {!loadingMeta && emailEdit.trim() && !(account?.email_verified) && (
+          {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && !(account?.email_verified) && (
             verifSent
               ? <Text style={styles.successText}>{t('ACCT_VERIF_SENT')}</Text>
               : <TouchableOpacity onPress={handleSendVerification} disabled={sendingVerif} style={styles.linkBtn}>
@@ -382,14 +392,14 @@ export default function AccountSettingsScreen() {
           <View style={styles.contactHeaderRow}>
             <Text style={styles.fieldLabel}>{t('ACCT_LABEL_PHONE')}</Text>
             <View style={styles.contactHeaderRight}>
-              {!loadingMeta && phoneEdit.trim() && (
+              {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && (
                 <StatusBadge
                   verified={account?.phone_verified ?? false}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              {phoneEdit.trim() ? (
+              {phoneEdit.trim() && phoneEdit === originalPhone ? (
                 <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
                   <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
                 </TouchableOpacity>
@@ -411,7 +421,7 @@ export default function AccountSettingsScreen() {
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
           {phoneEditError && <Text style={styles.errorText}>{phoneEditError}</Text>}
-          {!loadingMeta && phoneEdit.trim() && !(account?.phone_verified) && (
+          {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && !(account?.phone_verified) && (
             <TouchableOpacity
               onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(phoneEdit.trim())}` as any)}
               style={styles.linkBtn}

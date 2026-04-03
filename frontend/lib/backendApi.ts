@@ -1085,6 +1085,25 @@ export async function addLocalCredentials(username: string, newPassword: string)
 	if (!res || res.status !== 'ok') throw new Error('Failed to set credentials')
 }
 
+export async function registerPendingPhone(phone: string): Promise<void> {
+	const res = await request('/auth/register-phone', {
+		method: 'POST',
+		body: JSON.stringify({ phone }),
+		debugLabel: 'registerPendingPhone',
+	}) as { status?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Failed to register phone')
+}
+
+export async function verifyPhoneAddition(firebaseIdToken: string): Promise<{ phone: string }> {
+	const res = await request('/auth/verify-phone', {
+		method: 'POST',
+		body: JSON.stringify({ firebase_id_token: firebaseIdToken }),
+		debugLabel: 'verifyPhoneAddition',
+	}) as { status?: string; phone?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Phone verification failed')
+	return { phone: res.phone ?? '' }
+}
+
 export async function getMyProviders(): Promise<string[]> {
 	const data = await request('/me/providers', { debugLabel: 'getMyProviders' }) as { providers?: { provider: string }[] } | null
 	if (!data || !Array.isArray(data.providers)) return []

@@ -1458,6 +1458,137 @@ def sync_social_user(
     }
 
 
+@router.post('/register-phone')
+def register_pending_phone(payload: dict, authorization: Optional[str] = Header(None)):
+    """Register a phone number for OTP verification (authenticated).
+    Writes to unverified_users with phone_verified=false.
+    Does NOT update userinfo.contactnumber — that only happens after OTP is confirmed via /verify-phone.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token = authorization[7:]
+    try:
+        token_payload = decode_token(access_token)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    phone_raw = (payload.get('phone') or '').strip()
+    if not phone_raw:
+        raise HTTPException(status_code=400, detail="Missing phone")
+
+    # Validate VN phone format (0[3-9]XXXXXXXX)
+    if not re.match(r'^0[3-9]\d{8}$', phone_raw):
+        raise HTTPException(status_code=400, detail="Invalid Vietnamese phone format (must be 10 digits starting with 0[3-9])")
+
+    # Normalize to E.164
+    phone_e164 = '+84' + phone_raw[1:]
+
+    # Check if phone is already taken by another user in userinfo
+    existing_info = rest_select("userinfo", "userid", {"contactnumber": phone_e164}, single=True)
+    if not existing_info:
+        existing_info = rest_select("userinfo", "userid", {"contactnumber": phone_raw}, single=True)
+    if existing_info and existing_info.get('userid') != userid:
+        raise HTTPException(status_code=409, detail="Phone number already in use by another account")
+
+    token_hash_val = f"PHONE_PENDING:{hashlib.sha256(f'{userid}:{phone_e164}'.encode()).hexdigest()[:24]}"
+    token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+    # Upsert unverified_users record
+    try:
+        existing_unver = rest_select("unverified_users", "unverifiedid", {"userid": userid}, single=True)
+        if existing_unver:
+            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {
+                "phone": phone_e164,
+                "phone_verified": False,
+                "token_hash": token_hash_val,
+                "token_expires_at": token_expires,
+            })
+        else:
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_id,
+                "userid": userid,
+                "phone": phone_e164,
+                "phone_verified": False,
+                "token_hash": token_hash_val,
+                "token_expires_at": token_expires,
+                "resend_count": 0,
+            })
+    except Exception as e:
+        logger.warning(f"/register-phone unverified_users write failed userid={userid} err={e}")
+        raise HTTPException(status_code=500, detail="Failed to register phone")
+
+    logger.info(f"/register-phone SUCCESS userid={userid} phone={phone_e164}")
+    return {"status": "ok"}
+
+
+@router.post('/verify-phone')
+def verify_phone_for_account(payload: dict, authorization: Optional[str] = Header(None)):
+    """Verify phone OTP via Firebase token for an already-logged-in user.
+    Updates userinfo.contactnumber and marks unverified_users.phone_verified=true.
+    Does NOT issue new session tokens.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token = authorization[7:]
+    try:
+        token_payload = decode_token(access_token)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    firebase_id_token = (payload.get('firebase_id_token') or '').strip()
+    if not firebase_id_token:
+        raise HTTPException(status_code=400, detail="Missing firebase_id_token")
+
+    # Verify Firebase token
+    try:
+        firebase_app = _get_firebase_app()
+        decoded = fb_auth.verify_id_token(firebase_id_token, app=firebase_app, check_revoked=False)
+    except Exception as e:
+        logger.warning(f"/verify-phone Firebase verify failed userid={userid} err={e}")
+        raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)[:120]}")
+
+    phone_number = decoded.get('phone_number')
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Firebase token does not contain phone_number")
+
+    # Update userinfo.contactnumber for this user
+    try:
+        rest_update("userinfo", {"userid": userid}, {"contactnumber": phone_number})
+    except Exception as e:
+        logger.error(f"/verify-phone userinfo update failed userid={userid} err={e}")
+        raise HTTPException(status_code=500, detail="Failed to update contact number")
+
+    # Update unverified_users.phone_verified = true
+    try:
+        existing_unver = rest_select("unverified_users", "unverifiedid", {"userid": userid}, single=True)
+        if existing_unver:
+            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {
+                "phone": phone_number,
+                "phone_verified": True,
+            })
+        else:
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_id,
+                "userid": userid,
+                "phone": phone_number,
+                "phone_verified": True,
+                "token_hash": f"PHONE_VERIFIED:{hashlib.sha256(phone_number.encode()).hexdigest()[:24]}",
+                "token_expires_at": "2099-01-01T00:00:00+00:00",
+                "resend_count": 0,
+            })
+    except Exception as e:
+        logger.warning(f"/verify-phone unverified_users update failed userid={userid} err={e}")
+
+    logger.info(f"/verify-phone SUCCESS userid={userid} phone={phone_number}")
+    return {"status": "ok", "phone": phone_number}
+
+
 @router.post('/phone-login')
 def phone_login(payload: dict):
     """

@@ -105,7 +105,7 @@ export default function LoginScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top', 'bottom']}>
-        <TouchableOpacity onPress={toggleLanguage} style={styles.langToggle}>
+        <TouchableOpacity onPress={toggleLanguage} style={[styles.langToggle, { top: insets.top + 8 }]}>
           <Text style={styles.langToggleText}>{lang === 'vi' ? 'Tiếng Việt' : 'English'}</Text>
         </TouchableOpacity>
         <ScrollView
@@ -335,7 +335,6 @@ const styles = StyleSheet.create({
   },
   langToggle: {
     position: 'absolute',
-    top: 12,
     right: 20,
     zIndex: 10,
     backgroundColor: COLORS.white,
