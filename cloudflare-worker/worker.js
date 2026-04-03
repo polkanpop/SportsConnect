@@ -240,6 +240,35 @@ export default {
       return new Response(TERMS_HTML, { headers });
     }
 
+    // Zalo token verification proxy — backends outside Vietnam can't call graph.zalo.me directly.
+    // This worker runs from Cloudflare's Vietnam edge so Zalo accepts it.
+    if (path === "/zalo-proxy/tokeninfo" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const accessToken = body.access_token;
+        if (!accessToken || typeof accessToken !== "string") {
+          return new Response(JSON.stringify({ error: "missing access_token" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const zaloResp = await fetch(
+          "https://graph.zalo.me/v2.0/me?fields=id,name",
+          { headers: { "access_token": accessToken } }
+        );
+        const data = await zaloResp.json();
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "proxy_error", message: String(err) }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Serve the basketball icon as SVG — fixes the 404 on /icon.png
     if (path === "/icon.png" || path === "/favicon.ico") {
       return new Response(ICON_SVG, {
