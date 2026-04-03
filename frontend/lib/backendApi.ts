@@ -1051,7 +1051,7 @@ export async function removeFavouriteCourt(favouriteid: number) {
 // ---- User Info API ----
 // GET /userinfo?userid=123 returns list[ { infoid, userid, name, email, ... } ]
 // Helper to fetch first row by userid.
-export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; biography?: string | null; pfp?: string | null; contactvisiblestatus?: boolean | null }
+export type UserInfoRow = { infoid: number; userid: number; name?: string | null; email?: string | null; contactnumber?: string | null; time?: string | null; biography?: string | null; pfp?: string | null; emailvisiblestatus?: boolean | null; phonevisiblestatus?: boolean | null }
 
 export async function getUserInfoByUserId(userid: number) {
 	if (userid == null) throw new Error('userid required')
@@ -1065,6 +1065,28 @@ export async function getMyIdentity(): Promise<UserInfoRow | null> {
 	const data = await request('/me/identity', { debugLabel: 'getMyIdentity' })
 	if (data && typeof data === 'object') return data as UserInfoRow
 	return null
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+	const res = await request('/userlogin/change-password', {
+		method: 'POST',
+		body: JSON.stringify({ currentPassword, newPassword }),
+		debugLabel: 'changePassword',
+	}) as { status?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Password change failed')
+}
+
+export async function getMyProviders(): Promise<string[]> {
+	const data = await request('/me/providers', { debugLabel: 'getMyProviders' }) as { providers?: { provider: string }[] } | null
+	if (!data || !Array.isArray(data.providers)) return []
+	return data.providers.map((p) => p.provider)
+}
+
+export type MyAccountInfo = { username: string | null; logintype: string | null; email_verified: boolean; phone_verified: boolean }
+
+export async function getMyAccount(): Promise<MyAccountInfo | null> {
+	const data = await request('/me/account', { debugLabel: 'getMyAccount' }) as MyAccountInfo | null
+	return data ?? null
 }
 
 export async function updateUserInfo(userid: number, data: Partial<UserInfoRow>) {

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
+from typing import Optional
 from ..db import rest_select, rest_upsert
+from ..auth import decode_token
 import logging, hashlib, secrets, os, smtplib
 from email.message import EmailMessage
 from datetime import datetime, timedelta
@@ -175,3 +177,57 @@ def reset_password(payload: dict):
     rec["used"] = True
     logger.info(f"reset-password success userid={rec.get('userid')} tokenHash={token_hash[:12]}")
     return {"status": "ok", "reset": True}
+
+
+@router.post("/change-password")
+def change_password(payload: dict, authorization: Optional[str] = Header(None)):
+    """Change password for an authenticated local account user.
+    Expects JSON: { currentPassword, newPassword }
+    Authorization: Bearer <access_token>
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token = authorization[7:]
+
+    try:
+        token_payload = decode_token(access_token)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    current_pw = payload.get("currentPassword") or ""
+    new_pw = payload.get("newPassword") or ""
+
+    if not current_pw or not new_pw:
+        raise HTTPException(status_code=400, detail="Missing currentPassword or newPassword")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password too short (min 8)")
+
+    userlogin_row = rest_select("userlogin", "loginid, userid, username, passwordhash, logintype", {"userid": userid}, single=True)
+    if not userlogin_row:
+        raise HTTPException(status_code=404, detail="No login record found for this user")
+
+    login_type = (userlogin_row.get("logintype") or "").strip().lower()
+    if login_type not in ("local", ""):
+        raise HTTPException(status_code=400, detail="Password change is only available for local accounts")
+
+    stored_hash = userlogin_row.get("passwordhash") or ""
+    pepper = _get_password_pepper()
+    if not pwd_context.verify(current_pw + pepper, stored_hash):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    new_hash = pwd_context.hash(new_pw + pepper)
+    try:
+        rest_upsert("userlogin", {
+            "loginid": userlogin_row.get("loginid"),
+            "userid": userid,
+            "username": userlogin_row.get("username"),
+            "passwordhash": new_hash,
+            "logintype": "Local",
+        })
+    except Exception as e:
+        logger.exception(f"change-password update failed userid={userid} err={e}")
+        raise HTTPException(status_code=500, detail="Failed updating password")
+
+    logger.info(f"change-password success userid={userid}")
+    return {"status": "ok"}

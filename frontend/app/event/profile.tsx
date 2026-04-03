@@ -19,8 +19,9 @@ export default function Profile() {
   const userInfo = userInfoQuery.data
   
   const [bio, setBio] = useState('')
-  const [contactVisible, setContactVisible] = useState(true)
-  const [showContactLog, setShowContactLog] = useState(false)
+  const [emailVisible, setEmailVisible] = useState(true)
+  const [phoneVisible, setPhoneVisible] = useState(true)
+  const [showContactLog, setShowContactLog] = useState<{ field: 'email' | 'phone'; visible: boolean } | null>(null)
   const logTimerRef = useRef<any>(null)
   
   const [isEditingBio, setIsEditingBio] = useState(false)
@@ -55,9 +56,8 @@ export default function Profile() {
   useEffect(() => {
     if (userInfo) {
       setBio(userInfo.biography || '')
-    // Persisted privacy: if backend provides a boolean, respect it
-    const persisted = (userInfo as any)?.contactvisiblestatus
-		if (typeof persisted === 'boolean') setContactVisible(persisted)
+      if (typeof userInfo.emailvisiblestatus === 'boolean') setEmailVisible(userInfo.emailvisiblestatus)
+      if (typeof userInfo.phonevisiblestatus === 'boolean') setPhoneVisible(userInfo.phonevisiblestatus)
     }
   }, [userInfo])
 
@@ -99,21 +99,34 @@ export default function Profile() {
   }
 
 
-  const handleToggleContact = async () => {
+  const handleToggleEmail = async () => {
     if (!userid) return
-	const next = !contactVisible
-    setContactVisible(next)
-    setShowContactLog(true)
+    const next = !emailVisible
+    setEmailVisible(next)
+    setShowContactLog({ field: 'email', visible: next })
     if (logTimerRef.current) clearTimeout(logTimerRef.current)
-    logTimerRef.current = setTimeout(() => {
-      setShowContactLog(false)
-    }, 5000)
-  try {
-    await updateUserInfo(userid, { contactvisiblestatus: next } as any)
-		queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
-	} catch (e) {
-		console.warn('Failed to persist contact visibility', (e as any)?.message)
-	}
+    logTimerRef.current = setTimeout(() => setShowContactLog(null), 5000)
+    try {
+      await updateUserInfo(userid, { emailvisiblestatus: next })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+    } catch (e) {
+      console.warn('Failed to persist email visibility', (e as any)?.message)
+    }
+  }
+
+  const handleTogglePhone = async () => {
+    if (!userid) return
+    const next = !phoneVisible
+    setPhoneVisible(next)
+    setShowContactLog({ field: 'phone', visible: next })
+    if (logTimerRef.current) clearTimeout(logTimerRef.current)
+    logTimerRef.current = setTimeout(() => setShowContactLog(null), 5000)
+    try {
+      await updateUserInfo(userid, { phonevisiblestatus: next })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+    } catch (e) {
+      console.warn('Failed to persist phone visibility', (e as any)?.message)
+    }
   }
 
   const uploadToCloudinary = async (localUri: string) => {
@@ -411,25 +424,33 @@ export default function Profile() {
 
         {/* Contact */}
         <View style={styles.section}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>{t('PROFILE_SECTION_CONTACT')}</Text>
-            <TouchableOpacity onPress={handleToggleContact}>
-              <Image 
-                source={contactVisible ? ICONS.eye : ICONS.notEye} 
-                style={{ width: 16, height: 16, tintColor: '#555' }} 
-              />
+          <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>{t('PROFILE_SECTION_CONTACT')}</Text>
+
+          {/* Email row */}
+          <View style={[styles.contactRow, { marginBottom: 10 }]}>
+            <Text style={[styles.contactLabel]}>{t('PROFILE_CONTACT_LABEL_EMAIL')}</Text>
+            <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.email || t('PROFILE_CONTACT_FALLBACK')}</Text>
+            <TouchableOpacity onPress={handleToggleEmail} style={{ paddingLeft: 8 }}>
+              <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: '#555' }} />
             </TouchableOpacity>
-            {showContactLog && (
-              <Text style={{ marginLeft: 10, fontSize: 12, color: '#888', flex: 1, fontStyle: 'italic' }}>
-                {contactVisible
-                  ? t('PROFILE_CONTACT_NOW_VISIBLE')
-                  : t('PROFILE_CONTACT_NOW_HIDDEN')}
-              </Text>
-            )}
           </View>
+
+          {/* Phone row */}
           <View style={styles.contactRow}>
-            <Text style={styles.contactText}>{userInfo?.email || t('PROFILE_CONTACT_FALLBACK')}</Text>
+            <Text style={[styles.contactLabel]}>{t('PROFILE_CONTACT_LABEL_PHONE')}</Text>
+            <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.contactnumber || t('PROFILE_CONTACT_NO_PHONE')}</Text>
+            <TouchableOpacity onPress={handleTogglePhone} style={{ paddingLeft: 8 }}>
+              <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: '#555' }} />
+            </TouchableOpacity>
           </View>
+
+          {showContactLog && (
+            <Text style={{ marginTop: 6, fontSize: 12, color: '#888', fontStyle: 'italic' }}>
+              {showContactLog.field === 'email'
+                ? (showContactLog.visible ? t('PROFILE_EMAIL_NOW_VISIBLE') : t('PROFILE_EMAIL_NOW_HIDDEN'))
+                : (showContactLog.visible ? t('PROFILE_PHONE_NOW_VISIBLE') : t('PROFILE_PHONE_NOW_HIDDEN'))}
+            </Text>
+          )}
         </View>
 
         {/* Achievements */}
@@ -577,6 +598,7 @@ const styles = StyleSheet.create({
   bioInput: { minHeight: 100, padding: 12, fontSize: 14, color: '#333', textAlignVertical: 'top' },
   
   contactRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  contactLabel: { fontSize: 13, fontWeight: '600', color: '#888', width: 52 },
   contactText: { fontSize: 14, color: '#555' },
 
   achievementsScroll: { marginTop: 8 },

@@ -141,7 +141,7 @@ export default function SettingsPage() {
 
         {/* Section One: Account + Notification + Language */}
         <View style={styles.card}>
-          <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} disabled />
+          <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} />
           <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />
           <SettingRowSwitch
             icon={ICONS.language}

@@ -399,11 +399,62 @@ async def get_identity(user_sub: str = Depends(get_current_user)):
 
     row = rest_select(
         "userinfo",
-        "infoid,userid,name,email,contactnumber,biography,pfp,contactvisiblestatus",
+        "infoid,userid,name,email,contactnumber,biography,pfp,emailvisiblestatus,phonevisiblestatus",
         filters={"userid": userid},
         single=True,
     )
     return row
+
+
+@router.get("/providers")
+async def get_my_providers(user_sub: str = Depends(get_current_user)):
+    """Return which OAuth providers are linked to the authenticated user."""
+    try:
+        userid = int(user_sub)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail="Providers endpoint requires a numeric user-id in the JWT subject.",
+        )
+
+    rows = rest_select(
+        "user_auth_providers",
+        "provider,provider_uid",
+        filters={"userid": userid},
+    )
+    providers = rows if isinstance(rows, list) else []
+    return {"providers": providers}
+
+
+@router.get("/account")
+async def get_account(user_sub: str = Depends(get_current_user)):
+    """Return login info (username, logintype) + verification status for the authenticated user."""
+    try:
+        userid = int(user_sub)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail="Account endpoint requires a numeric user-id in the JWT subject.",
+        )
+
+    login_row = rest_select("userlogin", "loginid, username, logintype", {"userid": userid}, single=True)
+    unver_rows = rest_select("unverified_users", "email_verified, phone_verified", {"userid": userid})
+
+    email_verified = False
+    phone_verified = False
+    if isinstance(unver_rows, list):
+        for row in unver_rows:
+            if row.get("email_verified"):
+                email_verified = True
+            if row.get("phone_verified"):
+                phone_verified = True
+
+    return {
+        "username": (login_row or {}).get("username"),
+        "logintype": (login_row or {}).get("logintype"),
+        "email_verified": email_verified,
+        "phone_verified": phone_verified,
+    }
 
 
 @router.get("/dashboard")

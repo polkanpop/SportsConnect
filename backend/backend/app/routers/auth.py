@@ -1084,6 +1084,37 @@ def zalo_sign_in(payload: dict):
             "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
         }
 
+    # Step 1b: phone collision — link Zalo provider to the existing account instead of creating a new user
+    if zalo_phone:
+        existing_by_phone = find_user_by_phone(zalo_phone)
+        if existing_by_phone:
+            userid = existing_by_phone.get("userid")
+            ensure_auth_provider(userid, "Zalo", zalo_id)
+            if zalo_name and existing_by_phone.get("name") != zalo_name:
+                try:
+                    rest_update("userinfo", {"userid": userid}, {"name": zalo_name})
+                except Exception as e:
+                    logger.warning(f"/auth/zalo phone-merge name update failed userid={userid} err={e}")
+            try:
+                tokens = create_user_tokens(userid, None, None, remember_me=True)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail="Token creation failed")
+            users_row = rest_select("users", "userid, role", {"userid": userid}, single=True)
+            existing_role = (users_row.get("role") if users_row else None) or "player"
+            existing_info = find_userinfo_by_userid(userid)
+            logger.debug(f"/auth/zalo PHONE MERGE userid={userid} phone={zalo_phone} elapsedMs={_now_ms()-t0}")
+            return {
+                "status": "ok",
+                "userid": userid,
+                "name": (existing_info or existing_by_phone).get("name") or display_name,
+                "logintype": "Zalo",
+                "role": existing_role,
+                "accessToken": tokens.get("access_token"),
+                "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+                "refreshToken": tokens.get("refresh_token"),
+                "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+            }
+
     # Step 2: New user — provision users, userinfo, userlogin rows
     role = "player"
     try:
