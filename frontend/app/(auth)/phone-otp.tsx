@@ -51,7 +51,11 @@ export default function PhoneOtpScreen() {
 
   // Restore persisted draft phone number when navigating back without params
   useEffect(() => {
-    if (!params.phone) {
+    if (params.phone) {
+      // Persist the param-provided phone immediately so it survives if the user
+      // navigates away before typing (onChangeText would never fire otherwise).
+      AsyncStorage.setItem(OTP_DRAFT_KEY, params.phone).catch(() => {});
+    } else {
       AsyncStorage.getItem(OTP_DRAFT_KEY)
         .then(val => { if (val) setPhone(val); })
         .catch(() => {});
