@@ -15,6 +15,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.zing.zalo.zalosdk.oauth.ZaloSDK
 
 class MainApplication : Application(), ReactApplication {
 
@@ -47,6 +48,7 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+    ZaloSDK.Instance.init(this)
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

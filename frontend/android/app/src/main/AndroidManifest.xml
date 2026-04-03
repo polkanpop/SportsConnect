@@ -24,6 +24,7 @@
         <data android:scheme="sportconnect"/>
       </intent-filter>
     </activity>
+    <meta-data android:name="com.zing.zalo.zalosdk.appID" android:value="@string/zalo_app_id"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
