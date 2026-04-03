@@ -46,8 +46,11 @@ export default function ProfileSpectate() {
   }, [numericUserId])
 
   const contactVisible = useMemo(() => {
-		const v = (userInfo as any)?.contactvisiblestatus
-		return typeof v === 'boolean' ? v : true
+		const ev = (userInfo as any)?.emailvisiblestatus
+		const pv = (userInfo as any)?.phonevisiblestatus
+		const emailV = typeof ev === 'boolean' ? ev : true
+		const phoneV = typeof pv === 'boolean' ? pv : true
+		return emailV || phoneV
 	}, [userInfo])
 
   return (

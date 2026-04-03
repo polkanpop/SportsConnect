@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Header
 from typing import Optional
-from ..db import rest_select, rest_upsert
+from ..db import rest_select, rest_upsert, rest_insert
 from ..auth import decode_token
 import logging, hashlib, secrets, os, smtplib
 from email.message import EmailMessage
@@ -177,6 +177,74 @@ def reset_password(payload: dict):
     rec["used"] = True
     logger.info(f"reset-password success userid={rec.get('userid')} tokenHash={token_hash[:12]}")
     return {"status": "ok", "reset": True}
+
+
+@router.post("/add-local")
+def add_local_credentials(payload: dict, authorization: Optional[str] = Header(None)):
+    """Allow an OAuth-only user to add a username + password (local) login.
+    Expects JSON: { username, newPassword }
+    Authorization: Bearer <access_token>
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token = authorization[7:]
+
+    try:
+        token_payload = decode_token(access_token)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    username = (payload.get("username") or "").strip()
+    new_pw = payload.get("newPassword") or ""
+
+    if not username or not new_pw:
+        raise HTTPException(status_code=400, detail="Missing username or newPassword")
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username too short (min 3 characters)")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="Password too short (min 8)")
+
+    # Reject if user already has local credentials
+    existing = rest_select("userlogin", "loginid,logintype", {"userid": userid}, single=True)
+    if existing and (existing.get("logintype") or "").strip().lower() == "local":
+        raise HTTPException(status_code=409, detail="User already has a local login")
+
+    # Reject if username is taken by another user
+    taken = rest_select("userlogin", "loginid", {"username": username}, single=True)
+    if taken:
+        raise HTTPException(status_code=409, detail="USERNAME_TAKEN")
+
+    pepper = _get_password_pepper()
+    new_hash = pwd_context.hash(new_pw + pepper)
+
+    if existing:
+        # Update existing OAuth row to become local
+        rest_upsert("userlogin", {
+            "loginid": existing.get("loginid"),
+            "userid": userid,
+            "username": username,
+            "passwordhash": new_hash,
+            "logintype": "Local",
+        })
+    else:
+        rest_insert("userlogin", {
+            "userid": userid,
+            "username": username,
+            "passwordhash": new_hash,
+            "logintype": "Local",
+        })
+
+    # Ensure Local is recorded in user_auth_providers
+    try:
+        existing_prov = rest_select("user_auth_providers", "providerid", {"userid": userid, "provider": "Local"}, single=True)
+        if not existing_prov:
+            rest_insert("user_auth_providers", {"userid": userid, "provider": "Local"})
+    except Exception:
+        pass  # non-critical
+
+    logger.info(f"add-local success userid={userid} username={username}")
+    return {"status": "ok"}
 
 
 @router.post("/change-password")

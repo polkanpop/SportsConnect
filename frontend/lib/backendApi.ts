@@ -1076,6 +1076,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
 	if (!res || res.status !== 'ok') throw new Error('Password change failed')
 }
 
+export async function addLocalCredentials(username: string, newPassword: string): Promise<void> {
+	const res = await request('/userlogin/add-local', {
+		method: 'POST',
+		body: JSON.stringify({ username, newPassword }),
+		debugLabel: 'addLocalCredentials',
+	}) as { status?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Failed to set credentials')
+}
+
 export async function getMyProviders(): Promise<string[]> {
 	const data = await request('/me/providers', { debugLabel: 'getMyProviders' }) as { providers?: { provider: string }[] } | null
 	if (!data || !Array.isArray(data.providers)) return []

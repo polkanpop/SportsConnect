@@ -16,7 +16,7 @@ def list_userinfo(userid: int | None = Query(None, description="Filter by userid
         filters = {"userid": userid} if userid is not None else None
         data = rest_select(
             "userinfo",
-            "infoid,userid,name,email,contactnumber,biography,pfp,contactvisiblestatus",
+            "infoid,userid,name,email,contactnumber,biography,pfp,emailvisiblestatus,phonevisiblestatus",
             filters=filters,
             order={"column": PRIMARY_KEY},
         )

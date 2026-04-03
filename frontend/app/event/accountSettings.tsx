@@ -20,6 +20,7 @@ import {
   resendVerification,
   requestPasswordReset,
   updateUserInfo,
+  addLocalCredentials,
   type MyAccountInfo,
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
@@ -99,6 +100,26 @@ export default function AccountSettingsScreen() {
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwError, setPwError] = useState<string | null>(null)
 
+  // ── Contact edit ─────────────────────────────────────────────────────────
+  const [emailEdit, setEmailEdit] = useState('')
+  const [phoneEdit, setPhoneEdit] = useState('')
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [phoneSaving, setPhoneSaving] = useState(false)
+  const [emailSuccess, setEmailSuccess] = useState(false)
+  const [phoneSuccess, setPhoneSuccess] = useState(false)
+  const [emailEditError, setEmailEditError] = useState<string | null>(null)
+  const [phoneEditError, setPhoneEditError] = useState<string | null>(null)
+
+  // ── OAuth add-credentials ────────────────────────────────────────────────
+  const [newUsername, setNewUsername] = useState('')
+  const [newPwOAuth, setNewPwOAuth] = useState('')
+  const [confirmPwOAuth, setConfirmPwOAuth] = useState('')
+  const [showNewPwOAuth, setShowNewPwOAuth] = useState(false)
+  const [showConfirmPwOAuth, setShowConfirmPwOAuth] = useState(false)
+  const [credSaving, setCredSaving] = useState(false)
+  const [credSuccess, setCredSuccess] = useState(false)
+  const [credError, setCredError] = useState<string | null>(null)
+
   // ── Reset password ────────────────────────────────────────────────────────
   const [sendingReset, setSendingReset] = useState(false)
   const [resetSent, setResetSent] = useState(false)
@@ -109,6 +130,8 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     if (userInfo) {
       setNameValue(userInfo.name ?? '')
+      setEmailEdit(userInfo.email ?? '')
+      setPhoneEdit(userInfo.contactnumber ?? '')
       if (typeof userInfo.emailvisiblestatus === 'boolean') setEmailVisible(userInfo.emailvisiblestatus)
       if (typeof userInfo.phonevisiblestatus === 'boolean') setPhoneVisible(userInfo.phonevisiblestatus)
     }
@@ -162,6 +185,60 @@ export default function AccountSettingsScreen() {
     const next = !phoneVisible
     setPhoneVisible(next)
     try { await updateUserInfo(userid, { phonevisiblestatus: next }) } catch {}
+  }
+
+  // ── Save contact edits ────────────────────────────────────────────────────
+  const handleSaveEmail = async () => {
+    if (!userid || !emailEdit.trim()) return
+    setEmailSaving(true); setEmailEditError(null); setEmailSuccess(false)
+    try {
+      await updateUserInfo(userid, { email: emailEdit.trim() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      setEmailSuccess(true)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+      successTimerRef.current = setTimeout(() => setEmailSuccess(false), 3000)
+    } catch (e: any) {
+      setEmailEditError(e?.message || t('ACCT_ERR_GENERIC'))
+    } finally {
+      setEmailSaving(false)
+    }
+  }
+
+  const handleSavePhone = async () => {
+    if (!userid || !phoneEdit.trim()) return
+    setPhoneSaving(true); setPhoneEditError(null); setPhoneSuccess(false)
+    try {
+      await updateUserInfo(userid, { contactnumber: phoneEdit.trim() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      setPhoneSuccess(true)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+      successTimerRef.current = setTimeout(() => setPhoneSuccess(false), 3000)
+    } catch (e: any) {
+      setPhoneEditError(e?.message || t('ACCT_ERR_GENERIC'))
+    } finally {
+      setPhoneSaving(false)
+    }
+  }
+
+  // ── Add local credentials (OAuth users) ──────────────────────────────────
+  const handleAddCredentials = async () => {
+    setCredError(null); setCredSuccess(false)
+    if (newUsername.trim().length < 3) { setCredError(t('ACCT_ERR_USERNAME_TOO_SHORT')); return }
+    if (newPwOAuth.length < 8) { setCredError(t('ACCT_ERR_PW_TOO_SHORT')); return }
+    if (newPwOAuth !== confirmPwOAuth) { setCredError(t('ACCT_ERR_PW_MISMATCH')); return }
+    setCredSaving(true)
+    try {
+      await addLocalCredentials(newUsername.trim(), newPwOAuth)
+      setCredSuccess(true)
+      setNewUsername(''); setNewPwOAuth(''); setConfirmPwOAuth('')
+      void loadMeta()
+    } catch (e: any) {
+      const msg: string = e?.message || ''
+      if (msg.includes('USERNAME_TAKEN')) setCredError(t('ACCT_ERR_USERNAME_TAKEN'))
+      else setCredError(t('ACCT_ERR_GENERIC'))
+    } finally {
+      setCredSaving(false)
+    }
   }
 
   // ── Resend email verification ─────────────────────────────────────────────
@@ -250,85 +327,114 @@ export default function AccountSettingsScreen() {
           </View>
           {nameSuccess && <Text style={styles.successText}>{t('ACCT_NAME_SAVE_SUCCESS')}</Text>}
           {nameError && <Text style={styles.errorText}>{nameError}</Text>}
-
-          {/* Username (read-only) */}
-          {account?.username ? (
-            <View style={{ marginTop: 12 }}>
-              <Text style={styles.fieldLabel}>{t('ACCT_LABEL_USERNAME')}</Text>
-              <View style={styles.readonlyRow}>
-                <Text style={styles.readonlyText}>@{account.username}</Text>
-              </View>
-            </View>
-          ) : null}
         </View>
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
         <SectionHeader title={t('ACCT_SECTION_CONTACT')} />
         <View style={styles.card}>
 
-          {/* Email row */}
-          <View style={styles.contactItemRow}>
-            <Text style={styles.contactItemLabel}>{t('ACCT_LABEL_EMAIL')}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.contactItemValue} numberOfLines={1}>
-                {userInfo?.email || t('ACCT_CONTACT_NOT_SET')}
-              </Text>
-              {!loadingMeta && userInfo?.email && (
+          {/* Email */}
+          <View style={styles.contactHeaderRow}>
+            <Text style={styles.fieldLabel}>{t('ACCT_LABEL_EMAIL')}</Text>
+            <View style={styles.contactHeaderRight}>
+              {!loadingMeta && emailEdit.trim() && (
                 <StatusBadge
                   verified={account?.email_verified ?? false}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
+              <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
+                <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
-              <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={emailEdit}
+              onChangeText={setEmailEdit}
+              placeholder={t('ACCT_CONTACT_NOT_SET')}
+              placeholderTextColor="#aaa"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveEmail} disabled={emailSaving}>
+              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
-
-          {/* Send email verification button */}
-          {!loadingMeta && userInfo?.email && !(account?.email_verified) && (
-            <View style={{ marginTop: 6, marginBottom: 4 }}>
-              {verifSent ? (
-                <Text style={styles.successText}>{t('ACCT_VERIF_SENT')}</Text>
-              ) : (
-                <TouchableOpacity onPress={handleSendVerification} disabled={sendingVerif} style={styles.linkBtn}>
-                  {sendingVerif
-                    ? <ActivityIndicator size="small" color="#3b82f6" />
-                    : <Text style={styles.linkText}>{t('ACCT_BTN_SEND_VERIFICATION')}</Text>}
+          {emailSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
+          {emailEditError && <Text style={styles.errorText}>{emailEditError}</Text>}
+          {!loadingMeta && emailEdit.trim() && !(account?.email_verified) && (
+            verifSent
+              ? <Text style={styles.successText}>{t('ACCT_VERIF_SENT')}</Text>
+              : <TouchableOpacity onPress={handleSendVerification} disabled={sendingVerif} style={styles.linkBtn}>
+                  {sendingVerif ? <ActivityIndicator size="small" color="#3b82f6" /> : <Text style={styles.linkText}>{t('ACCT_BTN_VERIFY_NOW')}</Text>}
                 </TouchableOpacity>
-              )}
-              {verifError && <Text style={styles.errorText}>{verifError}</Text>}
-            </View>
           )}
+          {verifError && <Text style={styles.errorText}>{verifError}</Text>}
 
           <View style={styles.contactDivider} />
 
-          {/* Phone row */}
-          <View style={styles.contactItemRow}>
-            <Text style={styles.contactItemLabel}>{t('ACCT_LABEL_PHONE')}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.contactItemValue} numberOfLines={1}>
-                {userInfo?.contactnumber || t('ACCT_CONTACT_NOT_SET')}
-              </Text>
-              {!loadingMeta && userInfo?.contactnumber && (
+          {/* Phone */}
+          <View style={styles.contactHeaderRow}>
+            <Text style={styles.fieldLabel}>{t('ACCT_LABEL_PHONE')}</Text>
+            <View style={styles.contactHeaderRight}>
+              {!loadingMeta && phoneEdit.trim() && (
                 <StatusBadge
                   verified={account?.phone_verified ?? false}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
+              <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
+                <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
-              <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              value={phoneEdit}
+              onChangeText={setPhoneEdit}
+              placeholder={t('ACCT_CONTACT_NOT_SET')}
+              placeholderTextColor="#aaa"
+              keyboardType="phone-pad"
+            />
+            <TouchableOpacity style={styles.inlineBtn} onPress={handleSavePhone} disabled={phoneSaving}>
+              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
+          {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
+          {phoneEditError && <Text style={styles.errorText}>{phoneEditError}</Text>}
+          {!loadingMeta && phoneEdit.trim() && !(account?.phone_verified) && (
+            <TouchableOpacity
+              onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(phoneEdit.trim())}` as any)}
+              style={styles.linkBtn}
+            >
+              <Text style={styles.linkText}>{t('ACCT_BTN_VERIFY_OTP')}</Text>
+            </TouchableOpacity>
+          )}
 
         </View>
 
-        {/* ── Password ─────────────────────────────────────────────────── */}
-        <SectionHeader title={t('ACCT_SECTION_PASSWORD')} />
+        {/* ── Authentication & Security ─────────────────────────────── */}
+        <SectionHeader title={t('ACCT_SECTION_AUTH')} />
+
+        {/* Username subsection */}
         <View style={styles.card}>
+          <Text style={styles.fieldLabel}>{t('ACCT_LABEL_USERNAME')}</Text>
+          {account?.username ? (
+            <View style={styles.readonlyRow}>
+              <Text style={styles.readonlyText}>{account.username}</Text>
+            </View>
+          ) : (
+            <Text style={styles.mutedText}>{t('ACCT_NO_USERNAME')}</Text>
+          )}
+        </View>
+
+        {/* Password / Credentials subsection */}
+        <View style={[styles.card, { marginTop: 12 }]}>
           {loadingMeta ? (
             <ActivityIndicator size="small" color="#888" style={{ marginVertical: 12 }} />
           ) : isLocalAccount ? (
@@ -422,7 +528,75 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={styles.mutedText}>{t('ACCT_NO_PASSWORD_SECTION')}</Text>
+            <>
+              {/* Set username + password for OAuth users */}
+              <Text style={styles.fieldLabel}>{t('ACCT_LABEL_NEW_USERNAME')}</Text>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  value={newUsername}
+                  onChangeText={setNewUsername}
+                  placeholder="username"
+                  placeholderTextColor="#aaa"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_NEW_PASSWORD')}</Text>
+              <View style={styles.pwRow}>
+                <TextInput
+                  style={styles.pwInput}
+                  value={newPwOAuth}
+                  onChangeText={setNewPwOAuth}
+                  secureTextEntry={!showNewPwOAuth}
+                  placeholder="••••••••"
+                  placeholderTextColor="#aaa"
+                />
+                <TouchableOpacity onPress={() => setShowNewPwOAuth(v => !v)} style={styles.eyeBtn}>
+                  <Image source={showNewPwOAuth ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Strength bar */}
+              {(() => {
+                const sr = getStrength(newPwOAuth)
+                return sr !== null ? (
+                  <View style={styles.strengthWrapper}>
+                    <View style={styles.strengthTrack}>
+                      {[0, 1, 2, 3].map((i) => (
+                        <View key={i} style={[styles.strengthSegment, i < sr.score ? { backgroundColor: sr.color } : { backgroundColor: '#e5e7eb' }]} />
+                      ))}
+                    </View>
+                    <Text style={[styles.strengthLabel, { color: sr.color }]}>{STRENGTH_LABELS[sr.score]}</Text>
+                  </View>
+                ) : null
+              })()}
+
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_CONFIRM_PASSWORD')}</Text>
+              <View style={styles.pwRow}>
+                <TextInput
+                  style={styles.pwInput}
+                  value={confirmPwOAuth}
+                  onChangeText={setConfirmPwOAuth}
+                  secureTextEntry={!showConfirmPwOAuth}
+                  placeholder="••••••••"
+                  placeholderTextColor="#aaa"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPwOAuth(v => !v)} style={styles.eyeBtn}>
+                  <Image source={showConfirmPwOAuth ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                </TouchableOpacity>
+              </View>
+
+              {credError && <Text style={styles.errorText}>{credError}</Text>}
+              {credSuccess && <Text style={styles.successText}>{t('ACCT_SET_CRED_SUCCESS')}</Text>}
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleAddCredentials} disabled={credSaving}>
+                {credSaving
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.saveBtnText}>{t('ACCT_BTN_SET_CREDENTIALS')}</Text>}
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
@@ -524,12 +698,14 @@ const styles = StyleSheet.create({
 
   inputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden' },
   input: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#111' },
-  inlineBtn: { backgroundColor: '#111', paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'center', alignItems: 'center' },
+  inlineBtn: { backgroundColor: '#FF6017', paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'center', alignItems: 'center' },
 
   readonlyRow: { backgroundColor: '#f5f5f7', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   readonlyText: { fontSize: 15, color: '#555' },
 
   contactItemRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
+  contactHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  contactHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   contactItemLabel: { fontSize: 13, fontWeight: '600', color: '#666', width: 56 },
   contactItemValue: { fontSize: 14, color: '#111', marginBottom: 2 },
   contactDivider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 10 },
@@ -562,7 +738,7 @@ const styles = StyleSheet.create({
   strengthLabel: { fontSize: 12, fontWeight: '600', minWidth: 60 },
 
   saveBtn: {
-    backgroundColor: '#111',
+    backgroundColor: '#FF6017',
     borderRadius: 10,
     paddingVertical: 13,
     alignItems: 'center',
