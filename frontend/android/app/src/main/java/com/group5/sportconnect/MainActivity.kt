@@ -1,9 +1,11 @@
 package com.group5.sportconnect
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 
 import com.facebook.react.ReactActivity
+import com.zing.zalo.zalosdk.oauth.ZaloSDK
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
@@ -61,5 +63,10 @@ class MainActivity : ReactActivity() {
       // Use the default back button implementation on Android S
       // because it's doing more than [Activity.moveTaskToBack] in fact.
       super.invokeDefaultOnBackPressed()
+  }
+
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    ZaloSDK.Instance.onActivityResult(this, requestCode, resultCode, data)
   }
 }
