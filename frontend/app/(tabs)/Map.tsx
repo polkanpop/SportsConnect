@@ -1372,7 +1372,7 @@
                   <View style={styles.searchContainer}>
                     <View style={styles.searchOverlayWrapper}>
                       <SearchBar
-                        placeholder="Search for a location..."
+                        placeholder={t('MAP_PLACEHOLDER_SEARCH')}
                         onChangeText={onSearchTextChange}
                       />
                       <TouchableOpacity
@@ -1435,7 +1435,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image source={ICONS.venueCategory} style={styles.filterIcon} />
                         <Text style={styles.filterChipText}>
-                          {selectedVenue.length === 2 ? t('MAP_CHIP_VENUE_BOTH') : selectedVenue.length === 1 ? `${t('MAP_CHIP_VENUE')}: ${selectedVenue[0]}` : t('MAP_CHIP_VENUE')}
+                          {selectedVenue.length === 2 ? t('MAP_CHIP_VENUE_BOTH') : selectedVenue.length === 1 ? `${t('MAP_CHIP_VENUE')}: ${selectedVenue[0].toLowerCase().includes('indoor') && selectedVenue[0].toLowerCase().includes('outdoor') ? t('MAP_LABEL_IN_OUTDOOR') : selectedVenue[0].toLowerCase().includes('indoor') ? t('MAP_LABEL_INDOOR') : t('MAP_LABEL_OUTDOOR')}` : t('MAP_CHIP_VENUE')}
                         </Text>
                       </View>
                       <Image
@@ -1552,7 +1552,13 @@
                                 >
                                   <View style={styles.dropdownItemLeft}>
                                     <Image source={leftIcon as any} style={styles.optionIcon} />
-                                    <Text style={styles.dropdownItemText}>{item}</Text>
+                                    <Text style={styles.dropdownItemText}>
+                                      {item.toLowerCase().includes('indoor') && item.toLowerCase().includes('outdoor')
+                                        ? t('MAP_LABEL_IN_OUTDOOR')
+                                        : item.toLowerCase().includes('indoor')
+                                        ? t('MAP_LABEL_INDOOR')
+                                        : t('MAP_LABEL_OUTDOOR')}
+                                    </Text>
                                   </View>
                                   <Image
                                     source={selected ? ICONS.tick : ""}

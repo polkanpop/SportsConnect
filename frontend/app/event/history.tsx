@@ -367,6 +367,19 @@ export default function HistoryPage() {
     if (b === 'Payment') return t('HISTORY_KIND_PAYMENT')
     return b
   }
+
+  const tPaymentMethod = (method: string): string => {
+    if (method === 'free') return t('COMMON_LABEL_FREE')
+    if (method === 'cash') return t('BOOKING_COURT_PAYMENT_CASH')
+    if (method === 'vnpay') return t('BOOKING_COURT_PAYMENT_VNPAY')
+    return method
+  }
+
+  const tCreatedType = (type: string): string => {
+    if (type === 'free') return t('COMMON_LABEL_FREE')
+    if (type === 'monetize') return t('HISTORY_TYPE_MONETIZE')
+    return type
+  }
   const dashboardRaw = dashboard.data
   const [items, setItems] = useState<HistoryEntry[]>([])
   const [refreshing, setRefreshing] = useState(false)
@@ -980,7 +993,7 @@ export default function HistoryPage() {
                     <View style={styles.scheduleWrap}>
                       <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TIME')} {resolvedSchedule.time}</Text>
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && (
-                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TYPE')} {createdType}</Text>
+                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
                       )}
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && (
                         <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
@@ -990,14 +1003,14 @@ export default function HistoryPage() {
                   {!!displaySubtitle && <Text style={styles.subtitle}>{displaySubtitle}</Text>}
 
                   {(item.kind === 'event_booking' || item.kind === 'session_booking' || item.kind === 'court_booking') && !!paymentMethod && (
-                    <Text style={styles.metaText}>{t('HISTORY_META_PAYMENT')} {paymentMethod}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_META_PAYMENT')} {tPaymentMethod(paymentMethod)}</Text>
                   )}
 
                   {item.kind === 'court_booking' && !!courtType && (
-                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {courtType}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {tPaymentMethod(courtType)}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !resolvedSchedule && (
-                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {createdType}</Text>
+                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !resolvedSchedule && (
                     <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>

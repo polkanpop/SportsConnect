@@ -899,7 +899,7 @@ export default function CourtBooking() {
             {availability && (
               <View style={styles.metaRow}>
                 <Image source={ICONS.clock} style={styles.metaIcon} />
-                <Text style={styles.availabilityMeta}>Opening {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}</Text>
+                <Text style={styles.availabilityMeta}>{t('MAP_OPENING_TIME')} {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}</Text>
               </View>
             )}
           </View>
@@ -938,7 +938,7 @@ export default function CourtBooking() {
                     >
                       <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: active ? '#fff' : '#222' }}>{bn}</Text>
                       {!!meta?.surfaceText && (
-                        <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 11, fontWeight: '700', color: active ? '#ffe7d1' : '#666', textTransform: 'capitalize' }}>{meta.surfaceText}</Text>
+                        <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 11, fontWeight: '700', color: active ? '#ffe7d1' : '#666', textTransform: 'capitalize' }}>{(() => { const s = meta.surfaceText.toLowerCase(); if (s === 'concrete') return t('COURT_SURFACE_CONCRETE'); if (s === 'hardwood') return t('COURT_SURFACE_HARDWOOD'); if (s === 'synthetic') return t('COURT_SURFACE_SYNTHETIC'); if (s === 'grass') return t('COURT_SURFACE_GRASS'); return meta.surfaceText; })()}</Text>
                       )}
                       <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, fontWeight: '700', color: active ? '#fff' : '#111' }}>{meta?.priceText || '0đ'}</Text>
                     </TouchableOpacity>
@@ -962,7 +962,7 @@ export default function CourtBooking() {
                   </View>
                   {scheduleDisplayAvailability && (
                     <Text style={styles.availabilityMeta}>
-                      Opening Time: {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+                      {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
                     </Text>
                   )}
                   <View style={styles.weekRow}>
@@ -1101,7 +1101,7 @@ export default function CourtBooking() {
           </View>
           {scheduleDisplayAvailability && (
             <Text style={styles.availabilityMeta}>
-              Opening Time: {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+              {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
             </Text>
           )}
           <View style={styles.weekRow}>

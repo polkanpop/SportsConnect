@@ -61,7 +61,7 @@ const parseTimestampLoose = (ts?: string | null) => {
 
 const formatDateWeekdayDDMMYYYY = (dt: Date) => {
   if (Number.isNaN(dt.getTime())) return 'Unknown'
-  const wd = dt.toLocaleDateString(undefined, { weekday: 'short' })
+  const wd = dt.toLocaleDateString('vi-VN', { weekday: 'short' })
   const dd = pad2(dt.getDate())
   const mm = pad2(dt.getMonth() + 1)
   const yyyy = dt.getFullYear()

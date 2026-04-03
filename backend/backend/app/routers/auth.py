@@ -1009,23 +1009,61 @@ def zalo_sign_in(payload: dict):
         logger.error("/auth/zalo ZALO_APP_SECRET not configured")
         raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
 
-    # Verify the access_token belongs to the claimed zalo_id via tokeninfo endpoint.
-    # oauth.zaloapp.com is accessible outside Vietnam, unlike graph.zalo.me.
+    # Verify the access_token belongs to the claimed zalo_id.
+    # Try three approaches in order — Zalo's API differs by deployment/version:
+    #   1. GET /v4/tokeninfo with access_token header
+    #   2. POST /v4/tokeninfo with secret_key + access_token headers
+    #   3. GET graph.zalo.me/v2.0/me as last resort (may work from SG IP for metadata-only)
+    verified_uid = ""
+    verify_debug: list[str] = []
+
+    # Attempt 1: GET tokeninfo, access_token in header
     try:
-        verify_resp = httpx.get(
+        r1 = httpx.get(
             "https://oauth.zaloapp.com/v4/tokeninfo",
-            params={"access_token": access_token, "secret_key": zalo_app_secret},
+            headers={"access_token": access_token},
             timeout=10.0,
         )
-        verify_json = verify_resp.json()
+        j1 = r1.json()
+        verified_uid = str(j1.get("uid") or "")
+        verify_debug.append(f"GET header → status={r1.status_code} uid={verified_uid!r} body={j1}")
     except Exception as e:
-        logger.exception(f"/auth/zalo tokeninfo error: {e}")
-        raise HTTPException(status_code=502, detail=f"Zalo token verification failed: {e}")
+        verify_debug.append(f"GET header → exception {e}")
 
-    verified_uid = str(verify_json.get("uid") or "")
+    # Attempt 2: POST tokeninfo, secret_key + access_token in headers
     if not verified_uid:
-        logger.error(f"/auth/zalo tokeninfo returned no uid: {verify_json}")
-        raise HTTPException(status_code=401, detail="Zalo token verification failed: no uid in response")
+        try:
+            r2 = httpx.post(
+                "https://oauth.zaloapp.com/v4/tokeninfo",
+                headers={"secret_key": zalo_app_secret, "access_token": access_token},
+                timeout=10.0,
+            )
+            j2 = r2.json()
+            verified_uid = str(j2.get("uid") or "")
+            verify_debug.append(f"POST headers → status={r2.status_code} uid={verified_uid!r} body={j2}")
+        except Exception as e:
+            verify_debug.append(f"POST headers → exception {e}")
+
+    # Attempt 3: graph.zalo.me/v2.0/me (lighter endpoint, may accept non-VN IPs)
+    if not verified_uid:
+        try:
+            r3 = httpx.get(
+                "https://graph.zalo.me/v2.0/me",
+                params={"fields": "id"},
+                headers={"access_token": access_token},
+                timeout=10.0,
+            )
+            j3 = r3.json()
+            verified_uid = str(j3.get("id") or "")
+            verify_debug.append(f"graph.zalo.me → status={r3.status_code} uid={verified_uid!r} body={j3}")
+        except Exception as e:
+            verify_debug.append(f"graph.zalo.me → exception {e}")
+
+    logger.debug(f"/auth/zalo token verification attempts: {verify_debug}")
+
+    if not verified_uid:
+        logger.error(f"/auth/zalo all token verification methods failed: {verify_debug}")
+        raise HTTPException(status_code=401, detail="Zalo token verification failed — could not retrieve uid from any endpoint")
     if verified_uid != zalo_id:
         logger.error(f"/auth/zalo uid mismatch: token uid={verified_uid} claimed={zalo_id}")
         raise HTTPException(status_code=401, detail="Zalo token uid does not match claimed zalo_id")
