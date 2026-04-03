@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/constants/translations';
+import { useLanguage } from '@/providers/language-provider';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
@@ -32,6 +33,7 @@ function detectMode(v: string): InputMode {
 export default function LoginScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { lang, toggleLanguage } = useLanguage();
 
   const [identifier, setIdentifier] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('unknown');
@@ -103,6 +105,11 @@ export default function LoginScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top', 'bottom']}>
+        <View style={styles.langToggleRow}>
+          <TouchableOpacity onPress={toggleLanguage} style={styles.langToggle}>
+            <Text style={styles.langToggleText}>{lang === 'vi' ? 'EN' : 'VI'}</Text>
+          </TouchableOpacity>
+        </View>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.container, { paddingBottom: 24 + (insets?.bottom ?? 0) }]}
@@ -327,6 +334,25 @@ const styles = StyleSheet.create({
   signUpLink: {
     color: COLORS.green700,
     fontWeight: '700',
+  },
+  langToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  langToggle: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.dark300,
+  },
+  langToggleText: {
+    color: COLORS.dark300,
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 

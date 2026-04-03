@@ -17,6 +17,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTranslation } from '@/constants/translations'
+import { useLanguage } from '@/providers/language-provider'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { signupSchema, SignupFormData, isPhoneInput } from '@/lib/signupSchema'
@@ -34,6 +35,7 @@ const STRENGTH_COLORS = ['#dc2626', '#f97316', '#eab308', '#84cc16', '#22c55e']
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SignUpScreen() {
   const { t } = useTranslation()
+  const { lang } = useLanguage()
   const STRENGTH = [
     { label: t('AUTH_STRENGTH_VERY_WEAK'), color: STRENGTH_COLORS[0] },
     { label: t('AUTH_STRENGTH_WEAK'),      color: STRENGTH_COLORS[1] },
@@ -288,7 +290,7 @@ export default function SignUpScreen() {
                     style={styles.termsLink}
                     onPress={(e) => {
                       e.stopPropagation()
-                      Linking.openURL('https://sportconnects.org/terms')
+                      Linking.openURL(lang === 'vi' ? 'https://sportconnects.org/terms-vi' : 'https://sportconnects.org/terms')
                     }}
                   >
                     {t('AUTH_SIGNUP_TERMS_LINK')}

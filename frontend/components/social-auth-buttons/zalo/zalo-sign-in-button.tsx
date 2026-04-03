@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { login, getUserProfile } from 'react-native-zalo-kit';
 import { API_BASE_URL } from '@/env';
 
 export default function ZaloSignInButton() {
@@ -20,6 +19,11 @@ export default function ZaloSignInButton() {
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
+      // Lazy-load to prevent the app from crashing on OTA builds where
+      // the ZaloKit native module has not yet been compiled into the binary.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { login, getUserProfile } = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
+
       // 1. Native SDK opens the installed Zalo app (falls back to Zalo web if not installed).
       //    The SDK handles the full OAuth + code-exchange and returns the access token directly.
       const { accessToken } = await login('AUTH_VIA_APP_OR_WEB');
