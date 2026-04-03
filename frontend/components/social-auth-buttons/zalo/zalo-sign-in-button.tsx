@@ -35,12 +35,13 @@ export default function ZaloSignInButton() {
       const zaloModule = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
       const { login, getUserProfile } = zaloModule;
 
-      // 1. AUTH_VIA_APP deep-links directly into the installed Zalo app — user approves there
-      //    and is returned via the zalo-{appId}:// scheme (BrowserLoginActivity handles redirect).
-      //    APP_OR_WEB triggered a "version incompatible" version-gate dialog that broke the flow.
-      //    AUTH_VIA_WEB opens a browser which is unwanted — APP bypasses both issues.
+      // AUTH_VIA_WEB bypasses the native SDK version check (which fails because the Zalo
+      // GitLab SDK artifacts are stale — last updated Nov 2024). AUTH_VIA_APP / APP_OR_WEB
+      // both trigger a "version incompatible" dialog that silently cancels after skip.
+      // AUTH_VIA_WEB goes directly to BrowserLoginActivity → Custom Chrome Tab → Zalo web login.
+      // TODO: replace with official AAR bundle from developers.zalo.me on next rebuild.
       const loginResult = await Promise.race([
-        login('AUTH_VIA_APP'),
+        login('AUTH_VIA_WEB'),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Zalo login timed out after 60s')), 60000),
         ),
