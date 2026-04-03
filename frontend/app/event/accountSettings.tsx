@@ -344,9 +344,11 @@ export default function AccountSettingsScreen() {
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
-                <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
-              </TouchableOpacity>
+              {emailEdit.trim() ? (
+                <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
+                  <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
           <View style={styles.inputRow}>
@@ -387,9 +389,11 @@ export default function AccountSettingsScreen() {
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
-                <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
-              </TouchableOpacity>
+              {phoneEdit.trim() ? (
+                <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
+                  <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
           <View style={styles.inputRow}>
@@ -696,9 +700,9 @@ const styles = StyleSheet.create({
 
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
 
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden' },
+  inputRow: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden', backgroundColor: '#fff' },
   input: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#111' },
-  inlineBtn: { backgroundColor: '#FF6017', paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'center', alignItems: 'center' },
+  inlineBtn: { backgroundColor: '#FF6017', width: 48, justifyContent: 'center', alignItems: 'center', borderTopRightRadius: 9, borderBottomRightRadius: 9 },
 
   readonlyRow: { backgroundColor: '#f5f5f7', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   readonlyText: { fontSize: 15, color: '#555' },

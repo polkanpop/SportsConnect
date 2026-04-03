@@ -21,8 +21,15 @@ export default function ZaloSignInButton() {
     try {
       // Lazy-load to prevent the app from crashing on OTA builds where
       // the ZaloKit native module has not yet been compiled into the binary.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { login, getUserProfile } = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
+      let zaloModule: typeof import('react-native-zalo-kit') | null = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        zaloModule = require('react-native-zalo-kit') as typeof import('react-native-zalo-kit');
+      } catch {
+        Alert.alert('Zalo sign-in unavailable', 'Zalo login requires a full app update. Please update the app from the store.');
+        return;
+      }
+      const { login, getUserProfile } = zaloModule;
 
       // 1. Native SDK opens the installed Zalo app (falls back to Zalo web if not installed).
       //    The SDK handles the full OAuth + code-exchange and returns the access token directly.
