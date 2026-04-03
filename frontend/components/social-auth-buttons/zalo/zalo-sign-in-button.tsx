@@ -1,114 +1,108 @@
 ﻿/**
- * Zalo sign-in via custom OAuth 2.0 PKCE — no react-native-zalo-kit SDK.
+ * Zalo sign-in using the official Zalo SDK V4 via react-native-zalo-kit.
  *
- * Redirect chain:
- *   Zalo web auth → https://sportconnects.org/zalo-callback?code=...
- *                 → HTTP 302 → sportconnect://zalo-code?code=...&state=...
- *                 → Android Intent via full browser → onNewIntent
- *                 → expo-router navigates to app/(auth)/zalo-code.tsx
- *                 → that screen exchanges code for JWT and logs user in
+ * Uses LoginVia.APP (app-to-app) — opens the Zalo app directly, no browser.
+ * Falls back to app-or-web only if Zalo app is not installed.
  *
- * WHY Linking.openURL instead of openAuthSessionAsync:
- *   Chrome Custom Tab (used by openAuthSessionAsync polyfill on Android) blocks
- *   intent dispatch for custom-scheme redirects on Android 12+ / Chrome 88+.
- *   The system browser launched via Linking.openURL fires the Android Intent
- *   at the OS level when it follows the HTTP 302 → sportconnect:// redirect,
- *   which is reliably delivered via onNewIntent → expo-router deep-link handling.
+ * Flow:
+ *   1. login("AUTH_VIA_APP") opens Zalo app → user approves
+ *   2. Native SDK exchanges OAuth code internally → returns {accessToken, refreshToken}
+ *   3. getUserProfile() fetches Zalo user info (id, name) using cached access token
+ *   4. POST to our backend /api/auth/zalo → receives JWT
+ *   5. Persist session → navigate home
  */
-import * as Crypto from 'expo-crypto';
+import { login, getUserProfile } from 'react-native-zalo-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ICONS } from '@/constants/icons';
+import { persistAuthSession } from '@/lib/backendApi';
+import { queryClient } from '@/providers/query-provider';
+import { queryKeys } from '@/hooks/query-keys';
+import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, Linking, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
+import { API_BASE_URL } from '@/env';
 
-const ZALO_APP_ID = '959402498466634174';
-const ZALO_REDIRECT_URI = 'https://sportconnects.org/zalo-callback';
-const ZALO_AUTH_STATE_KEY = '@zaloAuth:state';
-const ZALO_AUTH_VERIFIER_KEY = '@zaloAuth:codeVerifier';
-
-// ─── PKCE helpers (pure JS) ──────────────────────────────────────────────────
-
-async function generateCodeVerifier(): Promise<string> {
-  const raw = await Crypto.getRandomBytesAsync(32);
-  return btoa(String.fromCharCode(...Array.from(raw)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    verifier,
-    { encoding: Crypto.CryptoEncoding.BASE64 },
-  );
-  return hash.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-
-async function randomState(): Promise<string> {
-  const raw = await Crypto.getRandomBytesAsync(16);
-  return Array.from(raw).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function parseQueryParams(url: string): Record<string, string> {
-  const idx = url.indexOf('?');
-  if (idx === -1) return {};
-  return Object.fromEntries(
-    url.slice(idx + 1).split('&').flatMap(kv => {
-      const eq = kv.indexOf('=');
-      if (eq === -1) return [];
-      return [[decodeURIComponent(kv.slice(0, eq)), decodeURIComponent(kv.slice(eq + 1))]];
-    }),
-  );
-}
-
-// ─── Component ───────────────────────────────────────────────────────────────
+const OAUTH_PROMPT_PREFIX = '@oauth_cred_prompt_';
 
 export default function ZaloSignInButton() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const signIn = useCallback(async () => {
     if (loading) return;
     setLoading(true);
 
+    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
+
     try {
-      // 1. PKCE + CSRF state
-      const codeVerifier = await generateCodeVerifier();
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const state = await randomState();
+      // 1. Authenticate via Zalo APP (app-to-app, no browser).
+      //    react-native-zalo-kit calls ZaloSDK.Instance.authenticateZaloWithAuthenType
+      //    with LoginVia.APP, which opens the installed Zalo app for auth.
+      //    The native SDK handles PKCE internally and exchanges the OAuth code for tokens.
+      const authResult = await login('AUTH_VIA_APP');
+      const { accessToken } = authResult;
 
-      // 2. Persist PKCE tokens so zalo-code.tsx can validate after returning from browser
-      await AsyncStorage.multiSet([
-        [ZALO_AUTH_STATE_KEY, state],
-        [ZALO_AUTH_VERIFIER_KEY, codeVerifier],
-      ]);
+      if (!accessToken) {
+        Alert.alert('Đăng nhập Zalo thất bại', 'Không nhận được access token từ Zalo.');
+        return;
+      }
 
-      // 3. Build Zalo OAuth consent URL
-      const authUrl =
-        `https://oauth.zaloapp.com/v4/permission` +
-        `?app_id=${ZALO_APP_ID}` +
-        `&redirect_uri=${encodeURIComponent(ZALO_REDIRECT_URI)}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&code_challenge_method=S256` +
-        `&state=${state}`;
+      // 2. Fetch Zalo user profile (uses the token cached by the native SDK)
+      const profile = await getUserProfile();
+      const zaloId = String(profile?.id ?? '');
+      const zaloName = String(profile?.name ?? '');
 
-      // 4. Open in system browser (NOT Chrome Custom Tab).
-      //    The system browser fires an Android Intent at OS level when it follows
-      //    the HTTP 302 redirect from sportconnects.org/zalo-callback to
-      //    sportconnect://zalo-code?... — expo-router then navigates to
-      //    app/(auth)/zalo-code.tsx which handles the code exchange.
-      await Linking.openURL(authUrl);
+      if (!zaloId) {
+        Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
+        return;
+      }
 
-      // Loading is cleared immediately — the user is now in the browser.
-      // When they return via deep link, expo-router navigates away from login
-      // so this component will unmount anyway.
+      // 3. Sync with our backend → receive JWT
+      const authResp = await fetch(`${backendUrl}/api/auth/zalo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName }),
+      });
+      const authJson = await authResp.json().catch(() => ({}));
+      if (!authResp.ok || !authJson?.userid) {
+        const detail = authJson?.detail || JSON.stringify(authJson);
+        Alert.alert('Đăng nhập Zalo thất bại', `Xác thực thất bại (${authResp.status}): ${detail}`);
+        return;
+      }
+
+      // 4. Persist session and navigate home
+      await persistAuthSession(authJson, { rememberMe: true });
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+
+      // One-time prompt for OAuth users to set up local credentials
+      const promptKey = `${OAUTH_PROMPT_PREFIX}${authJson.userid}`;
+      const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
+      if (!alreadyPrompted) {
+        await AsyncStorage.setItem(promptKey, '1').catch(() => {});
+        Alert.alert(
+          'Thiết lập tài khoản',
+          'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
+          [
+            { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
+            { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
+          ],
+        );
+      } else {
+        router.replace('/(tabs)/Home');
+      }
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? '';
+      // User cancelled (pressed back on Zalo screen) - don't show error
+      if (msg.includes('cancel') || msg.includes('Cancel') || msg.includes('-201')) {
+        return;
+      }
       if (__DEV__) console.error('[ZaloSignIn]', e);
-      Alert.alert('Lỗi', `Không thể mở đăng nhập Zalo: ${msg}`);
+      Alert.alert('Lỗi', `Không thể đăng nhập Zalo: ${msg}`);
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, [loading, router]);
 
   return (
     <TouchableOpacity
