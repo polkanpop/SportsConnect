@@ -29,6 +29,10 @@ export default function ZaloSignInButton() {
         Alert.alert('Zalo sign-in unavailable', 'Zalo login requires a full app update. Please update the app from the store.');
         return;
       }
+      if (!zaloModule || typeof (zaloModule as any).login !== 'function') {
+        Alert.alert('Zalo sign-in unavailable', 'Zalo login requires a full app update. Please update the app from the store.');
+        return;
+      }
       const { login, getUserProfile } = zaloModule;
 
       // 1. Native SDK opens the installed Zalo app (falls back to Zalo web if not installed).

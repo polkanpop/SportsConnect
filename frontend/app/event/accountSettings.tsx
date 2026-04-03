@@ -222,7 +222,11 @@ export default function AccountSettingsScreen() {
     setPhoneSaving(true); setPhoneEditError(null); setPhoneSuccess(false)
     try {
       await registerPendingPhone(trimmed)
-      router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(trimmed)}&mode=add_phone` as any)
+      setOriginalPhone(trimmed)
+      void loadMeta()
+      setPhoneSuccess(true)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+      successTimerRef.current = setTimeout(() => setPhoneSuccess(false), 3000)
     } catch (e: any) {
       setPhoneEditError(e?.message || t('ACCT_ERR_GENERIC'))
     } finally {
@@ -345,8 +349,8 @@ export default function AccountSettingsScreen() {
 
           {/* Email */}
           <View style={styles.contactHeaderRow}>
-            <Text style={styles.fieldLabel}>{t('ACCT_LABEL_EMAIL')}</Text>
-            <View style={styles.contactHeaderRight}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>{t('ACCT_LABEL_EMAIL')}</Text>
               {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && (
                 <StatusBadge
                   verified={account?.email_verified ?? false}
@@ -354,12 +358,12 @@ export default function AccountSettingsScreen() {
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              {emailEdit.trim() && emailEdit === originalEmail ? (
-                <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
-                  <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
-                </TouchableOpacity>
-              ) : null}
             </View>
+            {emailEdit.trim() && emailEdit === originalEmail ? (
+              <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
+                <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+              </TouchableOpacity>
+            ) : null}
           </View>
           <View style={styles.inputRow}>
             <TextInput
@@ -390,8 +394,8 @@ export default function AccountSettingsScreen() {
 
           {/* Phone */}
           <View style={styles.contactHeaderRow}>
-            <Text style={styles.fieldLabel}>{t('ACCT_LABEL_PHONE')}</Text>
-            <View style={styles.contactHeaderRight}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>{t('ACCT_LABEL_PHONE')}</Text>
               {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && (
                 <StatusBadge
                   verified={account?.phone_verified ?? false}
@@ -399,12 +403,12 @@ export default function AccountSettingsScreen() {
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
               )}
-              {phoneEdit.trim() && phoneEdit === originalPhone ? (
-                <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
-                  <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
-                </TouchableOpacity>
-              ) : null}
             </View>
+            {phoneEdit.trim() && phoneEdit === originalPhone ? (
+              <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
+                <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+              </TouchableOpacity>
+            ) : null}
           </View>
           <View style={styles.inputRow}>
             <TextInput
@@ -423,7 +427,7 @@ export default function AccountSettingsScreen() {
           {phoneEditError && <Text style={styles.errorText}>{phoneEditError}</Text>}
           {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && !(account?.phone_verified) && (
             <TouchableOpacity
-              onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(phoneEdit.trim())}` as any)}
+              onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(phoneEdit.trim())}&mode=add_phone` as any)}
               style={styles.linkBtn}
             >
               <Text style={styles.linkText}>{t('ACCT_BTN_VERIFY_OTP')}</Text>
