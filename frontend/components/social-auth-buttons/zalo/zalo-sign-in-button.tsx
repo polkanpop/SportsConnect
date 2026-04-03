@@ -3,27 +3,29 @@
  *
  * Redirect chain:
  *   Zalo web auth → https://sportconnects.org/zalo-callback?code=...
- *                 → 302 → sportconnect://zalo-code?code=...&state=...
- *                 → Chrome Custom Tab resolves → we exchange code for JWT
+ *                 → HTTP 302 → sportconnect://zalo-code?code=...&state=...
+ *                 → Android Intent via full browser → onNewIntent
+ *                 → expo-router navigates to app/(auth)/zalo-code.tsx
+ *                 → that screen exchanges code for JWT and logs user in
  *
- * Chrome Custom Tab (openAuthSessionAsync) is used for all cases — it intercepts
- * the sportconnect:// redirect, whereas Linking.openURL (full browser) does not.
+ * WHY Linking.openURL instead of openAuthSessionAsync:
+ *   Chrome Custom Tab (used by openAuthSessionAsync polyfill on Android) blocks
+ *   intent dispatch for custom-scheme redirects on Android 12+ / Chrome 88+.
+ *   The system browser launched via Linking.openURL fires the Android Intent
+ *   at the OS level when it follows the HTTP 302 → sportconnect:// redirect,
+ *   which is reliably delivered via onNewIntent → expo-router deep-link handling.
  */
 import * as Crypto from 'expo-crypto';
-import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ICONS } from '@/constants/icons';
-import { persistAuthSession } from '@/lib/backendApi';
-import { queryClient } from '@/providers/query-provider';
-import { queryKeys } from '@/hooks/query-keys';
-import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, Linking, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { API_BASE_URL } from '@/env';
 
 const ZALO_APP_ID = '959402498466634174';
 const ZALO_REDIRECT_URI = 'https://sportconnects.org/zalo-callback';
+const ZALO_AUTH_STATE_KEY = '@zaloAuth:state';
+const ZALO_AUTH_VERIFIER_KEY = '@zaloAuth:codeVerifier';
 
 // ─── PKCE helpers (pure JS) ──────────────────────────────────────────────────
 
@@ -62,14 +64,11 @@ function parseQueryParams(url: string): Record<string, string> {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ZaloSignInButton() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const signIn = useCallback(async () => {
     if (loading) return;
     setLoading(true);
-
-    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
       // 1. PKCE + CSRF state
@@ -77,7 +76,13 @@ export default function ZaloSignInButton() {
       const codeChallenge = await generateCodeChallenge(codeVerifier);
       const state = await randomState();
 
-      // 2. Zalo OAuth consent URL
+      // 2. Persist PKCE tokens so zalo-code.tsx can validate after returning from browser
+      await AsyncStorage.multiSet([
+        [ZALO_AUTH_STATE_KEY, state],
+        [ZALO_AUTH_VERIFIER_KEY, codeVerifier],
+      ]);
+
+      // 3. Build Zalo OAuth consent URL
       const authUrl =
         `https://oauth.zaloapp.com/v4/permission` +
         `?app_id=${ZALO_APP_ID}` +
@@ -86,99 +91,24 @@ export default function ZaloSignInButton() {
         `&code_challenge_method=S256` +
         `&state=${state}`;
 
-      // 3. Open OAuth consent in Chrome Custom Tab — the only approach that can intercept
-      //    the sportconnect:// deep-link redirect on Android without a native Zalo SDK.
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sportconnect://');
-      const returnUrl = result.type === 'success' ? result.url : null;
+      // 4. Open in system browser (NOT Chrome Custom Tab).
+      //    The system browser fires an Android Intent at OS level when it follows
+      //    the HTTP 302 redirect from sportconnects.org/zalo-callback to
+      //    sportconnect://zalo-code?... — expo-router then navigates to
+      //    app/(auth)/zalo-code.tsx which handles the code exchange.
+      await Linking.openURL(authUrl);
 
-      if (!returnUrl) {
-        // User cancelled (pressed back, or timed out)
-        return;
-      }
-
-      // 4. Parse code + validate state
-      const params = parseQueryParams(returnUrl);
-      if (params.error) {
-        Alert.alert('Dong Zalo that bai', `Zalo tra ve loi: ${params.error}`);
-        return;
-      }
-      if (params.state !== state) {
-        Alert.alert('Dong Zalo that bai', 'State mismatch — yeu cau khong hop le.');
-        return;
-      }
-      const { code } = params;
-      if (!code) {
-        Alert.alert('Dong Zalo that bai', 'Khong nhan duoc ma xac thuc tu Zalo.');
-        return;
-      }
-
-      // 5. Exchange auth code for Zalo access_token via backend (holds app_secret)
-      const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, code_verifier: codeVerifier }),
-      });
-      const tokenJson = await tokenResp.json().catch(() => ({}));
-      if (!tokenResp.ok || !tokenJson?.access_token) {
-        const detail = tokenJson?.detail || JSON.stringify(tokenJson);
-        Alert.alert('Dong Zalo that bai', `Trao doi token that bai: ${detail}`);
-        return;
-      }
-      const { access_token } = tokenJson;
-
-      // 6. Fetch Zalo user profile from device (Vietnam IP satisfies geo requirement)
-      const profileResp = await fetch(
-        'https://graph.zalo.me/v2.0/me?fields=id,name,picture',
-        { headers: { access_token } },
-      );
-      const profile = await profileResp.json().catch(() => ({}));
-      const zaloId = String(profile?.id ?? '');
-      const zaloName = String(profile?.name ?? '');
-      if (!zaloId) {
-        Alert.alert('Dong Zalo that bai', 'Khong lay duoc thong tin nguoi dung Zalo.');
-        return;
-      }
-
-      // 7. Sync with our backend → receive JWT
-      const authResp = await fetch(`${backendUrl}/api/auth/zalo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token, zalo_id: zaloId, zalo_name: zaloName }),
-      });
-      const authJson = await authResp.json().catch(() => ({}));
-      if (!authResp.ok || !authJson?.userid) {
-        const detail = authJson?.detail || JSON.stringify(authJson);
-        Alert.alert('Dong Zalo that bai', `Xac thuc that bai (${authResp.status}): ${detail}`);
-        return;
-      }
-
-      // 8. Persist session and navigate home
-      await persistAuthSession(authJson, { rememberMe: true });
-      queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
-      // One-time prompt for OAuth users to set up local credentials
-      const promptKey = `@oauth_cred_prompt_${authJson.userid}`;
-      const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
-      if (!alreadyPrompted) {
-        await AsyncStorage.setItem(promptKey, '1').catch(() => {});
-        Alert.alert(
-          'Thiết lập tài khoản',
-          'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
-          [
-            { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
-            { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
-          ],
-        );
-      } else {
-        router.replace('/(tabs)/Home');
-      }
+      // Loading is cleared immediately — the user is now in the browser.
+      // When they return via deep link, expo-router navigates away from login
+      // so this component will unmount anyway.
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? '';
       if (__DEV__) console.error('[ZaloSignIn]', e);
-      Alert.alert('Loi', `Khong the dang nhap Zalo: ${msg}`);
+      Alert.alert('Lỗi', `Không thể mở đăng nhập Zalo: ${msg}`);
     } finally {
       setLoading(false);
     }
-  }, [loading, router]);
+  }, [loading]);
 
   return (
     <TouchableOpacity
@@ -203,3 +133,4 @@ const styles = StyleSheet.create({
     bottom: 1,
   },
 });
+
