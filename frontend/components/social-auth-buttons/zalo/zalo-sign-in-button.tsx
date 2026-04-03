@@ -1,33 +1,24 @@
 ﻿/**
  * Zalo sign-in via custom OAuth 2.0 PKCE — no react-native-zalo-kit SDK.
  *
- * Auth routing:
- *   - Zalo installed  → Linking.openURL (system intent, respects Android App Links)
- *                        Android App Links route oauth.zaloapp.com to the Zalo app if Zalo
- *                        has registered that domain (which it does in Vietnam builds).
- *                        The user approves natively inside the Zalo app.
- *   - Zalo NOT installed → WebBrowser.openAuthSessionAsync (Chrome Custom Tab web fallback)
- *
- * NOTE: openAuthSessionAsync was the previous approach but Chrome Custom Tabs bypass Android
- * App Links entirely (they run inside Chrome's context). Linking.openURL uses the normal
- * Android intent system which checks App Links before opening any browser, so the Zalo app
- * intercepts oauth.zaloapp.com and handles auth natively.
- *
  * Redirect chain:
- *   Zalo/web → https://sportconnects.org/zalo-callback?code=...
- *            → 302 → sportconnect://zalo-code?code=...&state=...
- *            → our Linking listener resolves → we exchange code for JWT
+ *   Zalo web auth → https://sportconnects.org/zalo-callback?code=...
+ *                 → 302 → sportconnect://zalo-code?code=...&state=...
+ *                 → Chrome Custom Tab resolves → we exchange code for JWT
+ *
+ * Chrome Custom Tab (openAuthSessionAsync) is used for all cases — it intercepts
+ * the sportconnect:// redirect, whereas Linking.openURL (full browser) does not.
  */
 import * as Crypto from 'expo-crypto';
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ICONS } from '@/constants/icons';
 import { persistAuthSession } from '@/lib/backendApi';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { AppState, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
@@ -68,52 +59,6 @@ function parseQueryParams(url: string): Record<string, string> {
   );
 }
 
-// ─── System-intent auth opener ───────────────────────────────────────────────
-// Used when Zalo is installed. Launches oauth.zaloapp.com via Android's normal
-// intent system so App Links can route it to the native Zalo app. Waits for the
-// sportconnect://zalo-code deep link to come back, or null on cancel/timeout.
-
-function openWithSystemIntent(url: string, callbackPrefix: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let appWentBackground = false;
-    let returnTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const cleanup = (result: string | null) => {
-      if (resolved) return;
-      resolved = true;
-      urlSub.remove();
-      appStateSub.remove();
-      clearTimeout(masterTimeout);
-      if (returnTimeoutId) clearTimeout(returnTimeoutId);
-      resolve(result);
-    };
-
-    // Listen for the deep link callback (sportconnect://zalo-code?code=...)
-    const urlSub = Linking.addEventListener('url', (event) => {
-      if (event.url.startsWith(callbackPrefix)) {
-        cleanup(event.url);
-      }
-    });
-
-    // Detect cancellation: app came back to foreground but no url event fired
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'background' || state === 'inactive') {
-        appWentBackground = true;
-        if (returnTimeoutId) clearTimeout(returnTimeoutId);
-      } else if (state === 'active' && appWentBackground) {
-        // Give Linking 2 s to fire the url event before declaring cancelled
-        returnTimeoutId = setTimeout(() => cleanup(null), 2000);
-      }
-    });
-
-    // Hard safety timeout (2 min)
-    const masterTimeout = setTimeout(() => cleanup(null), 120_000);
-
-    Linking.openURL(url).catch(() => cleanup(null));
-  });
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ZaloSignInButton() {
@@ -141,19 +86,10 @@ export default function ZaloSignInButton() {
         `&code_challenge_method=S256` +
         `&state=${state}`;
 
-      // 3. Route based on whether Zalo app is installed
-      //    canOpenURL('zalo://') is reliable because <package android:name="com.zing.zalo"/>
-      //    is declared in AndroidManifest.xml queries, satisfying Android 11+ visibility rules.
-      let returnUrl: string | null;
-      const zaloInstalled = await Linking.canOpenURL('zalo://');
-      if (zaloInstalled) {
-        // System intent: Android App Links may redirect oauth.zaloapp.com to Zalo native app
-        returnUrl = await openWithSystemIntent(authUrl, 'sportconnect://zalo-code');
-      } else {
-        // Web fallback via Chrome Custom Tab
-        const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sportconnect://');
-        returnUrl = result.type === 'success' ? result.url : null;
-      }
+      // 3. Open OAuth consent in Chrome Custom Tab — the only approach that can intercept
+      //    the sportconnect:// deep-link redirect on Android without a native Zalo SDK.
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sportconnect://');
+      const returnUrl = result.type === 'success' ? result.url : null;
 
       if (!returnUrl) {
         // User cancelled (pressed back, or timed out)
@@ -219,7 +155,22 @@ export default function ZaloSignInButton() {
       // 8. Persist session and navigate home
       await persistAuthSession(authJson, { rememberMe: true });
       queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
-      router.replace('/(tabs)/Home');
+      // One-time prompt for OAuth users to set up local credentials
+      const promptKey = `@oauth_cred_prompt_${authJson.userid}`;
+      const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
+      if (!alreadyPrompted) {
+        await AsyncStorage.setItem(promptKey, '1').catch(() => {});
+        Alert.alert(
+          'Thiết lập tài khoản',
+          'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
+          [
+            { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
+            { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
+          ],
+        );
+      } else {
+        router.replace('/(tabs)/Home');
+      }
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? '';
       if (__DEV__) console.error('[ZaloSignIn]', e);

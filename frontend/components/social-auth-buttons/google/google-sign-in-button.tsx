@@ -9,10 +9,29 @@ const { Text } = require('@react-navigation/elements');
 import { Image } from 'expo-image';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/env';
 import { persistAuthSession } from '@/lib/backendApi';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
+
+async function showOAuthSetupPromptOrHome(userid: number, router: ReturnType<typeof useRouter>) {
+  const promptKey = `@oauth_cred_prompt_${userid}`;
+  const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
+  if (!alreadyPrompted) {
+    await AsyncStorage.setItem(promptKey, '1').catch(() => {});
+    Alert.alert(
+      'Thiết lập tài khoản',
+      'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập dễ dàng hơn.',
+      [
+        { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
+        { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
+      ],
+    );
+  } else {
+    router.replace('/(tabs)/Home');
+  }
+}
 
 // Helper: parse the fragment returned from /authorize redirect (#access_token=...)
 function parseFragment(url: string) {
@@ -43,6 +62,7 @@ export default function GoogleSignInButton() {
   const signIn = useCallback(async () => {
     if (loading) return;
     setLoading(true);
+    let oauthUserId = 0;
     // Prefer public env; fallback to app.json extras for development convenience
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined);
     // Derive backend base URL (strip /api suffix if present so we can call /api/auth/sync explicitly)
@@ -121,6 +141,7 @@ export default function GoogleSignInButton() {
               }
               await persistAuthSession(syncJson, { rememberMe: true });
               queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+              oauthUserId = syncJson.userid || 0;
             } catch (e) {
               console.error('[GoogleSignIn] backend sync (exchange) exception', e);
               setLoading(false);
@@ -129,7 +150,7 @@ export default function GoogleSignInButton() {
             }
           }
           setLoading(false);
-          router.replace('/(tabs)/Home');
+          await showOAuthSetupPromptOrHome(oauthUserId, router);
           return;
         }
       } catch (e) {
@@ -184,6 +205,7 @@ export default function GoogleSignInButton() {
         }
         await persistAuthSession(syncJson, { rememberMe: true });
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+        oauthUserId = syncJson.userid || 0;
       } catch (e) {
         console.error('[GoogleSignIn] backend sync exception', e);
         setLoading(false);
@@ -194,7 +216,7 @@ export default function GoogleSignInButton() {
 
     setLoading(false);
     // Navigate to home tabs after success
-    router.replace('/(tabs)/Home');
+    await showOAuthSetupPromptOrHome(oauthUserId, router);
   }, [loading, router]);
 
   return (

@@ -40,6 +40,9 @@ const ForgotPasswordScreen = () => {
           <Text style={styles.title}>{t('AUTH_FORGOT_TITLE')}</Text>
         </View>
         <Text style={styles.helper}>{t('AUTH_FORGOT_HELPER')}</Text>
+        <Text style={[styles.helper, { color: COLORS.green700, marginTop: -12, marginBottom: 20, fontSize: 13 }]}>
+          {'Nếu bạn đăng ký bằng số điện thoại, hãy dùng "Đăng nhập bằng SĐT" trên màn hình đăng nhập.'}
+        </Text>
         <TextInput
           placeholder={t('AUTH_FORGOT_PLACEHOLDER')}
           placeholderTextColor={COLORS.dark300}

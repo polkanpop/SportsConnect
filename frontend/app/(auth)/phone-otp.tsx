@@ -15,11 +15,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authPhoneLogin, persistAuthSession, verifyPhoneAddition } from '@/lib/backendApi';
 import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useTranslation } from '@/constants/translations';
+
+const OTP_DRAFT_KEY = '@phoneOtp:draft';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
@@ -45,6 +48,15 @@ export default function PhoneOtpScreen() {
 
   // Pre-fill from params (signup flow) OR let user type a fresh number
   const [phone, setPhone]           = useState(params.phone ?? '');
+
+  // Restore persisted draft phone number when navigating back without params
+  useEffect(() => {
+    if (!params.phone) {
+      AsyncStorage.getItem(OTP_DRAFT_KEY)
+        .then(val => { if (val) setPhone(val); })
+        .catch(() => {});
+    }
+  }, []);
   const [displayName]               = useState(params.name ?? '');
   const [otpSent, setOtpSent]       = useState(false);
   const [otp, setOtp]               = useState('');
@@ -125,6 +137,7 @@ export default function PhoneOtpScreen() {
         // Authenticated user adding/verifying their phone — do NOT re-login
         await verifyPhoneAddition(firebaseIdToken);
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
+        AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
         router.back();
       } else {
         // Login flow: exchange Firebase ID token for our backend session
@@ -136,7 +149,7 @@ export default function PhoneOtpScreen() {
         await persistAuthSession(res, { rememberMe: true });
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         try { await initFavoritesForCurrentUser(); } catch {}
-
+        AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
         router.replace('/(tabs)/Home');
       }
     } catch (e: any) {
@@ -189,7 +202,7 @@ export default function PhoneOtpScreen() {
                   placeholder={t('AUTH_OTP_PLACEHOLDER_PHONE')}
                   placeholderTextColor={COLOR.dark300}
                   value={phone}
-                  onChangeText={(t) => { setPhone(t); setError(null); }}
+                  onChangeText={(text) => { setPhone(text); setError(null); AsyncStorage.setItem(OTP_DRAFT_KEY, text).catch(() => {}); }}
                   keyboardType="phone-pad"
                   style={styles.input}
                   maxLength={10}
