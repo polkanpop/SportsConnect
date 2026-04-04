@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +22,8 @@ import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useTranslation } from '@/constants/translations';
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider';
+import { ICONS } from '@/constants/icons';
 
 const OTP_DRAFT_KEY = '@phoneOtp:draft';
 
@@ -71,6 +74,7 @@ const COLOR = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PhoneOtpScreen() {
   const { t } = useTranslation();
+  const { userId: userid } = useAppBootstrap();
   const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string; mode?: string }>();
 
   // Pre-fill from params (signup flow) OR let user type a fresh number.
@@ -124,12 +128,12 @@ export default function PhoneOtpScreen() {
     setResendTimer(startAt);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
-      setResendTimer((t) => {
-        if (t <= 1) {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
           clearInterval(timerRef.current!);
           return 0;
         }
-        return t - 1;
+        return prev - 1;
       });
     }, 1000);
   };
@@ -172,7 +176,9 @@ export default function PhoneOtpScreen() {
               setSending(false);
               setOtpSent(true);
               setAutoVerified(true);
-              handleVerifyWithCredential(null, true, phoneAuthSnapshot.user ?? undefined);
+              // The `user` field is present on the snapshot at AUTO_VERIFIED time but
+              // is missing from the community TypeScript types — cast to access it.
+              handleVerifyWithCredential(null, true, (phoneAuthSnapshot as any).user ?? undefined);
               break;
 
             case auth.PhoneAuthState.ERROR:
@@ -251,6 +257,9 @@ export default function PhoneOtpScreen() {
 
       if (params.mode === 'add_phone') {
         await verifyPhoneAddition(firebaseIdToken);
+        // Invalidate the dashboard cache so accountSettings.tsx gets fresh
+        // userInfo.contactnumber immediately on the next render cycle.
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) });
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
         _pendingOtp = null;
@@ -330,9 +339,9 @@ export default function PhoneOtpScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Back */}
-            <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-              <Text style={styles.backText}>{t('AUTH_OTP_BACK')}</Text>
-            </Pressable>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+              <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+            </TouchableOpacity>
 
             <Text style={styles.title}>{t('AUTH_OTP_TITLE')}</Text>
             <Text style={styles.subtitle}>
@@ -431,11 +440,15 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     marginBottom: 20,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  backText: {
-    color: COLOR.brand,
-    fontWeight: '600',
-    fontSize: 15,
+  backIcon: {
+    width: 22,
+    height: 22,
+    tintColor: '#222',
   },
   title: {
     fontSize: 26,

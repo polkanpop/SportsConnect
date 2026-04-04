@@ -1602,6 +1602,17 @@ def verify_phone_for_account(payload: dict, authorization: Optional[str] = Heade
     if not phone_number:
         raise HTTPException(status_code=400, detail="Firebase token does not contain phone_number")
 
+    # Release phone from any prior owner so it can be reassigned cleanly.
+    # This handles the case where userId A had the number, then userId B verifies it —
+    # we clear A's contactnumber before writing B's, preventing a uniqueness conflict.
+    try:
+        prior_owner = rest_select("userinfo", "userid", {"contactnumber": phone_number}, single=True)
+        if prior_owner and prior_owner.get("userid") != userid:
+            rest_update("userinfo", {"userid": prior_owner["userid"]}, {"contactnumber": None})
+            logger.info(f"/verify-phone cleared phone {phone_number} from prior owner userid={prior_owner['userid']}")
+    except Exception as _prior_e:
+        logger.warning(f"/verify-phone prior-owner release failed: {_prior_e}")
+
     # Update userinfo.contactnumber for this user
     try:
         rest_update("userinfo", {"userid": userid}, {"contactnumber": phone_number})

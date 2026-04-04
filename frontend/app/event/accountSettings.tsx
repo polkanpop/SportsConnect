@@ -38,6 +38,13 @@ import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 
+// Convert E.164 (+84xxxxxxxxx) back to local format (0xxxxxxxxx) for display/input.
+function toLocalPhone(input: string): string {
+  const s = (input ?? '').trim()
+  if (s.startsWith('+84') && s.length === 12) return '0' + s.slice(3)
+  return s
+}
+
 const ZALO_APP_ID = '959402498466634174';
 const ZALO_AUTH_ENDPOINT = 'https://oauth.zaloapp.com/v4/permission';
 const WORKER_ORIGIN = 'https://sportconnects.org';
@@ -106,6 +113,7 @@ export default function AccountSettingsScreen() {
 
   // ── Identity ─────────────────────────────────────────────────────────────
   const [nameValue, setNameValue] = useState('')
+  const [originalName, setOriginalName] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
   const [nameSuccess, setNameSuccess] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -204,8 +212,9 @@ export default function AccountSettingsScreen() {
   useEffect(() => {
     if (userInfo) {
       setNameValue(userInfo.name ?? '')
+      setOriginalName(userInfo.name ?? '')
       const em = userInfo.email ?? ''
-      const ph = userInfo.contactnumber ?? ''
+      const ph = toLocalPhone(userInfo.contactnumber ?? '')
       setEmailEdit(em)
       setOriginalEmail(em)
       setPhoneEdit(ph)
@@ -230,8 +239,9 @@ export default function AccountSettingsScreen() {
         setEmailEdit(acct.unverified_email)
       }
       if (acct?.unverified_phone) {
-        setOriginalPhone(acct.unverified_phone)
-        setPhoneEdit(acct.unverified_phone)
+        const localPhone = toLocalPhone(acct.unverified_phone)
+        setOriginalPhone(localPhone)
+        setPhoneEdit(localPhone)
       }
     } catch {
       // silent — screen is still usable without this
@@ -409,7 +419,16 @@ export default function AccountSettingsScreen() {
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
       )
-      if (result.type !== 'success') return
+      // Explicitly dismiss the browser tab to prevent the black-screen flash
+      // that occurs when Zalo auto-consents and redirects before the CCT is visually closed.
+      WebBrowser.dismissBrowser()
+      if (result.type !== 'success') {
+        // Zalo may have auto-consented and linked successfully even if the result
+        // type is not 'success' (race between redirect and CCT close detection).
+        // Reload meta in case the link already went through.
+        void loadMeta()
+        return
+      }
       // 3. Extract code
       const urlObj = new URL(result.url)
       const code = urlObj.searchParams.get('code')
@@ -489,7 +508,7 @@ export default function AccountSettingsScreen() {
               placeholderTextColor="#aaa"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveName} disabled={nameSaving}>
+            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
               {nameSaving
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
@@ -531,7 +550,7 @@ export default function AccountSettingsScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveEmail} disabled={emailSaving}>
+            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveEmail} disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}>
               {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
@@ -575,7 +594,7 @@ export default function AccountSettingsScreen() {
               placeholderTextColor="#aaa"
               keyboardType="phone-pad"
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSavePhone} disabled={phoneSaving}>
+            <TouchableOpacity style={styles.inlineBtn} onPress={handleSavePhone} disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}>
               {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
@@ -809,7 +828,7 @@ export default function AccountSettingsScreen() {
                   <View style={styles.contactDivider} />
                   <LinkedAccountRow
                     icon={ICONS.user}
-                    label={t('ACCT_LABEL_USERNAME') + ' / Password'}
+                    label="Tài khoản cục bộ"
                     linked
                   />
                 </>
