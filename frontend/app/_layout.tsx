@@ -8,6 +8,7 @@ import {
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useEffect } from 'react'
 import { StyleSheet, Text, TextInput } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -135,15 +136,31 @@ export default function RootLayout() {
   const colorScheme = useColorScheme()
   useAuthContext()
 
-  // Check for OTA updates on every cold start
+  // Check for OTA updates on every cold start.
+  // Guard: track the last update group ID we tried. If it fails (incompatible fingerprint),
+  // we skip re-downloading it so we don't loop forever.
   useEffect(() => {
     if (__DEV__) return
     ;(async () => {
       try {
         const update = await Updates.checkForUpdateAsync()
-        if (update.isAvailable) {
+        if (!update.isAvailable) return
+        // Read the last failed update group to avoid infinite incompatibility loop
+        const lastFailed = await AsyncStorage.getItem('@ota:lastFailed').catch(() => null)
+        const updateId: string = (update as any)?.manifest?.id ?? (update as any)?.updateId ?? ''
+        if (updateId && updateId === lastFailed) {
+          console.warn('[OTA] Skipping previously incompatible update:', updateId)
+          return
+        }
+        try {
           await Updates.fetchUpdateAsync()
           await Updates.reloadAsync()
+        } catch (applyErr: any) {
+          // Mark this update as failed to prevent the incompatibility loop
+          if (updateId) {
+            await AsyncStorage.setItem('@ota:lastFailed', updateId).catch(() => {})
+          }
+          console.warn('[OTA] Apply failed (possibly incompatible fingerprint):', applyErr)
         }
       } catch (e) {
         console.warn('[OTA] Update check failed:', e)

@@ -41,10 +41,9 @@ export default function ZaloSignInButton() {
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
-      // 1. Authenticate via Zalo App (LoginVia.APP).
-      //    Opens the native Zalo app directly — no browser, no Chrome Custom Tabs.
-      //    Requires hash key WSjJhOo3HdMyjuHH7La+W3L4HVY= registered in Zalo Dev Console.
-      const authResult = await login('AUTH_VIA_APP');
+      // 1. Authenticate via Zalo WebView (LoginVia.WEB).
+      //    Opens id.zalo.me — user taps "Đăng nhập qua ứng dụng Zalo" inside.
+      const authResult = await login('AUTH_VIA_WEB');
       const { accessToken } = authResult;
 
       if (!accessToken) {
