@@ -27,9 +27,21 @@ import CourtPanel from "@/app/event/courtPanel";
 import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
+import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 
 export default function Home() {
   const router = useRouter();
+  const overlay = useZaloAuthOverlay()
+
+  // Dismiss the global Zalo auth overlay once this screen has rendered its first frame.
+  // The overlay is shown before the Chrome Custom Tab opens and is kept alive through the
+  // ~300 ms OPPO/ColorOS surface-reconstruction window that occurs when the CCT closes.
+  // useEffect fires AFTER React Native commits the render to the native layer, so at this
+  // point the drawing surface is guaranteed to be fully restored.
+  useEffect(() => {
+    overlay.hide()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null

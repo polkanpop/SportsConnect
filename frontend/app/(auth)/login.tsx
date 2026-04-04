@@ -9,7 +9,7 @@ import { initFavoritesForCurrentUser } from '@/storage/favorites';
 import { Image as ExpoImage } from 'expo-image';
 import { Link, Stack, router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/constants/translations';
 import { useLanguage } from '@/providers/language-provider';
@@ -42,7 +42,6 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [zaloAuthLoading, setZaloAuthLoading] = useState(false);
 
   // Restore remember-me and auto-redirect if session is cached
   useEffect(() => {
@@ -176,10 +175,7 @@ export default function LoginScreen() {
 
           <View style={styles.socialRow}>
             <GoogleSignInButton />
-            <ZaloSignInButton
-              onAuthStart={() => setZaloAuthLoading(true)}
-              onAuthDone={() => setZaloAuthLoading(false)}
-            />
+            <ZaloSignInButton />
             <AppleSignInButton />
           </View>
 
@@ -188,27 +184,6 @@ export default function LoginScreen() {
             <Link href="/(auth)/signup"><Text style={styles.signUpLink}>{t('AUTH_LINK_SIGN_UP')}</Text></Link>
           </View>
         </ScrollView>
-
-        {/* Full-screen Zalo auth guard — rendered OUTSIDE the ScrollView so it
-            covers the entire screen without creating a separate Android window
-            (using <Modal> causes the black-screen flash on OPPO/ColorOS when
-            the Chrome Custom Tab closes and the surface briefly goes invalid). */}
-        {zaloAuthLoading && (
-          <View
-            style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: '#fff',
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 999,
-              elevation: 10,
-            }}
-            pointerEvents="box-only"
-          >
-            <ActivityIndicator size="large" color="#0068FF" />
-          </View>
-        )}
       </SafeAreaView>
     </>
   );

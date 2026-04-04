@@ -25,7 +25,8 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View, AppState, InteractionManager, Platform } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
@@ -36,29 +37,6 @@ const REDIRECT_INTERCEPT = 'sportconnect://zalo-code';
 const ZALO_REDIRECT_URI = `${WORKER_ORIGIN}/zalo-callback`;
 
 const OAUTH_PROMPT_PREFIX = '@oauth_cred_prompt_';
-
-// Waits until the app is foregrounded and one animation frame has committed.
-// Fixes the OPPO/Android black-screen flash that occurs when Chrome Custom Tab
-// (CCT) closes and the surface goes through a brief invalid state.
-function waitForActiveAndFrame(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const settle = () => {
-      InteractionManager.runAfterInteractions(() => {
-        requestAnimationFrame(() => resolve())
-      })
-    }
-    if (AppState.currentState === 'active') {
-      settle()
-    } else {
-      const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') {
-          sub.remove()
-          settle()
-        }
-      })
-    }
-  })
-}
 
 // ─── PKCE helpers ─────────────────────────────────────────────────────────────
 function toBase64Url(base64: string): string {
@@ -95,6 +73,7 @@ interface ZaloSignInButtonProps {
 
 export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignInButtonProps = {}) {
   const router = useRouter();
+  const overlay = useZaloAuthOverlay();
   const [loading, setLoading] = useState(false);
   const isProcessing = useRef(false);
   const isMounted = useRef(true);
@@ -115,6 +94,10 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
     isProcessing.current = true;
     setLoading(true);
     onAuthStart?.();
+    overlay.show();
+    // Track whether we navigated away — if not (cancel/error) we hide the overlay here.
+    // If we DO navigate, the destination screen hides it after its first render commits.
+    let willNavigate = false;
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
@@ -134,22 +117,26 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       const oauthUrl = `${ZALO_AUTH_ENDPOINT}?${params.toString()}`;
 
       // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
-      // Use requestAnimationFrame so the parent's loading guard paints BEFORE CCT opens
+      // Yield one JS frame so the overlay paints before CCT opens
       await new Promise<void>(r => requestAnimationFrame(r));
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
       // Explicitly dismiss so the CCT cannot fire more redirect events
       WebBrowser.dismissBrowser();
-      // Wait for the Android surface to fully settle after CCT closes.
-      // On OPPO/ColorOS, the surface goes through a brief invalid state
-      // (handleResized abandoned + landscape flip) during the CCT→app transition.
-      // Clearing loading state before the surface settles causes a black frame.
-      if (Platform.OS === 'android') await waitForActiveAndFrame();
-      if (result.type !== 'success') return;
+      // DO NOT clear the overlay here. The global ZaloAuthOverlayProvider overlay
+      // (rendered at root level, outside the Stack navigator) keeps covering the screen
+      // throughout the ~300 ms surface-reconstruction window on OPPO/ColorOS.
+      // hide() is called by the destination screen's useEffect after its first render.
+      if (result.type !== 'success') {
+        // User cancelled or CCT failed — we're staying on this screen, safe to hide now.
+        overlay.hide();
+        return;
+      }
 
       // 4. Extract code from deep link sportconnect://zalo-code?code=...
       const urlObj = new URL(result.url);
       const code = urlObj.searchParams.get('code');
       if (!code) {
+        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', 'Không nhận được mã xác thực từ Zalo.');
         return;
       }
@@ -163,6 +150,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       const tokenJson = await tokenResp.json().catch(() => ({}));
       const accessToken: string = tokenJson?.access_token ?? '';
       if (!accessToken) {
+        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', tokenJson?.detail || 'Không lấy được access token.');
         return;
       }
@@ -182,6 +170,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
         } catch { /* non-fatal */ }
       }
       if (!zaloId) {
+        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
         return;
       }
@@ -194,14 +183,19 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       });
       const authJson = await authResp.json().catch(() => ({}));
       if (!authResp.ok || !authJson?.userid) {
+        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', authJson?.detail || 'Xác thực thất bại');
         return;
       }
 
-      // 8. Persist session and navigate home
+      // 8. Persist session and navigate home.
+      // Mark willNavigate=true BEFORE navigation so the finally block knows NOT to
+      // hide the overlay — the destination screen (Home / accountSettings) hides it
+      // inside its useEffect after the first render commits to the native layer.
       await persistAuthSession(authJson, { rememberMe: true });
       queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
 
+      willNavigate = true;
       const promptKey = `${OAUTH_PROMPT_PREFIX}${authJson.userid}`;
       const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
       if (!alreadyPrompted) {
@@ -225,10 +219,16 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       }
     } finally {
       setLoading(false);
-      onAuthDone?.();
+      // Only hide the overlay if we are NOT navigating away.
+      // If willNavigate=true, the destination screen calls overlay.hide() after its
+      // first render, guaranteeing the surface is fully reconstructed before dismiss.
+      if (!willNavigate) {
+        overlay.hide();
+        onAuthDone?.();
+      }
       isProcessing.current = false;
     }
-  }, [loading, router, onAuthStart, onAuthDone]);
+  }, [loading, router, overlay, onAuthStart, onAuthDone]);
 
   return (
     <>

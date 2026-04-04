@@ -4,9 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  AppState,
   Image,
-  InteractionManager,
   LayoutAnimation,
   Modal,
   Platform,
@@ -47,37 +45,11 @@ import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
+import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true)
-}
-
-/**
- * Waits until the React Native app is in the 'active' foreground state,
- * then lets InteractionManager + one animation frame pass.
- * This prevents the black-screen flash that occurs on OPPO/ColorOS when
- * a Chrome Custom Tab (CCT) closes and the Android surface briefly goes
- * invalid (handleResized abandoned) during its lifecycle transition.
- */
-function waitForActiveAndFrame(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const settle = () => {
-      InteractionManager.runAfterInteractions(() => {
-        requestAnimationFrame(() => resolve())
-      })
-    }
-    if (AppState.currentState === 'active') {
-      settle()
-    } else {
-      const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active') {
-          sub.remove()
-          settle()
-        }
-      })
-    }
-  })
 }
 
 // Convert E.164 (+84xxxxxxxxx) back to local format (0xxxxxxxxx) for display/input.
@@ -142,6 +114,7 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
 export default function AccountSettingsScreen() {
   const router = useRouter()
   const { t } = useTranslation()
+  const overlay = useZaloAuthOverlay()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
   const userInfo = userInfoQuery.data
 
@@ -216,6 +189,28 @@ export default function AccountSettingsScreen() {
 
   // ── Google account linking ─────────────────────────────────────────────────
   const [linkingGoogle, setLinkingGoogle] = useState(false)
+
+  // ── Hide root-level overlay after CCT auth completes and screen re-renders ──
+  // The global ZaloAuthOverlayProvider overlay is shown before the CCT opens.
+  // We only call hide() here, inside useEffect, so it fires AFTER React Native
+  // has committed this component's new render to the native layer — meaning the
+  // Android surface is guaranteed to be fully reconstructed at this point.
+  const wasLinkingZaloRef = useRef(false)
+  const wasLinkingGoogleRef = useRef(false)
+  useEffect(() => {
+    if (linkingZalo) { wasLinkingZaloRef.current = true; return }
+    if (wasLinkingZaloRef.current) {
+      wasLinkingZaloRef.current = false
+      overlay.hide()
+    }
+  }, [linkingZalo, overlay])
+  useEffect(() => {
+    if (linkingGoogle) { wasLinkingGoogleRef.current = true; return }
+    if (wasLinkingGoogleRef.current) {
+      wasLinkingGoogleRef.current = false
+      overlay.hide()
+    }
+  }, [linkingGoogle, overlay])
 
   // ── Which linked-row is expanded (showing unlink X) ───────────────────────
   const [linkExpandedProvider, setLinkExpandedProvider] = useState<string | null>(null)
@@ -456,6 +451,7 @@ export default function AccountSettingsScreen() {
   // ── Link Zalo account ─────────────────────────────────────────────────────
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
+    overlay.show()
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     try {
       // 1. PKCE
@@ -469,17 +465,16 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
-      // Yield one JS frame so the loading overlay renders before the CCT opens
+      // Yield one JS frame so the overlay paints before the CCT opens
       await new Promise<void>(r => requestAnimationFrame(r))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
       )
       WebBrowser.dismissBrowser()
-      // On Android (especially OPPO/ColorOS), the surface goes through a brief
-      // invalid state (handleResized abandoned) when the CCT closes. Wait until
-      // the app is active and one frame has been committed before touching any state.
-      if (Platform.OS === 'android') await waitForActiveAndFrame()
+      // DO NOT clear the overlay here. overlay.hide() is called by the useEffect
+      // that watches linkingZalo — it fires AFTER this screen re-renders with the
+      // new auth state, guaranteeing the surface reconstruction is complete.
       if (result.type !== 'success') {
         // Zalo may have auto-consented and linked successfully even if the result
         // type is not 'success' (race between redirect and CCT close detection).
@@ -531,6 +526,7 @@ export default function AccountSettingsScreen() {
   // ── Link Google account ───────────────────────────────────────────────────
   const handleLinkGoogle = async () => {
     setLinkingGoogle(true)
+    overlay.show()
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined)
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     if (!supabaseUrl) {
@@ -551,7 +547,8 @@ export default function AccountSettingsScreen() {
         redirectUri,
       )
       WebBrowser.dismissBrowser()
-      if (Platform.OS === 'android') await waitForActiveAndFrame()
+      // DO NOT clear the overlay here — same pattern as handleLinkZalo.
+      // overlay.hide() fires from the linkingGoogle useEffect after re-render.
       if (wbResult.type !== 'success') { void loadMeta(); return }
 
       // Parse fragment for access_token
