@@ -4,7 +4,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   Image,
+  InteractionManager,
   LayoutAnimation,
   Modal,
   Platform,
@@ -49,6 +51,33 @@ import { API_BASE_URL } from '@/env'
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true)
+}
+
+/**
+ * Waits until the React Native app is in the 'active' foreground state,
+ * then lets InteractionManager + one animation frame pass.
+ * This prevents the black-screen flash that occurs on OPPO/ColorOS when
+ * a Chrome Custom Tab (CCT) closes and the Android surface briefly goes
+ * invalid (handleResized abandoned) during its lifecycle transition.
+ */
+function waitForActiveAndFrame(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const settle = () => {
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    }
+    if (AppState.currentState === 'active') {
+      settle()
+    } else {
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          sub.remove()
+          settle()
+        }
+      })
+    }
+  })
 }
 
 // Convert E.164 (+84xxxxxxxxx) back to local format (0xxxxxxxxx) for display/input.
@@ -440,15 +469,17 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
-      // Yield so the white overlay renders before CCT opens
-      await new Promise<void>(r => setTimeout(r, 50))
+      // Yield one JS frame so the loading overlay renders before the CCT opens
+      await new Promise<void>(r => requestAnimationFrame(r))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
       )
-      // Explicitly dismiss the browser tab to prevent the black-screen flash
-      // that occurs when Zalo auto-consents and redirects before the CCT is visually closed.
       WebBrowser.dismissBrowser()
+      // On Android (especially OPPO/ColorOS), the surface goes through a brief
+      // invalid state (handleResized abandoned) when the CCT closes. Wait until
+      // the app is active and one frame has been committed before touching any state.
+      if (Platform.OS === 'android') await waitForActiveAndFrame()
       if (result.type !== 'success') {
         // Zalo may have auto-consented and linked successfully even if the result
         // type is not 'success' (race between redirect and CCT close detection).
@@ -514,12 +545,13 @@ export default function AccountSettingsScreen() {
         redirect_to: redirectUri,
         scopes: 'email profile',
       })
-      await new Promise<void>(r => setTimeout(r, 50))
+      await new Promise<void>(r => requestAnimationFrame(r))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
         redirectUri,
       )
       WebBrowser.dismissBrowser()
+      if (Platform.OS === 'android') await waitForActiveAndFrame()
       if (wbResult.type !== 'success') { void loadMeta(); return }
 
       // Parse fragment for access_token
@@ -601,7 +633,7 @@ export default function AccountSettingsScreen() {
               placeholderTextColor="#aaa"
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
+            <TouchableOpacity style={[styles.inlineBtn, (nameValue.trim() === originalName.trim()) && styles.inlineBtnDisabled]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
               {nameSaving
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
@@ -1313,9 +1345,10 @@ const styles = StyleSheet.create({
   loadingOverlay: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', gap: 16 },
   loadingOverlayAbsolute: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: '#fff',
     justifyContent: 'center', alignItems: 'center', gap: 16,
     zIndex: 999,
+    elevation: 10,
   },
   loadingOverlayText: { fontSize: 15, color: '#888', fontWeight: '500' },
 

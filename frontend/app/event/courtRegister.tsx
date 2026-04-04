@@ -1116,7 +1116,7 @@ export default function CourtRegisterPage() {
       <TextInput
         value={name}
         onChangeText={setName}
-        placeholder="e.g. Some Random Court..."
+        placeholder={t('COURT_REGISTER_PLACEHOLDER_NAME')}
         placeholderTextColor="#94a3b8"
         style={styles.input}
       />

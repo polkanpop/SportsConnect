@@ -831,6 +831,7 @@ export const en = {
   COURT_REGISTER_WARNINGS_TITLE: 'Warnings',
   COURT_REGISTER_PLACEHOLDER_COURT_NAME: 'Court 1',
   COURT_REGISTER_PLACEHOLDER_ADDRESS: 'Street, City, Country',
+  COURT_REGISTER_PLACEHOLDER_NAME: 'e.g. Sports Court 1...',
   COURT_PANEL_PLACEHOLDER_ADDRESS: 'Court address',
 
   // Event List
@@ -1768,6 +1769,7 @@ export const vi: Record<TranslationKey, string> = {
   COURT_REGISTER_WARNINGS_TITLE: 'Cảnh báo',
   COURT_REGISTER_PLACEHOLDER_COURT_NAME: 'Sân 1',
   COURT_REGISTER_PLACEHOLDER_ADDRESS: 'Số nhà, Thành phố, Quốc gia',
+  COURT_REGISTER_PLACEHOLDER_NAME: 'vd. Sân thể thao 1...',
   COURT_PANEL_PLACEHOLDER_ADDRESS: 'Địa chỉ sân',
 
   // Event List

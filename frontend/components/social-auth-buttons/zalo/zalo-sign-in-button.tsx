@@ -25,7 +25,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, Modal, View } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View, AppState, InteractionManager, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
@@ -36,6 +36,29 @@ const REDIRECT_INTERCEPT = 'sportconnect://zalo-code';
 const ZALO_REDIRECT_URI = `${WORKER_ORIGIN}/zalo-callback`;
 
 const OAUTH_PROMPT_PREFIX = '@oauth_cred_prompt_';
+
+// Waits until the app is foregrounded and one animation frame has committed.
+// Fixes the OPPO/Android black-screen flash that occurs when Chrome Custom Tab
+// (CCT) closes and the surface goes through a brief invalid state.
+function waitForActiveAndFrame(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const settle = () => {
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    }
+    if (AppState.currentState === 'active') {
+      settle()
+    } else {
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          sub.remove()
+          settle()
+        }
+      })
+    }
+  })
+}
 
 // ─── PKCE helpers ─────────────────────────────────────────────────────────────
 function toBase64Url(base64: string): string {
@@ -63,7 +86,14 @@ function generateState(): string {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function ZaloSignInButton() {
+interface ZaloSignInButtonProps {
+  /** Called right before the CCT opens so the parent can show a full-screen guard */
+  onAuthStart?: () => void
+  /** Called when auth finishes (success or failure) so the parent can hide the guard */
+  onAuthDone?: () => void
+}
+
+export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignInButtonProps = {}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const isProcessing = useRef(false);
@@ -84,6 +114,7 @@ export default function ZaloSignInButton() {
     if (loading || isProcessing.current) return;
     isProcessing.current = true;
     setLoading(true);
+    onAuthStart?.();
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
@@ -103,11 +134,16 @@ export default function ZaloSignInButton() {
       const oauthUrl = `${ZALO_AUTH_ENDPOINT}?${params.toString()}`;
 
       // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
-      // Yield one JS frame so the white loading overlay renders before the CCT opens
-      await new Promise<void>(r => setTimeout(r, 50));
+      // Use requestAnimationFrame so the parent's loading guard paints BEFORE CCT opens
+      await new Promise<void>(r => requestAnimationFrame(r));
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
       // Explicitly dismiss so the CCT cannot fire more redirect events
       WebBrowser.dismissBrowser();
+      // Wait for the Android surface to fully settle after CCT closes.
+      // On OPPO/ColorOS, the surface goes through a brief invalid state
+      // (handleResized abandoned + landscape flip) during the CCT→app transition.
+      // Clearing loading state before the surface settles causes a black frame.
+      if (Platform.OS === 'android') await waitForActiveAndFrame();
       if (result.type !== 'success') return;
 
       // 4. Extract code from deep link sportconnect://zalo-code?code=...
@@ -189,19 +225,13 @@ export default function ZaloSignInButton() {
       }
     } finally {
       setLoading(false);
+      onAuthDone?.();
       isProcessing.current = false;
     }
-  }, [loading, router]);
+  }, [loading, router, onAuthStart, onAuthDone]);
 
   return (
     <>
-      {loading && (
-        <Modal visible animationType="none" statusBarTranslucent>
-          <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#0068FF" />
-          </View>
-        </Modal>
-      )}
       <TouchableOpacity
         onPress={signIn}
         disabled={loading}
