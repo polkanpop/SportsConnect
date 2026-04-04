@@ -182,7 +182,7 @@ export default {
     const path = url.pathname.replace(/\/+$/, "") || "/"; // normalize trailing slashes
 
     // Shared response headers: tell Google Bot these are public, cacheable pages
-    const headers = {
+    const headers = { 
       "content-type": "text/html;charset=UTF-8",
       "cache-control": "public, max-age=3600",
       "x-robots-tag": "index, follow",
@@ -191,43 +191,20 @@ export default {
     if (path === "/zalo-callback") {
       // Bridge Zalo OAuth redirect (must be HTTPS) → app deep link.
       // Zalo redirects here with ?code=...&state=... after user authorises.
-      // We forward ALL query params to the custom-scheme deep link so the app
-      // can pick them up via expo-linking inside openAuthSessionAsync.
-      const params = url.searchParams.toString();
-      const deepLink = `sportconnect://auth/zalo-callback${params ? "?" + params : ""}`;
+      //
+      // IMPORTANT: We use HTTP 302 (server-side redirect), NOT a JS window.location redirect.
+      // Chrome Custom Tab blocks JS-triggered custom-scheme navigations that lack a user gesture
+      // (Chrome security policy since ~v84). A server-issued 302 is handled at the network level
+      // before any page content loads, bypassing that restriction entirely.
+      // expo-web-browser's Android polyfill catches the resulting onNewIntent Linking event.
+      const qs = url.searchParams.toString();
+      const deepLink = `sportconnect://zalo-code${qs ? "?" + qs : ""}`;
 
-      // On most Android/iOS devices, Chrome Custom Tabs intercepts the custom
-      // scheme and returns control to the app without rendering this page.
-      // However, if the tab is NOT intercepted (e.g. first launch, browser
-      // quirk), we render a fallback page with an immediate JS redirect AND a
-      // tap-to-open button so the user can complete sign-in manually.
-      const fallbackHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Returning to SportConnect…</title>
-  <style>
-    body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;color:#1a1a2e;text-align:center;padding:2rem}
-    h2{color:#FF6017;margin-bottom:.5rem}
-    p{color:#555;margin-bottom:1.5rem}
-    a.btn{display:inline-block;background:#FF6017;color:#fff;font-weight:700;padding:.75rem 1.75rem;border-radius:8px;text-decoration:none;font-size:1rem}
-    a.btn:hover{background:#e05010}
-  </style>
-  <script>window.location.replace(${JSON.stringify(deepLink)});</script>
-</head>
-<body>
-  <h2>Returning to SportConnect…</h2>
-  <p>If the app doesn't open automatically, tap the button below.</p>
-  <a class="btn" href="${deepLink.replace(/"/g, '&quot;')}">Open SportConnect</a>
-</body>
-</html>`;
-
-      return new Response(fallbackHtml, {
-        status: 200,
+      return new Response(null, {
+        status: 302,
         headers: {
-          "content-type": "text/html;charset=UTF-8",
-          "cache-control": "no-store",
+          "Location": deepLink,
+          "Cache-Control": "no-store",
         },
       });
     }

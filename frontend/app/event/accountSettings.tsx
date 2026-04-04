@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -14,6 +15,8 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
+import * as Crypto from 'expo-crypto'
+import * as WebBrowser from 'expo-web-browser'
 import { ICONS } from '@/constants/icons'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import {
@@ -33,8 +36,31 @@ import {
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-import { login as zaloLogin, getUserProfile as zaloGetProfile } from 'react-native-zalo-kit'
+import { API_BASE_URL } from '@/env'
+
+const ZALO_APP_ID = '959402498466634174';
+const ZALO_AUTH_ENDPOINT = 'https://oauth.zaloapp.com/v4/permission';
+const WORKER_ORIGIN = 'https://sportconnects.org';
+const REDIRECT_INTERCEPT = 'sportconnect://zalo-code';
+const ZALO_REDIRECT_URI = `${WORKER_ORIGIN}/zalo-callback`;
+
+function _toBase64Url(base64: string): string {
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function _generateCodeVerifier(): string {
+  const bytes = Crypto.getRandomBytes(48);
+  return _toBase64Url(btoa(String.fromCharCode(...bytes)));
+}
+async function _generateCodeChallenge(verifier: string): Promise<string> {
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256, verifier, { encoding: Crypto.CryptoEncoding.BASE64 }
+  );
+  return _toBase64Url(hash);
+}
+function _generateState(): string {
+  const bytes = Crypto.getRandomBytes(16);
+  return _toBase64Url(btoa(String.fromCharCode(...bytes))).slice(0, 20);
+}
 
 // ─── Password strength ────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -366,15 +392,49 @@ export default function AccountSettingsScreen() {
   // ── Link Zalo account ─────────────────────────────────────────────────────
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
+    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     try {
-      const authResult = await zaloLogin('AUTH_VIA_WEB')
-      const { accessToken } = authResult
-      const profile = await zaloGetProfile()
-      await linkZaloProvider({
-        access_token: accessToken,
-        zalo_id: String(profile?.id ?? ''),
-        zalo_name: String(profile?.name ?? ''),
+      // 1. PKCE
+      const codeVerifier = _generateCodeVerifier()
+      const codeChallenge = await _generateCodeChallenge(codeVerifier)
+      const state = _generateState()
+      const params = new URLSearchParams({
+        app_id: ZALO_APP_ID,
+        redirect_uri: ZALO_REDIRECT_URI,
+        code_challenge: codeChallenge,
+        state,
       })
+      // 2. Open Chrome Custom Tab
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
+        REDIRECT_INTERCEPT
+      )
+      if (result.type !== 'success') return
+      // 3. Extract code
+      const urlObj = new URL(result.url)
+      const code = urlObj.searchParams.get('code')
+      if (!code) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không nhận được mã xác thực.'); return }
+      // 4. Exchange code → access_token
+      const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, code_verifier: codeVerifier }),
+      })
+      const tokenJson = await tokenResp.json().catch(() => ({}))
+      const accessToken: string = tokenJson?.access_token ?? ''
+      if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || 'Không lấy được access token.'); return }
+      // 5. Fetch Zalo profile via CF worker
+      const profileResp = await fetch(`${WORKER_ORIGIN}/zalo-proxy/tokeninfo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: accessToken }),
+      })
+      const profileJson = await profileResp.json().catch(() => ({}))
+      const zaloId = String(profileJson?.id ?? '')
+      const zaloName = String(profileJson?.name ?? '')
+      if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không lấy được thông tin người dùng Zalo.'); return }
+      // 6. Link provider
+      await linkZaloProvider({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName })
       void loadMeta()
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? ''
