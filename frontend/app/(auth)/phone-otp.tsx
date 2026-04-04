@@ -387,7 +387,7 @@ export default function PhoneOtpScreen() {
                   placeholder={t('AUTH_OTP_PLACEHOLDER_CODE')}
                   placeholderTextColor={COLOR.dark300}
                   value={otp}
-                  onChangeText={(t) => { setOtp(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
+                  onChangeText={(val) => { setOtp(val.replace(/\D/g, '').slice(0, 6)); setError(null); }}
                   keyboardType="number-pad"
                   style={[styles.input, styles.otpInput]}
                   maxLength={6}

@@ -25,7 +25,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, Modal, View } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
 
@@ -186,18 +186,27 @@ export default function ZaloSignInButton() {
   }, [loading, router]);
 
   return (
-    <TouchableOpacity
-      onPress={signIn}
-      disabled={loading}
-      activeOpacity={0.7}
-      style={{ opacity: loading ? 0.6 : 1, marginHorizontal: 12 }}
-    >
-      {loading ? (
-        <ActivityIndicator size="small" color="#0068FF" />
-      ) : (
-        <Image source={ICONS.zaloIcon} style={styles.icon} contentFit="contain" />
+    <>
+      {loading && (
+        <Modal visible animationType="none" statusBarTranslucent>
+          <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0068FF" />
+          </View>
+        </Modal>
       )}
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={signIn}
+        disabled={loading}
+        activeOpacity={0.7}
+        style={{ opacity: loading ? 0.6 : 1, marginHorizontal: 12 }}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="#0068FF" />
+        ) : (
+          <Image source={ICONS.zaloIcon} style={styles.icon} contentFit="contain" />
+        )}
+      </TouchableOpacity>
+    </>
   );
 }
 
