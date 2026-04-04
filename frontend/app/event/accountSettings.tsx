@@ -45,7 +45,6 @@ import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
-import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -114,7 +113,6 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
 export default function AccountSettingsScreen() {
   const router = useRouter()
   const { t } = useTranslation()
-  const overlay = useZaloAuthOverlay()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
   const userInfo = userInfoQuery.data
 
@@ -189,28 +187,6 @@ export default function AccountSettingsScreen() {
 
   // ── Google account linking ─────────────────────────────────────────────────
   const [linkingGoogle, setLinkingGoogle] = useState(false)
-
-  // ── Hide root-level overlay after CCT auth completes and screen re-renders ──
-  // The global ZaloAuthOverlayProvider overlay is shown before the CCT opens.
-  // We only call hide() here, inside useEffect, so it fires AFTER React Native
-  // has committed this component's new render to the native layer — meaning the
-  // Android surface is guaranteed to be fully reconstructed at this point.
-  const wasLinkingZaloRef = useRef(false)
-  const wasLinkingGoogleRef = useRef(false)
-  useEffect(() => {
-    if (linkingZalo) { wasLinkingZaloRef.current = true; return }
-    if (wasLinkingZaloRef.current) {
-      wasLinkingZaloRef.current = false
-      overlay.hide()
-    }
-  }, [linkingZalo, overlay])
-  useEffect(() => {
-    if (linkingGoogle) { wasLinkingGoogleRef.current = true; return }
-    if (wasLinkingGoogleRef.current) {
-      wasLinkingGoogleRef.current = false
-      overlay.hide()
-    }
-  }, [linkingGoogle, overlay])
 
   // ── Which linked-row is expanded (showing unlink X) ───────────────────────
   const [linkExpandedProvider, setLinkExpandedProvider] = useState<string | null>(null)
@@ -451,7 +427,6 @@ export default function AccountSettingsScreen() {
   // ── Link Zalo account ─────────────────────────────────────────────────────
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
-    overlay.show()
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     try {
       // 1. PKCE
@@ -466,7 +441,7 @@ export default function AccountSettingsScreen() {
       })
       // 2. Open Chrome Custom Tab
       // Yield one JS frame so the overlay paints before the CCT opens
-      await new Promise<void>(r => requestAnimationFrame(r))
+      await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
@@ -526,7 +501,6 @@ export default function AccountSettingsScreen() {
   // ── Link Google account ───────────────────────────────────────────────────
   const handleLinkGoogle = async () => {
     setLinkingGoogle(true)
-    overlay.show()
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined)
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     if (!supabaseUrl) {
@@ -541,7 +515,7 @@ export default function AccountSettingsScreen() {
         redirect_to: redirectUri,
         scopes: 'email profile',
       })
-      await new Promise<void>(r => requestAnimationFrame(r))
+      await new Promise<void>(r => requestAnimationFrame(() => r()))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
         redirectUri,
@@ -662,23 +636,22 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={[styles.inputRow, !!originalEmail.trim() && styles.inputRowLocked]}>
+          <View style={styles.inputRow}>
             <TextInput
-              style={[styles.input, !!originalEmail.trim() && styles.inputLocked]}
+              style={styles.input}
               value={emailEdit}
               onChangeText={setEmailEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
               placeholderTextColor="#aaa"
               keyboardType="email-address"
               autoCapitalize="none"
-              editable={!originalEmail.trim()}
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, !!originalEmail.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, emailEdit.trim() === originalEmail.trim() && styles.inlineBtnDisabled]}
               onPress={handleSaveEmail}
-              disabled={!!originalEmail.trim() || emailSaving || emailEdit.trim() === originalEmail.trim()}
+              disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}
             >
-              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: !!originalEmail.trim() ? '#ccc' : '#fff' }} />}
+              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
           {emailSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
@@ -712,22 +685,21 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={[styles.inputRow, !!originalPhone.trim() && styles.inputRowLocked]}>
+          <View style={styles.inputRow}>
             <TextInput
-              style={[styles.input, !!originalPhone.trim() && styles.inputLocked]}
+              style={styles.input}
               value={phoneEdit}
               onChangeText={setPhoneEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
               placeholderTextColor="#aaa"
               keyboardType="phone-pad"
-              editable={!originalPhone.trim()}
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, !!originalPhone.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, phoneEdit.trim() === originalPhone.trim() && styles.inlineBtnDisabled]}
               onPress={handleSavePhone}
-              disabled={!!originalPhone.trim() || phoneSaving || phoneEdit.trim() === originalPhone.trim()}
+              disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}
             >
-              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: !!originalPhone.trim() ? '#ccc' : '#fff' }} />}
+              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
             </TouchableOpacity>
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
@@ -939,6 +911,7 @@ export default function AccountSettingsScreen() {
               <LinkedAccountRow
                 icon={ICONS.googleIcon}
                 label="Google"
+                iconSize={36}
                 linked={providers.includes('Google')}
                 onPress={!providers.includes('Google')
                   ? () => setLinkConfirm({ provider: 'Google', onConfirm: handleLinkGoogle })
@@ -1118,7 +1091,7 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking, unlinkExpanded }: {
+function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking, unlinkExpanded, iconSize }: {
   icon: any
   label: string
   linked: boolean
@@ -1127,11 +1100,12 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
   onUnlinkPress?: () => void   // tap ✕ → open unlink confirmation
   unlinking?: boolean
   unlinkExpanded?: boolean     // whether the X button is currently visible
+  iconSize?: number            // override icon size (default 24)
 }) {
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
-        <Image source={icon} style={styles.linkedIcon} resizeMode="contain" />
+        <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
         {linked && (
           <View style={styles.linkedCheckBadge}>
             <Text style={styles.linkedCheckText}>✓</Text>

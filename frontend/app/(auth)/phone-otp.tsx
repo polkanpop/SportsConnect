@@ -362,9 +362,9 @@ export default function PhoneOtpScreen() {
                   value={phone}
                   onChangeText={(text) => { setPhone(text); setError(null); AsyncStorage.setItem(OTP_DRAFT_KEY, text).catch(() => {}); }}
                   keyboardType="phone-pad"
-                  style={styles.input}
+                  style={[styles.input, params.mode === 'add_phone' && styles.inputLocked]}
                   maxLength={10}
-                  editable={!sending}
+                  editable={params.mode !== 'add_phone' && !sending}
                 />
                 <TouchableOpacity
                   onPress={handleSendOtp}
@@ -418,10 +418,14 @@ export default function PhoneOtpScreen() {
                       </Text>
                     </Pressable>
                   )}
-                  <Text style={styles.separatorDot}> · </Text>
-                  <Pressable onPress={() => { setOtpSent(false); setOtp(''); setError(null); }}>
-                    <Text style={styles.resendLink}>{t('AUTH_OTP_CHANGE_NUMBER')}</Text>
-                  </Pressable>
+                  {params.mode !== 'add_phone' && (
+                    <>
+                      <Text style={styles.separatorDot}> · </Text>
+                      <Pressable onPress={() => { setOtpSent(false); setOtp(''); setError(null); }}>
+                        <Text style={styles.resendLink}>{t('AUTH_OTP_CHANGE_NUMBER')}</Text>
+                      </Pressable>
+                    </>
+                  )}
                 </View>
               </>
             )}
@@ -487,6 +491,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#111',
     fontSize: 16,
+  },
+  inputLocked: {
+    backgroundColor: '#f5f5f7',
+    color: '#888',
   },
   otpInput: {
     fontSize: 24,
