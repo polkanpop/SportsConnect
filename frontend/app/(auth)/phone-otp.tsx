@@ -190,11 +190,17 @@ export default function PhoneOtpScreen() {
       }
     } catch (e: any) {
       console.error('[PhoneOtp] verify error', e);
-      // Firebase invalid-verification-code
       if (e?.code === 'auth/invalid-verification-code') {
         setError(t('AUTH_OTP_ERR_WRONG_CODE'));
-      } else if (e?.code === 'auth/code-expired') {
-        setError(t('AUTH_OTP_ERR_CODE_EXPIRED'));
+      } else if (e?.code === 'auth/code-expired' || e?.code === 'auth/session-expired') {
+        // Session expired — clear the stale cache and let user resend immediately
+        _pendingOtp = null;
+        confirmRef.current = null;
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setResendTimer(0);
+        setOtpSent(false);
+        setOtp('');
+        setError('Mã xác thực đã hết hạn. Vui lòng gửi lại mã mới.');
       } else {
         setError(e?.message ?? t('AUTH_OTP_ERR_FAILED'));
       }

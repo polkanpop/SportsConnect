@@ -1,17 +1,16 @@
 ﻿/**
  * Zalo sign-in using the official Zalo SDK V4 via react-native-zalo-kit.
  *
- * Uses AUTH_VIA_APP (LoginVia.APP) — pure IPC to the installed Zalo app.
- * The Zalo app opens, user sees the consent screen, then Zalo calls back via
- * onActivityResult / onNewIntent to return an OAuth code.
+ * Uses AUTH_VIA_WEB (LoginVia.WEB) — opens id.zalo.me in a WebView.
+ * The page shows "Đăng nhập qua ứng dụng Zalo" so users can still tap into
+ * the Zalo app from within the web screen, without us needing the hash key.
  *
- * NOTE: If the app signing hash registered in Zalo Developer Console does not
- * match the current build's certificate, Zalo rejects with "bản cập nhật không
- * tương thích". Fix: download the EAS/Play Store deployment cert, compute its
- * SHA-1 as Base64, and register that hash in Zalo Dev Console → App Info → Android.
+ * AUTH_VIA_APP requires the app signing hash to be registered in Zalo Dev Console.
+ * Hash key for current EAS build: WSjJhOo3HdMyjuHH7La+W3L4HVY=
+ * Register at: developers.zalo.me → Configure → Mobile app → Android → Hash Key
  *
  * Flow:
- *   1. login("AUTH_VIA_APP") opens Zalo app directly (no WebView)
+ *   1. login("AUTH_VIA_WEB") opens Zalo OAuth page in a WebView
  *   2. Native SDK exchanges OAuth code via PKCE → returns {accessToken, refreshToken}
  *   3. getUserProfile() fetches Zalo user info (id, name) using cached access token
  *   4. POST to our backend /api/auth/zalo → receives JWT
@@ -42,11 +41,11 @@ export default function ZaloSignInButton() {
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
-      // 1. Authenticate via Zalo app IPC (LoginVia.APP).
-      //    react-native-zalo-kit calls ZaloSDK.Instance.authenticateZaloWithAuthenType
-      //    with LoginVia.APP, which launches the Zalo app for consent.
-      //    The native SDK handles PKCE internally and exchanges the OAuth code for tokens.
-      const authResult = await login('AUTH_VIA_APP');
+      // 1. Authenticate via Zalo WebView (LoginVia.WEB).
+      //    Opens id.zalo.me in a webview — user can tap "Đăng nhập qua ứng dụng Zalo"
+      //    from within the page to avoid password entry.
+      //    AUTH_VIA_APP is blocked by Zalo's hash key check until properly registered.
+      const authResult = await login('AUTH_VIA_WEB');
       const { accessToken } = authResult;
 
       if (!accessToken) {
