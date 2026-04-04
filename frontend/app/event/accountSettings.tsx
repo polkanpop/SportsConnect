@@ -423,19 +423,20 @@ export default function AccountSettingsScreen() {
       const tokenJson = await tokenResp.json().catch(() => ({}))
       const accessToken: string = tokenJson?.access_token ?? ''
       if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || 'Không lấy được access token.'); return }
-      // 5. Get user_id directly from Zalo tokeninfo — no secret needed, not geo-blocked, works from device.
-      //    Falls back to user_id returned by backend (available after backend restart).
+      // 5. Get user_id + name via graph.zalo.me (Social API, works from Vietnam device IPs).
+      //    Returns { id, name } — note field is 'id' not 'user_id'.
       let zaloId = String(tokenJson?.user_id ?? '')
+      let zaloName = 'Zalo User'
       if (!zaloId) {
         try {
-          const tiResp = await fetch('https://oauth.zaloapp.com/v4/tokeninfo', {
+          const tiResp = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
             headers: { 'access_token': accessToken },
           })
           const tiJson = await tiResp.json().catch(() => ({}))
-          zaloId = String(tiJson?.user_id ?? '')
+          zaloId = String(tiJson?.id ?? '')
+          if (tiJson?.name) zaloName = String(tiJson.name)
         } catch { /* non-fatal */ }
       }
-      const zaloName = 'Zalo User'
       if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không lấy được thông tin người dùng Zalo.'); return }
       // 6. Link provider
       await linkZaloProvider({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName })

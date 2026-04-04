@@ -1025,22 +1025,10 @@ def zalo_exchange_token(payload: dict):
     _whitelist_zalo_token(access_token)
     logger.debug(f"/auth/zalo/token whitelisted token (first 12 chars): {access_token[:12]}...")
 
-    # Fetch user_id via oauth.zaloapp.com/v4/tokeninfo — simple GET with access_token header,
-    # no app_secret needed, accessible from any region (unlike graph.zalo.me).
-    user_id: str = ""
-    try:
-        info_resp = httpx.get(
-            "https://oauth.zaloapp.com/v4/tokeninfo",
-            headers={"access_token": access_token},
-            timeout=8.0,
-        )
-        info_json = info_resp.json()
-        user_id = str(info_json.get("user_id") or "")
-        logger.debug(f"/auth/zalo/token tokeninfo user_id={user_id or '(empty)'} raw={info_json}")
-    except Exception as e:
-        logger.warning(f"/auth/zalo/token tokeninfo error (non-fatal): {e}")
-
-    return {"access_token": access_token, "user_id": user_id}
+    # Note: oauth.zaloapp.com/v4/tokeninfo returns "empty api" error — it is not a user-info endpoint.
+    # user_id is resolved by the device calling graph.zalo.me/v2.0/me?fields=id,name (Vietnam IP).
+    # Backend cannot call graph.zalo.me (geo-blocked from SG server), so we return without user_id.
+    return {"access_token": access_token, "user_id": ""}
 
 
 @router.post('/zalo')

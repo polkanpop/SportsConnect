@@ -213,10 +213,10 @@ export default {
       return new Response(TERMS_HTML, { headers });
     }
 
-    // Zalo token-info proxy — fetches user_id from Zalo's OAuth endpoint.
-    // oauth.zaloapp.com/v4/tokeninfo is accessible from any region (unlike graph.zalo.me).
-    // Called by the app after the code exchange to get the Zalo user_id.
-    if (path === "/zalo-proxy/tokeninfo" && request.method === "POST") {
+    // Zalo Social API proxy — fetches id+name from graph.zalo.me (accessible from Vietnam IPs).
+    // oauth.zaloapp.com/v4/tokeninfo is NOT a user-info endpoint (returns "empty api" error).
+    // Called by the app after the code exchange to get the Zalo user id and display name.
+    if (path === "/zalo-proxy/me" && request.method === "POST") {
       try {
         const body = await request.json();
         const accessToken = body.access_token;
@@ -226,9 +226,9 @@ export default {
             headers: { "Content-Type": "application/json" },
           });
         }
-        // Simple tokeninfo call — just access_token header, returns {user_id, app_id, exp}
+        // Social API — returns { id, name } not { user_id }
         const zaloResp = await fetch(
-          "https://oauth.zaloapp.com/v4/tokeninfo",
+          "https://graph.zalo.me/v2.0/me?fields=id,name",
           { headers: { "access_token": accessToken } }
         );
         const data = await zaloResp.json();

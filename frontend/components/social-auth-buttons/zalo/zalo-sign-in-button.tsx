@@ -113,20 +113,20 @@ export default function ZaloSignInButton() {
         return;
       }
 
-      // 6. Get Zalo user_id — call oauth.zaloapp.com/v4/tokeninfo directly from device.
-      //    Simple GET with access_token header, no secret needed, works from any region.
-      //    Falls back to user_id from backend response (populated after backend restart).
+      // 6. Get Zalo user_id + name via graph.zalo.me (Social API, works from Vietnam device IPs).
+      //    Returns { id, name } — note field is 'id' not 'user_id'.
       let zaloId = String(tokenJson?.user_id ?? '');
+      let zaloName = 'Zalo User';
       if (!zaloId) {
         try {
-          const tiResp = await fetch('https://oauth.zaloapp.com/v4/tokeninfo', {
+          const tiResp = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name', {
             headers: { 'access_token': accessToken },
           });
           const tiJson = await tiResp.json().catch(() => ({}));
-          zaloId = String(tiJson?.user_id ?? '');
+          zaloId = String(tiJson?.id ?? '');
+          if (tiJson?.name) zaloName = String(tiJson.name);
         } catch { /* non-fatal */ }
       }
-      const zaloName = 'Zalo User';
       if (!zaloId) {
         Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
         return;
