@@ -8,6 +8,7 @@ import json
 import base64
 import secrets
 import httpx
+import jwt as _pyjwt          # PyJWT — used for Firebase token verification
 from email.message import EmailMessage
 import smtplib
 from datetime import datetime, timedelta, timezone
@@ -70,7 +71,63 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Bcrypt password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ─── Firebase Admin SDK ───────────────────────────────────────────────────────
+# ─── Firebase Token Verification (PyJWT direct, bypasses firebase-admin cert cache) ───
+# firebase-admin's google-auth CacheControl layer can return an empty cached cert
+# response, causing json.JSONDecodeError. We fetch Firebase public certs ourselves
+# and verify with PyJWT (already installed as PyJWT==...) to avoid this.
+
+_FIREBASE_PROJECT_ID = "sportconnect-c34b9"
+_firebase_certs_cache: dict = {}   # {'certs': {kid: pem}, 'expires_at': float}
+_firebase_certs_lock = threading.Lock()
+
+
+def _verify_firebase_id_token(id_token: str) -> dict:
+    """Verify a Firebase ID token with PyJWT + fresh cert fetch.
+
+    Returns decoded payload dict (contains phone_number, sub, etc.).
+    Raises ValueError with a human-readable message on failure.
+    """
+    now = time.time()
+    with _firebase_certs_lock:
+        cache = _firebase_certs_cache
+        if not cache.get('certs') or cache.get('expires_at', 0) < now:
+            try:
+                resp = httpx.get(
+                    "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com",
+                    timeout=5.0,
+                )
+                resp.raise_for_status()
+                certs = resp.json()
+                _firebase_certs_cache.update({'certs': certs, 'expires_at': now + 600})
+            except Exception as e:
+                raise ValueError(f"Failed to fetch Firebase public certs: {e}")
+        certs = _firebase_certs_cache['certs']
+
+    try:
+        header = _pyjwt.get_unverified_header(id_token)
+    except Exception as e:
+        raise ValueError(f"Malformed Firebase ID token header: {e}")
+
+    kid = header.get('kid')
+    if not kid or kid not in certs:
+        raise ValueError(f"Firebase token key ID '{kid}' not recognised (known: {list(certs.keys())[:3]})")
+
+    try:
+        decoded = _pyjwt.decode(
+            id_token,
+            certs[kid],
+            algorithms=['RS256'],
+            audience=_FIREBASE_PROJECT_ID,
+            issuer=f"https://securetoken.google.com/{_FIREBASE_PROJECT_ID}",
+        )
+        return decoded
+    except _pyjwt.exceptions.ExpiredSignatureError:
+        raise ValueError("Firebase ID token has expired")
+    except _pyjwt.exceptions.InvalidTokenError as e:
+        raise ValueError(f"Firebase token invalid: {e}")
+
+
+# ─── Firebase Admin SDK (used for custom tokens only) ─────────────────────────
 
 _firebase_app = None
 
@@ -1521,11 +1578,10 @@ def verify_phone_for_account(payload: dict, authorization: Optional[str] = Heade
     if not firebase_id_token:
         raise HTTPException(status_code=400, detail="Missing firebase_id_token")
 
-    # Verify Firebase token
+    # Verify Firebase token using PyJWT (bypasses firebase-admin cert-cache bug)
     try:
-        firebase_app = _get_firebase_app()
-        decoded = fb_auth.verify_id_token(firebase_id_token, app=firebase_app, check_revoked=False)
-    except Exception as e:
+        decoded = _verify_firebase_id_token(firebase_id_token)
+    except ValueError as e:
         logger.warning(f"/verify-phone Firebase verify failed userid={userid} err={e}")
         raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)[:120]}")
 
@@ -1582,11 +1638,10 @@ def phone_login(payload: dict):
     if not firebase_id_token:
         raise HTTPException(status_code=400, detail="Missing firebase_id_token")
 
-    # ── Verify Firebase ID token ──────────────────────────────────────────────
+    # ── Verify Firebase ID token (PyJWT, bypasses firebase-admin cert-cache bug) ────
     try:
-        firebase_app = _get_firebase_app()
-        decoded = fb_auth.verify_id_token(firebase_id_token, app=firebase_app, check_revoked=False)
-    except Exception as e:
+        decoded = _verify_firebase_id_token(firebase_id_token)
+    except ValueError as e:
         logger.warning(f"/phone-login Firebase verify failed err={e}")
         raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)[:120]}")
 

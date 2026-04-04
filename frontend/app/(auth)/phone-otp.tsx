@@ -166,14 +166,13 @@ export default function PhoneOtpScreen() {
               break;
 
             case auth.PhoneAuthState.AUTO_VERIFIED:
-              // Android SMS Retriever auto-read the code — Firebase already signed the user in
-              // internally. Do NOT call signInWithCredential again (credential is consumed).
-              // Instead useCurrentUser=true path reads auth().currentUser directly.
+              // Firebase has signed in the phone user and provides it on the snapshot.
+              // Pass it directly to avoid the race where auth().currentUser is not yet populated.
               verificationIdRef.current = phoneAuthSnapshot.verificationId;
               setSending(false);
               setOtpSent(true);
               setAutoVerified(true);
-              handleVerifyWithCredential(null, true);
+              handleVerifyWithCredential(null, true, phoneAuthSnapshot.user ?? undefined);
               break;
 
             case auth.PhoneAuthState.ERROR:
@@ -211,10 +210,12 @@ export default function PhoneOtpScreen() {
 
   // Shared verification logic — used by both auto-verified and manual entry paths.
   // useCurrentUser=true: Firebase already signed in via AUTO_VERIFIED — read auth().currentUser.
+  // injectedUser: the User object from phoneAuthSnapshot.user (most direct, no race condition).
   // useCurrentUser=false (default): manual entry — call signInWithCredential.
   const handleVerifyWithCredential = async (
     credential: FirebaseAuthTypes.AuthCredential | null,
-    useCurrentUser = false
+    useCurrentUser = false,
+    injectedUser?: FirebaseAuthTypes.User
   ) => {
     setError(null);
     setVerifying(true);
@@ -222,17 +223,22 @@ export default function PhoneOtpScreen() {
       let firebaseUser: FirebaseAuthTypes.User | null;
 
       if (useCurrentUser) {
-        // AUTO_VERIFIED: Firebase signs the user in internally before the callback fires,
-        // but there is a race condition — currentUser may be null for a few hundred ms.
-        // Poll up to 10 × 500ms (5s total) before giving up.
-        let attempts = 0;
-        while (attempts < 10) {
-          firebaseUser = auth().currentUser;
-          if (firebaseUser) break;
-          await new Promise<void>((resolve) => setTimeout(resolve, 500));
-          attempts++;
+        // Prefer the user object from phoneAuthSnapshot (provided at AUTO_VERIFIED time).
+        // Fall back to polling auth().currentUser if snapshot didn't provide one.
+        if (injectedUser) {
+          firebaseUser = injectedUser;
+          console.log(`[PhoneOtp] AUTO_VERIFIED using snapshot.user uid=${firebaseUser.uid}`);
+        } else {
+          let attempts = 0;
+          firebaseUser = null;
+          while (attempts < 10) {
+            firebaseUser = auth().currentUser;
+            if (firebaseUser) break;
+            await new Promise<void>((resolve) => setTimeout(resolve, 500));
+            attempts++;
+          }
+          console.log(`[PhoneOtp] AUTO_VERIFIED poll done: attempts=${attempts}, user=${firebaseUser?.uid ?? 'null'}`);
         }
-        console.log(`[PhoneOtp] AUTO_VERIFIED poll done: attempts=${attempts}, user=${firebaseUser?.uid ?? 'null'}`);
       } else {
         const result = await auth().signInWithCredential(credential!);
         firebaseUser = result?.user ?? null;
@@ -240,7 +246,7 @@ export default function PhoneOtpScreen() {
 
       if (!firebaseUser) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
 
-      const firebaseIdToken = await firebaseUser.getIdToken();
+      const firebaseIdToken = await firebaseUser.getIdToken(true);
       if (!firebaseIdToken) throw new Error('Failed to get Firebase ID token');
 
       if (params.mode === 'add_phone') {
