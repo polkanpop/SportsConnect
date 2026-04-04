@@ -12,6 +12,7 @@ import {
 } from '@/lib/backendApi'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 
 type ReviewItem = {
   key: string
@@ -89,6 +90,7 @@ function isReviewableByStatusAndTime(opts: { bookingStatus?: unknown; sessionSta
 
 export default function ReviewsPanel() {
   const router = useRouter()
+  const { t } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
 
   const dashboardRaw = dashboard.data
@@ -188,7 +190,7 @@ export default function ReviewsPanel() {
         items.push({
           key: `court_${cb.courtbookingid}`,
           title: venueName ?? 'Court',
-          subtitle: 'Court',
+          subtitle: t('REVIEW_PANEL_SUBTITLE_COURT'),
           venueName: venueName ?? undefined,
           targettype: 'court',
           targetid: courtid ?? Number(cb.courtbookingid),
@@ -212,7 +214,7 @@ export default function ReviewsPanel() {
         items.push({
           key: `event_${eb.eventbookingid}`,
           title,
-          subtitle: 'Event',
+          subtitle: t('REVIEW_PANEL_SUBTITLE_EVENT'),
           venueName,
           targettype: 'event',
           targetid: eb.eventid,
@@ -236,7 +238,7 @@ export default function ReviewsPanel() {
         items.push({
           key: `session_${tb.tsbookingid}`,
           title,
-          subtitle: 'Training Session',
+          subtitle: t('REVIEW_PANEL_SUBTITLE_TRAINING'),
           venueName,
           targettype: 'trainingsession',
           targetid: tb.sessionid,
@@ -245,7 +247,7 @@ export default function ReviewsPanel() {
     }
 
     return items
-  }, [courtBookingsRaw, eventBookingsRaw, tsBookingsRaw, courtAvailabilityRaw, courtInfoRaw, eventsCombined, sessionsCombined])
+  }, [courtBookingsRaw, eventBookingsRaw, tsBookingsRaw, courtAvailabilityRaw, courtInfoRaw, eventsCombined, sessionsCombined, t])
 
   if (isLoading) {
     return (
@@ -257,14 +259,14 @@ export default function ReviewsPanel() {
 
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={styles.heading}>My Reviews</Text>
+      <Text style={styles.heading}>{t('REVIEW_PANEL_HEADING')}</Text>
       <Text style={styles.subheading}>
-        Completed bookings you can review
+        {t('REVIEW_PANEL_SUBHEADING')}
       </Text>
 
       {reviewItems.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>No completed bookings to review yet.</Text>
+          <Text style={styles.emptyText}>{t('REVIEW_PANEL_EMPTY')}</Text>
         </View>
       ) : (
         reviewItems.map(item => (
@@ -288,7 +290,7 @@ export default function ReviewsPanel() {
                 })
               }
             >
-              <Text style={styles.reviewBtnText}>★ Review</Text>
+              <Text style={styles.reviewBtnText}>{t('REVIEW_PANEL_BTN_REVIEW')}</Text>
             </TouchableOpacity>
           </View>
         ))

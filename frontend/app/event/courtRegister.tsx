@@ -1109,7 +1109,10 @@ export default function CourtRegisterPage() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-      <Text style={styles.label}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
+      {/* ── Venue Info ────────────────────────────────── */}
+      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_SECTION_INFO')}</Text>
+      <View style={styles.card}>
+      <Text style={styles.fieldLabel}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
       <TextInput
         value={name}
         onChangeText={setName}
@@ -1117,10 +1120,8 @@ export default function CourtRegisterPage() {
         placeholderTextColor="#94a3b8"
         style={styles.input}
       />
-
-      <View style={styles.labelRow}>
-        <Text style={styles.label}>{t('COMMON_LABEL_ADDRESS')}</Text>
-      </View>
+      <View style={styles.cardDivider} />
+      <Text style={styles.fieldLabel}>{t('COMMON_LABEL_ADDRESS')}</Text>
       <View style={styles.inputWrap}>
         <TextInput
           value={address}
@@ -1190,16 +1191,21 @@ export default function CourtRegisterPage() {
         </View>
       )}
       {!!verifyError && <Text style={styles.verifyErrorText}>{verifyError}</Text>}
-      <View style={styles.verifyRow}>
-        <TouchableOpacity
-          onPress={handleVerifyLocation}
-          disabled={checking || submitting || (!selectedPlaceId && !verifiedCoord)}
-          style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, (checking || submitting || (!selectedPlaceId && !verifiedCoord)) && styles.btnDisabled]}
-        >
-          <Text style={styles.smallBtnText}>{checking ? t('COURT_REGISTER_VERIFYING') : t('COURT_PANEL_BTN_VERIFY')}</Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleVerifyLocation}
+        disabled={checking || submitting || (!selectedPlaceId && !verifiedCoord)}
+        style={[styles.verifyFullBtn, verifiedCoord ? styles.verifyBtnVerified : (checking || submitting || (!selectedPlaceId && !verifiedCoord)) ? styles.btnDisabled : null]}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.verifyFullBtnText}>
+          {checking ? t('COURT_REGISTER_VERIFYING') : verifiedCoord ? `✓ ${t('COURT_PANEL_BTN_VERIFY')}` : t('COURT_PANEL_BTN_VERIFY')}
+        </Text>
+      </TouchableOpacity>
       </View>
-      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_VENUE_TYPE')}</Text>
+
+      {/* ── Venue Type ─────────────────────────────── */}
+      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_VENUE_TYPE')}</Text>
+      <View style={styles.card}>
       <View style={styles.segmented}>
         {(['Indoor', 'Outdoor', 'Both'] as const).map(v => {
           const active = venue === v
@@ -1218,7 +1224,12 @@ export default function CourtRegisterPage() {
         })}
       </View>
 
-      <Text style={styles.label}>{t('COURT_REGISTER_LABEL_COURT_SECTION')}</Text>
+      </View>
+      </View>
+
+      {/* ── Courts ──────────────────────────────────── */}
+      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_COURT_SECTION')}</Text>
+      <View style={styles.card}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1280,13 +1291,15 @@ export default function CourtRegisterPage() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      </View>
 
+      {/* ── Services ───────────────────────────────── */}
       <TouchableOpacity
         onPress={() => setServicesExpanded(v => !v)}
         activeOpacity={0.85}
-        style={styles.servicesHeaderRow}
+        style={styles.sectionAccordion}
       >
-        <Text style={styles.servicesHeaderText}>{t('COURT_REGISTER_LABEL_SERVICES')}</Text>
+        <Text style={styles.sectionAccordionLabel}>{t('COURT_REGISTER_LABEL_SERVICES')}</Text>
         <Image
           source={ICONS.arrowdown}
           style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]}
@@ -1294,7 +1307,7 @@ export default function CourtRegisterPage() {
       </TouchableOpacity>
 
       {servicesExpanded && (
-        <View style={styles.servicesBody}>
+        <View style={styles.card}>
           {services.length === 0 ? (
             <Text style={styles.servicesHint}>{t('COURT_REGISTER_NO_SERVICES')}</Text>
           ) : null}
@@ -1476,10 +1489,9 @@ export default function CourtRegisterPage() {
         </View>
       )}
 
-      <View style={styles.rowBetween}>
-        <Text style={styles.label}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
-      </View>
-
+      {/* ── Images ─────────────────────────────────── */}
+      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
+      <View style={styles.card}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1517,6 +1529,7 @@ export default function CourtRegisterPage() {
           </View>
         )}
       </ScrollView>
+      </View>
 
       <Modal
         visible={playingCourtModalVisible}
@@ -1958,8 +1971,71 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: COLORS.neutral925, textAlign: 'center' },
   headerSpacer: { width: 42 },
 
-  page: { flex: 1, backgroundColor: '#fff' },
-  content: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 220 },
+  page: { flex: 1, backgroundColor: '#f5f5f7' },
+  content: { paddingHorizontal: 0, paddingTop: 8, paddingBottom: 220 },
+
+  /* ── Design system: cards & section headers ── */
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 20,
+    marginBottom: 6,
+    marginHorizontal: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 4,
+  },
+  cardDivider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 10 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+
+  /* ── Verify button ── */
+  verifyFullBtn: {
+    backgroundColor: COLORS.brandOrangeDeep,
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  verifyBtnVerified: { backgroundColor: COLORS.limeGreen },
+  verifyFullBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  /* ── Services accordion header ── */
+  sectionAccordion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 0,
+    paddingVertical: 4,
+  },
+  sectionAccordionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
   label: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 12, marginBottom: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inputWrap: { position: 'relative' },
@@ -2161,6 +2237,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginTop: 14,
+    marginHorizontal: 16,
   },
   checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.neutral550, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.neutral0 },
   checkboxBoxChecked: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
@@ -2170,6 +2247,7 @@ const styles = StyleSheet.create({
 
   warningBox: {
     marginTop: 14,
+    marginHorizontal: 16,
     borderWidth: 1,
     borderColor: '#fde68a',
     backgroundColor: '#fffbeb',

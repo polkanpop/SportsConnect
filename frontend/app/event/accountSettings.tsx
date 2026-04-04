@@ -200,6 +200,24 @@ export default function AccountSettingsScreen() {
   // ── Unlink confirmation modal ──────────────────────────────────────────────
   const [unlinkConfirm, setUnlinkConfirm] = useState<{ provider: string; onConfirm: () => void } | null>(null)
 
+  // ── Merge email modal (after Google link with a different email) ───────────
+  const [mergePrompt, setMergePrompt] = useState<{ provider: string; email: string } | null>(null)
+
+  const handleMergeEmail = async () => {
+    if (!mergePrompt) return
+    const target = mergePrompt.email
+    setMergePrompt(null)
+    try {
+      await registerPendingEmail(target)
+      setOriginalEmail(target)
+      setEmailEdit(target)
+      setVerifSent(true)
+      Alert.alert(t('ACCT_VERIF_SENT'), target)
+    } catch (e: any) {
+      Alert.alert(t('COMMON_LABEL_ERROR'), e?.message || t('ACCT_ERR_GENERIC'))
+    }
+  }
+
   const handleUnlinkProvider = async (provider: string) => {
     setUnlinkingProvider(provider)
     try {
@@ -521,8 +539,20 @@ export default function AccountSettingsScreen() {
         return
       }
 
+      // Extract Google email from Supabase JWT payload (safe — just base64 decode)
+      let googleEmail: string | null = null
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]))
+        googleEmail = typeof payload?.email === 'string' ? payload.email : null
+      } catch { /* non-fatal */ }
+
       await linkGoogleProvider(accessToken)
       void loadMeta()
+
+      // Offer to merge if the Google email differs from the user's current registered email
+      if (googleEmail && googleEmail.toLowerCase() !== originalEmail.trim().toLowerCase()) {
+        setMergePrompt({ provider: 'Google', email: googleEmail })
+      }
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? ''
       if (!msg.toLowerCase().includes('cancel')) {
@@ -603,18 +633,23 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, !!originalEmail.trim() && styles.inputRowLocked]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, !!originalEmail.trim() && styles.inputLocked]}
               value={emailEdit}
               onChangeText={setEmailEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
               placeholderTextColor="#aaa"
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={!originalEmail.trim()}
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSaveEmail} disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}>
-              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
+            <TouchableOpacity
+              style={[styles.inlineBtn, !!originalEmail.trim() && styles.inlineBtnDisabled]}
+              onPress={handleSaveEmail}
+              disabled={!!originalEmail.trim() || emailSaving || emailEdit.trim() === originalEmail.trim()}
+            >
+              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: !!originalEmail.trim() ? '#ccc' : '#fff' }} />}
             </TouchableOpacity>
           </View>
           {emailSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
@@ -648,17 +683,22 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, !!originalPhone.trim() && styles.inputRowLocked]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, !!originalPhone.trim() && styles.inputLocked]}
               value={phoneEdit}
               onChangeText={setPhoneEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
               placeholderTextColor="#aaa"
               keyboardType="phone-pad"
+              editable={!originalPhone.trim()}
             />
-            <TouchableOpacity style={styles.inlineBtn} onPress={handleSavePhone} disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}>
-              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
+            <TouchableOpacity
+              style={[styles.inlineBtn, !!originalPhone.trim() && styles.inlineBtnDisabled]}
+              onPress={handleSavePhone}
+              disabled={!!originalPhone.trim() || phoneSaving || phoneEdit.trim() === originalPhone.trim()}
+            >
+              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: !!originalPhone.trim() ? '#ccc' : '#fff' }} />}
             </TouchableOpacity>
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
@@ -768,7 +808,11 @@ export default function AccountSettingsScreen() {
               {pwError && <Text style={styles.errorText}>{pwError}</Text>}
               {pwSuccess && <Text style={styles.successText}>{t('ACCT_PW_SAVE_SUCCESS')}</Text>}
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSavePassword} disabled={pwSaving}>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!currentPw && !newPw && !confirmPw) && styles.saveBtnDisabled]}
+                onPress={handleSavePassword}
+                disabled={pwSaving || (!currentPw && !newPw && !confirmPw)}
+              >
                 {pwSaving
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Text style={styles.saveBtnText}>{t('ACCT_BTN_SAVE_PASSWORD')}</Text>}
@@ -915,23 +959,20 @@ export default function AccountSettingsScreen() {
       </ScrollView>
 
       {/* ── Zalo OAuth loading overlay ── */}
+      {/* Use absolute View instead of Modal to prevent Android black-screen after CCT closes */}
       {linkingZalo && (
-        <Modal visible animationType="none" statusBarTranslucent>
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#FF6017" />
-            <Text style={styles.loadingOverlayText}>Đang kết nối Zalo…</Text>
-          </View>
-        </Modal>
+        <View style={styles.loadingOverlayAbsolute} pointerEvents="box-only">
+          <ActivityIndicator size="large" color="#FF6017" />
+          <Text style={styles.loadingOverlayText}>Đang kết nối Zalo…</Text>
+        </View>
       )}
 
       {/* ── Google OAuth loading overlay ── */}
       {linkingGoogle && (
-        <Modal visible animationType="none" statusBarTranslucent>
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#4285F4" />
-            <Text style={styles.loadingOverlayText}>Đang kết nối Google…</Text>
-          </View>
-        </Modal>
+        <View style={styles.loadingOverlayAbsolute} pointerEvents="box-only">
+          <ActivityIndicator size="large" color="#4285F4" />
+          <Text style={styles.loadingOverlayText}>Đang kết nối Google…</Text>
+        </View>
       )}
 
       {/* ── Link Confirmation Modal ────────────────────────────────────── */}
@@ -1000,6 +1041,42 @@ export default function AccountSettingsScreen() {
                   onPress={() => { setUnlinkConfirm(null); unlinkConfirm.onConfirm(); }}
                 >
                   <Text style={styles.modalBtnConfirmText}>Xác nhận</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ── Merge Email Modal (after Google link) ─────────────────────── */}
+      {mergePrompt && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMergePrompt(null)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setMergePrompt(null)}>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setMergePrompt(null)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{t('ACCT_MERGE_TITLE')}</Text>
+              <Text style={styles.modalBody}>
+                {t('ACCT_MERGE_BODY').replace('{provider}', mergePrompt.provider).replace('{email}', mergePrompt.email)}
+              </Text>
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  onPress={() => setMergePrompt(null)}
+                >
+                  <Text style={styles.modalBtnCancelText}>{t('ACCT_MERGE_BTN_NO')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnConfirm]}
+                  onPress={handleMergeEmail}
+                >
+                  <Text style={styles.modalBtnConfirmText}>{t('ACCT_MERGE_BTN_YES')}</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>
@@ -1161,7 +1238,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
+  saveBtnDisabled: {
+    backgroundColor: '#e5e7eb',
+  },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  inputRowLocked: { backgroundColor: '#f5f5f7', borderColor: '#e5e7eb' },
+  inputLocked: { color: '#999' },
+  inlineBtnDisabled: { backgroundColor: '#e5e7eb' },
 
   mutedText: { fontSize: 14, color: '#888', fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
 
@@ -1227,6 +1311,12 @@ const styles = StyleSheet.create({
 
   modalBtnDanger: { backgroundColor: '#ef4444' },
   loadingOverlay: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', gap: 16 },
+  loadingOverlayAbsolute: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    justifyContent: 'center', alignItems: 'center', gap: 16,
+    zIndex: 999,
+  },
   loadingOverlayText: { fontSize: 15, color: '#888', fontWeight: '500' },
 
   successText: { fontSize: 13, color: '#15803d', marginTop: 6, fontWeight: '500' },

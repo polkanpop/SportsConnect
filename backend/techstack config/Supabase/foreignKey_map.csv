@@ -1,0 +1,43 @@
+from_table,from_column,to_table,to_column,constraint_name,update_rule,delete_rule
+block_list,blocked_by_userid,users,userid,block_list_blocked_by_userid_fkey,NO ACTION,NO ACTION
+block_list,blocked_userid,users,userid,block_list_blocked_userid_fkey,NO ACTION,NO ACTION
+court_schedule_rules,courtid,courts,courtid,court_schedule_rules_courtid_fkey,NO ACTION,CASCADE
+court_schedule_rules,playingcourtid,playingcourt,playingcourtid,court_schedule_rules_playingcourtid_fkey,NO ACTION,CASCADE
+courtavailability,courtid,courts,courtid,courtavailability_courtid_fkey,NO ACTION,NO ACTION
+courtavailability,playingcourtid,playingcourt,playingcourtid,courtavailability_playingcourtid_fk,NO ACTION,CASCADE
+courtbooking,availabilityid,courtavailability,availabilityid,courtbooking_availabilityid_fkey,NO ACTION,NO ACTION
+courtbooking,paymentid,payments,paymentid,courtbooking_paymentid_fkey,NO ACTION,NO ACTION
+courtbooking,playingcourtid,playingcourt,playingcourtid,courtbooking_playingcourtid_fkey,NO ACTION,NO ACTION
+courtbooking,userid,users,userid,courtbooking_userid_fkey,NO ACTION,NO ACTION
+courtinfo,courtid,courts,courtid,courtinfo_courtid_fkey,NO ACTION,CASCADE
+courts,ownerid,users,userid,courts_ownerid_fkey,NO ACTION,NO ACTION
+eventbooking,eventid,events,eventid,eventbooking_eventid_fkey,NO ACTION,NO ACTION
+eventbooking,paymentid,payments,paymentid,eventbooking_paymentid_fkey,NO ACTION,NO ACTION
+eventbooking,userid,users,userid,eventbooking_userid_fkey,NO ACTION,NO ACTION
+eventinfo,eventid,events,eventid,eventinfo_eventid_fkey,NO ACTION,CASCADE
+events,courtbookingid,courtbooking,courtbookingid,events_courtbookingid_fkey,NO ACTION,NO ACTION
+events,organizerid,users,userid,events_organizerid_fkey,NO ACTION,NO ACTION
+favouritecourts,courtid,courts,courtid,fk_court,NO ACTION,CASCADE
+favouritecourts,userid,users,userid,fk_user,NO ACTION,CASCADE
+notifications,userid,users,userid,notifications_userid_fkey,NO ACTION,NO ACTION
+playingcourt,courtid,courts,courtid,playingcourt_courtid_fkey,NO ACTION,CASCADE
+playingcourtinfo,playingcourtid,playingcourt,playingcourtid,playingcourtinfo_playingcourtid_fkey,NO ACTION,CASCADE
+review_reactions,reviewid,reviews,reviewid,review_reactions_reviewid_fkey,NO ACTION,CASCADE
+review_reactions,userid,users,userid,review_reactions_userid_fkey,NO ACTION,CASCADE
+reviews,userid,users,userid,reviews_userid_fkey,NO ACTION,NO ACTION
+servicebooking,courtbookingid,courtbooking,courtbookingid,servicebooking_courtbookingid_fkey,NO ACTION,NO ACTION
+servicebooking,paymentid,payments,paymentid,servicebooking_paymentid_fkey,NO ACTION,NO ACTION
+servicebooking,serviceid,services,serviceid,servicebooking_serviceid_fkey,NO ACTION,NO ACTION
+services,courtid,courts,courtid,services_courtid_fkey,NO ACTION,NO ACTION
+trainingsessioninfo,sessionid,trainingsessions,sessionid,trainingsessioninfo_sessionid_fkey,NO ACTION,CASCADE
+trainingsessions,coachid,users,userid,trainingsessions_coachid_fkey,NO ACTION,NO ACTION
+trainingsessions,courtbookingid,courtbooking,courtbookingid,trainingsessions_courtbookingid_fkey,NO ACTION,NO ACTION
+tsbookings,paymentid,payments,paymentid,tsbookings_paymentid_fkey,NO ACTION,NO ACTION
+tsbookings,sessionid,trainingsessions,sessionid,tsbookings_sessionid_fkey,NO ACTION,NO ACTION
+tsbookings,userid,users,userid,tsbookings_userid_fkey,NO ACTION,NO ACTION
+unverified_users,userid,users,userid,unverified_users_userid_fkey,NO ACTION,CASCADE
+user_auth_providers,userid,users,userid,user_auth_providers_userid_fkey,NO ACTION,NO ACTION
+user_devices,userid,users,userid,user_devices_userid_fkey,NO ACTION,CASCADE
+user_tokens,userid,users,userid,user_tokens_userid_fkey,NO ACTION,CASCADE
+userinfo,userid,users,userid,userinfo_userid_fkey,NO ACTION,CASCADE
+userlogin,userid,users,userid,userlogin_userid_fkey,NO ACTION,CASCADE

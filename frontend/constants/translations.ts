@@ -576,6 +576,30 @@ export const en = {
   MANAGEMENT_PANEL_COURT: 'Venue & Court',
   MANAGEMENT_PANEL_REVIEWS: 'My Reviews',
 
+  // Reviews Panel page
+  REVIEW_PANEL_HEADING: 'My Reviews',
+  REVIEW_PANEL_SUBHEADING: 'Completed bookings you can review',
+  REVIEW_PANEL_EMPTY: 'No completed bookings to review yet.',
+  REVIEW_PANEL_BTN_REVIEW: '\u2605 Review',
+  REVIEW_PANEL_SUBTITLE_COURT: 'Court',
+  REVIEW_PANEL_SUBTITLE_EVENT: 'Event',
+  REVIEW_PANEL_SUBTITLE_TRAINING: 'Training Session',
+
+  // Account merge prompt (after linking Google/Zalo)
+  ACCT_MERGE_TITLE: 'Merge Email?',
+  ACCT_MERGE_BODY: 'Your {provider} account is linked with email {email}. Would you like to associate this email with your SportConnect account and send a verification link?',
+  ACCT_MERGE_BTN_YES: 'Yes, Associate & Verify',
+  ACCT_MERGE_BTN_NO: 'No, Keep Current',
+
+  // Reviews Panel page
+  REVIEW_PANEL_HEADING: 'My Reviews',
+  REVIEW_PANEL_SUBHEADING: 'Completed bookings you can review',
+  REVIEW_PANEL_EMPTY: 'No completed bookings to review yet.',
+  REVIEW_PANEL_BTN_REVIEW: '\u2605 Review',
+  REVIEW_PANEL_SUBTITLE_COURT: 'Court',
+  REVIEW_PANEL_SUBTITLE_EVENT: 'Event',
+  REVIEW_PANEL_SUBTITLE_TRAINING: 'Training Session',
+
   // Week day abbreviations (Map schedule, court schedule, activity calendar)
   MAP_DAY_MON: 'Mon',
   MAP_DAY_TUE: 'Tue',
@@ -744,6 +768,7 @@ export const en = {
 
   // Court Register page
   COURT_REGISTER_TITLE: 'Venue Register',
+  COURT_REGISTER_SECTION_INFO: 'Venue Info',
   COURT_REGISTER_LABEL_COURT_SECTION: 'Court',
   COURT_REGISTER_BTN_ADD_COURT: 'Add Court',
   COURT_REGISTER_LABEL_SERVICES: 'Services (optional)',
@@ -1497,6 +1522,21 @@ export const vi: Record<TranslationKey, string> = {
   MANAGEMENT_PANEL_COURT: 'Địa điểm & Sân',
   MANAGEMENT_PANEL_REVIEWS: 'Đánh giá của tôi',
 
+  // Reviews Panel page
+  REVIEW_PANEL_HEADING: 'Đánh giá của tôi',
+  REVIEW_PANEL_SUBHEADING: 'Các lịch đã hoàn thành mà bạn có thể đánh giá',
+  REVIEW_PANEL_EMPTY: 'Chưa có lịch nào đã hoàn thành để đánh giá.',
+  REVIEW_PANEL_BTN_REVIEW: '\u2605 Đánh giá',
+  REVIEW_PANEL_SUBTITLE_COURT: 'Sân',
+  REVIEW_PANEL_SUBTITLE_EVENT: 'Sự kiện',
+  REVIEW_PANEL_SUBTITLE_TRAINING: 'Buổi tập luyện',
+
+  // Account merge prompt (after linking Google/Zalo)
+  ACCT_MERGE_TITLE: 'Gộp email?',
+  ACCT_MERGE_BODY: 'Tài khoản {provider} của bạn liên kết với email {email}. Bạn có muốn gắn email này vào tài khoản SportConnect không và gửi liên kết xác minh?',
+  ACCT_MERGE_BTN_YES: 'Có, Gắn & Xác minh',
+  ACCT_MERGE_BTN_NO: 'Không, Giữ email hiện tại',
+
   // Week day abbreviations
   MAP_DAY_MON: 'T2',
   MAP_DAY_TUE: 'T3',
@@ -1665,6 +1705,7 @@ export const vi: Record<TranslationKey, string> = {
 
   // Court Register page
   COURT_REGISTER_TITLE: 'Đăng ký sân',
+  COURT_REGISTER_SECTION_INFO: 'Thông tin địa điểm',
   COURT_REGISTER_LABEL_COURT_SECTION: 'Sân chơi',
   COURT_REGISTER_BTN_ADD_COURT: 'Thêm sân',
   COURT_REGISTER_LABEL_SERVICES: 'Dịch vụ (tuỳ chọn)',

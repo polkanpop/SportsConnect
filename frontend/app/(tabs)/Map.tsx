@@ -895,13 +895,17 @@
     }, [getCurrentNumericUserId, normalizeCourtInfoRows, setMarkerStatesIfChanged]);
 
     const venueOptions = useMemo(() => {
-      const set = new Set<string>();
+      // Always show the three canonical venue types (never empty dropdown).
+      // Once markers are loaded, restrict to only types that actually exist in the data.
+      const CANONICAL = ['Indoor', 'Outdoor', 'Both'] as const
+      if (!markers.length) return [...CANONICAL]
+      const present = new Set<string>()
       markers.forEach((m) => {
-        const v = m.venue;
-        if (Array.isArray(v)) v.forEach((x) => set.add(String(x)));
-        else if (v) set.add(String(v));
-      });
-      return Array.from(set);
+        const v = m.venue
+        if (Array.isArray(v)) v.forEach((x) => present.add(String(x)))
+        else if (v) present.add(String(v))
+      })
+      return CANONICAL.filter((o) => present.has(o))
     }, [markers]);
     // On focus:
     // - Only refetch court markers if the courtinfo cache was invalidated (e.g., after Court Register)
@@ -1215,14 +1219,18 @@
       // Filter by venue (multi)
       if (selectedVenue.length > 0) {
         results = results.filter((m) => {
-          const mVenue = Array.isArray(m.venue) ? m.venue.map((x) => String(x).toLowerCase()) : [String(m.venue).toLowerCase()];
-          if (selectedVenue.length === 2) {
-            // Only show markers that have both 'indoor' and 'outdoor'
-            return mVenue.includes('indoor') && mVenue.includes('outdoor');
-          } else {
-            // Show markers that match the selected venue
-            return selectedVenue.some((v) => mVenue.includes(v.toLowerCase()));
-          }
+          const mVenue = Array.isArray(m.venue)
+            ? m.venue.map((x) => String(x).toLowerCase())
+            : [String(m.venue).toLowerCase()]
+          const hasBoth = mVenue.includes('both')
+          // A "Both" court matches Indoor or Outdoor selections too
+          return selectedVenue.some((v) => {
+            const vl = v.toLowerCase()
+            if (vl === 'both') return hasBoth
+            if (vl === 'indoor') return mVenue.includes('indoor') || hasBoth
+            if (vl === 'outdoor') return mVenue.includes('outdoor') || hasBoth
+            return mVenue.includes(vl)
+          })
         });
       }
 
