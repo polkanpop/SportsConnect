@@ -33,7 +33,7 @@ import orjson
 
 from ..auth import get_current_user
 from ..cache_utils import make_key_builder
-from ..db import rest_select
+from ..db import rest_select, rest_delete
 
 router = APIRouter(prefix="/me", tags=["me"])
 logger = logging.getLogger("me")
@@ -424,6 +424,40 @@ async def get_my_providers(user_sub: str = Depends(get_current_user)):
     )
     providers = rows if isinstance(rows, list) else []
     return {"providers": providers}
+
+
+@router.delete("/providers/{provider}")
+async def unlink_provider(provider: str, user_sub: str = Depends(get_current_user)):
+    """Unlink an OAuth provider (Google, Zalo) from the authenticated user.
+    Local (username/password) cannot be unlinked. Requires at least one other
+    provider to remain so the user can still log in."""
+    try:
+        userid = int(user_sub)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="Numeric user-id required.")
+
+    if provider == "Local":
+        raise HTTPException(status_code=400, detail="Cannot unlink username/password credentials.")
+
+    allowed = {"Google", "Zalo"}
+    if provider not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'.")
+
+    # Fetch all current providers to enforce minimum-one check
+    rows = rest_select("user_auth_providers", "provider", filters={"userid": userid})
+    current = [r["provider"] for r in (rows or [])]
+
+    if provider not in current:
+        raise HTTPException(status_code=404, detail=f"{provider} is not linked to this account.")
+
+    if len(current) <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot remove the only linked provider. Add another login method first.",
+        )
+
+    rest_delete("user_auth_providers", {"userid": userid, "provider": provider})
+    return {"ok": True}
 
 
 @router.get("/account")
