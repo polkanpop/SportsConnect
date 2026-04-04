@@ -100,8 +100,7 @@ export default function ZaloSignInButton() {
         return;
       }
 
-      // 5. Exchange code for access_token + user_id
-      // Backend also calls oauth.zaloapp.com/v4/tokeninfo (geo-unrestricted) to return user_id.
+      // 5. Exchange code for access_token
       const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,10 +113,20 @@ export default function ZaloSignInButton() {
         return;
       }
 
-      // 6. Get zalo_id: prefer user_id returned by backend tokeninfo call.
-      //    Falls back to empty (caught below) — no graph.zalo.me call needed.
-      const zaloId = String(tokenJson?.user_id ?? '');
-      const zaloName = 'Zalo User'; // display name — user can update in settings later
+      // 6. Get Zalo user_id — call oauth.zaloapp.com/v4/tokeninfo directly from device.
+      //    Simple GET with access_token header, no secret needed, works from any region.
+      //    Falls back to user_id from backend response (populated after backend restart).
+      let zaloId = String(tokenJson?.user_id ?? '');
+      if (!zaloId) {
+        try {
+          const tiResp = await fetch('https://oauth.zaloapp.com/v4/tokeninfo', {
+            headers: { 'access_token': accessToken },
+          });
+          const tiJson = await tiResp.json().catch(() => ({}));
+          zaloId = String(tiJson?.user_id ?? '');
+        } catch { /* non-fatal */ }
+      }
+      const zaloName = 'Zalo User';
       if (!zaloId) {
         Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
         return;

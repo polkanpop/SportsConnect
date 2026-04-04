@@ -191,26 +191,15 @@ export default {
     if (path === "/zalo-callback") {
       // Bridge Zalo OAuth redirect (must be HTTPS) → app deep link.
       // Zalo redirects here with ?code=...&state=... after user authorises.
-      //
-      // We use an Android intent:// URL (302) instead of a raw sportconnect:// custom scheme.
-      // When Chrome Custom Tab follows a 302 to a raw custom scheme it briefly surfaces the full
-      // Chrome app window before handing off to the app intent. Using intent:// instead lets
-      // Chrome CCT dispatch the Android Intent *internally* without switching to a new Chrome
-      // window, producing a seamless transition back to the host app.
-      //
-      // The intent URI unpacks to: scheme=sportconnect host=zalo-code query=code=...&state=...
-      // which fires MainActivity.onNewIntent → Linking event → openAuthSessionAsync resolves.
+      // expo-web-browser.openAuthSessionAsync intercepts the sportconnect:// URL and
+      // resolves the promise — CCT closes, app returns to foreground.
       const qs = url.searchParams.toString();
-      const paramStr = qs ? "?" + qs : "";
-      const intentUrl =
-        `intent://zalo-code${paramStr}` +
-        `#Intent;scheme=sportconnect;package=com.group5.sportconnect;` +
-        `S.browser_fallback_url=about%3Ablank;end`;
+      const deepLink = `sportconnect://zalo-code${qs ? "?" + qs : ""}`;
 
       return new Response(null, {
         status: 302,
         headers: {
-          "Location": intentUrl,
+          "Location": deepLink,
           "Cache-Control": "no-store",
         },
       });
@@ -224,8 +213,9 @@ export default {
       return new Response(TERMS_HTML, { headers });
     }
 
-    // Zalo token verification proxy — backends outside Vietnam can't call graph.zalo.me directly.
-    // This worker runs from Cloudflare's Vietnam edge so Zalo accepts it.
+    // Zalo token-info proxy — fetches user_id from Zalo's OAuth endpoint.
+    // oauth.zaloapp.com/v4/tokeninfo is accessible from any region (unlike graph.zalo.me).
+    // Called by the app after the code exchange to get the Zalo user_id.
     if (path === "/zalo-proxy/tokeninfo" && request.method === "POST") {
       try {
         const body = await request.json();
@@ -236,8 +226,9 @@ export default {
             headers: { "Content-Type": "application/json" },
           });
         }
+        // Simple tokeninfo call — just access_token header, returns {user_id, app_id, exp}
         const zaloResp = await fetch(
-          "https://graph.zalo.me/v2.0/me?fields=id,name",
+          "https://oauth.zaloapp.com/v4/tokeninfo",
           { headers: { "access_token": accessToken } }
         );
         const data = await zaloResp.json();

@@ -414,7 +414,7 @@ export default function AccountSettingsScreen() {
       const urlObj = new URL(result.url)
       const code = urlObj.searchParams.get('code')
       if (!code) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không nhận được mã xác thực.'); return }
-      // 4. Exchange code → access_token + user_id (backend calls tokeninfo internally)
+      // 4. Exchange code → access_token
       const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,8 +423,18 @@ export default function AccountSettingsScreen() {
       const tokenJson = await tokenResp.json().catch(() => ({}))
       const accessToken: string = tokenJson?.access_token ?? ''
       if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || 'Không lấy được access token.'); return }
-      // 5. Get zalo_id from backend tokeninfo response (no graph.zalo.me call needed)
-      const zaloId = String(tokenJson?.user_id ?? '')
+      // 5. Get user_id directly from Zalo tokeninfo — no secret needed, not geo-blocked, works from device.
+      //    Falls back to user_id returned by backend (available after backend restart).
+      let zaloId = String(tokenJson?.user_id ?? '')
+      if (!zaloId) {
+        try {
+          const tiResp = await fetch('https://oauth.zaloapp.com/v4/tokeninfo', {
+            headers: { 'access_token': accessToken },
+          })
+          const tiJson = await tiResp.json().catch(() => ({}))
+          zaloId = String(tiJson?.user_id ?? '')
+        } catch { /* non-fatal */ }
+      }
       const zaloName = 'Zalo User'
       if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không lấy được thông tin người dùng Zalo.'); return }
       // 6. Link provider

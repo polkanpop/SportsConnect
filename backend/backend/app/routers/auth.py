@@ -2,7 +2,6 @@ import re
 import time
 import logging
 import hashlib
-import hmac
 import os
 import threading
 import json
@@ -1026,22 +1025,18 @@ def zalo_exchange_token(payload: dict):
     _whitelist_zalo_token(access_token)
     logger.debug(f"/auth/zalo/token whitelisted token (first 12 chars): {access_token[:12]}...")
 
-    # Fetch user_id via tokeninfo — geographically unrestricted, avoids graph.zalo.me geo-block
+    # Fetch user_id via oauth.zaloapp.com/v4/tokeninfo — simple GET with access_token header,
+    # no app_secret needed, accessible from any region (unlike graph.zalo.me).
     user_id: str = ""
     try:
-        secret_key = hmac.new(
-            zalo_app_secret.encode("utf-8"),
-            f"{access_token}|{zalo_app_id}".encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
         info_resp = httpx.get(
             "https://oauth.zaloapp.com/v4/tokeninfo",
-            params={"access_token": access_token, "app_id": zalo_app_id, "secret_key": secret_key},
+            headers={"access_token": access_token},
             timeout=8.0,
         )
         info_json = info_resp.json()
         user_id = str(info_json.get("user_id") or "")
-        logger.debug(f"/auth/zalo/token tokeninfo user_id={user_id or '(empty)'}")
+        logger.debug(f"/auth/zalo/token tokeninfo user_id={user_id or '(empty)'} raw={info_json}")
     except Exception as e:
         logger.warning(f"/auth/zalo/token tokeninfo error (non-fatal): {e}")
 
