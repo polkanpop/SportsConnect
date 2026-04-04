@@ -192,18 +192,25 @@ export default {
       // Bridge Zalo OAuth redirect (must be HTTPS) → app deep link.
       // Zalo redirects here with ?code=...&state=... after user authorises.
       //
-      // IMPORTANT: We use HTTP 302 (server-side redirect), NOT a JS window.location redirect.
-      // Chrome Custom Tab blocks JS-triggered custom-scheme navigations that lack a user gesture
-      // (Chrome security policy since ~v84). A server-issued 302 is handled at the network level
-      // before any page content loads, bypassing that restriction entirely.
-      // expo-web-browser's Android polyfill catches the resulting onNewIntent Linking event.
+      // We use an Android intent:// URL (302) instead of a raw sportconnect:// custom scheme.
+      // When Chrome Custom Tab follows a 302 to a raw custom scheme it briefly surfaces the full
+      // Chrome app window before handing off to the app intent. Using intent:// instead lets
+      // Chrome CCT dispatch the Android Intent *internally* without switching to a new Chrome
+      // window, producing a seamless transition back to the host app.
+      //
+      // The intent URI unpacks to: scheme=sportconnect host=zalo-code query=code=...&state=...
+      // which fires MainActivity.onNewIntent → Linking event → openAuthSessionAsync resolves.
       const qs = url.searchParams.toString();
-      const deepLink = `sportconnect://zalo-code${qs ? "?" + qs : ""}`;
+      const paramStr = qs ? "?" + qs : "";
+      const intentUrl =
+        `intent://zalo-code${paramStr}` +
+        `#Intent;scheme=sportconnect;package=com.group5.sportconnect;` +
+        `S.browser_fallback_url=about%3Ablank;end`;
 
       return new Response(null, {
         status: 302,
         headers: {
-          "Location": deepLink,
+          "Location": intentUrl,
           "Cache-Control": "no-store",
         },
       });

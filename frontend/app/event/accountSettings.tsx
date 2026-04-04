@@ -414,7 +414,7 @@ export default function AccountSettingsScreen() {
       const urlObj = new URL(result.url)
       const code = urlObj.searchParams.get('code')
       if (!code) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không nhận được mã xác thực.'); return }
-      // 4. Exchange code → access_token
+      // 4. Exchange code → access_token + user_id (backend calls tokeninfo internally)
       const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,15 +423,9 @@ export default function AccountSettingsScreen() {
       const tokenJson = await tokenResp.json().catch(() => ({}))
       const accessToken: string = tokenJson?.access_token ?? ''
       if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || 'Không lấy được access token.'); return }
-      // 5. Fetch Zalo profile via CF worker
-      const profileResp = await fetch(`${WORKER_ORIGIN}/zalo-proxy/tokeninfo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: accessToken }),
-      })
-      const profileJson = await profileResp.json().catch(() => ({}))
-      const zaloId = String(profileJson?.id ?? '')
-      const zaloName = String(profileJson?.name ?? '')
+      // 5. Get zalo_id from backend tokeninfo response (no graph.zalo.me call needed)
+      const zaloId = String(tokenJson?.user_id ?? '')
+      const zaloName = 'Zalo User'
       if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không lấy được thông tin người dùng Zalo.'); return }
       // 6. Link provider
       await linkZaloProvider({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName })
