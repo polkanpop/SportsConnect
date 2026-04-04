@@ -31,6 +31,14 @@ function normalizeVNPhone(raw: string): string {
   return '+84' + raw.slice(1);
 }
 
+// Convert E.164 (+84xxxxxxxxx) back to local format (0xxxxxxxxx) for the input field.
+// The backend stores phones in E.164; users see and type local format.
+function toLocalPhone(input: string): string {
+  const t = input.trim();
+  if (t.startsWith('+84') && t.length === 12) return '0' + t.slice(3);
+  return t;
+}
+
 // ─── Module-level OTP cache ──────────────────────────────────────────────────
 // Survives navigation (component unmount/remount) within the same JS process.
 // Prevents users having to re-send OTP if they accidentally navigate away.
@@ -64,17 +72,18 @@ export default function PhoneOtpScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string; mode?: string }>();
 
-  // Pre-fill from params (signup flow) OR let user type a fresh number
-  const [phone, setPhone]           = useState(params.phone ?? '');
+  // Pre-fill from params (signup flow) OR let user type a fresh number.
+  // toLocalPhone converts +84xxx → 0xxx so the regex validator works correctly.
+  const [phone, setPhone]           = useState(toLocalPhone(params.phone ?? ''));
 
   // Restore persisted draft phone number when navigating back without params
   useEffect(() => {
     if (params.phone) {
-      AsyncStorage.setItem(OTP_DRAFT_KEY, params.phone).catch(() => {});
+      const localPhone = toLocalPhone(params.phone);
+      AsyncStorage.setItem(OTP_DRAFT_KEY, localPhone).catch(() => {});
       // Restore cached confirmation so user can resume without re-sending OTP
-      const rawPhone = params.phone.trim();
-      if (VN_PHONE_RE.test(rawPhone)) {
-        const e164 = normalizeVNPhone(rawPhone);
+      if (VN_PHONE_RE.test(localPhone)) {
+        const e164 = normalizeVNPhone(localPhone);
         const cached = _getCachedOtp(e164);
         if (cached) {
           confirmRef.current = cached.confirmation;
@@ -86,7 +95,7 @@ export default function PhoneOtpScreen() {
       }
     } else {
       AsyncStorage.getItem(OTP_DRAFT_KEY)
-        .then(val => { if (val) setPhone(val); })
+        .then(val => { if (val) setPhone(toLocalPhone(val)); })
         .catch(() => {});
     }
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps

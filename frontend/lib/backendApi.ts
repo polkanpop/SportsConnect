@@ -1129,6 +1129,13 @@ export async function getMyProviders(): Promise<string[]> {
 	return data.providers.map((p) => p.provider)
 }
 
+export async function unlinkProvider(provider: string): Promise<void> {
+	await request(`/me/providers/${encodeURIComponent(provider)}`, {
+		method: 'DELETE',
+		debugLabel: 'unlinkProvider',
+	})
+}
+
 export type MyAccountInfo = { username: string | null; logintype: string | null; email_verified: boolean; phone_verified: boolean; unverified_email: string | null; unverified_phone: string | null }
 
 export async function getMyAccount(): Promise<MyAccountInfo | null> {

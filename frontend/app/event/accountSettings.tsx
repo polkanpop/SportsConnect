@@ -18,6 +18,7 @@ import {
   changePassword,
   getMyAccount,
   getMyProviders,
+  unlinkProvider,
   resendVerification,
   requestPasswordReset,
   updateUserInfo,
@@ -134,6 +135,34 @@ export default function AccountSettingsScreen() {
 
   // ── Zalo account linking ───────────────────────────────────────────────────
   const [linkingZalo, setLinkingZalo] = useState(false)
+
+  // ── Provider unlinking ────────────────────────────────────────────────────
+  const [unlinkingProvider, setUnlinkingProvider] = useState<string | null>(null)
+
+  const handleUnlinkProvider = (provider: string) => {
+    Alert.alert(
+      `Huỷ liên kết ${provider}`,
+      `Bạn có chắc muốn huỷ liên kết tài khoản ${provider}? Bạn sẽ không thể đăng nhập bằng ${provider} nữa.`,
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        {
+          text: 'Xác nhận',
+          style: 'destructive',
+          onPress: async () => {
+            setUnlinkingProvider(provider)
+            try {
+              await unlinkProvider(provider)
+              setProviders(prev => prev.filter(p => p !== provider))
+            } catch (e: any) {
+              Alert.alert('Lỗi', e?.message || 'Không thể huỷ liên kết. Vui lòng thử lại.')
+            } finally {
+              setUnlinkingProvider(null)
+            }
+          },
+        },
+      ]
+    )
+  }
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -683,6 +712,8 @@ export default function AccountSettingsScreen() {
                 icon={ICONS.googleIcon}
                 label="Google"
                 linked={providers.includes('Google')}
+                onUnlink={providers.includes('Google') && providers.length > 1 ? () => handleUnlinkProvider('Google') : undefined}
+                unlinking={unlinkingProvider === 'Google'}
               />
               <View style={styles.contactDivider} />
               <LinkedAccountRow
@@ -691,6 +722,8 @@ export default function AccountSettingsScreen() {
                 linked={providers.includes('Zalo')}
                 onLink={!providers.includes('Zalo') ? handleLinkZalo : undefined}
                 linking={linkingZalo}
+                onUnlink={providers.includes('Zalo') && providers.length > 1 ? () => handleUnlinkProvider('Zalo') : undefined}
+                unlinking={unlinkingProvider === 'Zalo'}
               />
               {providers.includes('Local') && (
                 <>
@@ -712,12 +745,14 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onLink, linking }: {
+function LinkedAccountRow({ icon, label, linked, onLink, linking, onUnlink, unlinking }: {
   icon: any
   label: string
   linked: boolean
   onLink?: () => void
   linking?: boolean
+  onUnlink?: () => void
+  unlinking?: boolean
 }) {
   return (
     <View style={styles.linkedRow}>
@@ -731,8 +766,21 @@ function LinkedAccountRow({ icon, label, linked, onLink, linking }: {
       </View>
       <Text style={styles.linkedLabel}>{label}</Text>
       {linked ? (
-        <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
-          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
+            <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
+          </View>
+          {onUnlink && (
+            <TouchableOpacity
+              style={styles.linkedUnlinkBtn}
+              onPress={onUnlink}
+              disabled={unlinking}
+            >
+              {unlinking
+                ? <ActivityIndicator size="small" color="#dc2626" />
+                : <Text style={styles.linkedUnlinkBtnText}>Unlink</Text>}
+            </TouchableOpacity>
+          )}
         </View>
       ) : onLink ? (
         <TouchableOpacity
@@ -877,6 +925,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkedLinkBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  linkedUnlinkBtn: {
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  linkedUnlinkBtnText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
 
   successText: { fontSize: 13, color: '#15803d', marginTop: 6, fontWeight: '500' },
   errorText: { fontSize: 13, color: '#dc2626', marginTop: 6 },
