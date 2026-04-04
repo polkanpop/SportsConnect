@@ -166,18 +166,14 @@ export default function PhoneOtpScreen() {
               break;
 
             case auth.PhoneAuthState.AUTO_VERIFIED:
-              // Android SMS Retriever auto-read the code — build credential and sign in immediately
-              // This prevents session-expired when the user tries to enter it manually afterwards
-              const credential = auth.PhoneAuthProvider.credential(
-                phoneAuthSnapshot.verificationId,
-                phoneAuthSnapshot.code!
-              );
-              credentialRef.current = credential;
+              // Android SMS Retriever auto-read the code — Firebase already signed the user in
+              // internally. Do NOT call signInWithCredential again (credential is consumed).
+              // Instead useCurrentUser=true path reads auth().currentUser directly.
               verificationIdRef.current = phoneAuthSnapshot.verificationId;
               setSending(false);
               setOtpSent(true);
               setAutoVerified(true);
-              handleVerifyWithCredential(credential);
+              handleVerifyWithCredential(null, true);
               break;
 
             case auth.PhoneAuthState.ERROR:
@@ -213,15 +209,30 @@ export default function PhoneOtpScreen() {
     }
   };
 
-  // Shared verification logic — used by both auto-verified and manual entry paths
-  const handleVerifyWithCredential = async (credential: FirebaseAuthTypes.AuthCredential) => {
+  // Shared verification logic — used by both auto-verified and manual entry paths.
+  // useCurrentUser=true: Firebase already signed in via AUTO_VERIFIED — read auth().currentUser.
+  // useCurrentUser=false (default): manual entry — call signInWithCredential.
+  const handleVerifyWithCredential = async (
+    credential: FirebaseAuthTypes.AuthCredential | null,
+    useCurrentUser = false
+  ) => {
     setError(null);
     setVerifying(true);
     try {
-      const result = await auth().signInWithCredential(credential);
-      if (!result?.user) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
+      let firebaseUser: FirebaseAuthTypes.User | null;
 
-      const firebaseIdToken = await result.user.getIdToken();
+      if (useCurrentUser) {
+        // AUTO_VERIFIED: Firebase consumed the credential internally — user is already signed in
+        firebaseUser = auth().currentUser;
+      } else {
+        const result = await auth().signInWithCredential(credential!);
+        firebaseUser = result?.user ?? null;
+      }
+
+      if (!firebaseUser) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
+
+      const firebaseIdToken = await firebaseUser.getIdToken();
+      if (!firebaseIdToken) throw new Error('Failed to get Firebase ID token');
 
       if (params.mode === 'add_phone') {
         await verifyPhoneAddition(firebaseIdToken);
@@ -278,12 +289,7 @@ export default function PhoneOtpScreen() {
       setError(t('AUTH_OTP_ERR_ENTER_CODE'));
       return;
     }
-    // If auto-verified credential is ready, use it directly
-    if (credentialRef.current) {
-      await handleVerifyWithCredential(credentialRef.current);
-      return;
-    }
-    // Manual entry: build credential from verificationId
+    // Manual entry: build credential from verificationId + user-entered OTP
     if (!verificationIdRef.current) {
       setError(t('AUTH_OTP_ERR_SESSION_EXPIRED'));
       return;
