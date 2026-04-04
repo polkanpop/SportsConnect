@@ -84,8 +84,9 @@ const EventListScreen = () => {
   const [allEvents, setAllEvents] = useState<CombinedEvent[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'venue' | 'payment' | 'distance' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'venue' | 'payment' | 'distance' | 'surface' | null>(null)
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
+  const [selectedSurfaces, setSelectedSurfaces] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [freeOnly, setFreeOnly] = useState<boolean>(false)
   const [paymentSelections, setPaymentSelections] = useState<string[]>([]) // 'cash','vnpay'
@@ -222,6 +223,12 @@ const EventListScreen = () => {
     return [...set].sort((a,b) => a.localeCompare(b))
   }, [allEvents])
 
+  const surfaceOptions = useMemo(() => {
+    const set = new Set<string>()
+    allEvents.forEach(ev => { if (ev.surface) set.add(ev.surface) })
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [allEvents])
+
   // Filtering
   const filteredEvents = useMemo(() => {
     return allEvents.filter(ev => {
@@ -257,6 +264,8 @@ const EventListScreen = () => {
       const venues = asArray(ev.venue)
       const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venues.includes(sel))
       if (!venueOk) return false
+      const surfaceOk = selectedSurfaces.length === 0 || (ev.surface != null && selectedSurfaces.includes(ev.surface))
+      if (!surfaceOk) return false
       // Free filter
       if (freeOnly) {
         if (ev.entry_fee != null) return false
@@ -275,7 +284,7 @@ const EventListScreen = () => {
       }
       return true
     })
-  }, [allEvents, search, selectedVenues, freeOnly, paymentSelections])
+  }, [allEvents, search, selectedVenues, selectedSurfaces, freeOnly, paymentSelections])
 
   const displayEvents = useMemo(() => {
     let list = filteredEvents
@@ -331,7 +340,7 @@ const EventListScreen = () => {
   useEffect(() => {
     setVisibleCount(BATCH_SIZE)
     setLoadingMore(false)
-  }, [search, selectedVenues, freeOnly, paymentSelections, closeToMe, selectedDistanceKm])
+  }, [search, selectedVenues, selectedSurfaces, freeOnly, paymentSelections, closeToMe, selectedDistanceKm])
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore) return
@@ -397,6 +406,7 @@ const EventListScreen = () => {
   }, [distanceFilterActive, userCoord, visibleEvents, openFilter, selectedDistanceKm])
 
   const toggleVenue = (v: string) => setSelectedVenues(p => p.includes(v) ? p.filter(x => x!==v) : [...p, v])
+  const toggleSurface = (v: string) => setSelectedSurfaces(p => p.includes(v) ? p.filter(x => x!==v) : [...p, v])
   const toggleExpand = (id: number) => setExpandedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -433,8 +443,16 @@ const EventListScreen = () => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('MAP_FILTER_VENUE')}</Text>
+            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
+            onPress={() => setOpenFilter(openFilter==='surface'?null:'surface')}
+          >
+            <Image source={ICONS.menu} style={styles.filterIcon} />
+            <Text style={[styles.filterText, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
+            {selectedSurfaces.length>0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
             <Image source={ICONS.freeIcon} style={styles.filterIcon} />
@@ -462,13 +480,28 @@ const EventListScreen = () => {
           </ScrollView>
         </View>
         {/* Subheader removed (title is in header row) */}
-        {openFilter && openFilter !== 'payment' && (
+        {openFilter === 'venue' && (
           <View style={styles.dropdownWrapper}>
             <ScrollView style={styles.dropdown}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
+                    <Text style={styles.dropdownItemText}>{opt}</Text>
+                    <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+          </View>
+        )}
+        {openFilter === 'surface' && (
+          <View style={styles.dropdownWrapper}>
+            <ScrollView style={styles.dropdown}>
+              {surfaceOptions.map(opt => {
+                const selected = selectedSurfaces.includes(opt)
+                return (
+                  <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{opt}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
@@ -484,7 +517,7 @@ const EventListScreen = () => {
                 const selected = paymentSelections.includes(opt)
                 return (
                   <Pressable key={opt} onPress={() => togglePaymentSelection(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{opt === 'cash' ? 'Cash' : 'VNPay'}</Text>
+                    <Text style={styles.dropdownItemText}>{opt === 'cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )

@@ -1412,7 +1412,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image
                           source={mapMode === 'events' ? ICONS.starCal : mapMode === 'training' ? ICONS.tsNoti : ICONS.courtFilter}
-                          style={[styles.filterIcon, { tintColor: COLORS.neutral700 }]}
+                          style={[styles.filterIcon, { tintColor: COLORS.neutral925 }]}
                         />
                         <Text style={styles.filterChipText}>
                           {mapMode === 'courts' ? t('MAP_CHIP_COURTS') : mapMode === 'events' ? t('MAP_CHIP_EVENTS') : t('MAP_CHIP_TRAINING')}

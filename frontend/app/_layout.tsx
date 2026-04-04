@@ -8,6 +8,7 @@ import {
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
+import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useEffect } from 'react'
 import { StyleSheet, Text, TextInput } from 'react-native'
@@ -32,6 +33,10 @@ import AuthProvider from '@/providers/auth-providers'
 function PushRegistrar() {
   const { isLoggedIn } = useAuthContext()
   usePushNotifications(isLoggedIn)
+  // Request location permission on first render so map loads without a blackout
+  useEffect(() => {
+    Location.requestForegroundPermissionsAsync().catch(() => {})
+  }, [])
   return null
 }
 

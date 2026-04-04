@@ -372,9 +372,6 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
           <Text style={styles.username}>{userInfo?.name || t('PROFILE_USERNAME_FALLBACK')}</Text>
-          <TouchableOpacity activeOpacity={1} disabled>
-            <Text style={styles.changeThemeLink}>{t('PROFILE_LINK_CHANGE_THEME')}</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.divider} />
@@ -408,9 +405,12 @@ export default function Profile() {
               />
               <TouchableOpacity 
                 style={{ position: 'absolute', bottom: 8, right: 8 }}
-                onPress={handleSaveBio}
+                onPress={() => {
+                  const originalBio = userInfo?.biography || ''
+                  if (bio === originalBio) { setIsEditingBio(false) } else { handleSaveBio() }
+                }}
               >
-                <Image source={ICONS.tick} style={{ width: 14, height: 14, tintColor: 'green' }} />
+                <Image source={ICONS.tick} style={{ width: 22, height: 22, tintColor: 'green' }} />
               </TouchableOpacity>
             </View>
           ) : (
@@ -438,7 +438,7 @@ export default function Profile() {
           {/* Phone row */}
           <View style={styles.contactRow}>
             <Text style={[styles.contactLabel]}>{t('PROFILE_CONTACT_LABEL_PHONE')}</Text>
-            <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.contactnumber || t('PROFILE_CONTACT_NO_PHONE')}</Text>
+            <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.contactnumber ? (userInfo.contactnumber.startsWith('+84') && userInfo.contactnumber.length === 12 ? '0' + userInfo.contactnumber.slice(3) : userInfo.contactnumber) : t('PROFILE_CONTACT_NO_PHONE')}</Text>
             <TouchableOpacity onPress={handleTogglePhone} style={{ paddingLeft: 8 }}>
               <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: '#555' }} />
             </TouchableOpacity>
@@ -453,28 +453,7 @@ export default function Profile() {
           )}
         </View>
 
-        {/* Achievements */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('PROFILE_SECTION_ACHIEVEMENTS')}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.achievementsScroll}>
-             {/* Placeholder 1 */}
-             <View style={styles.achievementPlaceholder}>
-                <View style={styles.achievementIconPlaceholder} />
-                <View style={styles.achievementLines}>
-                    <View style={[styles.line, { width: '60%' }]} />
-                    <View style={[styles.line, { width: '40%' }]} />
-                </View>
-             </View>
-             {/* Placeholder 2 */}
-             <View style={[styles.achievementPlaceholder, { backgroundColor: '#FFFACD' }]}>
-                <View style={[styles.achievementIconPlaceholder, { backgroundColor: '#FFD700' }]} />
-                <View style={styles.achievementLines}>
-                    <View style={[styles.line, { width: '50%' }]} />
-                    <View style={[styles.line, { width: '30%' }]} />
-                </View>
-             </View>
-          </ScrollView>
-        </View>
+        {/* Achievements removed */}
 
       </ScrollView>
 
@@ -598,7 +577,7 @@ const styles = StyleSheet.create({
   bioInput: { minHeight: 100, padding: 12, fontSize: 14, color: '#333', textAlignVertical: 'top' },
   
   contactRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  contactLabel: { fontSize: 13, fontWeight: '600', color: '#888', width: 52 },
+  contactLabel: { fontSize: 13, fontWeight: '600', color: '#888', minWidth: 80 },
   contactText: { fontSize: 14, color: '#555' },
 
   achievementsScroll: { marginTop: 8 },

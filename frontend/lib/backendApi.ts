@@ -1267,6 +1267,7 @@ export type CourtInfoRow = {
 	availability?: string | null
 	accuracy_type?: string | null
 	auto_approve?: boolean | null
+	surface?: string | null
 }
 
 export async function listCourtInfo(opts?: { compact?: boolean; limit?: number; courtids?: number[] }): Promise<CourtInfoRow[]> {
@@ -1909,6 +1910,7 @@ export type CombinedEvent = {
 	longitude?: number | null
 	court_name?: string | null
 	venue?: string[] | string | null
+	surface?: string | null
 }
 
 export type TrainingSessionRow = { sessionid: number; time: string; courtbookingid: number; status?: string; coachid: number }
@@ -2112,6 +2114,7 @@ export type CombinedTrainingSession = {
 	support_payment_method?: string | null
 	participants_cap?: number | null
 	join_status?: boolean | null
+	surface?: string | null
 }
 
 // Utility to safely fetch a single resource and swallow errors (returns null)

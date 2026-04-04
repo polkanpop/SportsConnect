@@ -56,8 +56,9 @@ const CourtListScreen = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [openFilter, setOpenFilter] = useState<'venue' | 'distance' | null>(null)
+  const [openFilter, setOpenFilter] = useState<'venue' | 'distance' | 'surface' | null>(null)
   const [selectedVenues, setSelectedVenues] = useState<string[]>([])
+  const [selectedSurfaces, setSelectedSurfaces] = useState<string[]>([])
   const [favouriteCourtIds, setFavouriteCourtIds] = useState<number[]>([])
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null)
@@ -240,6 +241,13 @@ const CourtListScreen = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [allCourts])
 
+  // Derive unique surface options
+  const surfaceOptions = useMemo(() => {
+    const set = new Set<string>()
+    allCourts.forEach(c => { if (c.surface) set.add(c.surface) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [allCourts])
+
   // Filtering
   const filteredCourts = useMemo(() => {
     return allCourts.filter(c => {
@@ -250,10 +258,11 @@ const CourtListScreen = () => {
       const venueArr = asArray(c.venue)
       const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venueArr.includes(sel))
       const favOk = !showFavouritesOnly || favouriteCourtIds.includes(c.courtid)
-      if (!(venueOk && favOk)) return false
+      const surfaceOk = selectedSurfaces.length === 0 || (c.surface != null && selectedSurfaces.includes(c.surface))
+      if (!(venueOk && favOk && surfaceOk)) return false
       return true
     })
-  }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds])
+  }, [allCourts, search, selectedVenues, showFavouritesOnly, favouriteCourtIds, selectedSurfaces])
 
   const displayCourts = useMemo(() => {
     let list = filteredCourts
@@ -293,7 +302,7 @@ const CourtListScreen = () => {
   useEffect(() => {
     setVisibleCount(BATCH_SIZE)
     setLoadingMore(false)
-  }, [search, selectedVenues, showFavouritesOnly, closeToMe, selectedDistanceKm])
+  }, [search, selectedVenues, selectedSurfaces, showFavouritesOnly, closeToMe, selectedDistanceKm])
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore) return
@@ -367,6 +376,10 @@ const CourtListScreen = () => {
     setSelectedVenues(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
   }
 
+  const toggleSurface = (v: string) => {
+    setSelectedSurfaces(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
+  }
+
   // Close dropdown when tapping outside
   const handleOutsidePress = () => {
     if (openFilter) setOpenFilter(null)
@@ -412,7 +425,7 @@ const CourtListScreen = () => {
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
               <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COMMON_LABEL_VENUE')}</Text>
+              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
@@ -421,6 +434,15 @@ const CourtListScreen = () => {
             >
               <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
               <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterButton, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
+              onPress={() => setOpenFilter(openFilter === 'surface' ? null : 'surface')}
+            >
+              <Image source={ICONS.menu} style={styles.filterIcon} />
+              <Text style={[styles.filterText, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
+              {selectedSurfaces.length > 0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -444,6 +466,22 @@ const CourtListScreen = () => {
                 const selected = selectedVenues.includes(opt)
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
+                    <Text style={styles.dropdownItemText}>{opt}</Text>
+                    <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
+                  </Pressable>
+                )
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {openFilter === 'surface' && (
+          <View style={styles.dropdownWrapper}>
+            <ScrollView style={styles.dropdown}>
+              {surfaceOptions.map(opt => {
+                const selected = selectedSurfaces.includes(opt)
+                return (
+                  <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{opt}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>

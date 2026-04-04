@@ -657,7 +657,7 @@ export default function ActivityPage() {
         } else if (bs === 'approved') {
           if (ss !== 'cancelled') {
             const approvedBadge = { label: t('ACTIVITY_BADGE_APPROVED'), bg: '#22C55E' }
-            if (ss === 'completed') badges = [approvedBadge, { label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
+            if (ss === 'completed') badges = [{ label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
             else if (ss === 'missed') badges = [approvedBadge, { label: t('ACTIVITY_BADGE_MISSED'), bg: '#374151' }]
             else badges = [approvedBadge, { label: t('ACTIVITY_BADGE_UPCOMING'), bg: '#3B82F6' }]
           }
@@ -667,7 +667,7 @@ export default function ActivityPage() {
           badges = [{ label: t('ACTIVITY_BADGE_PENDING'), bg: '#EAB308' }]
         } else if (bs === 'joined') {
           const joinedBadge = { label: t('ACTIVITY_BADGE_JOINED'), bg: '#22C55E' }
-          if (ss.includes('completed') || item.status === 'Completed') badges = [joinedBadge, { label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
+          if (ss.includes('completed') || item.status === 'Completed') badges = [{ label: t('ACTIVITY_BADGE_COMPLETED'), bg: '#22C55E' }]
           else if (ss.includes('missed') || item.status === 'Missed') badges = [joinedBadge, { label: t('ACTIVITY_BADGE_MISSED'), bg: '#374151' }]
           else badges = [joinedBadge, { label: t('ACTIVITY_BADGE_UPCOMING'), bg: '#3B82F6' }]
         }
@@ -1212,7 +1212,7 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   completed: {
-    backgroundColor: COLORS.success,
+    backgroundColor: '#22C55E',
   },
   upcoming: {
     backgroundColor: COLORS.bootstrapBlue,
