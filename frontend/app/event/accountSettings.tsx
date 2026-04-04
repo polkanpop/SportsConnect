@@ -3,20 +3,27 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Crypto from 'expo-crypto'
 import * as WebBrowser from 'expo-web-browser'
+import * as AuthSession from 'expo-auth-session'
+import { expo } from '@/app.json'
+import { supabase } from '@/lib/supabase'
 import { ICONS } from '@/constants/icons'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import {
@@ -31,12 +38,18 @@ import {
   registerPendingPhone,
   registerPendingEmail,
   linkZaloProvider,
+  linkGoogleProvider,
   type MyAccountInfo,
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true)
+}
 
 // Convert E.164 (+84xxxxxxxxx) back to local format (0xxxxxxxxx) for display/input.
 function toLocalPhone(input: string): string {
@@ -171,6 +184,12 @@ export default function AccountSettingsScreen() {
 
   // ── Zalo account linking ───────────────────────────────────────────────────
   const [linkingZalo, setLinkingZalo] = useState(false)
+
+  // ── Google account linking ─────────────────────────────────────────────────
+  const [linkingGoogle, setLinkingGoogle] = useState(false)
+
+  // ── Which linked-row is expanded (showing unlink X) ───────────────────────
+  const [linkExpandedProvider, setLinkExpandedProvider] = useState<string | null>(null)
 
   // ── Provider unlinking ────────────────────────────────────────────────────
   const [unlinkingProvider, setUnlinkingProvider] = useState<string | null>(null)
@@ -403,6 +422,8 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
+      // Yield so the white overlay renders before CCT opens
+      await new Promise<void>(r => setTimeout(r, 50))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
@@ -455,6 +476,60 @@ export default function AccountSettingsScreen() {
       }
     } finally {
       setLinkingZalo(false)
+    }
+  }
+
+  // ── Link Google account ───────────────────────────────────────────────────
+  const handleLinkGoogle = async () => {
+    setLinkingGoogle(true)
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined)
+    const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
+    if (!supabaseUrl) {
+      Alert.alert('Lỗi', 'Thiếu cấu hình Supabase URL.')
+      setLinkingGoogle(false)
+      return
+    }
+    try {
+      const redirectUri = AuthSession.makeRedirectUri({ scheme: (expo as any).scheme })
+      const params = new URLSearchParams({
+        provider: 'google',
+        redirect_to: redirectUri,
+        scopes: 'email profile',
+      })
+      await new Promise<void>(r => setTimeout(r, 50))
+      const wbResult = await WebBrowser.openAuthSessionAsync(
+        `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
+        redirectUri,
+      )
+      WebBrowser.dismissBrowser()
+      if (wbResult.type !== 'success') { void loadMeta(); return }
+
+      // Parse fragment for access_token
+      const u = new URL(wbResult.url)
+      const hash = u.hash.startsWith('#') ? u.hash.substring(1) : u.hash
+      const sp = new URLSearchParams(hash)
+      let accessToken = sp.get('access_token') || undefined
+
+      // Fallback: exchange code if PKCE flow
+      if (!accessToken && sp.get('code')) {
+        const { data } = await supabase.auth.exchangeCodeForSession(sp.get('code')!)
+        accessToken = data.session?.access_token
+      }
+
+      if (!accessToken) {
+        Alert.alert('Liên kết Google thất bại', 'Không nhận được token xác thực.')
+        return
+      }
+
+      await linkGoogleProvider(accessToken)
+      void loadMeta()
+    } catch (e: any) {
+      const msg: string = e?.message ?? String(e) ?? ''
+      if (!msg.toLowerCase().includes('cancel')) {
+        Alert.alert('Liên kết Google thất bại', msg || 'Vui lòng thử lại.')
+      }
+    } finally {
+      setLinkingGoogle(false)
     }
   }
 
@@ -792,8 +867,16 @@ export default function AccountSettingsScreen() {
                 icon={ICONS.googleIcon}
                 label="Google"
                 linked={providers.includes('Google')}
+                onPress={!providers.includes('Google')
+                  ? () => setLinkConfirm({ provider: 'Google', onConfirm: handleLinkGoogle })
+                  : () => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+                      setLinkExpandedProvider(p => p === 'Google' ? null : 'Google')
+                    }}
+                linking={linkingGoogle}
+                unlinkExpanded={linkExpandedProvider === 'Google'}
                 onUnlinkPress={providers.includes('Google') && providers.length > 1
-                  ? () => setUnlinkConfirm({ provider: 'Google', onConfirm: () => handleUnlinkProvider('Google') })
+                  ? () => setUnlinkConfirm({ provider: 'Google', onConfirm: () => { setLinkExpandedProvider(null); handleUnlinkProvider('Google') } })
                   : undefined}
                 unlinking={unlinkingProvider === 'Google'}
               />
@@ -804,10 +887,14 @@ export default function AccountSettingsScreen() {
                 linked={providers.includes('Zalo')}
                 onPress={!providers.includes('Zalo')
                   ? () => setLinkConfirm({ provider: 'Zalo', onConfirm: handleLinkZalo })
-                  : undefined}
+                  : () => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+                      setLinkExpandedProvider(p => p === 'Zalo' ? null : 'Zalo')
+                    }}
                 linking={linkingZalo}
+                unlinkExpanded={linkExpandedProvider === 'Zalo'}
                 onUnlinkPress={providers.includes('Zalo') && providers.length > 1
-                  ? () => setUnlinkConfirm({ provider: 'Zalo', onConfirm: () => handleUnlinkProvider('Zalo') })
+                  ? () => setUnlinkConfirm({ provider: 'Zalo', onConfirm: () => { setLinkExpandedProvider(null); handleUnlinkProvider('Zalo') } })
                   : undefined}
                 unlinking={unlinkingProvider === 'Zalo'}
               />
@@ -827,12 +914,22 @@ export default function AccountSettingsScreen() {
 
       </ScrollView>
 
-      {/* ── Zalo OAuth loading overlay (prevents CCT black-screen flash) ── */}
+      {/* ── Zalo OAuth loading overlay ── */}
       {linkingZalo && (
         <Modal visible animationType="none" statusBarTranslucent>
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#FF6017" />
             <Text style={styles.loadingOverlayText}>Đang kết nối Zalo…</Text>
+          </View>
+        </Modal>
+      )}
+
+      {/* ── Google OAuth loading overlay ── */}
+      {linkingGoogle && (
+        <Modal visible animationType="none" statusBarTranslucent>
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#4285F4" />
+            <Text style={styles.loadingOverlayText}>Đang kết nối Google…</Text>
           </View>
         </Modal>
       )}
@@ -915,14 +1012,15 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking }: {
+function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking, unlinkExpanded }: {
   icon: any
   label: string
   linked: boolean
-  onPress?: () => void      // tap whole row when NOT linked → open link confirmation
+  onPress?: () => void      // tap whole row: when not linked → link confirm, when linked → toggle X
   linking?: boolean
-  onUnlinkPress?: () => void   // tap ✕ when linked → open unlink confirmation
+  onUnlinkPress?: () => void   // tap ✕ → open unlink confirmation
   unlinking?: boolean
+  unlinkExpanded?: boolean     // whether the X button is currently visible
 }) {
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
@@ -942,7 +1040,7 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
           <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
             <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
           </View>
-          {onUnlinkPress && (
+          {unlinkExpanded && onUnlinkPress && (
             <TouchableOpacity
               style={styles.unlinkCircleBtn}
               onPress={onUnlinkPress}
@@ -956,19 +1054,16 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
           )}
         </View>
       ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
-            <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Chưa liên kết</Text>
-          </View>
-          {onPress && <Text style={styles.linkedChevron}>›</Text>}
+        <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
+          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Chưa liên kết</Text>
         </View>
       )}
     </View>
   )
 
-  if (!linked && onPress) {
+  if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7} disabled={linking}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} disabled={!!(linking || unlinking)}>
         {inner}
       </TouchableOpacity>
     )

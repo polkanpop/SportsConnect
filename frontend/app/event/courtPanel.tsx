@@ -1307,7 +1307,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         images: [],
       },
     ])
-    setServiceExpanded((prev) => ({ ...prev, [id]: true }))
+    setServiceExpanded((prev) => ({ ...prev, [id]: false }))
   }, [])
 
   const updateServiceDraft = useCallback((localId: string, patch: Partial<ServiceEditDraft>) => {
@@ -2541,21 +2541,29 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             setConfirmServiceDeleteVisible(true)
                           }}
                           activeOpacity={0.85}
-                          style={styles.serviceHeaderDeleteBtn}
+                          style={styles.serviceHeaderDeleteCircle}
+                          hitSlop={8}
                         >
-                          <Text style={styles.serviceHeaderDeleteText}>{t('COMMON_BTN_DELETE')}</Text>
+                          <Text style={styles.serviceHeaderDeleteCircleText}>−</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? true) }))}
+                          onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? false) }))}
                           activeOpacity={0.85}
-                          style={styles.serviceHeaderBtn}
+                          hitSlop={8}
                         >
-                          <Text style={styles.serviceHeaderBtnText}>{(serviceExpanded[d.localId] ?? true) ? t('COMMON_BTN_CLOSE') : t('COMMON_BTN_OPEN')}</Text>
+                          <Image
+                            source={ICONS.arrowdown}
+                            style={[
+                              styles.serviceChevron,
+                              !(serviceExpanded[d.localId] ?? false) && { transform: [{ rotate: '-90deg' }] },
+                            ]}
+                            resizeMode="contain"
+                          />
                         </TouchableOpacity>
                       </View>
                     </View>
 
-                    {(serviceExpanded[d.localId] ?? true) ? (
+                    {(serviceExpanded[d.localId] ?? false) ? (
                       <>
 
                     <Text style={styles.label}>{t('COMMON_LABEL_NAME')}</Text>
@@ -3271,32 +3279,26 @@ const styles = StyleSheet.create({
   serviceHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  serviceHeaderBtn: {
-    width: 92,
-    height: 36,
+  serviceHeaderDeleteCircle: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: COLORS.orange200,
-    borderWidth: 1,
-    borderColor: COLORS.orange200,
-    alignItems: 'center',
+    backgroundColor: '#ef4444',
     justifyContent: 'center',
-  },
-  serviceHeaderDeleteBtn: {
-    width: 92,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: COLORS.danger500,
-    borderWidth: 1,
-    borderColor: COLORS.danger500,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  serviceHeaderDeleteText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.neutral0,
+  serviceHeaderDeleteCircleText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  serviceChevron: {
+    width: 18,
+    height: 18,
+    tintColor: '#555',
   },
   serviceCoverFrame: {
     width: 92,

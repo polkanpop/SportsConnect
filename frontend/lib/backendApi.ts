@@ -1113,6 +1113,15 @@ export async function linkZaloProvider(data: { access_token: string; zalo_id: st
 	if (!res || res.status !== 'ok') throw new Error('Failed to link Zalo account')
 }
 
+export async function linkGoogleProvider(supabaseAccessToken: string): Promise<void> {
+	const res = await request('/auth/link-google', {
+		method: 'POST',
+		body: JSON.stringify({ supabase_access_token: supabaseAccessToken }),
+		debugLabel: 'linkGoogleProvider',
+	}) as { status?: string } | null
+	if (!res || res.status !== 'ok') throw new Error('Failed to link Google account')
+}
+
 export async function verifyPhoneAddition(firebaseIdToken: string): Promise<{ phone: string }> {
 	const res = await request('/auth/verify-phone', {
 		method: 'POST',
