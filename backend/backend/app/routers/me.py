@@ -443,17 +443,22 @@ async def unlink_provider(provider: str, user_sub: str = Depends(get_current_use
     if provider not in allowed:
         raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'.")
 
-    # Fetch all current providers to enforce minimum-one check
+    # Fetch all current providers to enforce minimum-one login method check
     rows = rest_select("user_auth_providers", "provider", filters={"userid": userid})
     current = [r["provider"] for r in (rows or [])]
 
     if provider not in current:
         raise HTTPException(status_code=404, detail=f"{provider} is not linked to this account.")
 
-    if len(current) <= 1:
+    # Part 5/6: Prevent unlinking if it would leave zero login methods.
+    # A login method is: any user_auth_providers row OR any userlogin row with non-null passwordhash.
+    providers_after = [p for p in current if p != provider]
+    login_rows = rest_select("userlogin", "loginid, passwordhash", filters={"userid": userid})
+    has_password = any(bool(r.get("passwordhash")) for r in (login_rows or []))
+    if not providers_after and not has_password:
         raise HTTPException(
             status_code=400,
-            detail="Cannot remove the only linked provider. Add another login method first.",
+            detail="Cannot remove the only linked provider. Add a username/password or another provider first.",
         )
 
     rest_delete("user_auth_providers", {"userid": userid, "provider": provider})

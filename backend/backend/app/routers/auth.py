@@ -20,7 +20,7 @@ from jose import jwt
 import firebase_admin
 import firebase_admin.auth as fb_auth
 from firebase_admin import credentials as fb_credentials
-from ..db import rest_select, rest_upsert, rest_update
+from ..db import rest_select, rest_upsert, rest_update, rest_rpc, RpcError
 from ..auth import get_jwt_secret, HS_ALGORITHM, decode_token
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
 from ..login_rules import (
@@ -1067,27 +1067,20 @@ def zalo_sign_in(payload: dict):
     if not access_token or not zalo_id:
         raise HTTPException(status_code=400, detail="Missing access_token or zalo_id")
 
-    zalo_app_secret = os.getenv("ZALO_APP_SECRET", "")
-    if not zalo_app_secret:
-        logger.error("/auth/zalo ZALO_APP_SECRET not configured")
-        raise HTTPException(status_code=503, detail="Zalo sign-in not configured on server")
-
-    # Trust model: the Zalo native SDK on the device opens the Zalo app directly,
-    # authenticates with Zalo's servers, and returns a real Zalo access_token.
-    # getUserProfile() is called on the device (Vietnam IP) to confirm zalo_id/zalo_name.
-    # No server-side Zalo API call is possible (geo-blocked from SG server) and none is needed.
-    logger.debug(f"/auth/zalo native SDK sign-in for zalo_id={zalo_id}")
+    # Trust model: /auth/zalo/token already validated the Zalo access_token via
+    # oauth.zaloapp.com/v4/tokeninfo and whitelisted it. The zalo_id is trusted.
+    logger.debug(f"/auth/zalo PKCE sign-in for zalo_id={zalo_id}")
 
     display_name = zalo_name or f"Zalo User {zalo_id}"
 
-    # 3. Find or create user — provider-first lookup, then create new
-
-    # Step 1: look up by (Zalo, zalo_id) in user_auth_providers
+    # Part 2 — Look up existing Zalo account by provider (user_auth_providers only).
+    # Never auto-link by phone or email during login — that requires explicit user action
+    # from Account Settings (Part 3).
     existing_by_provider = find_user_by_provider("Zalo", zalo_id)
     if existing_by_provider:
         userid = existing_by_provider.get("userid")
         existing_info = find_userinfo_by_userid(userid)
-        # Only update display name if it changed — never touch email or pfp
+        # Keep name in sync but never touch email or pfp
         if zalo_name and (existing_info or {}).get("name") != zalo_name:
             try:
                 rest_update("userinfo", {"userid": userid}, {"name": zalo_name})
@@ -1111,37 +1104,6 @@ def zalo_sign_in(payload: dict):
             "refreshToken": tokens.get("refresh_token"),
             "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
         }
-
-    # Step 1b: phone collision — link Zalo provider to the existing account instead of creating a new user
-    if zalo_phone:
-        existing_by_phone = find_user_by_phone(zalo_phone)
-        if existing_by_phone:
-            userid = existing_by_phone.get("userid")
-            ensure_auth_provider(userid, "Zalo", zalo_id)
-            if zalo_name and existing_by_phone.get("name") != zalo_name:
-                try:
-                    rest_update("userinfo", {"userid": userid}, {"name": zalo_name})
-                except Exception as e:
-                    logger.warning(f"/auth/zalo phone-merge name update failed userid={userid} err={e}")
-            try:
-                tokens = create_user_tokens(userid, None, None, remember_me=True)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail="Token creation failed")
-            users_row = rest_select("users", "userid, role", {"userid": userid}, single=True)
-            existing_role = (users_row.get("role") if users_row else None) or "player"
-            existing_info = find_userinfo_by_userid(userid)
-            logger.debug(f"/auth/zalo PHONE MERGE userid={userid} phone={zalo_phone} elapsedMs={_now_ms()-t0}")
-            return {
-                "status": "ok",
-                "userid": userid,
-                "name": (existing_info or existing_by_phone).get("name") or display_name,
-                "logintype": "Zalo",
-                "role": existing_role,
-                "accessToken": tokens.get("access_token"),
-                "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
-                "refreshToken": tokens.get("refresh_token"),
-                "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
-            }
 
     # Step 2: New user — provision users, userinfo, userlogin rows
     role = "player"
@@ -1199,27 +1161,27 @@ def zalo_sign_in(payload: dict):
     # Register Zalo auth provider for this new user
     ensure_auth_provider(userid, "Zalo", zalo_id)
 
-    # Insert unverified_users record using the Zalo phone number (phone_verified=True).
-    # Zalo accounts are phone-verified by Zalo's own OTP flow — we treat the phone as
-    # pre-verified, mirroring how /auth/sync marks Google emails as email_verified=True.
-    if zalo_phone:
-        try:
-            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
-            next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
-            rest_upsert("unverified_users", {
-                "unverifiedid": next_unver_id,
-                "userid": userid,
-                "phone": zalo_phone,
-                "token_hash": f"ZALO_PHONE_VERIFIED:{hashlib.sha256(zalo_phone.encode()).hexdigest()[:24]}",
-                "token_expires_at": "2099-01-01T00:00:00+00:00",
-                "resend_count": 0,
-                "phone_verified": True,
-            })
-            logger.debug(f"/auth/zalo unverified_users phone record created userid={userid} phone={zalo_phone}")
-        except Exception as e:
-            logger.warning(f"/auth/zalo unverified_users phone insert failed userid={userid} err={e}")
-    else:
-        logger.debug(f"/auth/zalo no phone returned by Zalo SDK for zalo_id={zalo_id} — skipping unverified_users")
+    # Part 1 — Always insert unverified_users (with null email/phone when not provided).
+    # Spec: insert with email=null, phone=zalo_phone if provided else null,
+    # email_verified=false, phone_verified=false (or true when phone is from Zalo).
+    try:
+        max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+        next_unver_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+        placeholder_hash = f"ZALO_PLACEHOLDER:{hashlib.sha256(str(userid).encode()).hexdigest()[:24]}"
+        rest_upsert("unverified_users", {
+            "unverifiedid": next_unver_id,
+            "userid": userid,
+            "email": None,
+            "phone": zalo_phone if zalo_phone else None,
+            "token_hash": placeholder_hash if not zalo_phone else f"ZALO_PHONE_VERIFIED:{hashlib.sha256(zalo_phone.encode()).hexdigest()[:24]}",
+            "token_expires_at": "2099-01-01T00:00:00+00:00",
+            "resend_count": 0,
+            "email_verified": False,
+            "phone_verified": bool(zalo_phone),
+        })
+        logger.debug(f"/auth/zalo unverified_users created userid={userid} phone={zalo_phone or 'null'}")
+    except Exception as e:
+        logger.warning(f"/auth/zalo unverified_users insert failed userid={userid} err={e}")
 
     try:
         tokens = create_user_tokens(userid, None, None, remember_me=True)
@@ -1874,11 +1836,31 @@ def link_zalo(payload: dict, authorization: Optional[str] = Header(None)):
     if not zalo_id:
         raise HTTPException(status_code=400, detail="Missing zalo_id")
 
-    # Reject if this Zalo ID already belongs to a DIFFERENT user
+    # Part 3 — Check if this Zalo ID already has an account
     existing = find_user_by_provider("Zalo", zalo_id)
-    if existing and existing.get("userid") != userid:
-        raise HTTPException(status_code=409, detail="This Zalo account is already linked to a different user")
+    if existing:
+        secondary_userid = existing.get("userid")
+        if secondary_userid == userid:
+            # Already linked to this same account — idempotent success
+            logger.info(f"/auth/link-zalo already linked userid={userid} zalo_id={zalo_id}")
+            return {"status": "ok", "linked": True, "merged": False}
+        # Secondary account exists with this Zalo ID — merge it atomically into primary.
+        # The secondary is typically the phantom Zalo account created during login.
+        try:
+            result = rest_rpc("merge_accounts", {
+                "p_primary_userid": userid,
+                "p_secondary_userid": secondary_userid,
+            })
+            logger.info(f"/auth/link-zalo MERGED primary={userid} secondary={secondary_userid} result={result}")
+        except RpcError as e:
+            logger.error(f"/auth/link-zalo merge RPC failed: {e.message}")
+            raise HTTPException(status_code=500, detail=f"Account merge failed: {e.message}")
+        except Exception as e:
+            logger.error(f"/auth/link-zalo merge error: {e}")
+            raise HTTPException(status_code=500, detail=f"Account merge failed: {e}")
+        return {"status": "ok", "linked": True, "merged": True}
 
+    # No existing account for this Zalo ID — simply add the provider to the primary account
     ensure_auth_provider(userid, "Zalo", zalo_id)
     logger.info(f"/auth/link-zalo SUCCESS userid={userid} zalo_id={zalo_id}")
-    return {"status": "ok", "linked": True}
+    return {"status": "ok", "linked": True, "merged": False}
