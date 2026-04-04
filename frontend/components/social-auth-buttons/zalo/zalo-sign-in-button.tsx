@@ -74,6 +74,12 @@ export default function ZaloSignInButton() {
     return () => { isMounted.current = false; };
   }, []);
 
+  // Pre-warm the Chrome Custom Tab so it opens instantly (eliminates black loading flash)
+  useEffect(() => {
+    void WebBrowser.warmUpAsync();
+    return () => { void WebBrowser.coolDownAsync(); };
+  }, []);
+
   const signIn = useCallback(async () => {
     if (loading || isProcessing.current) return;
     isProcessing.current = true;
@@ -97,6 +103,8 @@ export default function ZaloSignInButton() {
       const oauthUrl = `${ZALO_AUTH_ENDPOINT}?${params.toString()}`;
 
       // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
+      // Yield one JS frame so the white loading overlay renders before the CCT opens
+      await new Promise<void>(r => setTimeout(r, 50));
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
       // Explicitly dismiss so the CCT cannot fire more redirect events
       WebBrowser.dismissBrowser();

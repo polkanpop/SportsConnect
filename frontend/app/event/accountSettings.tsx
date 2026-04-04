@@ -915,13 +915,13 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onPress, linking, onDotPress, unlinking }: {
+function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking }: {
   icon: any
   label: string
   linked: boolean
   onPress?: () => void      // tap whole row when NOT linked → open link confirmation
   linking?: boolean
-  onDotPress?: () => void   // tap ⋮ when linked → open unlink menu
+  onUnlinkPress?: () => void   // tap ✕ when linked → open unlink confirmation
   unlinking?: boolean
 }) {
   const inner = (
