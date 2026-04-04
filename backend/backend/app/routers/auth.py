@@ -1931,3 +1931,63 @@ def link_zalo(payload: dict, authorization: Optional[str] = Header(None)):
     ensure_auth_provider(userid, "Zalo", zalo_id)
     logger.info(f"/auth/link-zalo SUCCESS userid={userid} zalo_id={zalo_id}")
     return {"status": "ok", "linked": True, "merged": False}
+
+
+@router.post('/link-google')
+def link_google(payload: dict, authorization: Optional[str] = Header(None)):
+    """Link a Google account (via Supabase OAuth token) to the currently authenticated backend user.
+
+    The frontend runs the Google OAuth flow (same as login), gets a Supabase access_token,
+    and POSTs it here together with the current user's backend Bearer token.
+    We decode the Supabase JWT to extract the Google sub (Supabase UUID), then call
+    ensure_auth_provider to record the link.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    access_token_raw = authorization[7:]
+    try:
+        token_payload = decode_token(access_token_raw)
+        userid = int(token_payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    supabase_token = str(payload.get('supabase_access_token') or '').strip()
+    if not supabase_token:
+        raise HTTPException(status_code=400, detail="Missing supabase_access_token")
+
+    # Decode the Supabase JWT to get the Google user's sub and email
+    try:
+        google_payload = decode_token(supabase_token)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired supabase_access_token")
+
+    google_sub = str(google_payload.get("sub") or "").strip()
+    google_email = str(google_payload.get("email") or "").strip()
+    if not google_sub:
+        raise HTTPException(status_code=400, detail="Could not extract Google user identifier from token")
+
+    # Check if this Google account is already linked to another user
+    existing = find_user_by_provider("Google", google_sub)
+    if existing:
+        secondary_userid = existing.get("userid")
+        if secondary_userid == userid:
+            logger.info(f"/auth/link-google already linked userid={userid} google_sub={google_sub}")
+            return {"status": "ok", "linked": True, "merged": False}
+        # Google account belongs to a different backend user — merge
+        try:
+            result = rest_rpc("merge_accounts", {
+                "p_primary_userid": userid,
+                "p_secondary_userid": secondary_userid,
+            })
+            logger.info(f"/auth/link-google MERGED primary={userid} secondary={secondary_userid} result={result}")
+        except RpcError as e:
+            logger.error(f"/auth/link-google merge RPC failed: {e.message}")
+            raise HTTPException(status_code=500, detail=f"Account merge failed: {e.message}")
+        except Exception as e:
+            logger.error(f"/auth/link-google merge error: {e}")
+            raise HTTPException(status_code=500, detail=f"Account merge failed: {e}")
+        return {"status": "ok", "linked": True, "merged": True}
+
+    ensure_auth_provider(userid, "Google", google_sub)
+    logger.info(f"/auth/link-google SUCCESS userid={userid} google_sub={google_sub} email={google_email}")
+    return {"status": "ok", "linked": True, "merged": False}
