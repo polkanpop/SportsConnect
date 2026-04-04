@@ -24,7 +24,7 @@ import { persistAuthSession } from '@/lib/backendApi';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
@@ -66,9 +66,17 @@ function generateState(): string {
 export default function ZaloSignInButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const isProcessing = useRef(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const signIn = useCallback(async () => {
-    if (loading) return;
+    if (loading || isProcessing.current) return;
+    isProcessing.current = true;
     setLoading(true);
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
@@ -90,6 +98,8 @@ export default function ZaloSignInButton() {
 
       // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
+      // Explicitly dismiss so the CCT cannot fire more redirect events
+      WebBrowser.dismissBrowser();
       if (result.type !== 'success') return;
 
       // 4. Extract code from deep link sportconnect://zalo-code?code=...
@@ -156,12 +166,12 @@ export default function ZaloSignInButton() {
           'Thiết lập tài khoản',
           'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
           [
-            { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
-            { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
+            { text: 'Để sau', onPress: () => { if (isMounted.current) router.replace('/(tabs)/Home'); } },
+            { text: 'Thiết lập ngay', onPress: () => { if (isMounted.current) router.replace('/event/accountSettings' as any); } },
           ],
         );
       } else {
-        router.replace('/(tabs)/Home');
+        if (isMounted.current) router.replace('/(tabs)/Home');
       }
     } catch (e: any) {
       if (__DEV__) console.error('[ZaloSignIn]', e);
@@ -171,6 +181,7 @@ export default function ZaloSignInButton() {
       }
     } finally {
       setLoading(false);
+      isProcessing.current = false;
     }
   }, [loading, router]);
 

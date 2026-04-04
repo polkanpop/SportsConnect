@@ -43,9 +43,10 @@ function toLocalPhone(input: string): string {
 // Survives navigation (component unmount/remount) within the same JS process.
 // Prevents users having to re-send OTP if they accidentally navigate away.
 // Cleared after successful verification or when TTL expires.
-const OTP_CACHE_TTL = 3 * 60 * 1000 // 3 min — conservative, Firebase session-expired can happen after ~2 min inactivity
+const OTP_CACHE_TTL = 3 * 60 * 1000 // 3 min
 interface _PendingOtp {
-  confirmation: FirebaseAuthTypes.ConfirmationResult
+  // confirmation is kept for legacy compatibility but is not used in verifyPhoneNumber flow
+  confirmation: FirebaseAuthTypes.ConfirmationResult | null
   e164Phone: string
   sentAt: number
 }
@@ -86,7 +87,6 @@ export default function PhoneOtpScreen() {
         const e164 = normalizeVNPhone(localPhone);
         const cached = _getCachedOtp(e164);
         if (cached) {
-          confirmRef.current = cached.confirmation;
           setOtpSent(true);
           const elapsed = Math.floor((Date.now() - cached.sentAt) / 1000);
           const remaining = Math.max(0, 60 - elapsed);
@@ -107,8 +107,11 @@ export default function PhoneOtpScreen() {
   const [resendTimer, setResendTimer] = useState(0);
   const [error, setError]           = useState<string | null>(null);
 
-  const confirmRef = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
-  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const confirmRef       = useRef<FirebaseAuthTypes.ConfirmationResult | null>(null);
+  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const credentialRef    = useRef<FirebaseAuthTypes.AuthCredential | null>(null);
+  const verificationIdRef = useRef<string | null>(null);
+  const [autoVerified, setAutoVerified] = useState(false);
 
   // Countdown for resend
   useEffect(() => {
@@ -139,57 +142,98 @@ export default function PhoneOtpScreen() {
     }
     setError(null);
     setSending(true);
+    // Reset any prior session state
+    credentialRef.current = null;
+    verificationIdRef.current = null;
+    setAutoVerified(false);
+
+    const e164 = normalizeVNPhone(trimmed);
+
     try {
-      const e164 = normalizeVNPhone(trimmed);
-      const confirmation = await auth().signInWithPhoneNumber(e164);
-      confirmRef.current = confirmation;
-      _pendingOtp = { confirmation, e164Phone: e164, sentAt: Date.now() };
-      setOtpSent(true);
-      startResendTimer();
+      auth().verifyPhoneNumber(e164).on(
+        'state_changed',
+        (phoneAuthSnapshot) => {
+          switch (phoneAuthSnapshot.state) {
+            case auth.PhoneAuthState.CODE_SENT:
+              // SMS sent — show OTP input for manual entry
+              confirmRef.current = null;
+              credentialRef.current = null;
+              verificationIdRef.current = phoneAuthSnapshot.verificationId;
+              _pendingOtp = { confirmation: null, e164Phone: e164, sentAt: Date.now() };
+              setSending(false);
+              setOtpSent(true);
+              startResendTimer();
+              break;
+
+            case auth.PhoneAuthState.AUTO_VERIFIED:
+              // Android SMS Retriever auto-read the code — build credential and sign in immediately
+              // This prevents session-expired when the user tries to enter it manually afterwards
+              const credential = auth.PhoneAuthProvider.credential(
+                phoneAuthSnapshot.verificationId,
+                phoneAuthSnapshot.code!
+              );
+              credentialRef.current = credential;
+              verificationIdRef.current = phoneAuthSnapshot.verificationId;
+              setSending(false);
+              setOtpSent(true);
+              setAutoVerified(true);
+              handleVerifyWithCredential(credential);
+              break;
+
+            case auth.PhoneAuthState.ERROR:
+              setSending(false);
+              const errMsg: string = (phoneAuthSnapshot as any).error?.message ?? '';
+              if (/BILLING_NOT_ENABLED|billing[\-_]not/i.test(errMsg)) {
+                setError('Dịch vụ xác thực SMS chưa sẵn sàng. Vui lòng đăng nhập bằng mật khẩu hoặc Zalo.');
+              } else {
+                setError(errMsg || t('AUTH_OTP_ERR_SEND_FAILED'));
+              }
+              break;
+          }
+        },
+        (error: any) => {
+          setSending(false);
+          const errMsg: string = error?.message ?? '';
+          if (/BILLING_NOT_ENABLED|billing[\-_]not/i.test(errMsg)) {
+            setError('Dịch vụ xác thực SMS chưa sẵn sàng. Vui lòng đăng nhập bằng mật khẩu hoặc Zalo.');
+          } else {
+            setError(errMsg || t('AUTH_OTP_ERR_SEND_FAILED'));
+          }
+        }
+      );
     } catch (e: any) {
       console.error('[PhoneOtp] sendOtp error', e);
+      setSending(false);
       const msg: string = e?.message ?? '';
       if (/BILLING_NOT_ENABLED|billing[\-_]not/i.test(msg)) {
         setError('Dịch vụ xác thực SMS chưa sẵn sàng. Vui lòng đăng nhập bằng mật khẩu hoặc Zalo.');
       } else {
         setError(msg || t('AUTH_OTP_ERR_SEND_FAILED'));
       }
-    } finally {
-      setSending(false);
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (otp.length < 6) {
-      setError(t('AUTH_OTP_ERR_ENTER_CODE'));
-      return;
-    }
-    if (!confirmRef.current) {
-      setError(t('AUTH_OTP_ERR_SESSION_EXPIRED'));
-      return;
-    }
+  // Shared verification logic — used by both auto-verified and manual entry paths
+  const handleVerifyWithCredential = async (credential: FirebaseAuthTypes.AuthCredential) => {
     setError(null);
     setVerifying(true);
     try {
-      const credential = await confirmRef.current.confirm(otp);
-      if (!credential?.user) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
+      const result = await auth().signInWithCredential(credential);
+      if (!result?.user) throw new Error(t('AUTH_OTP_ERR_NO_USER'));
 
-      const firebaseIdToken = await credential.user.getIdToken();
+      const firebaseIdToken = await result.user.getIdToken();
 
       if (params.mode === 'add_phone') {
-        // Authenticated user adding/verifying their phone — do NOT re-login
         await verifyPhoneAddition(firebaseIdToken);
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
         _pendingOtp = null;
         router.back();
       } else {
-        // Login flow: exchange Firebase ID token for our backend session
         const res = await authPhoneLogin({
           firebase_id_token: firebaseIdToken,
           display_name: displayName || undefined,
         });
-
         await persistAuthSession(res, { rememberMe: true });
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         try { await initFavoritesForCurrentUser(); } catch {}
@@ -212,13 +256,14 @@ export default function PhoneOtpScreen() {
       if (isWrongCode) {
         setError(t('AUTH_OTP_ERR_WRONG_CODE'));
       } else if (isExpired) {
-        // Session expired — clear handle but KEEP user on OTP entry screen so they can resend
         _pendingOtp = null;
         confirmRef.current = null;
+        credentialRef.current = null;
+        verificationIdRef.current = null;
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        setResendTimer(0);    // allow immediate resend
-        setOtp('');           // clear the stale code they entered
-        // DO NOT setOtpSent(false) — stay on OTP screen showing "Resend" button
+        setResendTimer(0);
+        setOtp('');
+        setAutoVerified(false);
         setError('Mã xác thực đã hết hạn. Nhấn Gửi lại để nhận mã mới.');
       } else {
         setError(e?.message ?? t('AUTH_OTP_ERR_FAILED'));
@@ -226,6 +271,28 @@ export default function PhoneOtpScreen() {
     } finally {
       setVerifying(false);
     }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6) {
+      setError(t('AUTH_OTP_ERR_ENTER_CODE'));
+      return;
+    }
+    // If auto-verified credential is ready, use it directly
+    if (credentialRef.current) {
+      await handleVerifyWithCredential(credentialRef.current);
+      return;
+    }
+    // Manual entry: build credential from verificationId
+    if (!verificationIdRef.current) {
+      setError(t('AUTH_OTP_ERR_SESSION_EXPIRED'));
+      return;
+    }
+    const credential = auth.PhoneAuthProvider.credential(
+      verificationIdRef.current,
+      otp
+    );
+    await handleVerifyWithCredential(credential);
   };
 
   return (
