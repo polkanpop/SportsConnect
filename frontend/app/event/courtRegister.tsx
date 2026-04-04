@@ -1225,7 +1225,6 @@ export default function CourtRegisterPage() {
       </View>
 
       </View>
-      </View>
 
       {/* ── Courts ──────────────────────────────────── */}
       <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_COURT_SECTION')}</Text>
