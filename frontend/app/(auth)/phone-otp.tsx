@@ -43,7 +43,7 @@ function toLocalPhone(input: string): string {
 // Survives navigation (component unmount/remount) within the same JS process.
 // Prevents users having to re-send OTP if they accidentally navigate away.
 // Cleared after successful verification or when TTL expires.
-const OTP_CACHE_TTL = 5 * 60 * 1000 // 5 min — Firebase SMS code lifetime
+const OTP_CACHE_TTL = 3 * 60 * 1000 // 3 min — conservative, Firebase session-expired can happen after ~2 min inactivity
 interface _PendingOtp {
   confirmation: FirebaseAuthTypes.ConfirmationResult
   e164Phone: string
