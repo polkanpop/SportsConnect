@@ -222,8 +222,17 @@ export default function PhoneOtpScreen() {
       let firebaseUser: FirebaseAuthTypes.User | null;
 
       if (useCurrentUser) {
-        // AUTO_VERIFIED: Firebase consumed the credential internally — user is already signed in
-        firebaseUser = auth().currentUser;
+        // AUTO_VERIFIED: Firebase signs the user in internally before the callback fires,
+        // but there is a race condition — currentUser may be null for a few hundred ms.
+        // Poll up to 10 × 500ms (5s total) before giving up.
+        let attempts = 0;
+        while (attempts < 10) {
+          firebaseUser = auth().currentUser;
+          if (firebaseUser) break;
+          await new Promise<void>((resolve) => setTimeout(resolve, 500));
+          attempts++;
+        }
+        console.log(`[PhoneOtp] AUTO_VERIFIED poll done: attempts=${attempts}, user=${firebaseUser?.uid ?? 'null'}`);
       } else {
         const result = await auth().signInWithCredential(credential!);
         firebaseUser = result?.user ?? null;
