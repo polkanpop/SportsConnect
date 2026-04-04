@@ -75,9 +75,17 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # firebase-admin's google-auth CacheControl layer can return an empty cached cert
 # response, causing json.JSONDecodeError. We fetch Firebase public certs ourselves
 # and verify with PyJWT (already installed as PyJWT==...) to avoid this.
+#
+# Google's cert endpoint returns X.509 certificates in PEM format.
+# PyJWT's RSAAlgorithm.prepare_key() CANNOT parse X.509 certs directly — it needs
+# the raw RSA public key. We use the `cryptography` library (already installed) to
+# load each cert and extract its public key before caching.
+
+from cryptography import x509 as _cx509
+from cryptography.hazmat.backends import default_backend as _crypto_backend
 
 _FIREBASE_PROJECT_ID = "sportconnect-c34b9"
-_firebase_certs_cache: dict = {}   # {'certs': {kid: pem}, 'expires_at': float}
+_firebase_certs_cache: dict = {}   # {'certs': {kid: RSAPublicKey}, 'expires_at': float}
 _firebase_certs_lock = threading.Lock()
 
 
@@ -97,8 +105,13 @@ def _verify_firebase_id_token(id_token: str) -> dict:
                     timeout=5.0,
                 )
                 resp.raise_for_status()
-                certs = resp.json()
-                _firebase_certs_cache.update({'certs': certs, 'expires_at': now + 600})
+                raw_certs = resp.json()  # {kid: x509_pem_cert_string}
+                # Extract RSA public keys from X.509 certs — PyJWT cannot parse X.509 directly
+                parsed = {}
+                for kid, pem in raw_certs.items():
+                    cert = _cx509.load_pem_x509_certificate(pem.encode(), _crypto_backend())
+                    parsed[kid] = cert.public_key()
+                _firebase_certs_cache.update({'certs': parsed, 'expires_at': now + 600})
             except Exception as e:
                 raise ValueError(f"Failed to fetch Firebase public certs: {e}")
         certs = _firebase_certs_cache['certs']
