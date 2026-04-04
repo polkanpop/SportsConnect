@@ -1,17 +1,17 @@
 ﻿/**
  * Zalo sign-in using the official Zalo SDK V4 via react-native-zalo-kit.
  *
- * Uses AUTH_VIA_WEB (LoginVia.WEB) — opens id.zalo.me in a WebView.
- * The page shows "Đăng nhập qua ứng dụng Zalo" so users can still tap into
- * the Zalo app from within the web screen, without us needing the hash key.
- *
- * AUTH_VIA_APP requires the app signing hash to be registered in Zalo Dev Console.
+ * Uses AUTH_VIA_APP (LoginVia.APP) — opens the Zalo app directly via IPC.
+ * Requires the app signing hash to be registered in Zalo Dev Console.
  * Hash key for current EAS build: WSjJhOo3HdMyjuHH7La+W3L4HVY=
  * Register at: developers.zalo.me → Configure → Mobile app → Android → Hash Key
  *
+ * The native build must also export onNewIntent so the Zalo app can return
+ * the auth result back into our app (already done in EAS build 97fb2c59).
+ *
  * Flow:
- *   1. login("AUTH_VIA_WEB") opens Zalo OAuth page in a WebView
- *   2. Native SDK exchanges OAuth code via PKCE → returns {accessToken, refreshToken}
+ *   1. login("AUTH_VIA_APP") launches Zalo app for in-app auth (no browser)
+ *   2. Native SDK receives result via onNewIntent → returns {accessToken, refreshToken}
  *   3. getUserProfile() fetches Zalo user info (id, name) using cached access token
  *   4. POST to our backend /api/auth/zalo → receives JWT
  *   5. Persist session → navigate home
@@ -41,11 +41,10 @@ export default function ZaloSignInButton() {
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
     try {
-      // 1. Authenticate via Zalo WebView (LoginVia.WEB).
-      //    Opens id.zalo.me in a webview — user can tap "Đăng nhập qua ứng dụng Zalo"
-      //    from within the page to avoid password entry.
-      //    AUTH_VIA_APP is blocked by Zalo's hash key check until properly registered.
-      const authResult = await login('AUTH_VIA_WEB');
+      // 1. Authenticate via Zalo App (LoginVia.APP).
+      //    Opens the native Zalo app directly — no browser, no Chrome Custom Tabs.
+      //    Requires hash key WSjJhOo3HdMyjuHH7La+W3L4HVY= registered in Zalo Dev Console.
+      const authResult = await login('AUTH_VIA_APP');
       const { accessToken } = authResult;
 
       if (!accessToken) {

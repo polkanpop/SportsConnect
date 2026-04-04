@@ -199,17 +199,27 @@ export default function PhoneOtpScreen() {
       }
     } catch (e: any) {
       console.error('[PhoneOtp] verify error', e);
-      if (e?.code === 'auth/invalid-verification-code') {
+      const errCode: string = e?.code ?? e?.userInfo?.code ?? '';
+      const errMsg: string = e?.message ?? '';
+      const isExpired =
+        errCode === 'auth/code-expired' ||
+        errCode === 'auth/session-expired' ||
+        errMsg.includes('session-expired') ||
+        errMsg.includes('code-expired');
+      const isWrongCode =
+        errCode === 'auth/invalid-verification-code' ||
+        errMsg.includes('invalid-verification-code');
+      if (isWrongCode) {
         setError(t('AUTH_OTP_ERR_WRONG_CODE'));
-      } else if (e?.code === 'auth/code-expired' || e?.code === 'auth/session-expired') {
-        // Session expired — clear the stale cache and let user resend immediately
+      } else if (isExpired) {
+        // Session expired — clear handle but KEEP user on OTP entry screen so they can resend
         _pendingOtp = null;
         confirmRef.current = null;
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        setResendTimer(0);
-        setOtpSent(false);
-        setOtp('');
-        setError('Mã xác thực đã hết hạn. Vui lòng gửi lại mã mới.');
+        setResendTimer(0);    // allow immediate resend
+        setOtp('');           // clear the stale code they entered
+        // DO NOT setOtpSent(false) — stay on OTP screen showing "Resend" button
+        setError('Mã xác thực đã hết hạn. Nhấn Gửi lại để nhận mã mới.');
       } else {
         setError(e?.message ?? t('AUTH_OTP_ERR_FAILED'));
       }

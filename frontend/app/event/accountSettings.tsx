@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -138,6 +140,12 @@ export default function AccountSettingsScreen() {
 
   // ── Provider unlinking ────────────────────────────────────────────────────
   const [unlinkingProvider, setUnlinkingProvider] = useState<string | null>(null)
+
+  // ── Link confirmation modal ────────────────────────────────────────────────
+  const [linkConfirm, setLinkConfirm] = useState<{ provider: string; onConfirm: () => void } | null>(null)
+
+  // ── 3-dot unlink menu modal ────────────────────────────────────────────────
+  const [dotMenu, setDotMenu] = useState<{ provider: string; onUnlink: () => void } | null>(null)
 
   const handleUnlinkProvider = (provider: string) => {
     Alert.alert(
@@ -359,7 +367,7 @@ export default function AccountSettingsScreen() {
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
     try {
-      const authResult = await zaloLogin('AUTH_VIA_WEB')
+      const authResult = await zaloLogin('AUTH_VIA_APP')
       const { accessToken } = authResult
       const profile = await zaloGetProfile()
       await linkZaloProvider({
@@ -712,7 +720,9 @@ export default function AccountSettingsScreen() {
                 icon={ICONS.googleIcon}
                 label="Google"
                 linked={providers.includes('Google')}
-                onUnlink={providers.includes('Google') && providers.length > 1 ? () => handleUnlinkProvider('Google') : undefined}
+                onDotPress={providers.includes('Google') && providers.length > 1
+                  ? () => setDotMenu({ provider: 'Google', onUnlink: () => handleUnlinkProvider('Google') })
+                  : undefined}
                 unlinking={unlinkingProvider === 'Google'}
               />
               <View style={styles.contactDivider} />
@@ -720,9 +730,13 @@ export default function AccountSettingsScreen() {
                 icon={ICONS.zaloIcon}
                 label="Zalo"
                 linked={providers.includes('Zalo')}
-                onLink={!providers.includes('Zalo') ? handleLinkZalo : undefined}
+                onPress={!providers.includes('Zalo')
+                  ? () => setLinkConfirm({ provider: 'Zalo', onConfirm: handleLinkZalo })
+                  : undefined}
                 linking={linkingZalo}
-                onUnlink={providers.includes('Zalo') && providers.length > 1 ? () => handleUnlinkProvider('Zalo') : undefined}
+                onDotPress={providers.includes('Zalo') && providers.length > 1
+                  ? () => setDotMenu({ provider: 'Zalo', onUnlink: () => handleUnlinkProvider('Zalo') })
+                  : undefined}
                 unlinking={unlinkingProvider === 'Zalo'}
               />
               {providers.includes('Local') && (
@@ -740,22 +754,81 @@ export default function AccountSettingsScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── Link Confirmation Modal ────────────────────────────────────── */}
+      {linkConfirm && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLinkConfirm(null)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setLinkConfirm(null)}>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setLinkConfirm(null)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Liên kết {linkConfirm.provider}</Text>
+              <Text style={styles.modalBody}>
+                Bạn sẽ có thể đăng nhập bằng {linkConfirm.provider} sau khi liên kết.{'\n\n'}
+                Lưu ý: nếu huỷ liên kết sau này, tài khoản {linkConfirm.provider} sẽ không còn được dùng để đăng nhập vào ứng dụng.
+              </Text>
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  onPress={() => setLinkConfirm(null)}
+                >
+                  <Text style={styles.modalBtnCancelText}>Huỷ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnConfirm]}
+                  onPress={() => { setLinkConfirm(null); linkConfirm.onConfirm(); }}
+                >
+                  <Text style={styles.modalBtnConfirmText}>Liên kết</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ── 3-dot Unlink Menu Modal ────────────────────────────────────── */}
+      {dotMenu && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDotMenu(null)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setDotMenu(null)}>
+            <Pressable style={styles.dotMenuCard} onPress={() => {}}>
+              <TouchableOpacity
+                style={styles.dotMenuOption}
+                onPress={() => { setDotMenu(null); dotMenu.onUnlink(); }}
+              >
+                <Text style={styles.dotMenuOptionText}>Huỷ liên kết {dotMenu.provider}</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+
     </SafeAreaView>
   )
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onLink, linking, onUnlink, unlinking }: {
+function LinkedAccountRow({ icon, label, linked, onPress, linking, onDotPress, unlinking }: {
   icon: any
   label: string
   linked: boolean
-  onLink?: () => void
+  onPress?: () => void      // tap whole row when NOT linked → open link confirmation
   linking?: boolean
-  onUnlink?: () => void
+  onDotPress?: () => void   // tap ⋮ when linked → open unlink menu
   unlinking?: boolean
 }) {
-  return (
-    <View style={styles.linkedRow}>
+  const inner = (
+    <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
         <Image source={icon} style={styles.linkedIcon} resizeMode="contain" />
         {linked && (
@@ -765,40 +838,45 @@ function LinkedAccountRow({ icon, label, linked, onLink, linking, onUnlink, unli
         )}
       </View>
       <Text style={styles.linkedLabel}>{label}</Text>
-      {linked ? (
+      {linking ? (
+        <ActivityIndicator size="small" color="#FF6017" />
+      ) : linked ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
             <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
           </View>
-          {onUnlink && (
+          {onDotPress && (
             <TouchableOpacity
-              style={styles.linkedUnlinkBtn}
-              onPress={onUnlink}
+              style={styles.dotBtn}
+              onPress={onDotPress}
               disabled={unlinking}
+              hitSlop={8}
             >
               {unlinking
-                ? <ActivityIndicator size="small" color="#dc2626" />
-                : <Text style={styles.linkedUnlinkBtnText}>Unlink</Text>}
+                ? <ActivityIndicator size="small" color="#888" />
+                : <Text style={styles.dotBtnText}>⋮</Text>}
             </TouchableOpacity>
           )}
         </View>
-      ) : onLink ? (
-        <TouchableOpacity
-          style={styles.linkedLinkBtn}
-          onPress={onLink}
-          disabled={linking}
-        >
-          {linking
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.linkedLinkBtnText}>Link</Text>}
-        </TouchableOpacity>
       ) : (
-        <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
-          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Not linked</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
+            <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Chưa liên kết</Text>
+          </View>
+          {onPress && <Text style={styles.linkedChevron}>›</Text>}
         </View>
       )}
     </View>
   )
+
+  if (!linked && onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} disabled={linking}>
+        {inner}
+      </TouchableOpacity>
+    )
+  }
+  return inner
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -916,25 +994,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkedCheckText: { color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 10 },
-  linkedLinkBtn: {
-    backgroundColor: '#FF6017',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    minWidth: 52,
+  linkedChevron: { fontSize: 20, color: '#bbb', marginLeft: 2, lineHeight: 24 },
+
+  dotBtn: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: '#f3f4f6',
+  },
+  dotBtnText: { fontSize: 18, color: '#555', lineHeight: 22 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  linkedLinkBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  linkedUnlinkBtn: {
-    borderWidth: 1,
-    borderColor: '#dc2626',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    minWidth: 52,
-    alignItems: 'center',
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '82%',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  linkedUnlinkBtnText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
+  modalCloseBtn: { position: 'absolute', top: 12, right: 14, padding: 6 },
+  modalCloseText: { fontSize: 18, color: '#888', fontWeight: '400', lineHeight: 22 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111', marginBottom: 12, marginTop: 4 },
+  modalBody: { fontSize: 14, color: '#444', lineHeight: 20, marginBottom: 20 },
+  modalBtnRow: { flexDirection: 'row', gap: 10 },
+  modalBtn: { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  modalBtnCancel: { backgroundColor: '#f3f4f6' },
+  modalBtnConfirm: { backgroundColor: '#FF6017' },
+  modalBtnCancelText: { fontSize: 15, fontWeight: '600', color: '#555' },
+  modalBtnConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  dotMenuCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 4,
+    width: 220,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dotMenuOption: { paddingHorizontal: 18, paddingVertical: 14 },
+  dotMenuOptionText: { fontSize: 15, color: '#dc2626', fontWeight: '600' },
 
   successText: { fontSize: 13, color: '#15803d', marginTop: 6, fontWeight: '500' },
   errorText: { fontSize: 13, color: '#dc2626', marginTop: 6 },
