@@ -25,7 +25,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { InteractionManager, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
@@ -204,12 +204,28 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
           'Thiết lập tài khoản',
           'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
           [
-            { text: 'Để sau', onPress: () => { if (isMounted.current) router.replace('/(tabs)/Home'); } },
-            { text: 'Thiết lập ngay', onPress: () => { if (isMounted.current) router.replace('/event/accountSettings' as any); } },
+            {
+              text: 'Để sau',
+              onPress: () => {
+                if (isMounted.current) router.replace('/(tabs)/Home');
+                // Dismiss the Modal overlay once navigation animations complete.
+                // Using InteractionManager so it fires after all pending animations,
+                // guaranteeing Home is fully rendered before the overlay disappears.
+                InteractionManager.runAfterInteractions(() => overlay.hide());
+              },
+            },
+            {
+              text: 'Thiết lập ngay',
+              onPress: () => {
+                if (isMounted.current) router.replace('/event/accountSettings' as any);
+                InteractionManager.runAfterInteractions(() => overlay.hide());
+              },
+            },
           ],
         );
       } else {
         if (isMounted.current) router.replace('/(tabs)/Home');
+        InteractionManager.runAfterInteractions(() => overlay.hide());
       }
     } catch (e: any) {
       if (__DEV__) console.error('[ZaloSignIn]', e);

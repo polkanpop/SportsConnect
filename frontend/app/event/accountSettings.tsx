@@ -233,10 +233,19 @@ export default function AccountSettingsScreen() {
   }
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guard: only hide the overlay after a REAL transition from linking→idle.
+  // Without this, if the component mounts (or remounts) with the initial
+  // false/false state it would call overlay.hide() immediately, dismissing
+  // the overlay before the API calls have finished.
+  const wasLinkingRef = useRef(false)
 
-  // ── Hide global overlay after surface reconstruction completes ─────────────
+  // ── Hide global overlay only after a real linking → idle transition ────────
   useEffect(() => {
-    if (!linkingZalo && !linkingGoogle) {
+    if (linkingZalo || linkingGoogle) {
+      wasLinkingRef.current = true
+    }
+    if (wasLinkingRef.current && !linkingZalo && !linkingGoogle) {
+      wasLinkingRef.current = false
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           overlay.hide()

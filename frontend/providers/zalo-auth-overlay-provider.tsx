@@ -20,7 +20,7 @@
  *       {overlay renders AFTER children, highest z-order inside GestureHandlerRootView}
  */
 import React, { createContext, useCallback, useContext, useState } from 'react'
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native'
 
 interface ZaloAuthOverlayContextType {
   show: () => void
@@ -36,32 +36,58 @@ export function useZaloAuthOverlay() {
   return useContext(ZaloAuthOverlayContext)
 }
 
-export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNode }) {
-  const [visible, setVisible] = useState(false)
+// Module-level flag so the overlay state survives provider remounts (e.g. if
+// _layout.tsx re-renders and unmounts/remounts the provider during app resume).
+let _overlayVisible = false
 
-  const show = useCallback(() => setVisible(true), [])
-  const hide = useCallback(() => setVisible(false), [])
+export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNode }) {
+  // Initialise from the module-level flag so a remounted provider stays in sync.
+  const [visible, setVisible] = useState(_overlayVisible)
+
+  const show = useCallback(() => {
+    _overlayVisible = true
+    setVisible(true)
+  }, [])
+
+  const hide = useCallback(() => {
+    _overlayVisible = false
+    setVisible(false)
+  }, [])
 
   return (
     <ZaloAuthOverlayContext.Provider value={{ show, hide }}>
       {children}
-      {visible && (
-        <View style={styles.overlay} pointerEvents="box-only">
+      {/*
+       * Using a Modal (Android Dialog window) instead of a plain View so that the
+       * overlay lives in its OWN native window — completely separate from the app's
+       * main ViewRootImpl surface. This means it survives the OPPO/ColorOS surface
+       * reconstruction that occurs when Chrome Custom Tab closes, even during the
+       * ~800 ms gap where the main surface is dead and no React View can paint.
+       *
+       * When CCT is in the foreground it covers the Dialog (which waits behind
+       * it). When CCT finishes and the app's Activity returns to the foreground
+       * the Dialog is immediately visible — no surface relayout needed.
+       */}
+      <Modal
+        visible={visible}
+        transparent={false}
+        animationType="none"
+        statusBarTranslucent={true}
+        onRequestClose={() => { /* ignore hardware back while overlay is shown */ }}
+      >
+        <View style={styles.overlay}>
           <ActivityIndicator size="large" color="#0068FF" />
         </View>
-      )}
+      </Modal>
     </ZaloAuthOverlayContext.Provider>
   )
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    // High elevation so Android draws this on top of the reconstructed surface
-    elevation: 20,
-    zIndex: 9999,
   },
 })
