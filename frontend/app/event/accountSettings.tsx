@@ -45,6 +45,7 @@ import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
+import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -113,6 +114,7 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
 export default function AccountSettingsScreen() {
   const router = useRouter()
   const { t } = useTranslation()
+  const overlay = useZaloAuthOverlay()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
   const userInfo = userInfoQuery.data
 
@@ -231,6 +233,17 @@ export default function AccountSettingsScreen() {
   }
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Hide global overlay after surface reconstruction completes ─────────────
+  useEffect(() => {
+    if (!linkingZalo && !linkingGoogle) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          overlay.hide()
+        })
+      })
+    }
+  }, [linkingZalo, linkingGoogle])
 
   // ── Sync visibility from bootstrap data ──────────────────────────────────
   useEffect(() => {
@@ -440,7 +453,8 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
-      // Yield one JS frame so the overlay paints before the CCT opens
+      // Show global overlay to cover surface reconstruction, then yield one frame before CCT opens
+      overlay.show()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
@@ -515,9 +529,11 @@ export default function AccountSettingsScreen() {
         redirect_to: redirectUri,
         scopes: 'email profile',
       })
+      overlay.show()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
+
         redirectUri,
       )
       WebBrowser.dismissBrowser()
