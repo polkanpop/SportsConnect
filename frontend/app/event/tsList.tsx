@@ -432,9 +432,10 @@ const TrainingSessionListScreen = () => {
             <ScrollView style={styles.dropdown}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
+                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{opt}</Text>
+                    <Text style={styles.dropdownItemText}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -447,9 +448,10 @@ const TrainingSessionListScreen = () => {
             <ScrollView style={styles.dropdown}>
               {surfaceOptions.map(opt => {
                 const selected = selectedSurfaces.includes(opt)
+                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{opt}</Text>
+                    <Text style={styles.dropdownItemText}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )

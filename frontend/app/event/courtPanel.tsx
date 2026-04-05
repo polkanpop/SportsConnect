@@ -2446,7 +2446,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       activeOpacity={0.85}
                       style={styles.coverPressable}
                     >
-                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <Text style={styles.addPlus}>+</Text>}
+                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>}
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2663,7 +2663,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             {imageUploading ? (
                               <ActivityIndicator size="small" color={COLORS.neutral800} />
                             ) : (
-                              <Text style={styles.addPlus}>+</Text>
+                              <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>
                             )}
                           </TouchableOpacity>
                         </View>
@@ -2704,7 +2704,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               {editImages.length < 3 && (
                 <View style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity onPress={pickImage} disabled={imageUploading} activeOpacity={0.85} style={styles.coverPressable}>
-                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <Text style={styles.addPlus}>+</Text>}
+                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -3185,10 +3185,16 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   addPlus: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.neutral800,
-    marginTop: -1,
+    fontSize: 22,
+    fontWeight: '600',
+    color: COLORS.neutral600,
+    marginTop: 2,
+  },
+  addPlusIcon: {
+    width: 24,
+    height: 24,
+    tintColor: COLORS.neutral500,
+    marginBottom: 2,
   },
   removeXBtn: {
     position: 'absolute',

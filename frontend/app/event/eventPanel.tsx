@@ -1971,7 +1971,7 @@ export default function EventPanel({ organizerId }: Props) {
 										{imageUploading ? (
 											<ActivityIndicator size="small" color={COLORS.neutral800} />
 										) : (
-											<Text style={{ fontSize: 28, fontWeight: "700", color: COLORS.neutral800, marginTop: -1 }}>+</Text>
+											<><Image source={ICONS.camera} style={{ width: 24, height: 24, tintColor: COLORS.neutral500, marginBottom: 2 }} resizeMode="contain" /><Text style={{ fontSize: 22, fontWeight: "600", color: COLORS.neutral600, marginTop: 2 }}>+</Text></>
 										)}
 									</TouchableOpacity>
 								</View>

@@ -198,53 +198,10 @@ export default function ReviewsPanel() {
       }
     }
 
-    // Event bookings (completed)
-    if (Array.isArray(eventBookingsRaw)) {
-      for (const eb of eventBookingsRaw) {
-        const ev = eventsById.get(eb.eventid)
-        const reviewable = isReviewableByStatusAndTime({
-          bookingStatus: (eb as any)?.status,
-          sessionStatus: (eb as any)?.bookingstatus,
-          startTs: (ev as any)?.start_timestamp ?? (ev as any)?.time,
-          endTs: (ev as any)?.end_timestamp,
-        })
-        if (!reviewable) continue
-        const title = pickNestedTitle(ev) || 'Event'
-        const venueName = pickVenueName(ev) || undefined
-        items.push({
-          key: `event_${eb.eventbookingid}`,
-          title,
-          subtitle: t('REVIEW_PANEL_SUBTITLE_EVENT'),
-          venueName,
-          targettype: 'event',
-          targetid: eb.eventid,
-        })
-      }
-    }
+    // Event bookings — reviews disabled; users review the court via the booking
+    // detail screen instead (review button there targets the associated court).
 
-    // Training session bookings (completed)
-    if (Array.isArray(tsBookingsRaw)) {
-      for (const tb of tsBookingsRaw) {
-        const sess = sessionsById.get(tb.sessionid)
-        const reviewable = isReviewableByStatusAndTime({
-          bookingStatus: (tb as any)?.status,
-          sessionStatus: (tb as any)?.bookingstatus,
-          startTs: (sess as any)?.start_timestamp ?? (sess as any)?.time,
-          endTs: (sess as any)?.end_timestamp,
-        })
-        if (!reviewable) continue
-        const title = pickNestedTitle(sess) || 'Training Session'
-        const venueName = pickVenueName(sess) || undefined
-        items.push({
-          key: `session_${tb.tsbookingid}`,
-          title,
-          subtitle: t('REVIEW_PANEL_SUBTITLE_TRAINING'),
-          venueName,
-          targettype: 'trainingsession',
-          targetid: tb.sessionid,
-        })
-      }
-    }
+    // Training session bookings — same as events: review the court instead.
 
     return items
   }, [courtBookingsRaw, eventBookingsRaw, tsBookingsRaw, courtAvailabilityRaw, courtInfoRaw, eventsCombined, sessionsCombined, t])

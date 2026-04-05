@@ -2,16 +2,19 @@
  * ZaloAuthOverlayProvider
  *
  * Renders a full-screen white overlay at the ROOT of the view hierarchy — outside the
- * Stack navigator — so it survives the Android surface reconstruction that occurs on
- * OPPO/ColorOS (and similar) when Chrome Custom Tab closes.
+ * Stack navigator — as a simple absolute-positioned View (NOT a Modal/Dialog).
  *
- * Architecture:
- *   - show()  → called just before openAuthSessionAsync
- *   - hide()  → called ONLY inside a useEffect on the DESTINATION screen, after that
- *               screen's first render has committed to the native layer.
- *               This guarantees the overlay covers the ~300 ms surface-reconstruction
- *               window even on slow OPPO devices where AppState + requestAnimationFrame
- *               fire before the surface is actually ready to draw.
+ * Previous iterations used an Android Modal (Dialog window) to survive surface
+ * reconstruction on OPPO/ColorOS. However, the extra Dialog window causes OPPO to
+ * cascade-destroy VRI surfaces for 12+ seconds, permanently breaking React rendering
+ * and leaving the user stuck on a black screen forever.
+ *
+ * A plain View is part of the main Activity surface. It won't survive the ~1-2 s
+ * surface reconstruction gap, but:
+ *   1. It does NOT create extra windows for OPPO to kill (no stuck-forever bug).
+ *   2. The native android:windowBackground=white (already in styles.xml) covers the
+ *      gap once a native build is installed.
+ *   3. A brief white flash during CCT close is cosmetic; stuck-forever is a showstopper.
  *
  * Placement in _layout.tsx:
  *   GestureHandlerRootView
@@ -20,7 +23,7 @@
  *       {overlay renders AFTER children, highest z-order inside GestureHandlerRootView}
  */
 import React, { createContext, useCallback, useContext, useState } from 'react'
-import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
 
 interface ZaloAuthOverlayContextType {
   show: () => void
@@ -58,36 +61,25 @@ export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNod
     <ZaloAuthOverlayContext.Provider value={{ show, hide }}>
       {children}
       {/*
-       * Using a Modal (Android Dialog window) instead of a plain View so that the
-       * overlay lives in its OWN native window — completely separate from the app's
-       * main ViewRootImpl surface. This means it survives the OPPO/ColorOS surface
-       * reconstruction that occurs when Chrome Custom Tab closes, even during the
-       * ~800 ms gap where the main surface is dead and no React View can paint.
-       *
-       * When CCT is in the foreground it covers the Dialog (which waits behind
-       * it). When CCT finishes and the app's Activity returns to the foreground
-       * the Dialog is immediately visible — no surface relayout needed.
+       * Simple absolute-positioned View overlay — part of the main Activity surface.
+       * No Modal/Dialog window = no extra VRI for OPPO to kill = no stuck-forever bug.
        */}
-      <Modal
-        visible={visible}
-        transparent={false}
-        animationType="none"
-        statusBarTranslucent={true}
-        onRequestClose={() => { /* ignore hardware back while overlay is shown */ }}
-      >
-        <View style={styles.overlay}>
+      {visible && (
+        <View style={styles.overlay} pointerEvents="box-only">
           <ActivityIndicator size="large" color="#0068FF" />
         </View>
-      </Modal>
+      )}
     </ZaloAuthOverlayContext.Provider>
   )
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 9999,
+    elevation: 9999,
   },
 })

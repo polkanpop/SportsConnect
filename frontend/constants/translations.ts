@@ -489,6 +489,8 @@ export const en = {
   ACCT_EMAIL_PENDING_SENT: 'Verification email sent to new address. Click the link to confirm the change.',
   ACCT_LINK_ZALO_ERR_TITLE: 'Failed to link Zalo',
   ACCT_BTN_UNLINK: 'Unlink',
+  ACCT_LINKED_BADGE: 'Linked',
+  ACCT_UNLINKED_BADGE: 'Not linked',
 
   // Review
   REVIEW_HEADER_TITLE: 'Review',
@@ -1314,7 +1316,7 @@ export const vi: Record<TranslationKey, string> = {
   HISTORY_STATUS_PENDING: 'Đang chờ',
   HISTORY_STATUS_MISSED: 'Đã bỏ lỡ',
   HISTORY_STATUS_JOINED: 'Đã tham gia',
-  HISTORY_STATUS_COMPLETED: 'Đã hoàn thành',
+  HISTORY_STATUS_COMPLETED: 'Hoàn thành',
   HISTORY_STATUS_CANCELLED: 'Đã hủy',
   HISTORY_STATUS_UPCOMING: 'Sắp diễn ra',
   HISTORY_STATUS_PAID: 'Đã thanh toán',
@@ -1437,6 +1439,8 @@ export const vi: Record<TranslationKey, string> = {
   ACCT_EMAIL_PENDING_SENT: 'Đã gửi email xác thực đến địa chỉ mới. Nhấn vào liên kết để xác nhận thay đổi.',
   ACCT_LINK_ZALO_ERR_TITLE: 'Liên kết Zalo thất bại',
   ACCT_BTN_UNLINK: 'Huỷ liên kết',
+  ACCT_LINKED_BADGE: 'Đã liên kết',
+  ACCT_UNLINKED_BADGE: 'Chưa liên kết',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',

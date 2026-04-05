@@ -208,23 +208,21 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
               text: 'Để sau',
               onPress: () => {
                 if (isMounted.current) router.replace('/(tabs)/Home');
-                // Wait 1 000 ms for OPPO's async CCT cleanup window to finish,
-                // then dismiss the Modal after all navigation animations settle.
-                setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
+                InteractionManager.runAfterInteractions(() => overlay.hide());
               },
             },
             {
               text: 'Thiết lập ngay',
               onPress: () => {
                 if (isMounted.current) router.replace('/event/accountSettings' as any);
-                setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
+                InteractionManager.runAfterInteractions(() => overlay.hide());
               },
             },
           ],
         );
       } else {
         if (isMounted.current) router.replace('/(tabs)/Home');
-        setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
+        InteractionManager.runAfterInteractions(() => overlay.hide());
       }
     } catch (e: any) {
       if (__DEV__) console.error('[ZaloSignIn]', e);

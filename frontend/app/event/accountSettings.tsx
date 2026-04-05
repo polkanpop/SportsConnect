@@ -235,9 +235,6 @@ export default function AccountSettingsScreen() {
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Guard: only hide the overlay after a REAL transition from linking→idle.
   const wasLinkingRef = useRef(false)
-  // Tracks when overlay.show() was called so the hide delay is measured from
-  // the moment the CCT opens rather than from when the API returns.
-  const authLinkStartTime = useRef<number>(0)
 
   // ── Hide global overlay only after a real linking → idle transition ────────
   useEffect(() => {
@@ -246,17 +243,10 @@ export default function AccountSettingsScreen() {
     }
     if (wasLinkingRef.current && !linkingZalo && !linkingGoogle) {
       wasLinkingRef.current = false
-      // OPPO/ColorOS fires an async "window dying" cleanup event up to ~8 s
-      // after the CCT opens (observed: 5.4 s and 3.8 s in separate sessions).
-      // We keep the overlay alive for at least 8 s from when the CCT was opened
-      // so that it is still showing while OPPO tears down its VRI surface.
-      // elapsed = time already spent in the auth flow (PKCE + CCT + API calls).
-      // remainingDelay = how much longer we must wait to reach the 8 s mark.
-      // If the entire flow already took > 8 s, we hide immediately (delay = 0).
-      const elapsed = Date.now() - authLinkStartTime.current
-      const remainingDelay = Math.max(0, 8000 - elapsed)
-      const timer = setTimeout(() => overlay.hide(), remainingDelay)
-      return () => clearTimeout(timer)
+      // Hide overlay immediately — the View-based overlay (no Modal) does not
+      // need timing delays. OPPO can reconstruct surfaces freely without the
+      // extra Dialog window causing cascading VRI kills.
+      overlay.hide()
     }
   }, [linkingZalo, linkingGoogle])
 
@@ -470,7 +460,6 @@ export default function AccountSettingsScreen() {
       // 2. Open Chrome Custom Tab
       // Show global overlay to cover surface reconstruction, then yield one frame before CCT opens
       overlay.show()
-      authLinkStartTime.current = Date.now()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
@@ -546,7 +535,6 @@ export default function AccountSettingsScreen() {
         scopes: 'email profile',
       })
       overlay.show()
-      authLinkStartTime.current = Date.now()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
@@ -957,6 +945,7 @@ export default function AccountSettingsScreen() {
                   ? () => setUnlinkConfirm({ provider: 'Google', onConfirm: () => { setLinkExpandedProvider(null); handleUnlinkProvider('Google') } })
                   : undefined}
                 unlinking={unlinkingProvider === 'Google'}
+                iconSize={30}
               />
               <View style={styles.contactDivider} />
               <LinkedAccountRow
@@ -1151,7 +1140,7 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
       ) : linked ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>
-            <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ Linked</Text>
+            <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOn]}>✓ {t('ACCT_LINKED_BADGE')}</Text>
           </View>
           {unlinkExpanded && onUnlinkPress && (
             <TouchableOpacity
@@ -1168,7 +1157,7 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
         </View>
       ) : (
         <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
-          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>Chưa liên kết</Text>
+          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>{t('ACCT_UNLINKED_BADGE')}</Text>
         </View>
       )}
     </View>
