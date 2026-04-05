@@ -118,7 +118,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
 
       // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
       // Yield one JS frame so the overlay paints before CCT opens
-      await new Promise<void>(r => requestAnimationFrame(r));
+      await new Promise<void>(r => requestAnimationFrame(() => r()));
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
       // Explicitly dismiss so the CCT cannot fire more redirect events
       WebBrowser.dismissBrowser();
@@ -208,24 +208,23 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
               text: 'Để sau',
               onPress: () => {
                 if (isMounted.current) router.replace('/(tabs)/Home');
-                // Dismiss the Modal overlay once navigation animations complete.
-                // Using InteractionManager so it fires after all pending animations,
-                // guaranteeing Home is fully rendered before the overlay disappears.
-                InteractionManager.runAfterInteractions(() => overlay.hide());
+                // Wait 1 000 ms for OPPO's async CCT cleanup window to finish,
+                // then dismiss the Modal after all navigation animations settle.
+                setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
               },
             },
             {
               text: 'Thiết lập ngay',
               onPress: () => {
                 if (isMounted.current) router.replace('/event/accountSettings' as any);
-                InteractionManager.runAfterInteractions(() => overlay.hide());
+                setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
               },
             },
           ],
         );
       } else {
         if (isMounted.current) router.replace('/(tabs)/Home');
-        InteractionManager.runAfterInteractions(() => overlay.hide());
+        setTimeout(() => InteractionManager.runAfterInteractions(() => overlay.hide()), 1000);
       }
     } catch (e: any) {
       if (__DEV__) console.error('[ZaloSignIn]', e);

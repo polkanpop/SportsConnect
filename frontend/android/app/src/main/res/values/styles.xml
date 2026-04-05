@@ -4,6 +4,17 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#ffffff</item>
+    <!--
+      White window background fills the OPPO/ColorOS surface-reconstruction gap.
+      When a Chrome Custom Tab closes, OPPO destroys and recreates the app's
+      ViewRootImpl surface asynchronously (VRI#N dying). During this ~200-500ms
+      window, Android shows the Activity's windowBackground. Without this item the
+      theme inherits a dark/transparent background → black flash. With this set to
+      white, the user sees white (matching the Material loading overlay) instead
+      of black during ANY surface reconstruction, including CCT open/close and
+      Dialog add/remove cycles.
+    -->
+    <item name="android:windowBackground">@color/splashscreen_background</item>
   </style>
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
     <item name="windowSplashScreenBackground">@color/splashscreen_background</item>

@@ -246,11 +246,21 @@ export default function AccountSettingsScreen() {
     }
     if (wasLinkingRef.current && !linkingZalo && !linkingGoogle) {
       wasLinkingRef.current = false
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          overlay.hide()
-        })
-      })
+      // Delay 1 000 ms before dismissing the Modal overlay.
+      //
+      // Why: OPPO/ColorOS fires an async "window dying" cleanup event ~3-4 s
+      // after the Chrome Custom Tab closes (independently of our API calls).
+      // Our API calls typically finish within 200-900 ms of CCT close.
+      // Without the delay, overlay.hide() fires at roughly the same moment as
+      // OPPO's cleanup event, causing both a Dialog dismissal AND a window-dying
+      // surface reconstruction simultaneously — which shows a black flash.
+      //
+      // Waiting 1 000 ms ensures OPPO's cleanup finishes BEFORE we dismiss the
+      // Modal.  When the Modal then closes, the surface is already stable and
+      // any secondary reconstruction is < 200 ms (covered by the native
+      // android:windowBackground=white set in AppTheme/styles.xml).
+      const timer = setTimeout(() => overlay.hide(), 1000)
+      return () => clearTimeout(timer)
     }
   }, [linkingZalo, linkingGoogle])
 
