@@ -488,6 +488,7 @@ export const en = {
   ACCT_ERR_INVALID_EMAIL: 'Please enter a valid email address',
   ACCT_EMAIL_PENDING_SENT: 'Verification email sent to new address. Click the link to confirm the change.',
   ACCT_LINK_ZALO_ERR_TITLE: 'Failed to link Zalo',
+  ACCT_BTN_UNLINK: 'Unlink',
 
   // Review
   REVIEW_HEADER_TITLE: 'Review',
@@ -1435,6 +1436,7 @@ export const vi: Record<TranslationKey, string> = {
   ACCT_ERR_INVALID_EMAIL: 'Vui lòng nhập địa chỉ email hợp lệ',
   ACCT_EMAIL_PENDING_SENT: 'Đã gửi email xác thực đến địa chỉ mới. Nhấn vào liên kết để xác nhận thay đổi.',
   ACCT_LINK_ZALO_ERR_TITLE: 'Liên kết Zalo thất bại',
+  ACCT_BTN_UNLINK: 'Huỷ liên kết',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',

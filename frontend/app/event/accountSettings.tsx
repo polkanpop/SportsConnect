@@ -234,10 +234,10 @@ export default function AccountSettingsScreen() {
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Guard: only hide the overlay after a REAL transition from linking→idle.
-  // Without this, if the component mounts (or remounts) with the initial
-  // false/false state it would call overlay.hide() immediately, dismissing
-  // the overlay before the API calls have finished.
   const wasLinkingRef = useRef(false)
+  // Tracks when overlay.show() was called so the hide delay is measured from
+  // the moment the CCT opens rather than from when the API returns.
+  const authLinkStartTime = useRef<number>(0)
 
   // ── Hide global overlay only after a real linking → idle transition ────────
   useEffect(() => {
@@ -246,20 +246,16 @@ export default function AccountSettingsScreen() {
     }
     if (wasLinkingRef.current && !linkingZalo && !linkingGoogle) {
       wasLinkingRef.current = false
-      // Delay 1 000 ms before dismissing the Modal overlay.
-      //
-      // Why: OPPO/ColorOS fires an async "window dying" cleanup event ~3-4 s
-      // after the Chrome Custom Tab closes (independently of our API calls).
-      // Our API calls typically finish within 200-900 ms of CCT close.
-      // Without the delay, overlay.hide() fires at roughly the same moment as
-      // OPPO's cleanup event, causing both a Dialog dismissal AND a window-dying
-      // surface reconstruction simultaneously — which shows a black flash.
-      //
-      // Waiting 1 000 ms ensures OPPO's cleanup finishes BEFORE we dismiss the
-      // Modal.  When the Modal then closes, the surface is already stable and
-      // any secondary reconstruction is < 200 ms (covered by the native
-      // android:windowBackground=white set in AppTheme/styles.xml).
-      const timer = setTimeout(() => overlay.hide(), 1000)
+      // OPPO/ColorOS fires an async "window dying" cleanup event up to ~8 s
+      // after the CCT opens (observed: 5.4 s and 3.8 s in separate sessions).
+      // We keep the overlay alive for at least 8 s from when the CCT was opened
+      // so that it is still showing while OPPO tears down its VRI surface.
+      // elapsed = time already spent in the auth flow (PKCE + CCT + API calls).
+      // remainingDelay = how much longer we must wait to reach the 8 s mark.
+      // If the entire flow already took > 8 s, we hide immediately (delay = 0).
+      const elapsed = Date.now() - authLinkStartTime.current
+      const remainingDelay = Math.max(0, 8000 - elapsed)
+      const timer = setTimeout(() => overlay.hide(), remainingDelay)
       return () => clearTimeout(timer)
     }
   }, [linkingZalo, linkingGoogle])
@@ -474,6 +470,7 @@ export default function AccountSettingsScreen() {
       // 2. Open Chrome Custom Tab
       // Show global overlay to cover surface reconstruction, then yield one frame before CCT opens
       overlay.show()
+      authLinkStartTime.current = Date.now()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
@@ -549,6 +546,7 @@ export default function AccountSettingsScreen() {
         scopes: 'email profile',
       })
       overlay.show()
+      authLinkStartTime.current = Date.now()
       await new Promise<void>(r => requestAnimationFrame(() => r()))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
@@ -946,7 +944,6 @@ export default function AccountSettingsScreen() {
               <LinkedAccountRow
                 icon={ICONS.googleIcon}
                 label="Google"
-                iconSize={36}
                 linked={providers.includes('Google')}
                 onPress={!providers.includes('Google')
                   ? () => setLinkConfirm({ provider: 'Google', onConfirm: handleLinkGoogle })
@@ -1130,13 +1127,14 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
   icon: any
   label: string
   linked: boolean
-  onPress?: () => void      // tap whole row: when not linked → link confirm, when linked → toggle X
+  onPress?: () => void      // tap whole row: when not linked → link confirm, when linked → toggle Unlink btn
   linking?: boolean
-  onUnlinkPress?: () => void   // tap ✕ → open unlink confirmation
+  onUnlinkPress?: () => void   // tap Unlink → open unlink confirmation
   unlinking?: boolean
-  unlinkExpanded?: boolean     // whether the X button is currently visible
+  unlinkExpanded?: boolean     // whether the Unlink button is currently visible
   iconSize?: number            // override icon size (default 24)
 }) {
+  const { t } = useTranslation()
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
@@ -1157,14 +1155,14 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
           </View>
           {unlinkExpanded && onUnlinkPress && (
             <TouchableOpacity
-              style={styles.unlinkCircleBtn}
+              style={styles.unlinkBtn}
               onPress={onUnlinkPress}
               disabled={unlinking}
               hitSlop={8}
             >
               {unlinking
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.unlinkCircleText}>✕</Text>}
+                : <Text style={styles.unlinkBtnText}>{t('ACCT_BTN_UNLINK')}</Text>}
             </TouchableOpacity>
           )}
         </View>
@@ -1310,15 +1308,15 @@ const styles = StyleSheet.create({
   linkedCheckText: { color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 10 },
   linkedChevron: { fontSize: 20, color: '#bbb', marginLeft: 2, lineHeight: 24 },
 
-  unlinkCircleBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  unlinkBtn: {
     backgroundColor: '#ef4444',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  unlinkCircleText: { color: '#fff', fontSize: 11, fontWeight: '800', lineHeight: 14 },
+  unlinkBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   modalBackdrop: {
     flex: 1,
