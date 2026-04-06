@@ -150,16 +150,18 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
           });
       });
 
+      // CCT closed — hide overlay immediately so user sees their app during API calls.
+      // The ZaloAuthOverlayProvider's 600ms fade covers the Android surface rebuild.
+      overlay.hide();
+
       if (!authCode) {
         // User cancelled or CCT failed
-        overlay.hide();
         return;
       }
 
       // 4. Extract code from deep link — already have it
       const code = authCode;
       if (!code) {
-        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', 'Không nhận được mã xác thực từ Zalo.');
         return;
       }
@@ -173,7 +175,6 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       const tokenJson = await tokenResp.json().catch(() => ({}));
       const accessToken: string = tokenJson?.access_token ?? '';
       if (!accessToken) {
-        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', tokenJson?.detail || 'Không lấy được access token.');
         return;
       }
@@ -193,7 +194,6 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
         } catch { /* non-fatal */ }
       }
       if (!zaloId) {
-        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
         return;
       }
@@ -206,7 +206,6 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       });
       const authJson = await authResp.json().catch(() => ({}));
       if (!authResp.ok || !authJson?.userid) {
-        overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', authJson?.detail || 'Xác thực thất bại');
         return;
       }

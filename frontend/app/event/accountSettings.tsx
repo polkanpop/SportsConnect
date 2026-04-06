@@ -123,22 +123,34 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       setEnabled(false)
       return
     }
-    // Turning on — check if mic permission is already granted
-    const { granted } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
+    // Turning on — check current permission status
+    const { granted, canAskAgain } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
     if (granted) {
-      // Permission already granted (from a previous enable) — enable immediately
+      // Already granted (re-enable after disable) — no dialog needed
       setEnabled(true)
       return
     }
-    // Permission not yet granted — optimistically enable FIRST so the Switch
-    // stays ON during the permission dialog. On OPPO/ColorOS, the Android
-    // surface reconstructs when the dialog opens (activity pause→resume), which
-    // remounts this component and re-reads AsyncStorage. Writing 'true' here
+    if (!canAskAgain) {
+      // Permanently denied — OS will not show the dialog again.
+      // Direct the user to App Settings to grant mic access manually.
+      Alert.alert(
+        'Cần quyền Microphone',
+        'Bạn đã từ chối quyền micro. Hãy vào Cài đặt → Quyền → Micro để cấp quyền cho SportConnect.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Mở Cài đặt', onPress: () => Linking.openSettings() },
+        ]
+      )
+      return
+    }
+    // First-time request — optimistically enable BEFORE the dialog opens.
+    // On OPPO/ColorOS, Android surface reconstruction during the permission dialog
+    // remounts the component and re-reads AsyncStorage. Writing 'true' first
     // ensures the remounted component reads 'true' and stays ON.
     setEnabled(true)
     const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
     if (!nowGranted) {
-      // Permission denied — revert to off
+      // User denied — revert
       setEnabled(false)
     }
   }, [setEnabled])
@@ -149,7 +161,7 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
-            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 5 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
+            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 0 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
             <View style={{
               backgroundColor: '#FF6017',
               borderRadius: 6,
@@ -559,9 +571,12 @@ export default function AccountSettingsScreen() {
           })
       })
 
+      // CCT closed — hide overlay immediately so user sees their app.
+      // The ZaloAuthOverlayProvider's 600ms fade-out covers the Android surface rebuild.
+      overlay.hide()
+
       if (!code) {
         // User cancelled or CCT failed — reload meta in case link went through
-        overlay.hide()
         void loadMeta()
         return
       }
@@ -600,9 +615,7 @@ export default function AccountSettingsScreen() {
       }
     } finally {
       setLinkingZalo(false)
-      // Delay overlay dismissal so the Android OpenGL surface has time to
-      // stabilise after Chrome Custom Tab closes (prevents black flash).
-      setTimeout(() => overlay.hide(), 800)
+      overlay.hide() // safety backstop — no-op if already hidden above
     }
   }
 
