@@ -1,1 +1,0 @@
-these are just API config api are provided in render env

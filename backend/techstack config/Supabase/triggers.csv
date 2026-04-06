@@ -1,9 +1,0 @@
-trigger_name,table_name,trigger_event,action_timing,action_statement,action_orientation
-trg_set_courtbooking_duration,courtbooking,INSERT,BEFORE,EXECUTE FUNCTION set_courtbooking_duration(),ROW
-trg_set_courtbooking_duration,courtbooking,UPDATE,BEFORE,EXECUTE FUNCTION set_courtbooking_duration(),ROW
-trg_review_reaction_counts,review_reactions,UPDATE,AFTER,EXECUTE FUNCTION _sync_review_reaction_counts(),ROW
-trg_review_reaction_counts,review_reactions,INSERT,AFTER,EXECUTE FUNCTION _sync_review_reaction_counts(),ROW
-trg_review_reaction_counts,review_reactions,DELETE,AFTER,EXECUTE FUNCTION _sync_review_reaction_counts(),ROW
-trg_review_reactions_eligibility,review_reactions,INSERT,BEFORE,EXECUTE FUNCTION _enforce_review_reaction_eligibility(),ROW
-trg_reviews_eligibility,reviews,INSERT,BEFORE,EXECUTE FUNCTION _enforce_review_eligibility(),ROW
-trg_reviews_updated_at,reviews,UPDATE,BEFORE,EXECUTE FUNCTION _set_updated_at(),ROW

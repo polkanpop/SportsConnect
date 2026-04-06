@@ -1,7 +1,0 @@
-all of run by this commands  ( for dev purposes): 
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table_name TO anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table_name TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.your_table_name TO service_role;
-
-GRANT usage, select on sequence tablename_tableid_seq to anon, authenticated, service_role;

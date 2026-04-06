@@ -1,1 +1,0 @@
-cloudfare worker folder for cloudfare also read that 
