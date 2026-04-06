@@ -1,0 +1,2 @@
+schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+public,userlogin,Enable access for all users,PERMISSIVE,{public},ALL,true,null

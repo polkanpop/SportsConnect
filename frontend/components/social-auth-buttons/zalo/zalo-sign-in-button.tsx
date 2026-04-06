@@ -25,7 +25,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { InteractionManager, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
@@ -95,9 +95,6 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
     setLoading(true);
     onAuthStart?.();
     overlay.show();
-    // Track whether we navigated away — if not (cancel/error) we hide the overlay here.
-    // If we DO navigate, the destination screen hides it after its first render commits.
-    let willNavigate = false;
 
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '');
 
@@ -120,12 +117,8 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       // Yield one JS frame so the overlay paints before CCT opens
       await new Promise<void>(r => requestAnimationFrame(() => r()));
       const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
-      // Explicitly dismiss so the CCT cannot fire more redirect events
-      WebBrowser.dismissBrowser();
-      // DO NOT clear the overlay here. The global ZaloAuthOverlayProvider overlay
-      // (rendered at root level, outside the Stack navigator) keeps covering the screen
-      // throughout the ~300 ms surface-reconstruction window on OPPO/ColorOS.
-      // hide() is called by the destination screen's useEffect after its first render.
+      // Note: do NOT call WebBrowser.dismissBrowser() — it may cause Chrome to fire
+      // a delayed closing intent that kills the activity surface on some devices.
       if (result.type !== 'success') {
         // User cancelled or CCT failed — we're staying on this screen, safe to hide now.
         overlay.hide();
@@ -189,13 +182,9 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       }
 
       // 8. Persist session and navigate home.
-      // Mark willNavigate=true BEFORE navigation so the finally block knows NOT to
-      // hide the overlay — the destination screen (Home / accountSettings) hides it
-      // inside its useEffect after the first render commits to the native layer.
       await persistAuthSession(authJson, { rememberMe: true });
       queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
 
-      willNavigate = true;
       const promptKey = `${OAUTH_PROMPT_PREFIX}${authJson.userid}`;
       const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
       if (!alreadyPrompted) {
@@ -208,21 +197,18 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
               text: 'Để sau',
               onPress: () => {
                 if (isMounted.current) router.replace('/(tabs)/Home');
-                InteractionManager.runAfterInteractions(() => overlay.hide());
               },
             },
             {
               text: 'Thiết lập ngay',
               onPress: () => {
                 if (isMounted.current) router.replace('/event/accountSettings' as any);
-                InteractionManager.runAfterInteractions(() => overlay.hide());
               },
             },
           ],
         );
       } else {
         if (isMounted.current) router.replace('/(tabs)/Home');
-        InteractionManager.runAfterInteractions(() => overlay.hide());
       }
     } catch (e: any) {
       if (__DEV__) console.error('[ZaloSignIn]', e);
@@ -232,13 +218,11 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       }
     } finally {
       setLoading(false);
-      // Only hide the overlay if we are NOT navigating away.
-      // If willNavigate=true, the destination screen calls overlay.hide() after its
-      // first render, guaranteeing the surface is fully reconstructed before dismiss.
-      if (!willNavigate) {
-        overlay.hide();
-        onAuthDone?.();
-      }
+      // Always hide the overlay in finally. The overlay provider has a built-in
+      // auto-hide timeout as a safety net, but we should clean up eagerly.
+      // A brief flash during navigation is acceptable; stuck-forever is not.
+      overlay.hide();
+      onAuthDone?.();
       isProcessing.current = false;
     }
   }, [loading, router, overlay, onAuthStart, onAuthDone]);

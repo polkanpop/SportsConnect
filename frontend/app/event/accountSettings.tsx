@@ -11,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -46,6 +47,7 @@ import { queryKeys } from '@/hooks/query-keys'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
+import { useVoicePreference } from '@/hooks/use-voice-preference'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -110,6 +112,40 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
   )
 }
 
+function VoiceToggleSection({ t }: { t: (key: any) => string }) {
+  const { enabled, setEnabled } = useVoicePreference()
+  return (
+    <>
+      <SectionHeader title={t('VOICE_SECTION_TITLE')} />
+      <View style={styles.card}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Text style={styles.fieldLabel}>{t('VOICE_TOGGLE_LABEL')}</Text>
+            <View style={{
+              backgroundColor: '#FF6017',
+              borderRadius: 4,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              marginLeft: 8,
+            }}>
+              <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>BETA</Text>
+            </View>
+          </View>
+          <Switch
+            value={enabled}
+            onValueChange={setEnabled}
+            trackColor={{ false: '#ccc', true: '#FF6017' }}
+            thumbColor={enabled ? '#FFF' : '#f4f3f4'}
+          />
+        </View>
+        <Text style={{ color: '#888', fontSize: 12, marginTop: 8, lineHeight: 17 }}>
+          {t('VOICE_TOGGLE_DESC')}
+        </Text>
+      </View>
+    </>
+  )
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function AccountSettingsScreen() {
   const router = useRouter()
@@ -125,6 +161,28 @@ export default function AccountSettingsScreen() {
     t('AUTH_STRENGTH_GOOD'),
     t('AUTH_STRENGTH_STRONG'),
   ], [t])
+
+  // ── Settings search ──────────────────────────────────────────────────────
+  const [settingsSearch, setSettingsSearch] = useState('')
+  // Keywords per section (translated) — used to match against user search.
+  const sectionKeywords = useMemo(() => ({
+    identity: [t('ACCT_SECTION_IDENTITY'), t('ACCT_LABEL_DISPLAY_NAME'), 'name', 'tên'].join(' ').toLowerCase(),
+    contact:  [t('ACCT_SECTION_CONTACT'), t('ACCT_LABEL_EMAIL'), t('ACCT_LABEL_PHONE'), 'email', 'phone', 'điện thoại'].join(' ').toLowerCase(),
+    auth:     [t('ACCT_SECTION_AUTH'), t('ACCT_LABEL_USERNAME'), t('ACCT_LABEL_NEW_PASSWORD'), 'password', 'username', 'mật khẩu', 'tên đăng nhập', 'security', 'bảo mật'].join(' ').toLowerCase(),
+    linked:   [t('ACCT_SECTION_LINKED'), 'google', 'zalo', 'link', 'liên kết'].join(' ').toLowerCase(),
+    voice:    [t('VOICE_SECTION_TITLE'), 'voice', 'giọng nói', 'micro', 'mic', 'beta', 'automation'].join(' ').toLowerCase(),
+  }), [t])
+  const showSection = useMemo(() => {
+    const q = settingsSearch.trim().toLowerCase()
+    if (!q) return { identity: true, contact: true, auth: true, linked: true, voice: true }
+    return {
+      identity: sectionKeywords.identity.includes(q),
+      contact:  sectionKeywords.contact.includes(q),
+      auth:     sectionKeywords.auth.includes(q),
+      linked:   sectionKeywords.linked.includes(q),
+      voice:    sectionKeywords.voice.includes(q),
+    }
+  }, [settingsSearch, sectionKeywords])
 
   // ── Identity ─────────────────────────────────────────────────────────────
   const [nameValue, setNameValue] = useState('')
@@ -233,22 +291,6 @@ export default function AccountSettingsScreen() {
   }
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Guard: only hide the overlay after a REAL transition from linking→idle.
-  const wasLinkingRef = useRef(false)
-
-  // ── Hide global overlay only after a real linking → idle transition ────────
-  useEffect(() => {
-    if (linkingZalo || linkingGoogle) {
-      wasLinkingRef.current = true
-    }
-    if (wasLinkingRef.current && !linkingZalo && !linkingGoogle) {
-      wasLinkingRef.current = false
-      // Hide overlay immediately — the View-based overlay (no Modal) does not
-      // need timing delays. OPPO can reconstruct surfaces freely without the
-      // extra Dialog window causing cascading VRI kills.
-      overlay.hide()
-    }
-  }, [linkingZalo, linkingGoogle])
 
   // ── Sync visibility from bootstrap data ──────────────────────────────────
   useEffect(() => {
@@ -458,17 +500,10 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
-      // Show global overlay to cover surface reconstruction, then yield one frame before CCT opens
-      overlay.show()
-      await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
       )
-      WebBrowser.dismissBrowser()
-      // DO NOT clear the overlay here. overlay.hide() is called by the useEffect
-      // that watches linkingZalo — it fires AFTER this screen re-renders with the
-      // new auth state, guaranteeing the surface reconstruction is complete.
       if (result.type !== 'success') {
         // Zalo may have auto-consented and linked successfully even if the result
         // type is not 'success' (race between redirect and CCT close detection).
@@ -534,16 +569,10 @@ export default function AccountSettingsScreen() {
         redirect_to: redirectUri,
         scopes: 'email profile',
       })
-      overlay.show()
-      await new Promise<void>(r => requestAnimationFrame(() => r()))
       const wbResult = await WebBrowser.openAuthSessionAsync(
         `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
-
         redirectUri,
       )
-      WebBrowser.dismissBrowser()
-      // DO NOT clear the overlay here — same pattern as handleLinkZalo.
-      // overlay.hide() fires from the linkingGoogle useEffect after re-render.
       if (wbResult.type !== 'success') { void loadMeta(); return }
 
       // Parse fragment for access_token
@@ -609,9 +638,25 @@ export default function AccountSettingsScreen() {
         <View style={{ width: 44 }} />
       </View>
 
+      {/* Search bar */}
+      <View style={styles.settingsSearchRow}>
+        <View style={styles.settingsSearchContainer}>
+          <Image source={ICONS.search} style={styles.settingsSearchIcon} />
+          <TextInput
+            placeholder={t('ACCT_SEARCH_PLACEHOLDER')}
+            placeholderTextColor="#999"
+            value={settingsSearch}
+            onChangeText={setSettingsSearch}
+            style={styles.settingsSearchInput}
+            returnKeyType="search"
+          />
+        </View>
+      </View>
+
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
 
         {/* ── Identity ─────────────────────────────────────────────────── */}
+        {showSection.identity && <>
         <SectionHeader title={t('ACCT_SECTION_IDENTITY')} />
         <View style={styles.card}>
           {/* Display Name */}
@@ -634,8 +679,10 @@ export default function AccountSettingsScreen() {
           {nameSuccess && <Text style={styles.successText}>{t('ACCT_NAME_SAVE_SUCCESS')}</Text>}
           {nameError && <Text style={styles.errorText}>{nameError}</Text>}
         </View>
+        </>}
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
+        {showSection.contact && <>
         <SectionHeader title={t('ACCT_SECTION_CONTACT')} />
         <View style={styles.card}>
 
@@ -735,8 +782,10 @@ export default function AccountSettingsScreen() {
           )}
 
         </View>
+        </>}
 
         {/* ── Authentication & Security ─────────────────────────────── */}
+        {showSection.auth && <>
         <SectionHeader title={t('ACCT_SECTION_AUTH')} />
 
         {/* Username subsection */}
@@ -921,8 +970,10 @@ export default function AccountSettingsScreen() {
             </>
           )}
         </View>
+        </>}
 
         {/* ── Linked Accounts ───────────────────────────────────────────── */}
+        {showSection.linked && <>
         <SectionHeader title={t('ACCT_SECTION_LINKED')} />
         <View style={styles.card}>
           {loadingMeta ? (
@@ -978,6 +1029,10 @@ export default function AccountSettingsScreen() {
             </>
           )}
         </View>
+        </>}
+
+        {/* ── Voice Automation ──────────────────────────────────────────── */}
+        {showSection.voice && <VoiceToggleSection t={t} />}
 
       </ScrollView>
 
@@ -1191,6 +1246,11 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
   backIcon: { width: 22, height: 22, tintColor: '#222' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
+
+  settingsSearchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fff' },
+  settingsSearchContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f0f2', borderRadius: 24, paddingHorizontal: 14, paddingVertical: 10 },
+  settingsSearchIcon: { width: 18, height: 18, tintColor: '#888', marginRight: 8, resizeMode: 'contain' as const },
+  settingsSearchInput: { flex: 1, color: '#111', fontSize: 15, paddingVertical: 0 },
 
   sectionHeader: {
     fontSize: 13,

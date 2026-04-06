@@ -55,6 +55,7 @@ from .routers import (
 )
 from .routers import venues
 from .routers import debug_identity
+from .routers import voicebooking
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
@@ -215,6 +216,7 @@ app.include_router(drafts.router,   prefix="/api")  # Redis form-draft endpoints
 app.include_router(me.router,       prefix="/api")  # /api/me/dashboard bootstrap
 app.include_router(venues.router,   prefix="/api")  # venue booking-data bundle
 app.include_router(devices.router,  prefix="/api")  # push notification device tokens
+app.include_router(voicebooking.router, prefix="/api")  # voice booking intent (Groq STT + LLM)
 
 # ── Homepage + Legal document routes (served directly, no auth required) ──
 _HTML_DIR = Path(__file__).parent.parent / "static" / "html"

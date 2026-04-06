@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react'
 import type { CombinedEvent, CombinedTrainingSession, FavouriteCourt, NotificationRow, UserInfoRow } from '@/lib/backendApi'
-import { prefetchDashboardAndCourtInfo } from '@/lib/backendApi'
+import { prefetchDashboardAndCourtInfo, listCourtInfoCompactCached } from '@/lib/backendApi'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { queryKeys } from '@/hooks/query-keys'
 import { useUserId } from '@/hooks/use-user-id'
@@ -93,6 +93,14 @@ export function AppBootstrapProvider({ children }: { children: React.ReactNode }
 
   const resumePrefetchInFlightRef = useRef<Promise<void> | null>(null)
   const lastResumePrefetchMsRef = useRef<number>(0)
+  const initialCourtInfoPrefetchedRef = useRef(false)
+
+  // Pre-warm court info cache once after dashboard loads so Map tab opens instantly.
+  useEffect(() => {
+    if (!dashboard.data || initialCourtInfoPrefetchedRef.current) return
+    initialCourtInfoPrefetchedRef.current = true
+    listCourtInfoCompactCached().catch(() => {})
+  }, [dashboard.data])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {

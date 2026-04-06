@@ -8,9 +8,9 @@ block_list,35901_112106_6_not_null,CHECK,null,null,null,blocked_at IS NOT NULL
 block_list,block_list_blocked_by_userid_fkey,FOREIGN KEY,blocked_by_userid,users,userid,null
 block_list,block_list_blocked_userid_fkey,FOREIGN KEY,blocked_userid,users,userid,null
 block_list,block_list_pkey,PRIMARY KEY,blockid,null,null,null
-block_list,block_list_unique,UNIQUE,blocked_userid,null,null,null
 block_list,block_list_unique,UNIQUE,targettype,null,null,null
 block_list,block_list_unique,UNIQUE,targetid,null,null,null
+block_list,block_list_unique,UNIQUE,blocked_userid,null,null,null
 court_schedule_rules,35901_140810_10_not_null,CHECK,null,null,null,created_at IS NOT NULL
 court_schedule_rules,35901_140810_1_not_null,CHECK,null,null,null,schedule_rule_id IS NOT NULL
 court_schedule_rules,35901_140810_2_not_null,CHECK,null,null,null,courtid IS NOT NULL
@@ -99,8 +99,8 @@ favouritecourts,35901_50953_3_not_null,CHECK,null,null,null,courtid IS NOT NULL
 favouritecourts,fk_court,FOREIGN KEY,courtid,courts,courtid,null
 favouritecourts,fk_user,FOREIGN KEY,userid,users,userid,null
 favouritecourts,favouritecourts_pkey,PRIMARY KEY,favouriteid,null,null,null
-favouritecourts,uc_usercourt,UNIQUE,courtid,null,null,null
 favouritecourts,uc_usercourt,UNIQUE,userid,null,null,null
+favouritecourts,uc_usercourt,UNIQUE,courtid,null,null,null
 notifications,35901_36176_11_not_null,CHECK,null,null,null,data IS NOT NULL
 notifications,35901_36176_13_not_null,CHECK,null,null,null,created_at IS NOT NULL
 notifications,35901_36176_1_not_null,CHECK,null,null,null,notificationid IS NOT NULL
@@ -118,6 +118,7 @@ payments,35901_36021_2_not_null,CHECK,null,null,null,status IS NOT NULL
 payments,35901_36021_3_not_null,CHECK,null,null,null,time IS NOT NULL
 payments,35901_36021_4_not_null,CHECK,null,null,null,method IS NOT NULL
 payments,35901_36021_5_not_null,CHECK,null,null,null,amount IS NOT NULL
+payments,payments_userid_fkey,FOREIGN KEY,userid,users,userid,null
 payments,payments_pkey,PRIMARY KEY,paymentid,null,null,null
 playingcourt,35901_137092_1_not_null,CHECK,null,null,null,playingcourtid IS NOT NULL
 playingcourt,35901_137092_2_not_null,CHECK,null,null,null,courtid IS NOT NULL
@@ -131,8 +132,8 @@ playingcourt,35901_137092_9_not_null,CHECK,null,null,null,price IS NOT NULL
 playingcourt,playingcourt_part_check,CHECK,null,null,null,"(part = ANY (ARRAY['full'::text, 'half_a'::text, 'half_b'::text]))"
 playingcourt,playingcourt_courtid_fkey,FOREIGN KEY,courtid,courts,courtid,null
 playingcourt,playingcourt_pkey,PRIMARY KEY,playingcourtid,null,null,null
-playingcourt,playingcourt_courtid_base_name_part_key,UNIQUE,base_name,null,null,null
 playingcourt,playingcourt_courtid_base_name_part_key,UNIQUE,courtid,null,null,null
+playingcourt,playingcourt_courtid_base_name_part_key,UNIQUE,base_name,null,null,null
 playingcourt,playingcourt_courtid_base_name_part_key,UNIQUE,part,null,null,null
 playingcourtinfo,35901_137111_1_not_null,CHECK,null,null,null,playingcourtinfoid IS NOT NULL
 playingcourtinfo,35901_137111_2_not_null,CHECK,null,null,null,playingcourtid IS NOT NULL

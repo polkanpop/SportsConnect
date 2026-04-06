@@ -1,0 +1,219 @@
+table_name,col_order,column_name,data_type,udt_name,character_maximum_length,is_nullable,column_default,is_identity,identity_generation
+block_list,1,blockid,integer,int4,null,NO,null,YES,BY DEFAULT
+block_list,2,targettype,USER-DEFINED,block_target_type,null,NO,null,NO,null
+block_list,3,targetid,integer,int4,null,NO,null,NO,null
+block_list,4,blocked_userid,integer,int4,null,NO,null,NO,null
+block_list,5,blocked_by_userid,integer,int4,null,NO,null,NO,null
+block_list,6,blocked_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+court_schedule_rules,1,schedule_rule_id,bigint,int8,null,NO,null,YES,BY DEFAULT
+court_schedule_rules,2,courtid,integer,int4,null,NO,null,NO,null
+court_schedule_rules,3,playingcourtid,bigint,int8,null,YES,null,NO,null
+court_schedule_rules,4,day_of_week,smallint,int2,null,NO,null,NO,null
+court_schedule_rules,5,valid_from,date,date,null,NO,null,NO,null
+court_schedule_rules,6,valid_to,date,date,null,YES,null,NO,null
+court_schedule_rules,7,start_time,time without time zone,time,null,NO,null,NO,null
+court_schedule_rules,8,end_time,time without time zone,time,null,NO,null,NO,null
+court_schedule_rules,9,is_available,boolean,bool,null,NO,true,NO,null
+court_schedule_rules,10,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+courtavailability,1,availabilityid,integer,int4,null,NO,null,YES,BY DEFAULT
+courtavailability,2,courtid,integer,int4,null,NO,null,NO,null
+courtavailability,5,status,USER-DEFINED,availabilitystatus,null,NO,null,NO,null
+courtavailability,9,start_time,time without time zone,time,null,NO,null,NO,null
+courtavailability,10,end_time,time without time zone,time,null,NO,null,NO,null
+courtavailability,16,booking_date,jsonb,jsonb,null,NO,null,NO,null
+courtavailability,17,playingcourtid,bigint,int8,null,YES,null,NO,null
+courtbooking,1,courtbookingid,integer,int4,null,NO,null,YES,BY DEFAULT
+courtbooking,2,availabilityid,integer,int4,null,NO,null,NO,null
+courtbooking,3,userid,integer,int4,null,NO,null,NO,null
+courtbooking,4,status,USER-DEFINED,courtbookingstatus,null,NO,null,NO,null
+courtbooking,5,paymentid,integer,int4,null,YES,null,NO,null
+courtbooking,6,start_timestamp,timestamp without time zone,timestamp,null,NO,null,NO,null
+courtbooking,7,end_timestamp,timestamp without time zone,timestamp,null,NO,null,NO,null
+courtbooking,8,bookingdate,date,date,null,NO,null,NO,null
+courtbooking,9,note,text,text,null,YES,null,NO,null
+courtbooking,10,bookingstatus,USER-DEFINED,sessionstatus,null,NO,'upcoming'::sessionstatus,NO,null
+courtbooking,11,playingcourtid,bigint,int8,null,YES,null,NO,null
+courtbooking,12,selected_court_name,text,text,null,YES,null,NO,null
+courtbooking,13,selected_base_name,text,text,null,YES,null,NO,null
+courtbooking,14,selected_part,text,text,null,YES,null,NO,null
+courtbooking,15,selected_surface,USER-DEFINED,courtsurface,null,YES,null,NO,null
+courtbooking,16,court_price_at_booking,numeric,numeric,null,YES,null,NO,null
+courtbooking,17,duration_minutes,integer,int4,null,YES,null,NO,null
+courtbooking,18,total_amount,numeric,numeric,null,YES,null,NO,null
+courtinfo,1,courtinfoid,integer,int4,null,NO,null,YES,BY DEFAULT
+courtinfo,2,courtid,integer,int4,null,NO,null,NO,null
+courtinfo,3,address,text,text,null,NO,null,NO,null
+courtinfo,4,latitude,double precision,float8,null,NO,null,NO,null
+courtinfo,5,longitude,double precision,float8,null,NO,null,NO,null
+courtinfo,9,venue,ARRAY,_venue_type,null,NO,null,NO,null
+courtinfo,10,images,ARRAY,_text,null,YES,null,NO,null
+courtinfo,11,name,text,text,null,NO,null,NO,null
+courtinfo,12,availability,text,text,null,NO,null,NO,null
+courtinfo,17,accuracy_type,text,text,null,YES,null,NO,null
+courtinfo,20,auto_approve,boolean,bool,null,NO,false,NO,null
+courts,1,courtid,integer,int4,null,NO,null,YES,BY DEFAULT
+courts,2,courtinfo,text,text,null,NO,null,NO,null
+courts,4,ownerid,integer,int4,null,NO,null,NO,null
+courts,9,verified_at,timestamp with time zone,timestamptz,null,YES,null,NO,null
+courts,10,status,USER-DEFINED,court_status,null,NO,'verified'::court_status,NO,null
+eventbooking,1,eventbookingid,integer,int4,null,NO,null,YES,BY DEFAULT
+eventbooking,2,eventid,integer,int4,null,NO,null,NO,null
+eventbooking,3,userid,integer,int4,null,NO,null,NO,null
+eventbooking,4,paymentid,integer,int4,null,YES,null,NO,null
+eventbooking,5,status,USER-DEFINED,eventbookingstatus,null,NO,null,NO,null
+eventbooking,7,note,text,text,null,YES,null,NO,null
+eventbooking,9,bookingstatus,USER-DEFINED,sessionstatus,null,NO,'upcoming'::sessionstatus,NO,null
+eventinfo,1,eventinfoid,integer,int4,null,NO,null,YES,BY DEFAULT
+eventinfo,2,eventid,integer,int4,null,NO,null,NO,null
+eventinfo,3,numberofpeople,integer,int4,null,YES,null,NO,null
+eventinfo,4,description,text,text,null,YES,null,NO,null
+eventinfo,5,title,text,text,null,NO,null,NO,null
+eventinfo,6,entry_fee,numeric,numeric,null,YES,null,NO,null
+eventinfo,7,support_payment_method,USER-DEFINED,supportpaymentmethods,null,YES,null,NO,null
+eventinfo,8,participants_cap,integer,int4,null,NO,null,NO,null
+eventinfo,9,join_status,boolean,bool,null,NO,true,NO,null
+eventinfo,10,auto_approve,boolean,bool,null,NO,null,NO,null
+eventinfo,11,images,ARRAY,_text,null,YES,null,NO,null
+events,1,eventid,integer,int4,null,NO,null,YES,BY DEFAULT
+events,2,time,timestamp without time zone,timestamp,null,NO,null,NO,null
+events,3,courtbookingid,integer,int4,null,NO,null,NO,null
+events,4,status,USER-DEFINED,eventstatus,null,NO,null,NO,null
+events,5,organizerid,integer,int4,null,NO,null,NO,null
+favouritecourts,1,favouriteid,integer,int4,null,NO,null,YES,BY DEFAULT
+favouritecourts,2,userid,integer,int4,null,NO,null,NO,null
+favouritecourts,3,courtid,integer,int4,null,NO,null,NO,null
+notifications,1,notificationid,integer,int4,null,NO,null,YES,BY DEFAULT
+notifications,2,status,character varying,varchar,50,NO,null,NO,null
+notifications,3,userid,integer,int4,null,NO,null,NO,null
+notifications,4,message,text,text,null,NO,null,NO,null
+notifications,5,time,timestamp without time zone,timestamp,null,NO,CURRENT_TIMESTAMP,NO,null
+notifications,6,notificationtype,USER-DEFINED,notificationtype,null,NO,null,NO,null
+notifications,7,notificationtypeid,integer,int4,null,NO,null,NO,null
+notifications,8,title,text,text,null,YES,null,NO,null
+notifications,9,category,USER-DEFINED,notification_category,null,YES,null,NO,null
+notifications,10,kind,text,text,null,YES,null,NO,null
+notifications,11,data,jsonb,jsonb,null,NO,'{}'::jsonb,NO,null
+notifications,12,read_at,timestamp with time zone,timestamptz,null,YES,null,NO,null
+notifications,13,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+payments,1,paymentid,integer,int4,null,NO,null,YES,BY DEFAULT
+payments,2,status,USER-DEFINED,paymentstatus,null,NO,null,NO,null
+payments,3,time,timestamp without time zone,timestamp,null,NO,CURRENT_TIMESTAMP,NO,null
+payments,4,method,USER-DEFINED,paymentmethod,null,NO,null,NO,null
+payments,5,amount,numeric,numeric,null,NO,null,NO,null
+payments,6,userid,integer,int4,null,YES,null,NO,null
+playingcourt,1,playingcourtid,bigint,int8,null,NO,nextval('playingcourt_playingcourtid_seq'::regclass),NO,null
+playingcourt,2,courtid,bigint,int8,null,NO,null,NO,null
+playingcourt,3,base_name,text,text,null,NO,null,NO,null
+playingcourt,4,name,text,text,null,NO,null,NO,null
+playingcourt,5,part,text,text,null,NO,null,NO,null
+playingcourt,6,surface,USER-DEFINED,courtsurface,null,NO,'concrete'::courtsurface,NO,null
+playingcourt,7,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+playingcourt,8,allow_half_booking,boolean,bool,null,NO,true,NO,null
+playingcourt,9,price,numeric,numeric,null,NO,0,NO,null
+playingcourtinfo,1,playingcourtinfoid,bigint,int8,null,NO,nextval('playingcourtinfo_playingcourtinfoid_seq'::regclass),NO,null
+playingcourtinfo,2,playingcourtid,bigint,int8,null,NO,null,NO,null
+playingcourtinfo,4,images,ARRAY,_text,null,NO,'{}'::text[],NO,null
+review_reactions,1,reactionid,bigint,int8,null,NO,nextval('review_reactions_reactionid_seq'::regclass),NO,null
+review_reactions,2,reviewid,integer,int4,null,NO,null,NO,null
+review_reactions,3,userid,integer,int4,null,NO,null,NO,null
+review_reactions,4,reaction,USER-DEFINED,review_reaction_type,null,NO,null,NO,null
+review_reactions,5,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+reviews,1,reviewid,integer,int4,null,NO,null,YES,BY DEFAULT
+reviews,2,rating,integer,int4,null,NO,null,NO,null
+reviews,3,comment,text,text,null,NO,null,NO,null
+reviews,4,targettype,USER-DEFINED,reviewtargettype,null,NO,null,NO,null
+reviews,5,targetid,integer,int4,null,NO,null,NO,null
+reviews,6,userid,integer,int4,null,NO,null,NO,null
+reviews,7,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+reviews,8,updated_at,timestamp with time zone,timestamptz,null,YES,null,NO,null
+reviews,9,like_count,integer,int4,null,NO,0,NO,null
+reviews,10,dislike_count,integer,int4,null,NO,0,NO,null
+servicebooking,1,servicebookingid,integer,int4,null,NO,nextval('servicebooking_servicebookingid_seq'::regclass),NO,null
+servicebooking,2,courtbookingid,integer,int4,null,NO,null,NO,null
+servicebooking,3,serviceid,integer,int4,null,NO,null,NO,null
+servicebooking,4,quantity,integer,int4,null,NO,null,NO,null
+servicebooking,5,unit_price,numeric,numeric,null,NO,null,NO,null
+servicebooking,6,paymentid,integer,int4,null,YES,null,NO,null
+services,1,serviceid,integer,int4,null,NO,nextval('services_serviceid_seq'::regclass),NO,null
+services,2,courtid,integer,int4,null,NO,null,NO,null
+services,3,name,text,text,null,NO,null,NO,null
+services,4,category,USER-DEFINED,servicecategory,null,NO,null,NO,null
+services,5,price,numeric,numeric,null,NO,null,NO,null
+services,6,stock,integer,int4,null,NO,0,NO,null
+services,7,images,ARRAY,_text,null,YES,null,NO,null
+services,8,status,USER-DEFINED,servicestatus,null,NO,'active'::servicestatus,NO,null
+spatial_ref_sys,1,srid,integer,int4,null,NO,null,NO,null
+spatial_ref_sys,2,auth_name,character varying,varchar,256,YES,null,NO,null
+spatial_ref_sys,3,auth_srid,integer,int4,null,YES,null,NO,null
+spatial_ref_sys,4,srtext,character varying,varchar,2048,YES,null,NO,null
+spatial_ref_sys,5,proj4text,character varying,varchar,2048,YES,null,NO,null
+trainingsessioninfo,1,sessioninfoid,integer,int4,null,NO,null,YES,BY DEFAULT
+trainingsessioninfo,2,sessionid,integer,int4,null,YES,null,NO,null
+trainingsessioninfo,3,numberofpeople,integer,int4,null,NO,null,NO,null
+trainingsessioninfo,4,description,text,text,null,NO,null,NO,null
+trainingsessioninfo,5,title,text,text,null,NO,null,NO,null
+trainingsessioninfo,6,entry_fee,numeric,numeric,null,YES,null,NO,null
+trainingsessioninfo,7,support_payment_method,USER-DEFINED,supportpaymentmethods,null,YES,null,NO,null
+trainingsessioninfo,8,participants_cap,integer,int4,null,NO,null,NO,null
+trainingsessioninfo,9,join_status,boolean,bool,null,NO,true,NO,null
+trainingsessioninfo,10,images,ARRAY,_text,null,YES,null,NO,null
+trainingsessions,1,sessionid,integer,int4,null,NO,null,YES,BY DEFAULT
+trainingsessions,3,courtbookingid,integer,int4,null,NO,null,NO,null
+trainingsessions,4,time,timestamp without time zone,timestamp,null,NO,null,NO,null
+trainingsessions,5,status,USER-DEFINED,sessionstatus,null,NO,null,NO,null
+trainingsessions,6,coachid,integer,int4,null,NO,null,NO,null
+tsbookings,1,tsbookingid,integer,int4,null,NO,null,YES,BY DEFAULT
+tsbookings,2,sessionid,integer,int4,null,NO,null,NO,null
+tsbookings,3,paymentid,integer,int4,null,YES,null,NO,null
+tsbookings,4,userid,integer,int4,null,NO,null,NO,null
+tsbookings,5,status,USER-DEFINED,tsbookingstatus,null,NO,null,NO,null
+tsbookings,6,note,text,text,null,YES,null,NO,null
+tsbookings,8,bookingstatus,USER-DEFINED,sessionstatus,null,NO,'upcoming'::sessionstatus,NO,null
+unverified_users,1,unverifiedid,integer,int4,null,NO,null,YES,BY DEFAULT
+unverified_users,2,userid,integer,int4,null,YES,null,NO,null
+unverified_users,3,email,text,text,null,YES,null,NO,null
+unverified_users,4,token_hash,text,text,null,NO,null,NO,null
+unverified_users,5,token_expires_at,timestamp with time zone,timestamptz,null,NO,null,NO,null
+unverified_users,6,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+unverified_users,7,resend_count,integer,int4,null,NO,0,NO,null
+unverified_users,8,email_verified,boolean,bool,null,NO,false,NO,null
+unverified_users,9,phone,character varying,varchar,null,YES,null,NO,null
+unverified_users,10,phone_verified,boolean,bool,null,NO,false,NO,null
+user_auth_providers,1,providerid,integer,int4,null,NO,null,YES,ALWAYS
+user_auth_providers,2,userid,integer,int4,null,NO,null,NO,null
+user_auth_providers,3,provider,text,text,null,NO,null,NO,null
+user_auth_providers,4,provider_uid,text,text,null,YES,null,NO,null
+user_auth_providers,5,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+user_devices,1,deviceid,integer,int4,null,NO,null,YES,ALWAYS
+user_devices,2,userid,integer,int4,null,NO,null,NO,null
+user_devices,3,push_token,text,text,null,NO,null,NO,null
+user_devices,4,platform,text,text,null,NO,null,NO,null
+user_devices,5,token_type,text,text,null,NO,'expo'::text,NO,null
+user_devices,6,is_active,boolean,bool,null,NO,true,NO,null
+user_devices,7,last_seen_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+user_devices,8,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+user_tokens,1,tokenid,integer,int4,null,NO,null,YES,BY DEFAULT
+user_tokens,2,userid,integer,int4,null,NO,null,NO,null
+user_tokens,3,access_token_encrypted,bytea,bytea,null,YES,null,NO,null
+user_tokens,4,refresh_token_hash,text,text,null,NO,null,NO,null
+user_tokens,5,access_token_expires_at,timestamp with time zone,timestamptz,null,NO,null,NO,null
+user_tokens,6,refresh_token_expires_at,timestamp with time zone,timestamptz,null,NO,null,NO,null
+user_tokens,7,last_used_at,timestamp with time zone,timestamptz,null,YES,null,NO,null
+user_tokens,8,is_revoked,boolean,bool,null,NO,false,NO,null
+user_tokens,9,created_at,timestamp with time zone,timestamptz,null,NO,now(),NO,null
+userinfo,1,infoid,integer,int4,null,NO,null,YES,BY DEFAULT
+userinfo,2,userid,integer,int4,null,NO,null,NO,null
+userinfo,3,name,text,text,null,YES,null,NO,null
+userinfo,4,contactnumber,character varying,varchar,20,YES,null,NO,null
+userinfo,5,email,text,text,null,YES,null,NO,null
+userinfo,9,biography,text,text,null,YES,null,NO,null
+userinfo,10,pfp,text,text,null,YES,null,NO,null
+userinfo,12,emailvisiblestatus,boolean,bool,null,YES,null,NO,null
+userinfo,13,phonevisiblestatus,boolean,bool,null,YES,null,NO,null
+userlogin,1,loginid,integer,int4,null,NO,null,YES,BY DEFAULT
+userlogin,2,userid,integer,int4,null,NO,null,NO,null
+userlogin,3,username,character varying,varchar,50,YES,null,NO,null
+userlogin,4,passwordhash,text,text,null,YES,null,NO,null
+userlogin,5,logintype,character varying,varchar,20,YES,'Local'::character varying,NO,null
+users,1,userid,integer,int4,null,NO,null,YES,BY DEFAULT
+users,2,role,USER-DEFINED,userrole,null,NO,null,NO,null

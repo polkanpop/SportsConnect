@@ -20,6 +20,7 @@ events,organizerid,users,userid,events_organizerid_fkey,NO ACTION,NO ACTION
 favouritecourts,courtid,courts,courtid,fk_court,NO ACTION,CASCADE
 favouritecourts,userid,users,userid,fk_user,NO ACTION,CASCADE
 notifications,userid,users,userid,notifications_userid_fkey,NO ACTION,NO ACTION
+payments,userid,users,userid,payments_userid_fkey,NO ACTION,NO ACTION
 playingcourt,courtid,courts,courtid,playingcourt_courtid_fkey,NO ACTION,CASCADE
 playingcourtinfo,playingcourtid,playingcourt,playingcourtid,playingcourtinfo_playingcourtid_fkey,NO ACTION,CASCADE
 review_reactions,reviewid,reviews,reviewid,review_reactions_reviewid_fkey,NO ACTION,CASCADE

@@ -448,6 +448,7 @@ export const en = {
   ACCOUNT_HEADER_TITLE: 'Account',
   ACCOUNT_ROW_THEME: 'Theme',
   ACCT_HEADER_TITLE: 'Account Settings',
+  ACCT_SEARCH_PLACEHOLDER: 'Search settings...',
   ACCT_SECTION_IDENTITY: 'Identity',
   ACCT_LABEL_DISPLAY_NAME: 'Display Name',
   ACCT_PLACEHOLDER_NAME: 'Enter your display name',
@@ -491,6 +492,11 @@ export const en = {
   ACCT_BTN_UNLINK: 'Unlink',
   ACCT_LINKED_BADGE: 'Linked',
   ACCT_UNLINKED_BADGE: 'Not linked',
+
+  // Voice Automation
+  VOICE_SECTION_TITLE: 'Voice Automation',
+  VOICE_TOGGLE_LABEL: 'Voice Booking',
+  VOICE_TOGGLE_DESC: 'Use your voice to quickly fill booking forms. Tap the floating mic button to start. (Beta — Vietnamese only)',
 
   // Review
   REVIEW_HEADER_TITLE: 'Review',
@@ -1398,6 +1404,7 @@ export const vi: Record<TranslationKey, string> = {
   ACCOUNT_HEADER_TITLE: 'Tài khoản',
   ACCOUNT_ROW_THEME: 'Giao diện',
   ACCT_HEADER_TITLE: 'Cài đặt tài khoản',
+  ACCT_SEARCH_PLACEHOLDER: 'Tìm kiếm cài đặt...',
   ACCT_SECTION_IDENTITY: 'Danh tính',
   ACCT_LABEL_DISPLAY_NAME: 'Tên hiển thị',
   ACCT_PLACEHOLDER_NAME: 'Nhập tên hiển thị của bạn',
@@ -1441,6 +1448,11 @@ export const vi: Record<TranslationKey, string> = {
   ACCT_BTN_UNLINK: 'Huỷ liên kết',
   ACCT_LINKED_BADGE: 'Đã liên kết',
   ACCT_UNLINKED_BADGE: 'Chưa liên kết',
+
+  // Voice Automation
+  VOICE_SECTION_TITLE: 'Tự động bằng giọng nói',
+  VOICE_TOGGLE_LABEL: 'Đặt sân bằng giọng nói',
+  VOICE_TOGGLE_DESC: 'Dùng giọng nói để điền form đặt sân nhanh hơn. Nhấn nút micro nổi để bắt đầu. (Beta — chỉ hỗ trợ tiếng Việt)',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',

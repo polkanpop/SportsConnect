@@ -262,7 +262,7 @@ const EventListScreen = () => {
       if (!queryOk) return false
       // venue filters
       const venues = asArray(ev.venue)
-      const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venues.includes(sel))
+      const venueOk = selectedVenues.length === 0 || selectedVenues.some(sel => venues.includes(sel))
       if (!venueOk) return false
       const surfaceOk = selectedSurfaces.length === 0 || (ev.surface != null && selectedSurfaces.includes(ev.surface))
       if (!surfaceOk) return false

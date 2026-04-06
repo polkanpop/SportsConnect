@@ -93,6 +93,24 @@ type ServiceDraft = {
   images: string[]
 }
 
+/* ── Step badge section header ── */
+function StepHeader({ step, title }: { step: number; title: string }) {
+  return (
+    <View style={stepStyles.row}>
+      <View style={stepStyles.badge}>
+        <Text style={stepStyles.badgeText}>{step}</Text>
+      </View>
+      <Text style={stepStyles.title}>{title}</Text>
+    </View>
+  )
+}
+const stepStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: 22, marginBottom: 8, marginHorizontal: 16, gap: 10 },
+  badge: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.brandOrangeDeep, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  title: { fontSize: 13, fontWeight: '700', color: '#444', textTransform: 'uppercase', letterSpacing: 0.6 },
+})
+
 export default function CourtRegisterPage() {
   const router = useRouter()
   const isMountedRef = useRef(true)
@@ -1110,7 +1128,7 @@ export default function CourtRegisterPage() {
         <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
       {/* ── Venue Info ────────────────────────────────── */}
-      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_SECTION_INFO')}</Text>
+      <StepHeader step={1} title={t('COURT_REGISTER_SECTION_INFO')} />
       <View style={styles.card}>
       <Text style={styles.fieldLabel}>{t('COURT_PANEL_LABEL_COURT_NAME')}</Text>
       <TextInput
@@ -1204,7 +1222,7 @@ export default function CourtRegisterPage() {
       </View>
 
       {/* ── Venue Type ─────────────────────────────── */}
-      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_VENUE_TYPE')}</Text>
+      <StepHeader step={2} title={t('COURT_REGISTER_LABEL_VENUE_TYPE')} />
       <View style={styles.card}>
       <View style={styles.segmented}>
         {(['Indoor', 'Outdoor', 'Both'] as const).map(v => {
@@ -1227,7 +1245,7 @@ export default function CourtRegisterPage() {
       </View>
 
       {/* ── Courts ──────────────────────────────────── */}
-      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_COURT_SECTION')}</Text>
+      <StepHeader step={3} title={t('COURT_REGISTER_LABEL_COURT_SECTION')} />
       <View style={styles.card}>
       <ScrollView
         horizontal
@@ -1286,6 +1304,7 @@ export default function CourtRegisterPage() {
             activeOpacity={0.85}
             style={styles.coverPressable}
           >
+            <Text style={styles.addPlus}>+</Text>
             <Text style={styles.addCourtCoverText}>{t('COURT_REGISTER_BTN_ADD_COURT')}</Text>
           </TouchableOpacity>
         </View>
@@ -1298,7 +1317,12 @@ export default function CourtRegisterPage() {
         activeOpacity={0.85}
         style={styles.sectionAccordion}
       >
-        <Text style={styles.sectionAccordionLabel}>{t('COURT_REGISTER_LABEL_SERVICES')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={stepStyles.badge}>
+            <Text style={stepStyles.badgeText}>4</Text>
+          </View>
+          <Text style={styles.sectionAccordionLabel}>{t('COURT_REGISTER_LABEL_SERVICES')}</Text>
+        </View>
         <Image
           source={ICONS.arrowdown}
           style={[styles.servicesArrow, servicesExpanded && styles.servicesArrowOpen]}
@@ -1489,7 +1513,7 @@ export default function CourtRegisterPage() {
       )}
 
       {/* ── Images ─────────────────────────────────── */}
-      <Text style={styles.sectionHeader}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
+      <StepHeader step={5} title={t('COURT_REGISTER_LABEL_IMAGES')} />
       <View style={styles.card}>
       <ScrollView
         horizontal
@@ -1857,6 +1881,11 @@ export default function CourtRegisterPage() {
       {/* Fixed bottom submit bar (matches booking screens) */}
       <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
         <View style={styles.bottomBar}>
+          <View style={styles.bottomSummaryRow}>
+            <Text style={styles.bottomSummaryText}>
+              {playingCourts.length} {playingCourts.length === 1 ? 'court' : 'courts'} · {remoteImageUrls.length} {remoteImageUrls.length === 1 ? 'image' : 'images'} · {services.length} {services.length === 1 ? 'service' : 'services'}
+            </Text>
+          </View>
           <TouchableOpacity
             onPress={handlePressRegister}
             disabled={!canSubmit}
@@ -1964,7 +1993,7 @@ export default function CourtRegisterPage() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
   backBtn: { padding: 10, borderRadius: 28, backgroundColor: COLORS.neutral175, justifyContent: 'center', alignItems: 'center' },
   backIcon: { width: 22, height: 22, tintColor: COLORS.neutral925 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: COLORS.neutral925, textAlign: 'center' },
@@ -2133,10 +2162,16 @@ const styles = StyleSheet.create({
     width: 260,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#fff',
-    padding: 12,
+    padding: 14,
     alignSelf: 'flex-start',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.brandOrangeDeep,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
   },
   courtCardExpanded: { minHeight: 220 },
   courtCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
@@ -2146,8 +2181,8 @@ const styles = StyleSheet.create({
   courtDetailLine: { color: COLORS.neutral800, fontSize: 13, fontWeight: '700', marginBottom: 6 },
   courtDetailLabel: { color: COLORS.neutral800, fontSize: 13, fontWeight: '700', marginTop: 4 },
   courtDetailDesc: { color: COLORS.neutral800, fontSize: 13, marginTop: 6, lineHeight: 18 },
-  addCourtCover: { borderStyle: 'dashed' },
-  addCourtCoverText: { color: COLORS.neutral925, fontWeight: '700', fontSize: 13 },
+  addCourtCover: { borderStyle: 'dashed', width: 140, height: 140, borderColor: COLORS.brandOrangeDeep },
+  addCourtCoverText: { color: COLORS.brandOrangeDeep, fontWeight: '700', fontSize: 13, textAlign: 'center' },
   myCourtName: { color: COLORS.neutral925, fontWeight: '400', fontSize: 13 },
   myCourtMeta: { color: COLORS.neutral600, fontWeight: '700', fontSize: 12, marginTop: 2 },
 
@@ -2257,7 +2292,9 @@ const styles = StyleSheet.create({
   warningText: { fontSize: 13, color: '#92400e', fontWeight: '600' },
 
   bottomSafeArea: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#ffffff' },
-  bottomBar: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#eee', alignItems: 'center' },
+  bottomBar: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#eee', alignItems: 'center' },
+  bottomSummaryRow: { marginBottom: 8 },
+  bottomSummaryText: { fontSize: 12, fontWeight: '600', color: COLORS.neutral600, textAlign: 'center' },
   submitBtn: {
     width: '100%',
     borderRadius: 14,

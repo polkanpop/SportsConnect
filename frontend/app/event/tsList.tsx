@@ -231,7 +231,7 @@ const TrainingSessionListScreen = () => {
       const queryOk = !search || title.includes(search.toLowerCase()) || address.includes(search.toLowerCase())
       if(!queryOk) return false
       const venues = asArray(s.venue)
-      const venueOk = selectedVenues.length===0 || selectedVenues.every(sel => venues.includes(sel))
+      const venueOk = selectedVenues.length===0 || selectedVenues.some(sel => venues.includes(sel))
       if(!venueOk) return false
       const surfaceOk = selectedSurfaces.length === 0 || (s.surface != null && selectedSurfaces.includes(s.surface))
       if(!surfaceOk) return false

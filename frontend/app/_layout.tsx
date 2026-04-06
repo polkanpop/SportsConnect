@@ -21,6 +21,9 @@ import QueryProvider from '@/providers/query-provider'
 import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
 import { LanguageProvider } from '@/providers/language-provider'
 import { ZaloAuthOverlayProvider } from '@/providers/zalo-auth-overlay-provider'
+import { VoiceAutomationProvider } from '@/providers/voice-automation-provider'
+import FloatingVoiceButton from '@/components/voice/FloatingVoiceButton'
+import VoiceFocusOverlay from '@/components/voice/VoiceFocusOverlay'
 
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -201,12 +204,16 @@ export default function RootLayout() {
               <AuthProvider>
                 <PushRegistrar />
                 <AppBootstrapProvider>
+                  <VoiceAutomationProvider>
                   <SplashScreenController />
                   <Stack screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="+not-found" />
                   </Stack>
+                  <FloatingVoiceButton />
+                  <VoiceFocusOverlay />
+                  </VoiceAutomationProvider>
                   <StatusBar style="auto" />
                 </AppBootstrapProvider>
               </AuthProvider>

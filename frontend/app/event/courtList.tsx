@@ -256,7 +256,7 @@ const CourtListScreen = () => {
       const queryOk = !search || name.includes(search.toLowerCase()) || address.includes(search.toLowerCase())
       if (!queryOk) return false
       const venueArr = asArray(c.venue)
-      const venueOk = selectedVenues.length === 0 || selectedVenues.every(sel => venueArr.includes(sel))
+      const venueOk = selectedVenues.length === 0 || selectedVenues.some(sel => venueArr.includes(sel))
       const favOk = !showFavouritesOnly || favouriteCourtIds.includes(c.courtid)
       const surfaceOk = selectedSurfaces.length === 0 || (c.surface != null && selectedSurfaces.includes(c.surface))
       if (!(venueOk && favOk && surfaceOk)) return false
