@@ -42,6 +42,11 @@ module.exports = () => {
     },
   ])
 
+  // expo-speech-recognition: injects RECORD_AUDIO permission for voice booking
+  ensurePlugin(plugins, [
+    'expo-speech-recognition',
+  ])
+
   // react-native-zalo-kit native SDK wiring (auto-configures Android + iOS)
   ensurePlugin(plugins, [
     './plugins/withZaloSDK',

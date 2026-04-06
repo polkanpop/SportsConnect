@@ -12,7 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function DataPrivacyScreen() {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
+  const termsUrl = language === 'vi' ? 'https://sportconnects.org/terms-vi' : 'https://sportconnects.org/terms'
+  const privacyUrl = language === 'vi' ? 'https://sportconnects.org/privacy-vi' : 'https://sportconnects.org/privacy'
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
@@ -30,7 +32,7 @@ export default function DataPrivacyScreen() {
           {t('DATA_PRIVACY_TOS_PREFIX')}{' '}
           <Text
             style={styles.link}
-            onPress={() => Linking.openURL('https://sportconnects.org/terms')}
+            onPress={() => Linking.openURL(termsUrl)}
           >
             {t('DATA_PRIVACY_CLICK_HERE')}
           </Text>
@@ -39,7 +41,7 @@ export default function DataPrivacyScreen() {
           {t('DATA_PRIVACY_POLICY_PREFIX')}{' '}
           <Text
             style={styles.link}
-            onPress={() => Linking.openURL('https://sportconnects.org/privacy')}
+            onPress={() => Linking.openURL(privacyUrl)}
           >
             {t('DATA_PRIVACY_CLICK_HERE')}
           </Text>

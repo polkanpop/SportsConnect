@@ -129,9 +129,13 @@ const pickVenueLabel = (row: any): string | null => {
   );
 };
 
-const formatDateWeekdayDDMMYYYY = (dt: Date) => {
+const VI_WEEKDAY = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+const EN_WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const formatDateWeekdayDDMMYYYY = (dt: Date, lang?: string) => {
   if (Number.isNaN(dt.getTime())) return '';
-  const wd = dt.toLocaleDateString('en-US', { weekday: 'short' });
+  const dayIndex = dt.getDay(); // 0=Sun
+  const wd = lang === 'vi' ? VI_WEEKDAY[dayIndex] : EN_WEEKDAY[dayIndex];
   const dd = pad2(dt.getDate());
   const mm = pad2(dt.getMonth() + 1);
   const yyyy = dt.getFullYear();
@@ -715,7 +719,7 @@ export default function ActivityPage() {
         </View>
 
         <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_DATE')}</Text> {formatDateWeekdayDDMMYYYY(item.dateTime) || '—'}
+          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_DATE')}</Text> {formatDateWeekdayDDMMYYYY(item.dateTime, language) || '—'}
         </Text>
 
         <Text style={styles.eventMetaLine}>

@@ -180,11 +180,11 @@ export default function SettingsPage() {
           </View>
         </View>
 
-        {/* Section One: Account + Notification + Language */}
-        {(showRow.account || showRow.notification || showRow.language) && (
+        {/* Section One: Personalization — Account + Language */}
+        {(showRow.account || showRow.language) && (
         <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('SETTINGS_SECTION_PERSONALIZATION')}</Text>
           {showRow.account && <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} />}
-          {showRow.notification && <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />}
           {showRow.language && <SettingRowSwitch
             icon={ICONS.language}
             label={t('SETTINGS_ROW_LANGUAGE')}
@@ -208,7 +208,7 @@ export default function SettingsPage() {
           />
           <SettingRowSwitch
             icon={ICONS.notifications}
-            label={t('SETTINGS_ROW_NOTIFICATION')}
+            label={t('SETTINGS_FEATURE_PUSH_LABEL')}
             sublabel=""
             value={pushEnabled}
             onValueChange={() => setPushEnabled(!pushEnabled)}
@@ -216,9 +216,10 @@ export default function SettingsPage() {
         </View>
         )}
 
-        {/* Section Two: Court Register + Data & Privacy */}
+        {/* Section Two: Register & Policies — Court Register + Data & Privacy */}
         {(showRow.court_register || showRow.data_privacy) && (
         <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('SETTINGS_SECTION_REGISTER_POLICIES')}</Text>
           {showRow.court_register && <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />}
           {showRow.data_privacy && <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />}
         </View>
@@ -321,9 +322,9 @@ const SettingRowSwitch = ({
   <View style={[styles.row, { borderBottomWidth: 0 }]}>
     <View style={styles.rowLeft}>
       <Image source={icon} style={styles.rowIcon} />
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text style={styles.rowText}>{label}</Text>
-        <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8 }]}>{sublabel}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, flexShrink: 1 }}>
+        <Text style={[styles.rowText, { flexShrink: 1 }]}>{label}</Text>
+        {sublabel ? <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8 }]}>{sublabel}</Text> : null}
       </View>
     </View>
     <Switch

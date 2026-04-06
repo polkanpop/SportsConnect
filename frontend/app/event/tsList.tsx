@@ -6,6 +6,21 @@ import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
+
+const SURFACE_TRANSLATION_MAP: Record<string, string> = {
+  concrete: 'COURT_SURFACE_CONCRETE',
+  hardwood: 'COURT_SURFACE_HARDWOOD',
+  synthetic: 'COURT_SURFACE_SYNTHETIC',
+  grass: 'COURT_SURFACE_GRASS',
+  clay: 'COURT_SURFACE_CLAY',
+  indoor: 'MAP_LABEL_INDOOR',
+  outdoor: 'MAP_LABEL_OUTDOOR',
+}
+
+const translateSurface = (raw: string, tFn: (k: any) => string) => {
+  const key = SURFACE_TRANSLATION_MAP[raw.toLowerCase()]
+  return key ? tFn(key) : raw.charAt(0).toUpperCase() + raw.slice(1)
+}
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listTrainingSessionsCombinedCached, invalidateTrainingSessionsCombinedCache, CombinedTrainingSession, CourtInfoRow } from '@/lib/backendApi'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/query-keys'
@@ -448,7 +463,7 @@ const TrainingSessionListScreen = () => {
             <ScrollView style={styles.dropdown}>
               {surfaceOptions.map(opt => {
                 const selected = selectedSurfaces.includes(opt)
-                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
+                const label = translateSurface(opt, t)
                 return (
                   <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{label}</Text>

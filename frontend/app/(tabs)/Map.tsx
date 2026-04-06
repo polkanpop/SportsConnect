@@ -350,20 +350,40 @@
     // Shared value used by BottomSheet to report its animated Y-position (from container top).
     const sheetAnimatedPosition = useSharedValue(mapContainerHeight);
 
-    // My-location button floats 16px above the sheet's top edge.
+    // Snap thresholds (in px from top of container)
+    // 30% sheet → sheetTop ≈ containerHeight * 0.70
+    // 70% sheet → sheetTop ≈ containerHeight * 0.30
+    // 100% sheet → sheetTop ≈ 0
+    const snap70ThresholdPx = mapContainerHeight * 0.35; // midpoint between 30% and 70%
+    const snap100ThresholdPx = mapContainerHeight * 0.10; // near full-open
+
+    // My-location button: fixed above the 30% collapsed sheet, hide at 100%
     const myLocationAnimStyle = useAnimatedStyle(() => {
-      // When sheet is closed sheetAnimatedPosition.value ≈ containerHeight → default low position.
       const sheetTop = sheetAnimatedPosition.value;
-      const bottomPos = mapContainerHeight - sheetTop + 16;
-      // Clamp: at least 16px from bottom, at most containerHeight-60 so it stays on-screen.
-      return { bottom: Math.max(16, Math.min(bottomPos, mapContainerHeight - 60)) };
+      // If sheet is near 100% open, hide the button
+      if (sheetTop < snap100ThresholdPx) {
+        return { bottom: -100, opacity: 0 };
+      }
+      // When sheet is at 70% (2nd snap), lower the button so it doesn't touch searchbar
+      if (sheetTop < snap70ThresholdPx) {
+        const bottomPos = mapContainerHeight - sheetTop - 8;
+        return { bottom: Math.max(8, Math.min(bottomPos, mapContainerHeight * 0.3)), opacity: 1 };
+      }
+      // Default: fixed position above collapsed sheet (30%)
+      return { bottom: collapsedSheetHeightPx + 16, opacity: 1 };
     });
 
     // Google Maps button sits 62px above the My-location button.
     const googleMapsAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
-      const bottomPos = mapContainerHeight - sheetTop + 78;
-      return { bottom: Math.max(78, Math.min(bottomPos, mapContainerHeight - 10)) };
+      if (sheetTop < snap100ThresholdPx) {
+        return { bottom: -100, opacity: 0 };
+      }
+      if (sheetTop < snap70ThresholdPx) {
+        const bottomPos = mapContainerHeight - sheetTop + 54;
+        return { bottom: Math.max(70, Math.min(bottomPos, mapContainerHeight * 0.3 + 62)), opacity: 1 };
+      }
+      return { bottom: collapsedSheetHeightPx + 78, opacity: 1 };
     });
 
     // Approximate zoom stages for DynamicMap region deltas.
@@ -1027,8 +1047,8 @@
       setBottomSheetIndex(index);
     }, []);
 
-    // Keep map UI overlays from overlapping the BottomSheet when expanded
-    const overlaysVisible = bottomSheetIndex <= 0;
+    // Keep map UI overlays from overlapping the BottomSheet at 100% (index 2)
+    const overlaysVisible = bottomSheetIndex < 2;
 
     // Toggle venue in multi-select
     const toggleVenue = (venue: string) => {
@@ -1326,7 +1346,7 @@
                           pinColor: selectedMarker?.id === marker.id
                             ? COLORS.green
                             : marker.isFavorite
-                              ? COLORS.amber200
+                              ? COLORS.brandOrangeDeep
                               : COLORS.brandOrangeDeep,
                         }))
                       : mapMode === 'events'

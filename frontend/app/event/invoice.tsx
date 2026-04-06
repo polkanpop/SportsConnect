@@ -88,9 +88,9 @@ export default function Invoice() {
   const normalizedCourtName = String(Array.isArray(courtName) ? courtName[0] : (courtName ?? '')).trim()
 
   const subjectLabel = (() => {
-    if (effectiveType === 'event') return 'Event'
-    if (effectiveType === 'session') return 'Training Session'
-    return 'Court'
+    if (effectiveType === 'event') return t('INVOICE_SUBJECT_EVENT')
+    if (effectiveType === 'session') return t('INVOICE_SUBJECT_SESSION')
+    return t('INVOICE_SUBJECT_COURT')
   })()
 
   const timeDisplay = (() => {
@@ -109,6 +109,29 @@ export default function Invoice() {
     const s = String(Array.isArray(raw) ? raw[0] : raw).trim()
     return s || 'pending'
   })()
+
+  const translateBookingStatus = (s: string) => {
+    const low = s.toLowerCase()
+    if (low.includes('join') || low.includes('approv')) return t('INVOICE_STATUS_APPROVED')
+    if (low.includes('cancel')) return t('INVOICE_STATUS_CANCELLED')
+    if (low.includes('reject')) return t('INVOICE_STATUS_REJECTED')
+    if (low.includes('pend')) return t('INVOICE_STATUS_PENDING')
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+
+  const translatePaymentMethod = (raw: any) => {
+    const s = String(raw ?? '').trim().toLowerCase()
+    if (s.includes('cash') || s === 'tiền mặt') return t('INVOICE_PAYMENT_CASH')
+    if (s.includes('vnpay')) return t('INVOICE_PAYMENT_VNPAY')
+    return String(raw ?? '---')
+  }
+
+  const translatePaymentStatus = (raw: any) => {
+    const s = String(raw ?? '').trim().toLowerCase()
+    if (s === 'paid') return t('INVOICE_PAYMENT_PAID')
+    if (s === 'unpaid' || !s) return t('INVOICE_PAYMENT_UNPAID')
+    return String(raw ?? t('INVOICE_STATUS_PENDING'))
+  }
 
   const bookingStatusColor = (() => {
     const s = bookingStatusText.toLowerCase()
@@ -234,21 +257,21 @@ export default function Invoice() {
 
           <View style={styles.row}>
             <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_METHOD')}</Text>
-            <Text style={[styles.value, { textTransform: 'capitalize' }]}>{paymentMethod || '---'}</Text>
+            <Text style={styles.value}>{translatePaymentMethod(paymentMethod)}</Text>
           </View>
 
           <View style={styles.row}>
             <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_STATUS')}</Text>
-            <Text style={[styles.value, { textTransform: 'capitalize', color: paymentStatus === 'paid' ? '#28a745' : '#FF5733' }]}>
-              {paymentStatus || t('HISTORY_STATUS_PENDING')}
+            <Text style={[styles.value, { color: paymentStatus === 'paid' ? '#28a745' : '#FF5733' }]}>
+              {translatePaymentStatus(paymentStatus)}
             </Text>
           </View>
 
           {showBookingStatus ? (
             <View style={styles.row}>
               <Text style={styles.label}>{t('INVOICE_LABEL_BOOKING_STATUS')}</Text>
-              <Text style={[styles.value, { textTransform: 'capitalize', color: bookingStatusColor }]}>
-                {bookingStatusText}
+              <Text style={[styles.value, { color: bookingStatusColor }]}>
+                {translateBookingStatus(bookingStatusText)}
               </Text>
             </View>
           ) : null}

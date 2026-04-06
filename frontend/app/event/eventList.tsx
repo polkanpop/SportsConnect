@@ -13,6 +13,21 @@ import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
 
+const SURFACE_TRANSLATION_MAP: Record<string, string> = {
+  concrete: 'COURT_SURFACE_CONCRETE',
+  hardwood: 'COURT_SURFACE_HARDWOOD',
+  synthetic: 'COURT_SURFACE_SYNTHETIC',
+  grass: 'COURT_SURFACE_GRASS',
+  clay: 'COURT_SURFACE_CLAY',
+  indoor: 'MAP_LABEL_INDOOR',
+  outdoor: 'MAP_LABEL_OUTDOOR',
+}
+
+const translateSurface = (raw: string, tFn: (k: any) => string) => {
+  const key = SURFACE_TRANSLATION_MAP[raw.toLowerCase()]
+  return key ? tFn(key) : raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
 type Coord = { latitude: number; longitude: number }
 
 function parseMaybeTimestamp(raw: unknown): Date | null {
@@ -501,7 +516,7 @@ const EventListScreen = () => {
             <ScrollView style={styles.dropdown}>
               {surfaceOptions.map(opt => {
                 const selected = selectedSurfaces.includes(opt)
-                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
+                const label = translateSurface(opt, t)
                 return (
                   <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
                     <Text style={styles.dropdownItemText}>{label}</Text>

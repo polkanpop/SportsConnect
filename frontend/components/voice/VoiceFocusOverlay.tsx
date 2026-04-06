@@ -208,7 +208,7 @@ function ErrorView({ errorMessage, onRetry, onDismiss, t }: {
 }) {
   return (
     <View style={styles.stateContainer}>
-      <Image source={ICONS.cancelEdit} style={{ width: 48, height: 48, tintColor: '#F44336', marginBottom: 12 }} resizeMode="contain" />
+      <Image source={ICONS.microphone} style={{ width: 48, height: 48, tintColor: '#F44336', marginBottom: 12 }} resizeMode="contain" />
       <Text style={styles.errorText}>{errorMessage}</Text>
 
       <View style={styles.actionRow}>

@@ -59,9 +59,13 @@ const parseTimestampLoose = (ts?: string | null) => {
   return new Date(normalized)
 }
 
-const formatDateWeekdayDDMMYYYY = (dt: Date) => {
+const VI_WEEKDAY_D = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+const EN_WEEKDAY_D = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const formatDateWeekdayDDMMYYYY = (dt: Date, lang?: string) => {
   if (Number.isNaN(dt.getTime())) return 'Unknown'
-  const wd = dt.toLocaleDateString('vi-VN', { weekday: 'short' })
+  const dayIndex = dt.getDay()
+  const wd = lang === 'vi' ? VI_WEEKDAY_D[dayIndex] : EN_WEEKDAY_D[dayIndex]
   const dd = pad2(dt.getDate())
   const mm = pad2(dt.getMonth() + 1)
   const yyyy = dt.getFullYear()
@@ -267,7 +271,7 @@ const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
 export default function DetailsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
 
   // Translate raw booking/event status strings to the current language
   const tStatus = (raw: any): string => {
@@ -1775,7 +1779,7 @@ export default function DetailsPage() {
                   <Row label={t('DETAILS_ROW_BOOKING_STATUS')} value={tStatus(b.status || b.bookingstatus)} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(b as any)?.selected_court_name || (b as any)?.selected_base_name || (b as any)?.court_name || courtBookingCourt?.name || '—'} />
                   <Row label={t('COMMON_LABEL_ADDRESS')} value={courtBookingCourt?.address || '—'} />
-                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
+                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start, language)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label={t('COMMON_LABEL_NOTE')} value={b.note || '—'} />
                 </Section>
@@ -1799,7 +1803,7 @@ export default function DetailsPage() {
                   <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={tStatus(ev?.status ?? 'upcoming')} />
                   <Row label={t('COMMON_LABEL_VENUE')} value={summaryVenueName || '—'} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(eventCourtBooking as any)?.selected_court_name || (eventCourtBooking as any)?.selected_base_name || eventCourtName || resolveVenueLabel(ev) || '—'} />
-                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
+                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start, language)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label={t('COMMON_LABEL_DESCRIPTION')} value={ev?.description || evMeta?.description || '—'} />
                 </Section>
@@ -1823,7 +1827,7 @@ export default function DetailsPage() {
                   <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={tStatus(s?.status ?? 'upcoming')} />
                   <Row label={t('COMMON_LABEL_VENUE')} value={summaryVenueName || '—'} />
                   <Row label={t('DETAILS_ROW_COURT_NAME')} value={(sessionCourtBooking as any)?.selected_court_name || (sessionCourtBooking as any)?.selected_base_name || sessionCourtName || resolveVenueLabel(s) || '—'} />
-                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
+                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start, language)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={`${formatTimeHHMM(start) || '—'}${formatTimeHHMM(end) ? ` - ${formatTimeHHMM(end)}` : ''}`} />
                   <Row label={t('COMMON_LABEL_DESCRIPTION')} value={s?.description || sMeta?.description || '—'} />
                 </Section>
@@ -1841,7 +1845,7 @@ export default function DetailsPage() {
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(ev as any), eventinfo: meta ? [meta] : [] }, 'Event')} />
                   <Row label={t('DETAILS_ROW_EVENT_STATUS')} value={tStatus(ev.status)} />
                   <Row label={t('COMMON_LABEL_COURT')} value={createdEventCourtName || '—'} />
-                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
+                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start, language)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />
                   <Row label={t('DETAILS_ROW_PARTICIPANTS_CAP')} value={(meta as any)?.participants_cap ?? '—'} />
                   <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee, t)} />
@@ -1861,7 +1865,7 @@ export default function DetailsPage() {
                   <Row label={t('DETAILS_ROW_TITLE')} value={resolveTitle({ ...(s as any), trainingsessioninfo: meta ? [meta] : [] }, 'Training Session')} />
                   <Row label={t('DETAILS_ROW_SESSION_STATUS')} value={tStatus(s.status)} />
                   <Row label={t('COMMON_LABEL_COURT')} value={createdSessionCourtName || '—'} />
-                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start)} />
+                  <Row label={t('COMMON_LABEL_DATE')} value={formatDateWeekdayDDMMYYYY(start, language)} />
                   <Row label={t('COMMON_LABEL_TIME')} value={formatTimeHHMM(start) || '—'} />
                   <Row label={t('DETAILS_ROW_PARTICIPANTS_CAP')} value={(meta as any)?.participants_cap ?? '—'} />
                   <Row label={t('DETAILS_ROW_ENTRY_FEE')} value={formatEntryFee(meta?.entry_fee, t)} />

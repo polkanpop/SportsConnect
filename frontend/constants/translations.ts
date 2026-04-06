@@ -217,6 +217,8 @@ export const en = {
 
   // Settings
   SETTINGS_TITLE: 'Settings',
+  SETTINGS_SECTION_PERSONALIZATION: 'Personalization',
+  SETTINGS_SECTION_REGISTER_POLICIES: 'Register & Policies',
   SETTINGS_ROW_ACCOUNT: 'Account',
   SETTINGS_ROW_NOTIFICATION: 'Notification',
   SETTINGS_ROW_COURT_REGISTER: 'Court Register',
@@ -502,6 +504,21 @@ export const en = {
   SETTINGS_ROW_FEATURE: 'Feature',
   SETTINGS_FEATURE_VOICE_LABEL: 'Voice Booking',
   SETTINGS_FEATURE_VOICE_SUBLABEL: 'Beta',
+  SETTINGS_FEATURE_PUSH_LABEL: 'Push Notification',
+
+  // Invoice translations
+  INVOICE_SUBJECT_EVENT: 'Event',
+  INVOICE_SUBJECT_SESSION: 'Training Session',
+  INVOICE_SUBJECT_COURT: 'Court',
+  INVOICE_STATUS_PENDING: 'Pending',
+  INVOICE_STATUS_APPROVED: 'Approved',
+  INVOICE_STATUS_JOINED: 'Joined',
+  INVOICE_STATUS_REJECTED: 'Rejected',
+  INVOICE_STATUS_CANCELLED: 'Cancelled',
+  INVOICE_PAYMENT_CASH: 'Cash',
+  INVOICE_PAYMENT_VNPAY: 'VNPay',
+  INVOICE_PAYMENT_UNPAID: 'Unpaid',
+  INVOICE_PAYMENT_PAID: 'Paid',
 
   // Review
   REVIEW_HEADER_TITLE: 'Review',
@@ -808,6 +825,7 @@ export const en = {
   COURT_SURFACE_HARDWOOD: 'Hardwood',
   COURT_SURFACE_SYNTHETIC: 'Synthetic',
   COURT_SURFACE_GRASS: 'Grass',
+  COURT_SURFACE_CLAY: 'Clay',
   COURT_REGISTER_LABEL_DESC_OPT: 'Description (optional)',
   COURT_REGISTER_BTN_SUBMIT: 'Submit',
   COURT_REGISTER_LABEL_SVC_NAME: 'Service name',
@@ -1178,6 +1196,8 @@ export const vi: Record<TranslationKey, string> = {
 
   // Settings
   SETTINGS_TITLE: 'Cài đặt',
+  SETTINGS_SECTION_PERSONALIZATION: 'Cá nhân',
+  SETTINGS_SECTION_REGISTER_POLICIES: 'Đăng ký & Chính sách',
   SETTINGS_ROW_ACCOUNT: 'Tài khoản',
   SETTINGS_ROW_NOTIFICATION: 'Thông báo',
   SETTINGS_ROW_COURT_REGISTER: 'Đăng ký sân',
@@ -1463,6 +1483,21 @@ export const vi: Record<TranslationKey, string> = {
   SETTINGS_ROW_FEATURE: 'Tính năng',
   SETTINGS_FEATURE_VOICE_LABEL: 'Đặt sân bằng giọng nói',
   SETTINGS_FEATURE_VOICE_SUBLABEL: 'Beta',
+  SETTINGS_FEATURE_PUSH_LABEL: 'Thông báo đẩy',
+
+  // Invoice translations
+  INVOICE_SUBJECT_EVENT: 'Sự kiện',
+  INVOICE_SUBJECT_SESSION: 'Buổi tập',
+  INVOICE_SUBJECT_COURT: 'Sân',
+  INVOICE_STATUS_PENDING: 'Đang chờ',
+  INVOICE_STATUS_APPROVED: 'Đã duyệt',
+  INVOICE_STATUS_JOINED: 'Đã tham gia',
+  INVOICE_STATUS_REJECTED: 'Bị từ chối',
+  INVOICE_STATUS_CANCELLED: 'Đã huỷ',
+  INVOICE_PAYMENT_CASH: 'Tiền mặt',
+  INVOICE_PAYMENT_VNPAY: 'VNPay',
+  INVOICE_PAYMENT_UNPAID: 'Chưa thanh toán',
+  INVOICE_PAYMENT_PAID: 'Đã thanh toán',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',
@@ -1760,6 +1795,7 @@ export const vi: Record<TranslationKey, string> = {
   COURT_SURFACE_HARDWOOD: 'Sàn gỗ',
   COURT_SURFACE_SYNTHETIC: 'Sàn tổng hợp',
   COURT_SURFACE_GRASS: 'Sân cỏ',
+  COURT_SURFACE_CLAY: 'Sân đất nện',
   COURT_REGISTER_LABEL_DESC_OPT: 'Mô tả (tuỳ chọn)',
   COURT_REGISTER_BTN_SUBMIT: 'Xác nhận',
   COURT_REGISTER_LABEL_SVC_NAME: 'Tên dịch vụ',
