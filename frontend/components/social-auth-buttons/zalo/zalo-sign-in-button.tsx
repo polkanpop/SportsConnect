@@ -25,7 +25,7 @@ import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
 import { useRouter } from 'expo-router';
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { Linking, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
@@ -113,21 +113,51 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       });
       const oauthUrl = `${ZALO_AUTH_ENDPOINT}?${params.toString()}`;
 
-      // 3. Open Chrome Custom Tab — expo-web-browser always uses CCT (no full Chrome)
-      // Yield one JS frame so the overlay paints before CCT opens
+      // 3. Open Chrome Custom Tab with Linking listener fallback.
+      //    On OPPO/ColorOS the CCT may not self-close after the custom-scheme
+      //    redirect.  A parallel Linking listener catches the deep link and
+      //    force-dismisses the CCT so the user isn't stuck on a black screen.
       await new Promise<void>(r => requestAnimationFrame(() => r()));
-      const result = await WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT);
-      // Note: do NOT call WebBrowser.dismissBrowser() — it may cause Chrome to fire
-      // a delayed closing intent that kills the activity surface on some devices.
-      if (result.type !== 'success') {
-        // User cancelled or CCT failed — we're staying on this screen, safe to hide now.
+
+      const authCode: string | null = await new Promise<string | null>((resolve) => {
+        let settled = false;
+
+        const linkingSub = Linking.addEventListener('url', ({ url }) => {
+          if (settled || !url.startsWith(REDIRECT_INTERCEPT)) return;
+          settled = true;
+          linkingSub.remove();
+          try { WebBrowser.dismissAuthSession(); } catch {}
+          try { resolve(new URL(url).searchParams.get('code')); } catch { resolve(null); }
+        });
+
+        WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT)
+          .then((result) => {
+            if (settled) return;
+            settled = true;
+            linkingSub.remove();
+            try { WebBrowser.dismissAuthSession(); } catch {}
+            if (result.type === 'success') {
+              try { resolve(new URL(result.url).searchParams.get('code')); } catch { resolve(null); }
+            } else {
+              resolve(null);
+            }
+          })
+          .catch(() => {
+            if (settled) return;
+            settled = true;
+            linkingSub.remove();
+            resolve(null);
+          });
+      });
+
+      if (!authCode) {
+        // User cancelled or CCT failed
         overlay.hide();
         return;
       }
 
-      // 4. Extract code from deep link sportconnect://zalo-code?code=...
-      const urlObj = new URL(result.url);
-      const code = urlObj.searchParams.get('code');
+      // 4. Extract code from deep link — already have it
+      const code = authCode;
       if (!code) {
         overlay.hide();
         Alert.alert('Đăng nhập Zalo thất bại', 'Không nhận được mã xác thực từ Zalo.');

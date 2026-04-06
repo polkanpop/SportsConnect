@@ -12,12 +12,13 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { getUserInfoByUserIdCached, authLogout, purgeSessionCaches } from '@/lib/backendApi';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,6 +36,29 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSignOutModal, setShowSignOutModal] = useState<boolean>(false);
   const [profilePfp, setProfilePfp] = useState<string | null>(null);
+
+  // ── Settings search ────────────────────────────────────────────────────
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const settingsRows = useMemo(() => {
+    const rows = [
+      { key: 'account', keywords: [t('SETTINGS_ROW_ACCOUNT'), 'account', 'tài khoản', 'profile', 'hồ sơ'].join(' ').toLowerCase() },
+      { key: 'notification', keywords: [t('SETTINGS_ROW_NOTIFICATION'), 'notification', 'thông báo'].join(' ').toLowerCase() },
+      { key: 'language', keywords: [t('SETTINGS_ROW_LANGUAGE'), 'language', 'ngôn ngữ', t('SETTINGS_LANG_TOGGLE_LABEL')].join(' ').toLowerCase() },
+      { key: 'court_register', keywords: [t('SETTINGS_ROW_COURT_REGISTER'), 'court', 'sân', 'register', 'đăng ký'].join(' ').toLowerCase() },
+      { key: 'data_privacy', keywords: [t('SETTINGS_ROW_DATA_PRIVACY'), 'data', 'privacy', 'dữ liệu', 'quyền riêng tư'].join(' ').toLowerCase() },
+      { key: 'sign_out', keywords: [t('SETTINGS_BTN_SIGN_OUT'), 'sign out', 'đăng xuất', 'logout'].join(' ').toLowerCase() },
+    ];
+    return rows;
+  }, [t]);
+  const showRow = useMemo(() => {
+    const q = settingsSearch.trim().toLowerCase();
+    if (!q) return { account: true, notification: true, language: true, court_register: true, data_privacy: true, sign_out: true };
+    const result: Record<string, boolean> = {};
+    for (const r of settingsRows) {
+      result[r.key] = r.keywords.includes(q) || r.keywords.split(' ').some(w => w.startsWith(q));
+    }
+    return result;
+  }, [settingsSearch, settingsRows]);
 
   const refreshName = useCallback(async (opts?: { showRefresh?: boolean }) => {
     const showRefresh = !!opts?.showRefresh;
@@ -137,28 +161,45 @@ export default function SettingsPage() {
         {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
 
         {/* Search */}
-        <SearchBar placeholder={t('SETTINGS_SEARCH_PLACEHOLDER')} />
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <Image source={ICONS.search} style={styles.searchIcon} />
+            <TextInput
+              placeholder={t('SETTINGS_SEARCH_PLACEHOLDER')}
+              placeholderTextColor="#999"
+              value={settingsSearch}
+              onChangeText={setSettingsSearch}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
+          </View>
+        </View>
 
         {/* Section One: Account + Notification + Language */}
+        {(showRow.account || showRow.notification || showRow.language) && (
         <View style={styles.card}>
-          <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} />
-          <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />
-          <SettingRowSwitch
+          {showRow.account && <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} />}
+          {showRow.notification && <SettingRow icon={ICONS.notifications} label={t('SETTINGS_ROW_NOTIFICATION')} />}
+          {showRow.language && <SettingRowSwitch
             icon={ICONS.language}
             label={t('SETTINGS_ROW_LANGUAGE')}
             sublabel={t('SETTINGS_LANG_TOGGLE_LABEL')}
             value={isVietnamese}
             onValueChange={toggleLanguage}
-          />
+          />}
         </View>
+        )}
 
         {/* Section Two: Court Register + Data & Privacy */}
+        {(showRow.court_register || showRow.data_privacy) && (
         <View style={styles.card}>
-          <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />
-          <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />
+          {showRow.court_register && <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />}
+          {showRow.data_privacy && <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />}
         </View>
+        )}
 
-        {/* Section Two */}
+        {/* Sign Out */}
+        {showRow.sign_out && (
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={openSignOutModal}
@@ -169,6 +210,7 @@ export default function SettingsPage() {
             <Text style={styles.signOutText}>{t('SETTINGS_BTN_SIGN_OUT')}</Text>
           </View>
         </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Sign Out Confirmation Modal */}
@@ -325,6 +367,32 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+
+  searchRow: {
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 0,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F2',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 44,
+  },
+  searchIcon: {
+    width: 18,
+    height: 18,
+    tintColor: '#999',
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#222',
+    paddingVertical: 0,
   },
 
   row: {

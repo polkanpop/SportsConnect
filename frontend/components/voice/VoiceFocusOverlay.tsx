@@ -107,7 +107,7 @@ function ListeningView({ partialTranscript, onStop }: { partialTranscript: strin
 
       <Pressable onPress={onStop}>
         <Animated.View style={[styles.micCircle, { transform: [{ scale: pulseAnim }] }]}>
-          <Image source={ICONS.mic} style={{ width: 40, height: 40, tintColor: '#FFF' }} resizeMode="contain" />
+          <Image source={ICONS.app_icon} style={{ width: 52, height: 52, borderRadius: 12 }} resizeMode="contain" />
         </Animated.View>
       </Pressable>
 

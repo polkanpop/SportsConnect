@@ -31,8 +31,9 @@
 | A11 | Tap Zalo login → CCT opens | OPPO/ColorOS device | White overlay visible, no black screen | P0 |
 | A12 | Complete Zalo auth → redirect | Network drops during redirect | Overlay hides after timeout, error shown | P0 |
 | A13 | Cancel Zalo auth (press back) | N/A | Overlay fades out smoothly (600ms), no black flash | P0 |
-| A14 | Link Zalo from account settings | OPPO device, Zalo not installed | CCT opens web auth, overlay fades out on return | P0 |
+| A14 | Link Zalo from account settings | OPPO device, Zalo not installed | CCT opens web auth, Linking listener catches redirect, dismissAuthSession closes CCT | P0 |
 | A15 | Unlink Zalo provider | N/A | Provider removed, can re-link | P1 |
+| A16 | Zalo CCT stalls (openAuthSessionAsync never resolves) | OPPO/ColorOS | Linking listener catches deep link, dismissAuthSession force-closes CCT | P0 |
 
 ### 1.4 Session Management
 | # | Case | Harsh condition | Expected | Sev |
@@ -153,9 +154,14 @@
 | S2 | Change password | N/A | Old + new validated, success toast | P0 |
 | S3 | Link Zalo | OPPO device | Overlay shows, CCT opens, no black screen on return | P0 |
 | S4 | Unlink provider (last provider) | N/A | Warning dialog, cannot unlink last provider | P0 |
-| S5 | BETA badge alignment | N/A | Badge vertically centred with label text | P1 |
+| S5 | BETA badge alignment | N/A | Title text offset with marginTop:4, badge vertically centred | P1 |
 | S6 | Change language (EN/VI) | N/A | All strings update, no missing keys | P0 |
 | S7 | Change theme (light/dark) | N/A | Colors update, no unreadable text | P1 |
+| S8 | Settings search filters rows | N/A | Typing "account" shows only Account row, empty search shows all | P0 |
+| S9 | Settings search Vietnamese | N/A | Typing "tài khoản" matches Account row | P1 |
+| S10 | Voice toggle ON (mic already granted) | N/A | Enables immediately, no permission dialog | P0 |
+| S11 | Voice toggle ON (mic denied) | N/A | Toggle stays off, no snap-back glitch | P0 |
+| S12 | Voice toggle OFF then ON again (permission already granted) | N/A | Enables without asking permission again | P0 |
 
 ---
 
@@ -197,7 +203,7 @@
 
 | # | Case | Expected | Sev |
 |---|------|----------|-----|
-| D1 | OPPO/ColorOS (Zalo CCT) | Overlay masks black screen, fade-out 600ms | P0 |
+| D1 | OPPO/ColorOS (Zalo CCT) | Linking listener fallback catches deep link, dismissAuthSession closes CCT, no black screen | P0 |
 | D2 | Low-end 2GB RAM device | No OOM crash, lists virtualised | P0 |
 | D3 | Android 10 (API 29) | All features work, permissions handled | P1 |
 | D4 | Android 14 (API 34) | New permission model respected | P1 |
@@ -231,7 +237,26 @@ npm run test:watch
 
 # Specific test file
 npx jest __tests__/hooks/query-keys.test.ts
+npx jest __tests__/auth/zalo-auth-flow.test.ts
+npx jest __tests__/auth/pkce-helpers.test.ts
+npx jest __tests__/hooks/voice-toggle-permission.test.ts
+npx jest __tests__/settings/settings-search.test.ts
 ```
+
+## Test Files
+
+| File | Coverage Area |
+|------|---------------|
+| `constants/colors.test.ts` | Color constants exported |
+| `constants/env.test.ts` | Environment variables |
+| `constants/icons.test.ts` | Icon assets exported |
+| `constants/translations.test.ts` | Translation keys |
+| `hooks/query-keys.test.ts` | React Query key generators |
+| `hooks/voice-preference-logic.test.ts` | Voice preference module contract |
+| `hooks/voice-toggle-permission.test.ts` | Voice toggle permission flow logic |
+| `auth/zalo-auth-flow.test.ts` | Zalo CCT + Linking listener fallback |
+| `auth/pkce-helpers.test.ts` | PKCE code_verifier/challenge/state |
+| `settings/settings-search.test.ts` | Settings search filtering |
 
 ## Test Coverage Target
 

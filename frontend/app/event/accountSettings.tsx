@@ -6,6 +6,7 @@ import {
   Animated,
   Image,
   LayoutAnimation,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -117,14 +118,25 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
   const { enabled, setEnabled } = useVoicePreference()
 
   const handleToggle = useCallback(async (val: boolean) => {
-    if (val) {
-      const { granted } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
-      if (!granted) {
-        const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
-        if (!nowGranted) return // user denied – don't enable
-      }
+    if (!val) {
+      // Turning off — always allow, no permission needed
+      setEnabled(false)
+      return
     }
-    setEnabled(val)
+    // Turning on — check if mic permission is already granted
+    const { granted } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
+    if (granted) {
+      // Permission already granted (from a previous enable) — enable immediately
+      setEnabled(true)
+      return
+    }
+    // Permission not yet granted — request it
+    const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+    if (nowGranted) {
+      setEnabled(true)
+    }
+    // If denied, don't call setEnabled — Switch stays off.
+    // Next toggle attempt will request permission again.
   }, [setEnabled])
 
   return (
@@ -133,7 +145,7 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
-            <Text style={styles.fieldLabel}>{t('VOICE_TOGGLE_LABEL')}</Text>
+            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 4 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
             <View style={{
               backgroundColor: '#FF6017',
               borderRadius: 6,
@@ -177,26 +189,7 @@ export default function AccountSettingsScreen() {
   ], [t])
 
   // ── Settings search ──────────────────────────────────────────────────────
-  const [settingsSearch, setSettingsSearch] = useState('')
-  // Keywords per section (translated) — used to match against user search.
-  const sectionKeywords = useMemo(() => ({
-    identity: [t('ACCT_SECTION_IDENTITY'), t('ACCT_LABEL_DISPLAY_NAME'), 'name', 'tên'].join(' ').toLowerCase(),
-    contact:  [t('ACCT_SECTION_CONTACT'), t('ACCT_LABEL_EMAIL'), t('ACCT_LABEL_PHONE'), 'email', 'phone', 'điện thoại'].join(' ').toLowerCase(),
-    auth:     [t('ACCT_SECTION_AUTH'), t('ACCT_LABEL_USERNAME'), t('ACCT_LABEL_NEW_PASSWORD'), 'password', 'username', 'mật khẩu', 'tên đăng nhập', 'security', 'bảo mật'].join(' ').toLowerCase(),
-    linked:   [t('ACCT_SECTION_LINKED'), 'google', 'zalo', 'link', 'liên kết'].join(' ').toLowerCase(),
-    voice:    [t('VOICE_SECTION_TITLE'), 'voice', 'giọng nói', 'micro', 'mic', 'beta', 'automation'].join(' ').toLowerCase(),
-  }), [t])
-  const showSection = useMemo(() => {
-    const q = settingsSearch.trim().toLowerCase()
-    if (!q) return { identity: true, contact: true, auth: true, linked: true, voice: true }
-    return {
-      identity: sectionKeywords.identity.includes(q),
-      contact:  sectionKeywords.contact.includes(q),
-      auth:     sectionKeywords.auth.includes(q),
-      linked:   sectionKeywords.linked.includes(q),
-      voice:    sectionKeywords.voice.includes(q),
-    }
-  }, [settingsSearch, sectionKeywords])
+  // Search is handled in the parent settings.tsx screen. accountSettings shows all sections.
 
   // ── Identity ─────────────────────────────────────────────────────────────
   const [nameValue, setNameValue] = useState('')
@@ -520,25 +513,55 @@ export default function AccountSettingsScreen() {
         code_challenge: codeChallenge,
         state,
       })
-      // 2. Open Chrome Custom Tab
-      // Yield one JS frame so the overlay paints before CCT opens
+      // 2. Open Chrome Custom Tab with a Linking listener fallback.
+      //    On OPPO/ColorOS the CCT may not self-close after the custom-scheme
+      //    redirect.  A parallel Linking listener catches the deep link and
+      //    force-dismisses the CCT so the user isn't stuck on a black screen.
       await new Promise<void>(r => requestAnimationFrame(() => r()))
-      const result = await WebBrowser.openAuthSessionAsync(
-        `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
-        REDIRECT_INTERCEPT
-      )
-      if (result.type !== 'success') {
-        // Zalo may have auto-consented and linked successfully even if the result
-        // type is not 'success' (race between redirect and CCT close detection).
-        // Reload meta in case the link already went through.
+      const oauthUrl = `${ZALO_AUTH_ENDPOINT}?${params.toString()}`
+
+      const code: string | null = await new Promise<string | null>((resolve) => {
+        let settled = false
+
+        // Linking listener — catches sportconnect://zalo-code on devices where
+        // openAuthSessionAsync doesn't intercept the redirect properly.
+        const linkingSub = Linking.addEventListener('url', ({ url }) => {
+          if (settled || !url.startsWith(REDIRECT_INTERCEPT)) return
+          settled = true
+          linkingSub.remove()
+          try { WebBrowser.dismissAuthSession() } catch {}
+          try { resolve(new URL(url).searchParams.get('code')) } catch { resolve(null) }
+        })
+
+        // Primary path — openAuthSessionAsync
+        WebBrowser.openAuthSessionAsync(oauthUrl, REDIRECT_INTERCEPT)
+          .then((result) => {
+            if (settled) return
+            settled = true
+            linkingSub.remove()
+            // Force-close the CCT in case it lingers (OPPO/ColorOS)
+            try { WebBrowser.dismissAuthSession() } catch {}
+            if (result.type === 'success') {
+              try { resolve(new URL(result.url).searchParams.get('code')) } catch { resolve(null) }
+            } else {
+              resolve(null)
+            }
+          })
+          .catch(() => {
+            if (settled) return
+            settled = true
+            linkingSub.remove()
+            resolve(null)
+          })
+      })
+
+      if (!code) {
+        // User cancelled or CCT failed — reload meta in case link went through
         overlay.hide()
         void loadMeta()
         return
       }
-      // 3. Extract code
-      const urlObj = new URL(result.url)
-      const code = urlObj.searchParams.get('code')
-      if (!code) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không nhận được mã xác thực.'); return }
+      // 3. Extract code — already have it
       // 4. Exchange code → access_token
       const tokenResp = await fetch(`${backendUrl}/api/auth/zalo/token`, {
         method: 'POST',
@@ -665,25 +688,12 @@ export default function AccountSettingsScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      {/* Search bar */}
-      <View style={styles.settingsSearchRow}>
-        <View style={styles.settingsSearchContainer}>
-          <Image source={ICONS.search} style={styles.settingsSearchIcon} />
-          <TextInput
-            placeholder={t('ACCT_SEARCH_PLACEHOLDER')}
-            placeholderTextColor="#999"
-            value={settingsSearch}
-            onChangeText={setSettingsSearch}
-            style={styles.settingsSearchInput}
-            returnKeyType="search"
-          />
-        </View>
-      </View>
+      {/* Search bar removed — now in settings.tsx */}
 
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
 
         {/* ── Identity ─────────────────────────────────────────────────── */}
-        {showSection.identity && <>
+        {<>
         <SectionHeader title={t('ACCT_SECTION_IDENTITY')} />
         <View style={styles.card}>
           {/* Display Name */}
@@ -709,7 +719,7 @@ export default function AccountSettingsScreen() {
         </>}
 
         {/* ── Contact ──────────────────────────────────────────────────── */}
-        {showSection.contact && <>
+        {<>
         <SectionHeader title={t('ACCT_SECTION_CONTACT')} />
         <View style={styles.card}>
 
@@ -812,7 +822,7 @@ export default function AccountSettingsScreen() {
         </>}
 
         {/* ── Authentication & Security ─────────────────────────────── */}
-        {showSection.auth && <>
+        {<>
         <SectionHeader title={t('ACCT_SECTION_AUTH')} />
 
         {/* Username subsection */}
@@ -1000,7 +1010,7 @@ export default function AccountSettingsScreen() {
         </>}
 
         {/* ── Linked Accounts ───────────────────────────────────────────── */}
-        {showSection.linked && <>
+        {<>
         <SectionHeader title={t('ACCT_SECTION_LINKED')} />
         <View style={styles.card}>
           {loadingMeta ? (
@@ -1059,7 +1069,7 @@ export default function AccountSettingsScreen() {
         </>}
 
         {/* ── Voice Automation ──────────────────────────────────────────── */}
-        {showSection.voice && <VoiceToggleSection t={t} />}
+        <VoiceToggleSection t={t} />
 
       </ScrollView>
 
