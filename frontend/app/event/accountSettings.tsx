@@ -130,13 +130,17 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       setEnabled(true)
       return
     }
-    // Permission not yet granted — request it
+    // Permission not yet granted — optimistically enable FIRST so the Switch
+    // stays ON during the permission dialog. On OPPO/ColorOS, the Android
+    // surface reconstructs when the dialog opens (activity pause→resume), which
+    // remounts this component and re-reads AsyncStorage. Writing 'true' here
+    // ensures the remounted component reads 'true' and stays ON.
+    setEnabled(true)
     const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
-    if (nowGranted) {
-      setEnabled(true)
+    if (!nowGranted) {
+      // Permission denied — revert to off
+      setEnabled(false)
     }
-    // If denied, don't call setEnabled — Switch stays off.
-    // Next toggle attempt will request permission again.
   }, [setEnabled])
 
   return (
@@ -145,7 +149,7 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
-            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 4 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
+            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 5 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
             <View style={{
               backgroundColor: '#FF6017',
               borderRadius: 6,
