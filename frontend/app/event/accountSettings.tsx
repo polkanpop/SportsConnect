@@ -49,7 +49,6 @@ import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 import { useVoicePreference } from '@/hooks/use-voice-preference'
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -117,42 +116,12 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
 function VoiceToggleSection({ t }: { t: (key: any) => string }) {
   const { enabled, setEnabled } = useVoicePreference()
 
-  const handleToggle = useCallback(async (val: boolean) => {
-    if (!val) {
-      // Turning off — always allow, no permission needed
-      setEnabled(false)
-      return
-    }
-    // Turning on — check current permission status
-    const { granted, canAskAgain } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
-    if (granted) {
-      // Already granted (re-enable after disable) — no dialog needed
-      setEnabled(true)
-      return
-    }
-    if (!canAskAgain) {
-      // Permanently denied — OS will not show the dialog again.
-      // Direct the user to App Settings to grant mic access manually.
-      Alert.alert(
-        'Cần quyền Microphone',
-        'Bạn đã từ chối quyền micro. Hãy vào Cài đặt → Quyền → Micro để cấp quyền cho SportConnect.',
-        [
-          { text: 'Hủy', style: 'cancel' },
-          { text: 'Mở Cài đặt', onPress: () => Linking.openSettings() },
-        ]
-      )
-      return
-    }
-    // First-time request — optimistically enable BEFORE the dialog opens.
-    // On OPPO/ColorOS, Android surface reconstruction during the permission dialog
-    // remounts the component and re-reads AsyncStorage. Writing 'true' first
-    // ensures the remounted component reads 'true' and stays ON.
-    setEnabled(true)
-    const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
-    if (!nowGranted) {
-      // User denied — revert
-      setEnabled(false)
-    }
+  // Toggle is just a preference — no permission gating here.
+  // Mic permission is requested at use-time inside startListening()
+  // (voice-automation-provider). This avoids all the snap-back issues
+  // caused by async permission checks, surface reconstruction, etc.
+  const handleToggle = useCallback((val: boolean) => {
+    setEnabled(val)
   }, [setEnabled])
 
   return (
