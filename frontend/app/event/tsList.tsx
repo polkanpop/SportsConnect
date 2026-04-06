@@ -574,92 +574,89 @@ const TrainingSessionListScreen = () => {
             else if(venues.length) venueDisplay=[venues[0]]
             const expanded = expandedIds.has(s.sessionid)
 
-            const distanceNode = (() => {
-              if (!distanceFilterActive) return null
-              if (!userCoord) return null
-              if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') return null
-              const payload = {
-                origin_lat: userCoord.latitude,
-                origin_lng: userCoord.longitude,
-                dest_lat: s.latitude,
-                dest_lng: s.longitude,
-              }
+            /* ----- distance text (overlay-ready) ----- */
+            const distanceText = (() => {
+              if (!distanceFilterActive || !userCoord) return ''
+              if (typeof s.latitude !== 'number' || typeof s.longitude !== 'number') return ''
+              const payload = { origin_lat: userCoord.latitude, origin_lng: userCoord.longitude, dest_lat: s.latitude, dest_lng: s.longitude }
               const entry = peekDistanceMatrixCached(payload)
               const routeMeters = typeof entry?.result?.distance_meters === 'number' ? entry.result.distance_meters : null
               const routeText = formatKmFromMeters(routeMeters)
-              if (entry?.status === 'loaded' && routeText) {
-                return (
-                  <View style={[styles.tag, styles.distanceTag]}>
-                    <Text style={[styles.tagText, styles.distanceTagText]}>{routeText}</Text>
-                  </View>
-                )
-              }
+              if (entry?.status === 'loaded' && routeText) return routeText
               const approxMeters = haversineMeters(userCoord.latitude, userCoord.longitude, s.latitude, s.longitude)
               const approxText = formatKmFromMeters(approxMeters)
-              if (approxText) {
-                return (
-                  <View style={[styles.tag, styles.distanceTag]}>
-                    <Text style={[styles.tagText, styles.distanceTagText]}>{`~${approxText}`}</Text>
-                  </View>
-                )
-              }
-              return null
+              return approxText ? `~${approxText}` : ''
+            })()
+
+            const imageUrl = Array.isArray((s as any).images) && (s as any).images.length > 0 ? (s as any).images[0] : null
+
+            const entryFee = (s as any).entry_fee
+            const entryFeeLabel = entryFee == null ? t('TS_LIST_ENTRY_FREE') : `${String(Math.round(Number(entryFee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${t('TS_LIST_PER_PLAYER')}`
+
+            /* date display */
+            const dateDisplay = (() => {
+              const start = (s as any)?.start_timestamp ?? s.time
+              const end = (s as any)?.end_timestamp
+              if (!start) return 'Unknown date'
+              const startD = parseMaybeTimestamp(String(start)) || new Date(String(start))
+              const endD = end ? (parseMaybeTimestamp(String(end)) || new Date(String(end))) : null
+              const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
+              const startTime = startD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
+              const endTime = endD ? endD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
+              return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
             })()
 
             return (
               <TouchableOpacity
                 key={s.sessionid}
-                activeOpacity={0.8}
-                style={[styles.card, expanded && styles.cardExpanded]}
+                activeOpacity={0.85}
+                style={styles.card}
                 onPress={() => router.push(`/event/tsBooking?sessionid=${s.sessionid}` as any)}
               >
-                <Image source={ICONS.sillball} style={styles.cardSilhouette} />
-                <View style={styles.cardLeft}>
-                  <View style={styles.titleRow}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>{s.title || `Session ${s.sessionid}`}</Text>
-                    <TouchableOpacity onPress={() => toggleExpand(s.sessionid)} style={styles.expandButton}>
-                      <Image source={ICONS.arrowdown} style={[styles.expandIcon, expanded && { transform:[{rotate:'180deg'}]}]} />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.dateText}>{(() => {
-                    const start = (s as any)?.start_timestamp ?? s.time
-                    const end = (s as any)?.end_timestamp
-                    if (!start) return 'Unknown date'
-                    const startD = parseMaybeTimestamp(String(start)) || new Date(String(start))
-                    const endD = end ? (parseMaybeTimestamp(String(end)) || new Date(String(end))) : null
-                    const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
-                    const startTime = startD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
-                    const endTime = endD ? endD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
-                    return `${day}, ${startTime}${endTime?` - ${endTime}`:''}`
-                  })()}</Text>
-                  <View style={styles.tagRow}>
-                    {venueDisplay.map(v => <View key={v} style={[styles.tag, styles.venueTag]}><Text style={[styles.tagText,{color: COLORS.white}]}>{v}</Text></View>)}
-                    {distanceNode}
-                  </View>
-                  {/* Entry fee + payment methods displayed on their own line (match events layout) */}
-                  <View style={styles.entryRow}>
-                    <View style={[styles.tag, (s as any).entry_fee == null ? styles.freeTag : styles.entryTag, styles.entryTagRow]}>
-                      <Text style={[styles.tagText, (s as any).entry_fee == null ? styles.freeTagText : styles.entryTagText]}>{(s as any).entry_fee == null ? t('TS_LIST_ENTRY_FREE') : `${String(Math.round(Number((s as any).entry_fee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${t('TS_LIST_PER_PLAYER')}`}</Text>
+                {/* ---- image section ---- */}
+                <View style={styles.cardImageWrap}>
+                  {imageUrl ? (
+                    <Image source={{ uri: imageUrl }} style={styles.cardImage} />
+                  ) : (
+                    <View style={styles.cardImagePlaceholder}>
+                      <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />
                     </View>
-                    {(s as any).entry_fee != null && (s as any).support_payment_method && (
-                      <View style={[styles.tag, styles.methodTag, styles.methodIcons, styles.methodIconsRow]}>
-                        {((s as any).support_payment_method.toLowerCase()==='cash' || (s as any).support_payment_method.toLowerCase()==='both') && (
-                          <Image source={ICONS.cashIcon} style={styles.methodIconImg} />
-                        )}
-                        {((s as any).support_payment_method.toLowerCase()==='vnpay' || (s as any).support_payment_method.toLowerCase()==='both') && (
-                          <Image source={ICONS.vnpayIcon} style={styles.methodIconImg} />
-                        )}
+                  )}
+                  {/* overlay tags */}
+                  <View style={styles.cardOverlayTags}>
+                    {venueDisplay.map(v => (
+                      <View key={v} style={[styles.overlayTag, styles.venueTag]}>
+                        <Text style={styles.overlayTagText}>{v}</Text>
+                      </View>
+                    ))}
+                    {distanceText !== '' && (
+                      <View style={[styles.overlayTag, styles.distanceOverlayTag]}>
+                        <Text style={styles.overlayTagText}>{distanceText}</Text>
                       </View>
                     )}
+                    <View style={[styles.overlayTag, entryFee == null ? styles.freeOverlayTag : styles.entryOverlayTag]}>
+                      <Text style={styles.overlayTagText}>{entryFeeLabel}</Text>
+                    </View>
                   </View>
-                  <View style={styles.participantsRow}>
-                    <Image source={ICONS.participants} style={styles.participantsIconLarge} />
-                      <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)} {t('TS_LIST_PARTICIPANTS')}</Text>
+                  {/* expand button on image */}
+                  <TouchableOpacity style={styles.expandBtnOverlay} onPress={() => toggleExpand(s.sessionid)}>
+                    <Image source={ICONS.arrowdown} style={[styles.expandIconOverlay, expanded && { transform:[{rotate:'180deg'}]}]} />
+                  </TouchableOpacity>
+                </View>
+                {/* ---- info section ---- */}
+                <View style={styles.cardInfoSection}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{s.title || `Session ${s.sessionid}`}</Text>
+                  <Text style={styles.cardAddress} numberOfLines={1}>{s.address || t('TS_LIST_NO_ADDRESS')}</Text>
+                  <View style={styles.cardMetaRow}>
+                    <Text style={styles.dateText}>{dateDisplay}</Text>
+                    <View style={styles.participantsInline}>
+                      <Image source={ICONS.participants} style={styles.participantsIconSmall} />
+                      <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)}</Text>
+                    </View>
                   </View>
                   {expanded && (
                     <View style={styles.expandedContent}>
                       <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName || s.coachid}</Text>
-                      <Text style={styles.expandedLine}>{t('TS_LIST_ADDRESS_PREFIX')} {s.address || t('TS_LIST_NO_ADDRESS')}</Text>
                       <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
                       <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || t('TS_LIST_NO_DESC')}</Text>
                     </View>
@@ -726,38 +723,83 @@ const styles = StyleSheet.create({
   overlay:{position:'absolute',top:0,left:0,right:0,bottom:0},
   list:{flex:1},
   statusText:{color:COLORS.neutral800,fontSize:12,paddingVertical:12,textAlign:'center'},
-  card:{flexDirection:'row',backgroundColor:COLORS.white,borderRadius:14,padding:16,marginBottom:16,alignItems:'flex-start',minHeight:140,borderWidth:1,borderColor:LIST_ACCENT,borderLeftWidth:5,borderLeftColor:LIST_ACCENT,overflow:'hidden'},
-  cardExpanded:{minHeight:180},
-  cardLeft:{flex:1,paddingRight:78,zIndex:1},
-  cardSilhouette:{position:'absolute',top:-14,right:-18,width:128,height:128,opacity:0.14,tintColor:LIST_ACCENT,resizeMode:'contain',zIndex:0},
-  titleRow:{flexDirection:'row',alignItems:'center'},
-  expandButton:{padding:4,marginLeft:6},
-  expandIcon:{width:18,height:18,tintColor:COLORS.neutral500},
-  cardTitle:{color:COLORS.neutral950,fontSize:16,fontWeight:'800',flexShrink:1},
-  dateText:{color:COLORS.neutral800,fontSize:13,fontWeight:'600',marginTop:2},
-  tagRow:{flexDirection:'row',flexWrap:'wrap',marginTop:6},
-  tag:{backgroundColor:COLORS.neutral125,paddingHorizontal:8,paddingVertical:4,borderRadius:12,marginRight:6,marginBottom:6,flexDirection:'row',alignItems:'center'},
-  tagFallback:{backgroundColor:COLORS.neutral125},
-  freeTag:{backgroundColor:COLORS.greenSoft, borderColor:COLORS.seaGreen, borderWidth:1},
-  entryTag:{backgroundColor:COLORS.orangeSoft, borderColor:COLORS.orangeAccent, borderWidth:1},
-  methodTag:{backgroundColor:COLORS.blue50, borderColor:COLORS.blue500, borderWidth:1},
-  methodIcons:{flexDirection:'row',alignItems:'center'},
-  methodIconImg:{width:16,height:16,resizeMode:'contain',marginHorizontal:2},
-  freeTagText:{color:COLORS.green900,fontSize:11,fontWeight:'700'},
-  entryTagText:{color:COLORS.brown900,fontSize:11,fontWeight:'700'},
-  entryRow:{flexDirection:'row',alignItems:'center',marginTop:6,marginBottom:6},
-  entryTagRow:{paddingHorizontal:10,paddingVertical:6},
-  methodIconsRow:{flexDirection:'row',alignItems:'center',marginLeft:8},
+  card:{
+    backgroundColor:COLORS.white,
+    borderRadius:16,
+    marginBottom:16,
+    overflow:'hidden',
+    borderWidth:1,
+    borderColor:COLORS.neutral200 ?? '#E5E5E5',
+    shadowColor:'#000',
+    shadowOffset:{width:0,height:2},
+    shadowOpacity:0.08,
+    shadowRadius:8,
+    elevation:3,
+  },
+  cardImageWrap:{
+    width:'100%',
+    height:170,
+    backgroundColor:COLORS.neutral125,
+    position:'relative',
+  },
+  cardImage:{
+    width:'100%',
+    height:'100%',
+    resizeMode:'cover',
+  },
+  cardImagePlaceholder:{
+    width:'100%',
+    height:'100%',
+    justifyContent:'center',
+    alignItems:'center',
+    backgroundColor:COLORS.neutral125,
+  },
+  cardPlaceholderIcon:{
+    width:80,
+    height:80,
+    opacity:0.15,
+    tintColor:LIST_ACCENT,
+    resizeMode:'contain',
+  },
+  cardOverlayTags:{
+    position:'absolute',
+    top:10,
+    left:10,
+    flexDirection:'row',
+    flexWrap:'wrap',
+    gap:6,
+  },
+  overlayTag:{
+    paddingHorizontal:10,
+    paddingVertical:5,
+    borderRadius:8,
+  },
+  overlayTagText:{
+    color:COLORS.white,
+    fontSize:11,
+    fontWeight:'700',
+  },
   venueTag:{backgroundColor:COLORS.slateBlue},
-  tagText:{color:COLORS.neutral900,fontSize:11,fontWeight:'700'},
-  participantsRow:{flexDirection:'row',alignItems:'center',marginTop:4},
-  participantsIcon:{width:14,height:14,tintColor:COLORS.neutral525,marginRight:4,resizeMode:'contain'},
-  participantsIconLarge:{width:18,height:18,tintColor:COLORS.neutral525,marginRight:6,resizeMode:'contain'},
-  participantsText:{color:COLORS.neutral800,fontSize:13,fontWeight:'600'},
-  expandedContent:{marginTop:10},
-  expandedLine:{color:COLORS.neutral800,fontSize:13,fontWeight:'500',marginBottom:4},
-  expandedDescLabel:{color:COLORS.neutral800,fontSize:13,marginTop:4,fontWeight:'700'},
-  expandedDesc:{color:COLORS.neutral800,fontSize:13,marginTop:4},
+  distanceOverlayTag:{backgroundColor:'rgba(0,0,0,0.55)'},
+  freeOverlayTag:{backgroundColor:COLORS.seaGreen ?? '#2E8B57'},
+  entryOverlayTag:{backgroundColor:COLORS.orangeAccent},
+  expandBtnOverlay:{position:'absolute',top:10,right:10,backgroundColor:'rgba(255,255,255,0.85)',borderRadius:14,padding:5},
+  expandIconOverlay:{width:18,height:18,tintColor:COLORS.neutral800},
+  cardInfoSection:{
+    paddingHorizontal:14,
+    paddingVertical:12,
+  },
+  cardTitle:{color:COLORS.neutral950,fontSize:15,fontWeight:'700',marginBottom:3},
+  cardAddress:{color:COLORS.neutral800,fontSize:13,fontWeight:'500'},
+  cardMetaRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginTop:4},
+  dateText:{color:COLORS.neutral800,fontSize:12,fontWeight:'600'},
+  participantsInline:{flexDirection:'row',alignItems:'center'},
+  participantsIconSmall:{width:14,height:14,tintColor:COLORS.neutral525,marginRight:4,resizeMode:'contain'},
+  participantsText:{color:COLORS.neutral800,fontSize:12,fontWeight:'600'},
+  expandedContent:{marginTop:10,borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:COLORS.neutral200 ?? '#E5E5E5',paddingTop:10},
+  expandedLine:{color:COLORS.neutral800,fontSize:13,fontWeight:'500',marginBottom:6},
+  expandedDescLabel:{color:COLORS.neutral800,fontSize:13,marginTop:6,fontWeight:'700'},
+  expandedDesc:{color:COLORS.neutral800,fontSize:13,marginTop:6,lineHeight:18},
   fab:{position:'absolute',right:20,bottom:30,backgroundColor:COLORS.orangeAccent,paddingHorizontal:18,paddingVertical:12,borderRadius:30,flexDirection:'row',alignItems:'center',shadowColor:COLORS.black,shadowOpacity:0.3,shadowRadius:6,elevation:5},
   fabIcon:{width:22,height:22,tintColor:COLORS.white,marginRight:8,resizeMode:'contain'},
   fabText:{color:COLORS.white,fontSize:14,fontWeight:'700'},
@@ -775,7 +817,4 @@ const styles = StyleSheet.create({
   distanceFooterRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:12},
   distanceFooterBtn:{paddingHorizontal:10,paddingVertical:6,backgroundColor:COLORS.neutral175,borderRadius:8},
   distanceFooterBtnText:{fontSize:12,fontWeight:'700',color:COLORS.neutral925},
-  distanceTag:{backgroundColor:COLORS.neutral125,borderColor:COLORS.neutral350,borderWidth:1,borderRadius:0},
-  distanceTagText:{color:COLORS.neutral925,fontWeight:'700'},
-  distanceTagLoading:{paddingHorizontal:10},
 })

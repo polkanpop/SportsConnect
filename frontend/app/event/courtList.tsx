@@ -598,9 +598,10 @@ const CourtListScreen = () => {
             }
             const isFav = favouriteCourtIds.includes(c.courtid)
 
-            const hasImage = false
+            // First image from court images, or thumbnail fallback
+            const imageUrl = (Array.isArray(c.images) && c.images.length > 0) ? c.images[0] : c.thumbnail
 
-            const distanceNode = (() => {
+            const distanceText = (() => {
               if (!distanceFilterActive) return null
               if (!userCoord) return null
               if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number') return null
@@ -612,55 +613,67 @@ const CourtListScreen = () => {
               }
               const entry = peekDistanceMatrixCached(payload)
               const routeMeters = typeof entry?.result?.distance_meters === 'number' ? entry.result.distance_meters : null
-              const routeText = formatKmFromMeters(routeMeters)
-              if (entry?.status === 'loaded' && routeText) {
-                return (
-                  <View style={[styles.tag, styles.distanceTag]}>
-                    <Text style={[styles.tagText, styles.distanceTagText]}>{routeText}</Text>
-                  </View>
-                )
-              }
-              // Instant straight-line distance while route distance loads.
+              const routeFormatted = formatKmFromMeters(routeMeters)
+              if (entry?.status === 'loaded' && routeFormatted) return routeFormatted
               const approxMeters = haversineMeters(userCoord.latitude, userCoord.longitude, c.latitude, c.longitude)
-              const approxText = formatKmFromMeters(approxMeters)
-              if (approxText) {
-                return (
-                  <View style={[styles.tag, styles.distanceTag]}>
-                    <Text style={[styles.tagText, styles.distanceTagText]}>{`~${approxText}`}</Text>
-                  </View>
-                )
-              }
+              const approxFormatted = formatKmFromMeters(approxMeters)
+              if (approxFormatted) return `~${approxFormatted}`
               return null
             })()
 
-            return (
-              <View key={c.courtinfoid} style={styles.cardWrap}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.card}
-                  onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
-                >
-                  <Image source={ICONS.sillball} style={styles.cardSilhouette} />
-                  <View style={styles.cardLeft}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
-                    <Text style={styles.cardAddress} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
-                    <View style={styles.tagRow}>
-                      {venueDisplay.map(v => (
-                        <View key={v} style={[styles.tag, styles.venueTag]}>
-                          <Text style={[styles.tagText, { color: COLORS.neutral0 }]}>{v}</Text>
-                        </View>
-                      ))}
-                      {distanceNode}
-                    </View>
-                  </View>
-                </TouchableOpacity>
+            // Surface display
+            const surfaceText = c.surface ? c.surface : null
 
-                {isFav && (
-                  <View pointerEvents="none" style={styles.bookmarkWrap}>
-                    <Image source={ICONS.bookMark} style={styles.bookmarkIcon} />
+            return (
+              <TouchableOpacity
+                key={c.courtinfoid}
+                activeOpacity={0.85}
+                style={styles.card}
+                onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
+              >
+                {/* Image section (80%) */}
+                <View style={styles.cardImageWrap}>
+                  {imageUrl ? (
+                    <Image source={{ uri: imageUrl }} style={styles.cardImage} />
+                  ) : (
+                    <View style={styles.cardImagePlaceholder}>
+                      <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />
+                    </View>
+                  )}
+
+                  {/* Overlay tags — top left */}
+                  <View style={styles.cardOverlayTags}>
+                    {venueDisplay.map(v => (
+                      <View key={v} style={[styles.overlayTag, styles.venueTag]}>
+                        <Text style={styles.overlayTagText}>{v}</Text>
+                      </View>
+                    ))}
+                    {distanceText && (
+                      <View style={[styles.overlayTag, styles.distanceOverlayTag]}>
+                        <Text style={styles.overlayTagText}>{distanceText}</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
+
+                  {/* Bookmark — top right */}
+                  {isFav && (
+                    <View pointerEvents="none" style={styles.bookmarkWrap}>
+                      <Image source={ICONS.bookMark} style={styles.bookmarkIcon} />
+                    </View>
+                  )}
+                </View>
+
+                {/* Info section (20%) */}
+                <View style={styles.cardInfoSection}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
+                  <Text style={styles.cardAddress} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
+                  {surfaceText && (
+                    <Text style={styles.cardSurface} numberOfLines={1}>
+                      {t('COURT_REGISTER_SURFACE_PREFIX')}{surfaceText}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
             )
           })}
 
@@ -726,34 +739,73 @@ const styles = StyleSheet.create({
   loadMoreWrap: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   loadMoreText: { color: LIST_ACCENT, fontWeight: '700', fontSize: 13 },
   statusText: { color: COLORS.neutral800, fontSize: 12, paddingVertical: 12, textAlign: 'center' },
-  cardWrap: { position: 'relative', overflow: 'visible', marginBottom: 16 },
   card: {
-    flexDirection: 'row',
     backgroundColor: COLORS.neutral0,
-    borderRadius: 14,
-    padding: 18,
-    alignItems: 'center',
-    minHeight: 140,
-    borderWidth: 1,
-    borderColor: LIST_ACCENT,
-    borderLeftWidth: 5,
-    borderLeftColor: LIST_ACCENT,
+    borderRadius: 16,
+    marginBottom: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.neutral200 ?? '#E5E5E5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  bookmarkWrap: { position: 'absolute', top: -3, right: -6, zIndex: 50, elevation: 50 },
-  bookmarkIcon: { width: 32, height: 32, left: -8, tintColor: COLORS.gold, resizeMode: 'contain' },
-  cardLeft: { flex: 1, paddingRight: 78, zIndex: 1 },
-  cardSilhouette: { position: 'absolute', top: -14, right: -18, width: 128, height: 128, opacity: 0.14, tintColor: LIST_ACCENT, resizeMode: 'contain', zIndex: 0 },
-  cardTitle: { color: COLORS.neutral950, fontSize: 14, fontWeight: '700', marginBottom: 4 },
-  cardAddress: { color: COLORS.neutral800, fontSize: 13, fontWeight: '500' },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
-  tag: { backgroundColor: COLORS.neutral125, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6, marginBottom: 6 },
-  tagFallback: { backgroundColor: COLORS.neutral125 },
+  cardImageWrap: {
+    width: '100%',
+    height: 170,
+    backgroundColor: COLORS.neutral125,
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  cardImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.neutral125,
+  },
+  cardPlaceholderIcon: {
+    width: 80,
+    height: 80,
+    opacity: 0.15,
+    tintColor: LIST_ACCENT,
+    resizeMode: 'contain',
+  },
+  cardOverlayTags: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  overlayTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  overlayTagText: {
+    color: COLORS.neutral0,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   venueTag: { backgroundColor: COLORS.slateBlue },
-  tagText: { color: COLORS.neutral900, fontSize: 11, fontWeight: '700' },
-  distanceTag: { backgroundColor: COLORS.neutral125, borderColor: COLORS.neutral350, borderWidth: 1, borderRadius: 0 },
-  distanceTagText: { color: COLORS.neutral925, fontWeight: '700' },
-  distanceTagLoading: { paddingHorizontal: 10 },
+  distanceOverlayTag: { backgroundColor: 'rgba(0,0,0,0.55)' },
+  bookmarkWrap: { position: 'absolute', top: -2, right: 6, zIndex: 50, elevation: 50 },
+  bookmarkIcon: { width: 32, height: 32, tintColor: COLORS.gold, resizeMode: 'contain' },
+  cardInfoSection: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  cardTitle: { color: COLORS.neutral950, fontSize: 15, fontWeight: '700', marginBottom: 3 },
+  cardAddress: { color: COLORS.neutral800, fontSize: 13, fontWeight: '500' },
+  cardSurface: { color: COLORS.neutral650 ?? COLORS.neutral800, fontSize: 12, fontWeight: '600', marginTop: 4 },
   // Price filter & tag styles
   priceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8 },
   distanceFilterTitle: { fontSize: 13, fontWeight: '700', color: COLORS.neutral950, marginBottom: 8, marginTop: 10 },

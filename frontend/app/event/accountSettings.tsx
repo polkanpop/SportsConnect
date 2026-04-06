@@ -119,16 +119,17 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
       <SectionHeader title={t('VOICE_SECTION_TITLE')} />
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
             <Text style={styles.fieldLabel}>{t('VOICE_TOGGLE_LABEL')}</Text>
             <View style={{
               backgroundColor: '#FF6017',
-              borderRadius: 4,
-              paddingHorizontal: 6,
+              borderRadius: 6,
+              paddingHorizontal: 7,
               paddingVertical: 2,
               marginLeft: 8,
+              alignSelf: 'center',
             }}>
-              <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>BETA</Text>
+              <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5, lineHeight: 14 }}>BETA</Text>
             </View>
           </View>
           <Switch
@@ -485,8 +486,15 @@ export default function AccountSettingsScreen() {
   }
 
   // ── Link Zalo account ─────────────────────────────────────────────────────
+  // Pre-warm Chrome Custom Tab to reduce black-screen flash on CCT open/close.
+  useEffect(() => {
+    void WebBrowser.warmUpAsync()
+    return () => { void WebBrowser.coolDownAsync() }
+  }, [])
+
   const handleLinkZalo = async () => {
     setLinkingZalo(true)
+    overlay.show()
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     try {
       // 1. PKCE
@@ -500,6 +508,8 @@ export default function AccountSettingsScreen() {
         state,
       })
       // 2. Open Chrome Custom Tab
+      // Yield one JS frame so the overlay paints before CCT opens
+      await new Promise<void>(r => requestAnimationFrame(() => r()))
       const result = await WebBrowser.openAuthSessionAsync(
         `${ZALO_AUTH_ENDPOINT}?${params.toString()}`,
         REDIRECT_INTERCEPT
@@ -508,6 +518,7 @@ export default function AccountSettingsScreen() {
         // Zalo may have auto-consented and linked successfully even if the result
         // type is not 'success' (race between redirect and CCT close detection).
         // Reload meta in case the link already went through.
+        overlay.hide()
         void loadMeta()
         return
       }
@@ -549,6 +560,7 @@ export default function AccountSettingsScreen() {
       }
     } finally {
       setLinkingZalo(false)
+      overlay.hide()
     }
   }
 
