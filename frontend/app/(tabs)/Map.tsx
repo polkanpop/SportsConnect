@@ -1767,16 +1767,22 @@
                         {selectedEventPin.court_name ? (
                           <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedEventPin.court_name}</Text>
                         ) : null}
-                        <View style={[styles.actionRow, { marginTop: 10 }]}>
+                        <View style={[styles.actionRow, { marginTop: 10, flexWrap: 'wrap', gap: 6 }]}>
                           {selectedEventPin.start_timestamp ? (
                             <Text style={styles.filterChipText}>
                               {new Date(selectedEventPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                             </Text>
                           ) : null}
                           {selectedEventPin.entry_fee != null ? (
-                            <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
+                            <Text style={styles.filterChipText}>
                               {selectedEventPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
                             </Text>
+                          ) : null}
+                          {selectedEventPin.participants_cap != null ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Image source={ICONS.participants} style={{ width: 14, height: 14, tintColor: '#888', marginRight: 4 }} />
+                              <Text style={styles.filterChipText}>{selectedEventPin.participants_cap}</Text>
+                            </View>
                           ) : null}
                         </View>
                         <TouchableOpacity
@@ -1796,16 +1802,22 @@
                         {selectedTSPin.court_name ? (
                           <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedTSPin.court_name}</Text>
                         ) : null}
-                        <View style={[styles.actionRow, { marginTop: 10 }]}>
+                        <View style={[styles.actionRow, { marginTop: 10, flexWrap: 'wrap', gap: 6 }]}>
                           {selectedTSPin.start_timestamp ? (
                             <Text style={styles.filterChipText}>
                               {new Date(selectedTSPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                             </Text>
                           ) : null}
                           {selectedTSPin.entry_fee != null ? (
-                            <Text style={[styles.filterChipText, { marginLeft: 10 }]}>
+                            <Text style={styles.filterChipText}>
                               {selectedTSPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
                             </Text>
+                          ) : null}
+                          {selectedTSPin.participants_cap != null ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Image source={ICONS.participants} style={{ width: 14, height: 14, tintColor: '#888', marginRight: 4 }} />
+                              <Text style={styles.filterChipText}>{selectedTSPin.participants_cap}</Text>
+                            </View>
                           ) : null}
                         </View>
                         <TouchableOpacity

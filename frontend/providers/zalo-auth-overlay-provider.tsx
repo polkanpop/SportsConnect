@@ -19,7 +19,7 @@
  *       {overlay renders AFTER children, highest z-order inside GestureHandlerRootView}
  */
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Animated, AppState, StyleSheet } from 'react-native'
 
 interface ZaloAuthOverlayContextType {
   show: () => void
@@ -48,6 +48,7 @@ let _flowBusy = false // true while a Zalo auth flow is in-progress
 export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(_overlayVisible)
   const autoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const opacity = useRef(new Animated.Value(_overlayVisible ? 1 : 0)).current
 
   const clearTimer = useCallback(() => {
     if (autoHideTimer.current) { clearTimeout(autoHideTimer.current); autoHideTimer.current = null }
@@ -55,21 +56,25 @@ export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNod
 
   const doHide = useCallback(() => {
     clearTimer()
-    _overlayVisible = false
-    _overlayShowTime = 0
     _flowBusy = false
-    setVisible(false)
-  }, [clearTimer])
+    // Fade out over 600ms so the OpenGL surface has time to stabilise after CCT close
+    Animated.timing(opacity, { toValue: 0, duration: 600, useNativeDriver: true }).start(() => {
+      _overlayVisible = false
+      _overlayShowTime = 0
+      setVisible(false)
+    })
+  }, [clearTimer, opacity])
 
   const show = useCallback(() => {
     clearTimer()
     _flowBusy = true
     _overlayVisible = true
     _overlayShowTime = Date.now()
+    opacity.setValue(1)
     setVisible(true)
     // Safety: auto-hide after MAX_OVERLAY_MS no matter what.
     autoHideTimer.current = setTimeout(doHide, MAX_OVERLAY_MS)
-  }, [clearTimer, doHide])
+  }, [clearTimer, doHide, opacity])
 
   // ── AppState recovery ─────────────────────────────────────────────────────
   // When the app comes back to foreground, check if the overlay is stale.
@@ -94,9 +99,9 @@ export function ZaloAuthOverlayProvider({ children }: { children: React.ReactNod
     <ZaloAuthOverlayContext.Provider value={{ show, hide: doHide }}>
       {children}
       {visible && (
-        <View style={styles.overlay} pointerEvents="box-only">
+        <Animated.View style={[styles.overlay, { opacity }]} pointerEvents="box-only">
           <ActivityIndicator size="large" color="#0068FF" />
-        </View>
+        </Animated.View>
       )}
     </ZaloAuthOverlayContext.Provider>
   )

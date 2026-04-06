@@ -12,16 +12,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
+  Image,
   PanResponder,
   StyleSheet,
   TouchableWithoutFeedback,
   Vibration,
   View,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 
 import { COLORS } from '@/constants/colors'
+import { ICONS } from '@/constants/icons'
 import { useVoiceAutomation } from '@/providers/voice-automation-provider'
+import { useAuthContext } from '@/hooks/use-auth-context'
 
 const BUTTON_SIZE = 56
 const EDGE_PADDING = 12
@@ -29,9 +31,10 @@ const TAP_THRESHOLD = 8 // px movement to distinguish tap from drag
 
 export default function FloatingVoiceButton() {
   const { enabled, flowState, startListening, dismiss } = useVoiceAutomation()
+  const { isLoggedIn } = useAuthContext()
 
-  // Don't render if feature is disabled or flow active (overlay handles active states)
-  if (!enabled || flowState !== 'idle') return null
+  // Don't render if feature is disabled, flow active, or user not logged in
+  if (!enabled || !isLoggedIn || flowState !== 'idle') return null
 
   return <DraggableButton onTap={startListening} />
 }
@@ -53,6 +56,9 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
 
   // Pulse animation
   const pulse = useRef(new Animated.Value(1)).current
+
+  // Press bounce (scale down on tap, spring back)
+  const pressScale = useRef(new Animated.Value(1)).current
 
   // Track pan offset changes
   useEffect(() => {
@@ -94,8 +100,12 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
     },
     onPanResponderRelease: (_, gs) => {
       if (totalMovement.current < TAP_THRESHOLD) {
-        // It's a tap, not a drag
+        // It's a tap — bounce then fire
         Vibration.vibrate(30)
+        Animated.sequence([
+          Animated.spring(pressScale, { toValue: 0.8, useNativeDriver: true, speed: 50 }),
+          Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, bounciness: 14, speed: 8 }),
+        ]).start()
         onTap()
       } else {
         // Snap to edge
@@ -105,7 +115,7 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
         )
       }
     },
-  }), [pan, snapToEdge, onTap])
+  }), [pan, snapToEdge, onTap, pressScale])
 
   return (
     <Animated.View
@@ -116,13 +126,13 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
           transform: [
             { translateX: pan.x },
             { translateY: pan.y },
-            { scale: pulse },
+            { scale: Animated.multiply(pulse, pressScale) },
           ],
         },
       ]}
     >
       <View style={styles.button}>
-        <Ionicons name="mic" size={26} color={COLORS.neutral0 ?? '#FFFFFF'} />
+        <Image source={ICONS.mic} style={{ width: 26, height: 26, tintColor: COLORS.neutral0 ?? '#FFFFFF' }} resizeMode="contain" />
       </View>
     </Animated.View>
   )

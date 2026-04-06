@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useRef } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,10 +20,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { COLORS } from '@/constants/colors'
+import { ICONS } from '@/constants/icons'
 import { useVoiceAutomation, VoiceFlowState } from '@/providers/voice-automation-provider'
 import { useTranslation } from '@/constants/translations'
 
@@ -31,14 +32,22 @@ export default function VoiceFocusOverlay() {
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
 
+  // Fade-in animation on mount
+  const fadeAnim = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (flowState !== 'idle') {
+      fadeAnim.setValue(0)
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start()
+    }
+  }, [flowState !== 'idle'])
+
   // Only render when flow is active
   if (flowState === 'idle') return null
 
   return (
-    <View style={[styles.overlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-      {/* Close button */}
+    <Animated.View style={[styles.overlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, opacity: fadeAnim }]}>
       <TouchableOpacity style={styles.closeBtn} onPress={dismiss} hitSlop={12}>
-        <Ionicons name="close" size={28} color="#FFF" />
+        <Image source={ICONS.closeMenu} style={{ width: 28, height: 28, tintColor: '#FFF' }} resizeMode="contain" />
       </TouchableOpacity>
 
       <View style={styles.content}>
@@ -72,7 +81,7 @@ export default function VoiceFocusOverlay() {
           />
         )}
       </View>
-    </View>
+    </Animated.View>
   )
 }
 
@@ -98,7 +107,7 @@ function ListeningView({ partialTranscript, onStop }: { partialTranscript: strin
 
       <Pressable onPress={onStop}>
         <Animated.View style={[styles.micCircle, { transform: [{ scale: pulseAnim }] }]}>
-          <Ionicons name="mic" size={40} color="#FFF" />
+          <Image source={ICONS.mic} style={{ width: 40, height: 40, tintColor: '#FFF' }} resizeMode="contain" />
         </Animated.View>
       </Pressable>
 
@@ -147,7 +156,7 @@ function ResultView({ result, onApply, onRetry, onDismiss, t }: {
 
   return (
     <View style={styles.stateContainer}>
-      <Ionicons name="checkmark-circle" size={48} color="#4CAF50" style={{ marginBottom: 12 }} />
+      <Image source={ICONS.check} style={{ width: 48, height: 48, tintColor: '#4CAF50', marginBottom: 12 }} resizeMode="contain" />
 
       {/* Transcript */}
       <View style={styles.transcriptBox}>
@@ -173,13 +182,12 @@ function ResultView({ result, onApply, onRetry, onDismiss, t }: {
       {/* Actions */}
       <View style={styles.actionRow}>
         <TouchableOpacity style={styles.btnSecondary} onPress={onRetry}>
-          <Ionicons name="refresh" size={18} color="#FFF" />
-          <Text style={styles.btnSecondaryText}> Thử lại</Text>
+          <Text style={styles.btnSecondaryText}>↻ Thử lại</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.btnPrimary} onPress={onApply}>
-          <Ionicons name="checkmark" size={18} color="#FFF" />
-          <Text style={styles.btnPrimaryText}> Áp dụng</Text>
+          <Image source={ICONS.check} style={{ width: 18, height: 18, tintColor: '#FFF', marginRight: 4 }} resizeMode="contain" />
+          <Text style={styles.btnPrimaryText}>Áp dụng</Text>
         </TouchableOpacity>
       </View>
 
@@ -200,7 +208,7 @@ function ErrorView({ errorMessage, onRetry, onDismiss, t }: {
 }) {
   return (
     <View style={styles.stateContainer}>
-      <Ionicons name="alert-circle" size={48} color="#F44336" style={{ marginBottom: 12 }} />
+      <Image source={ICONS.cancelEdit} style={{ width: 48, height: 48, tintColor: '#F44336', marginBottom: 12 }} resizeMode="contain" />
       <Text style={styles.errorText}>{errorMessage}</Text>
 
       <View style={styles.actionRow}>
@@ -209,8 +217,7 @@ function ErrorView({ errorMessage, onRetry, onDismiss, t }: {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.btnPrimary} onPress={onRetry}>
-          <Ionicons name="refresh" size={18} color="#FFF" />
-          <Text style={styles.btnPrimaryText}> Thử lại</Text>
+          <Text style={styles.btnPrimaryText}>↻ Thử lại</Text>
         </TouchableOpacity>
       </View>
     </View>

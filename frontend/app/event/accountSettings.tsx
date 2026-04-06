@@ -48,6 +48,7 @@ import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 import { useVoicePreference } from '@/hooks/use-voice-preference'
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -114,6 +115,18 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
 
 function VoiceToggleSection({ t }: { t: (key: any) => string }) {
   const { enabled, setEnabled } = useVoicePreference()
+
+  const handleToggle = useCallback(async (val: boolean) => {
+    if (val) {
+      const { granted } = await ExpoSpeechRecognitionModule.getPermissionsAsync()
+      if (!granted) {
+        const { granted: nowGranted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync()
+        if (!nowGranted) return // user denied – don't enable
+      }
+    }
+    setEnabled(val)
+  }, [setEnabled])
+
   return (
     <>
       <SectionHeader title={t('VOICE_SECTION_TITLE')} />
@@ -129,12 +142,12 @@ function VoiceToggleSection({ t }: { t: (key: any) => string }) {
               marginLeft: 8,
               alignSelf: 'center',
             }}>
-              <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5, lineHeight: 14 }}>BETA</Text>
+              <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5, lineHeight: 13, includeFontPadding: false }}>BETA</Text>
             </View>
           </View>
           <Switch
             value={enabled}
-            onValueChange={setEnabled}
+            onValueChange={handleToggle}
             trackColor={{ false: '#ccc', true: '#FF6017' }}
             thumbColor={enabled ? '#FFF' : '#f4f3f4'}
           />
@@ -560,7 +573,9 @@ export default function AccountSettingsScreen() {
       }
     } finally {
       setLinkingZalo(false)
-      overlay.hide()
+      // Delay overlay dismissal so the Android OpenGL surface has time to
+      // stabilise after Chrome Custom Tab closes (prevents black flash).
+      setTimeout(() => overlay.hide(), 800)
     }
   }
 

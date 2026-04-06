@@ -289,7 +289,7 @@ export function DynamicMap({
               iconImage: ['match', ['get', 'imageKey'], 'event', 'eventMarker', 'training', 'trainingMarker', 'courtMarker'],
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
-              iconSize: 0.14,
+              iconSize: 0.09,
               iconAnchor: 'bottom',
               iconOpacity: 1,
             }}
