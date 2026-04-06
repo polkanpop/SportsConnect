@@ -11,7 +11,7 @@ import * as Updates from 'expo-updates'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useEffect } from 'react'
-import { StyleSheet, Text, TextInput } from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 import './global.css'
@@ -22,6 +22,7 @@ import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
 import { LanguageProvider } from '@/providers/language-provider'
 import { ZaloAuthOverlayProvider } from '@/providers/zalo-auth-overlay-provider'
 import { AppThemeProvider, useTheme } from '@/providers/theme-provider'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 import { VoiceAutomationProvider } from '@/providers/voice-automation-provider'
 import FloatingVoiceButton from '@/components/voice/FloatingVoiceButton'
 import VoiceFocusOverlay from '@/components/voice/VoiceFocusOverlay'
@@ -33,6 +34,16 @@ import VoiceFocusOverlay from '@/components/voice/VoiceFocusOverlay'
 function ThemedStatusBar() {
   const { isDark } = useTheme()
   return <StatusBar style={isDark ? 'light' : 'dark'} />
+}
+
+/** Provides themed bg color — sits inside AppThemeProvider */
+function ThemedAppShell({ children }: { children: React.ReactNode }) {
+  const tc = useThemeColors()
+  return (
+    <View style={{ flex: 1, backgroundColor: tc.bgBase }}>
+      {children}
+    </View>
+  )
 }
 
 import { useAuthContext } from '@/hooks/use-auth-context'
@@ -206,9 +217,10 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <ZaloAuthOverlayProvider>
         <AppThemeProvider>
+        <ThemedAppShell>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <LanguageProvider>
             <QueryProvider>
@@ -231,6 +243,7 @@ export default function RootLayout() {
             </QueryProvider>
           </LanguageProvider>
         </ThemeProvider>
+        </ThemedAppShell>
         </AppThemeProvider>
       </ZaloAuthOverlayProvider>
     </GestureHandlerRootView>

@@ -519,7 +519,7 @@ export default function NotificationsPage() {
         styles.notificationRow,
         (item.status || '').toLowerCase() !== "unread" && styles.viewedNotification,
         updating === item.notificationid && styles.updatingRow,
-        deleteMode && selectedIds.has(item.notificationid) && styles.selectedNotification,
+        deleteMode && selectedIds.has(item.notificationid) && [styles.selectedNotification, { backgroundColor: tc.brandSoft }],
       ]}
       onPress={() => handleNotificationClick(item)}
       onLongPress={() => handleNotificationLongPress(item)}
@@ -586,7 +586,7 @@ export default function NotificationsPage() {
                     setDropdownOpen(false)
                   }}
                 >
-                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? styles.dropdownItemTextSelected : null]}>
+                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? [styles.dropdownItemTextSelected, { color: tc.brand }] : null]}>
                     {opt === 'All' ? t('COMMON_FILTER_ALL') :
                      opt === 'Court' ? t('COMMON_FILTER_COURT') :
                      opt === 'Event' ? t('COMMON_FILTER_EVENT') :
@@ -625,7 +625,7 @@ export default function NotificationsPage() {
             <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.markAllWrap, { flex: 1 }]} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
-            <Text style={styles.markAllText}>{t('NOTIF_BTN_SELECT_ALL')}</Text>
+            <Text style={[styles.markAllText, { color: tc.brand }]}>{t('NOTIF_BTN_SELECT_ALL')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -646,7 +646,7 @@ export default function NotificationsPage() {
             </Text>
             {section.title === 'Today' && !deleteMode ? (
               <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
-                <Text style={styles.markAllText}>{t('NOTIF_BTN_MARK_ALL_READ')}</Text>
+                <Text style={[styles.markAllText, { color: tc.brand }]}>{t('NOTIF_BTN_MARK_ALL_READ')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.sectionHeaderActionSpacer} />

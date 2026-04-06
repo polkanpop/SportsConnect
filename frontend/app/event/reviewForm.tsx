@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { postReview } from '@/lib/backendApi'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 // Route params: targettype (court|event|trainingsession), targetid (string number), title (display name)
 export default function ReviewForm() {
@@ -28,6 +29,7 @@ export default function ReviewForm() {
   const [comment, setComment] = useState('')
   const [confirmVisible, setConfirmVisible] = useState(false)
   const [successVisible, setSuccessVisible] = useState(false)
+  const tc = useThemeColors()
 
   const numericId = parseInt(String(targetid ?? ''), 10)
   const displayTitle = useMemo(() => {
@@ -70,7 +72,7 @@ export default function ReviewForm() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.bgBase }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -78,24 +80,24 @@ export default function ReviewForm() {
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <SafeAreaView edges={['top']}>
-            <View style={styles.header}>
-              <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
+            <View style={[styles.header, { backgroundColor: tc.bgSurface, borderBottomColor: tc.divider }]}>
+              <TouchableOpacity onPress={handleGoBack} style={[styles.backBtn, { backgroundColor: tc.bgSurface }]}>
                 <Image source={ICONS.arrowLeft} style={styles.backIcon} />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>{t('REVIEW_HEADER_TITLE')}</Text>
+              <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('REVIEW_HEADER_TITLE')}</Text>
               <View style={{ width: 44 }} />
             </View>
           </SafeAreaView>
 
           {/* Target Info */}
-          <View style={styles.card}>
-            <Text style={styles.targetLabel}>{displayTitle}</Text>
-            <Text style={styles.targetType}>{contextLabel ? decodeURIComponent(String(contextLabel)) : String(targettype ?? '').replace('trainingsession', 'Training Session')}</Text>
+          <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
+            <Text style={[styles.targetLabel, { color: tc.textPrimary }]}>{displayTitle}</Text>
+            <Text style={[styles.targetType, { color: tc.textSecondary }]}>{contextLabel ? decodeURIComponent(String(contextLabel)) : String(targettype ?? '').replace('trainingsession', 'Training Session')}</Text>
           </View>
 
           {/* Star Rating */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('REVIEW_SECTION_RATING')}</Text>
+            <Text style={[styles.sectionLabel, { color: tc.textPrimary }]}>{t('REVIEW_SECTION_RATING')}</Text>
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.starBtn}>
@@ -106,7 +108,7 @@ export default function ReviewForm() {
               ))}
             </View>
             {rating > 0 && (
-              <Text style={styles.ratingLabel}>
+              <Text style={[styles.ratingLabel, { color: tc.textSecondary }]}>
                 {(['', t('REVIEW_RATING_POOR'), t('REVIEW_RATING_FAIR'), t('REVIEW_RATING_GOOD'), t('REVIEW_RATING_VERY_GOOD'), t('REVIEW_RATING_EXCELLENT')] as string[])[rating]}
               </Text>
             )}
@@ -114,11 +116,11 @@ export default function ReviewForm() {
 
           {/* Comment Input */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t('REVIEW_SECTION_COMMENT')}</Text>
+            <Text style={[styles.sectionLabel, { color: tc.textPrimary }]}>{t('REVIEW_SECTION_COMMENT')}</Text>
             <TextInput
-              style={styles.commentInput}
+              style={[styles.commentInput, { backgroundColor: tc.bgInput, color: tc.textPrimary, borderColor: tc.divider }]}
               placeholder={t('REVIEW_COMMENT_PLACEHOLDER')}
-              placeholderTextColor={COLORS.neutral600}
+              placeholderTextColor={tc.placeholder}
               multiline
               numberOfLines={5}
               textAlignVertical="top"
@@ -126,7 +128,7 @@ export default function ReviewForm() {
               onChangeText={setComment}
               maxLength={500}
             />
-            <Text style={styles.charCount}>{comment.length}/500</Text>
+            <Text style={[styles.charCount, { color: tc.textSecondary }]}>{comment.length}/500</Text>
           </View>
 
           {/* Submit Button */}
@@ -143,9 +145,9 @@ export default function ReviewForm() {
       {/* Confirmation Modal */}
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>{t('REVIEW_MODAL_CONFIRM_TITLE')}</Text>
-            <Text style={styles.modalBody}>
+          <View style={[styles.modalBox, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('REVIEW_MODAL_CONFIRM_TITLE')}</Text>
+            <Text style={[styles.modalBody, { color: tc.textSecondary }]}>
               {t('REVIEW_MODAL_CONFIRM_BODY')}
             </Text>
             <View style={styles.starsRowSmall}>
@@ -155,14 +157,14 @@ export default function ReviewForm() {
                 </Text>
               ))}
             </View>
-            <Text style={styles.modalComment} numberOfLines={4}>{comment.trim()}</Text>
+            <Text style={[styles.modalComment, { color: tc.textSecondary }]} numberOfLines={4}>{comment.trim()}</Text>
             <View style={styles.modalBtns}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalCancelBtn]}
+                style={[styles.modalBtn, styles.modalCancelBtn, { backgroundColor: tc.bgSurface }]}
                 onPress={() => setConfirmVisible(false)}
                 disabled={mutation.isPending}
               >
-                <Text style={styles.modalCancelBtnText}>{t('REVIEW_MODAL_BTN_CANCEL')}</Text>
+                <Text style={[styles.modalCancelBtnText, { color: tc.textPrimary }]}>{t('REVIEW_MODAL_BTN_CANCEL')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalConfirmBtn]}
@@ -182,10 +184,10 @@ export default function ReviewForm() {
       {/* Success Modal */}
       <Modal visible={successVisible} transparent animationType="fade" onRequestClose={handleGoBack}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { backgroundColor: tc.bgElevated }]}>
             <Text style={styles.successIcon}>✓</Text>
-            <Text style={styles.modalTitle}>{t('REVIEW_MODAL_SUCCESS_TITLE')}</Text>
-            <Text style={styles.modalBody}>{t('REVIEW_MODAL_SUCCESS_BODY')}</Text>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('REVIEW_MODAL_SUCCESS_TITLE')}</Text>
+            <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('REVIEW_MODAL_SUCCESS_BODY')}</Text>
             <TouchableOpacity style={[styles.modalBtn, styles.modalConfirmBtn, { width: '100%' }]} onPress={handleGoBack}>
               <Text style={styles.modalConfirmBtnText}>{t('REVIEW_MODAL_BTN_DONE')}</Text>
             </TouchableOpacity>

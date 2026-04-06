@@ -27,7 +27,7 @@ import { useThemeColors, ThemeTokens } from '@/hooks/use-theme-colors'
 const EXPECTED_KEYS: (keyof ThemeTokens)[] = [
   'bgBase', 'bgSurface', 'bgElevated', 'bgInput', 'bgOverlay',
   'textPrimary', 'textSecondary', 'textMuted',
-  'brand', 'brandSoft',
+  'brand', 'brandSoft', 'brandMuted',
   'accentPrimary', 'accentPrimaryLight', 'accentPrimarySoft',
   'accentSecondary', 'accentSecondaryLight', 'accentSecondarySoft',
   'border', 'borderStrong',
@@ -36,6 +36,9 @@ const EXPECTED_KEYS: (keyof ThemeTokens)[] = [
   'skeletonBase', 'skeletonHighlight',
   'cardBg', 'searchBarBg',
   'shadow', 'divider', 'placeholder',
+  'iconDefault', 'iconMuted',
+  'btnPrimaryBg', 'btnPrimaryText',
+  'btnSecondaryBg', 'btnSecondaryText', 'btnSecondaryBorder',
 ]
 
 beforeEach(() => {
@@ -83,14 +86,15 @@ describe('useThemeColors', () => {
     }
   })
 
-  it('brand color is identical in both themes', () => {
+  it('brand color switches between themes (orange light, purple dark)', () => {
     mockIsDark = false
     const light = useThemeColors()
     mockIsDark = true
     const dark = useThemeColors()
 
-    expect(light.brand).toBe(dark.brand)
     expect(light.brand).toBe(COLORS.brandOrangeDeep)
+    expect(dark.brand).toBe('#7C3AED')
+    expect(light.brand).not.toBe(dark.brand)
   })
 
   it('dark shadow is transparent (no shadows on dark bg)', () => {

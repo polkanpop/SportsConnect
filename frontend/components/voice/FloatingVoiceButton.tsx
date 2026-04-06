@@ -24,6 +24,7 @@ import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
 import { useVoiceAutomation } from '@/providers/voice-automation-provider'
 import { useAuthContext } from '@/hooks/use-auth-context'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const BUTTON_SIZE = 56
 const EDGE_PADDING = 12
@@ -48,6 +49,7 @@ export default function FloatingVoiceButton() {
 // ── Draggable button (extracted to avoid hook rules issues with early return) ─
 
 function DraggableButton({ onTap }: { onTap: () => void }) {
+  const tc = useThemeColors()
   const { width: screenW, height: screenH } = Dimensions.get('window')
 
   // Initialize from persisted position
@@ -137,8 +139,8 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
         },
       ]}
     >
-      <View style={styles.button}>
-        <Image source={ICONS.microphone} style={{ width: 26, height: 26, tintColor: COLORS.neutral0 ?? '#FFFFFF' }} resizeMode="contain" />
+      <View style={[styles.button, { backgroundColor: tc.brand, shadowColor: tc.shadow }]}>
+        <Image source={ICONS.microphone} style={{ width: 26, height: 26, tintColor: '#FFF' }} resizeMode="contain" />
       </View>
     </Animated.View>
   )

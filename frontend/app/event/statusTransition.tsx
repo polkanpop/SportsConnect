@@ -3,6 +3,7 @@ import { Animated, StyleSheet, Text, View, UIManager } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import LottieView from 'lottie-react-native'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
 
@@ -25,6 +26,7 @@ export default function StatusTransition() {
   const router = useRouter()
   const params = useLocalSearchParams()
   const hasNavigatedRef = useRef(false)
+  const tc = useThemeColors()
 
   const [revealed, setRevealed] = useState(false)
   const finishedRef = useRef(false)
@@ -157,7 +159,7 @@ export default function StatusTransition() {
   }, [isCancelFlow, revealed])
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.bgBase }]} edges={['top', 'bottom']}>
       <View style={styles.page}>
         <View style={[styles.inner, isCancelFlow && styles.innerRaised]}>
           {HAS_LOTTIE_NATIVE ? (
@@ -176,7 +178,7 @@ export default function StatusTransition() {
                 style={[
                   styles.title,
                   isSimpleCancel && styles.titleCancel,
-                  { opacity: revealed ? 1 : 0 },
+                  { opacity: revealed ? 1 : 0, color: tc.textPrimary },
                 ]}
               >
                 {titleText}
@@ -190,7 +192,7 @@ export default function StatusTransition() {
                 style={[
                   styles.title,
                   isSimpleCancel && styles.titleCancel,
-                  { opacity: revealed ? 1 : 0 },
+                  { opacity: revealed ? 1 : 0, color: tc.textPrimary },
                 ]}
               >
                 {titleText}
@@ -200,13 +202,13 @@ export default function StatusTransition() {
         </View>
 
         {isCancelFlow && revealed ? (
-          <View style={styles.footer}>
+          <View style={[styles.footer, { backgroundColor: tc.bgBase, borderTopColor: tc.divider }]}>
             <View style={styles.footerInner}>
               <View style={{ width: '100%' }}>
                 <View style={{ opacity: detailsId ? 1 : 0.45 }}>
                   <Text
                     onPress={detailsId ? handleSeeDetails : undefined}
-                    style={styles.detailsBtnText}
+                    style={[styles.detailsBtnText, { backgroundColor: tc.bgSurface, borderColor: tc.textPrimary, color: tc.textPrimary }]}
                   >
                     See details
                   </Text>

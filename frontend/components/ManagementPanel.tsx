@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ICONS } from '@/constants/icons'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 export type ManagementPanelKey = 'user' | 'event' | 'court' | 'reviews'
 
@@ -22,6 +23,7 @@ export default function ManagementPanel(props: {
   const [expandedInternal, setExpandedInternal] = useState(defaultExpanded)
   const expanded = typeof expandedProp === 'boolean' ? expandedProp : expandedInternal
   const { t } = useTranslation()
+  const tc = useThemeColors()
 
   const setExpanded = (next: boolean) => {
     if (typeof expandedProp === 'boolean') {
@@ -53,10 +55,10 @@ export default function ManagementPanel(props: {
         onPress={() => setExpanded(!expanded)}
         style={styles.sectionHeader}
       >
-        <Text style={styles.sectionTitle}>{t('MANAGEMENT_PANEL_TITLE')}</Text>
+        <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{t('MANAGEMENT_PANEL_TITLE')}</Text>
         <Image
           source={expanded ? ICONS.arrowdown : ICONS.smallArrowLeft}
-          style={styles.chevron}
+          style={[styles.chevron, { tintColor: tc.textPrimary }]}
           resizeMode="contain"
         />
       </TouchableOpacity>
@@ -77,6 +79,7 @@ export default function ManagementPanel(props: {
                 }}
                 style={[
                   styles.row,
+                  { borderBottomColor: tc.divider },
                   selected && styles.rowSelected,
                   disabled && styles.rowDisabled,
                 ]}
@@ -84,7 +87,8 @@ export default function ManagementPanel(props: {
                 <Text
                   style={[
                     styles.rowText,
-                    selected && styles.rowTextSelected,
+                    { color: tc.textPrimary },
+                    selected && [styles.rowTextSelected, { color: tc.brand }],
                     disabled && styles.rowTextDisabled,
                   ]}
                 >

@@ -1,6 +1,7 @@
 import { COLORS } from '@/constants/colors';
 import { ICONS } from '@/constants/icons';
 import { IMAGES } from '@/constants/images';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 import React from 'react';
 import { Image, ImageBackground, TextInput, TouchableOpacity } from 'react-native';
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export const SearchBar = ({ placeholder, onChangeText }: Props) => {
+  const tc = useThemeColors();
   return (
     <ImageBackground
       source={IMAGES.searchBar}
@@ -18,7 +20,7 @@ export const SearchBar = ({ placeholder, onChangeText }: Props) => {
         borderRadius: 40,
         overflow: "hidden",
         paddingHorizontal: 8,
-        backgroundColor: COLORS.searchBarBg,
+        backgroundColor: tc.searchBarBg,
       }}
     >
       <TouchableOpacity

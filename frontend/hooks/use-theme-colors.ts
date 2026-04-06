@@ -20,9 +20,10 @@ export interface ThemeTokens {
   textSecondary: string
   textMuted: string
 
-  // Brand (preserved in both themes)
+  // Brand — switches orange (light) ↔ purple (dark)
   brand: string
   brandSoft: string
+  brandMuted: string
 
   // Accent
   accentPrimary: string
@@ -58,6 +59,17 @@ export interface ThemeTokens {
   shadow: string
   divider: string
   placeholder: string
+
+  // Icon tint on elevated surfaces
+  iconDefault: string
+  iconMuted: string
+
+  // Button variants
+  btnPrimaryBg: string
+  btnPrimaryText: string
+  btnSecondaryBg: string
+  btnSecondaryText: string
+  btnSecondaryBorder: string
 }
 
 const LIGHT_TOKENS: ThemeTokens = {
@@ -73,6 +85,7 @@ const LIGHT_TOKENS: ThemeTokens = {
 
   brand: COLORS.brandOrangeDeep,
   brandSoft: COLORS.orangeSoft,
+  brandMuted: '#FED7AA',
 
   accentPrimary: '#7C3AED',
   accentPrimaryLight: '#A78BFA',
@@ -101,6 +114,15 @@ const LIGHT_TOKENS: ThemeTokens = {
   shadow: 'rgba(0,0,0,0.08)',
   divider: COLORS.neutral300,
   placeholder: COLORS.neutral650,
+
+  iconDefault: COLORS.neutral975,
+  iconMuted: COLORS.neutral650,
+
+  btnPrimaryBg: COLORS.brandOrangeDeep,
+  btnPrimaryText: '#FFFFFF',
+  btnSecondaryBg: 'transparent',
+  btnSecondaryText: COLORS.brandOrangeDeep,
+  btnSecondaryBorder: COLORS.brandOrangeDeep,
 }
 
 const DARK_TOKENS: ThemeTokens = {
@@ -114,8 +136,9 @@ const DARK_TOKENS: ThemeTokens = {
   textSecondary: '#9BA3C7',
   textMuted: '#5A6080',
 
-  brand: COLORS.brandOrangeDeep,
-  brandSoft: '#2D1A0A',
+  brand: '#7C3AED',
+  brandSoft: '#1E1640',
+  brandMuted: '#2D2060',
 
   accentPrimary: '#7C3AED',
   accentPrimaryLight: '#A78BFA',
@@ -144,6 +167,15 @@ const DARK_TOKENS: ThemeTokens = {
   shadow: 'transparent',
   divider: '#252848',
   placeholder: '#5A6080',
+
+  iconDefault: '#F0F2FF',
+  iconMuted: '#5A6080',
+
+  btnPrimaryBg: '#7C3AED',
+  btnPrimaryText: '#FFFFFF',
+  btnSecondaryBg: 'transparent',
+  btnSecondaryText: '#A78BFA',
+  btnSecondaryBorder: '#7C3AED',
 }
 
 export function useThemeColors(): ThemeTokens {

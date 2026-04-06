@@ -5,9 +5,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { getUserInfoByUserIdCached, type UserInfoRow } from '@/lib/backendApi'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 export default function ProfileSpectate() {
   const router = useRouter()
+  const tc = useThemeColors()
   const { userid } = useLocalSearchParams<{ userid?: string }>()
   const numericUserId = useMemo(() => {
     const raw = String(userid ?? '')
@@ -54,11 +56,11 @@ export default function ProfileSpectate() {
 	}, [userInfo])
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
         <View style={{ width: 44 }} />
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>Profile</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -71,7 +73,7 @@ export default function ProfileSpectate() {
         {error && <Text style={{ color: '#b91c1c', textAlign: 'center', paddingHorizontal: 16 }}>{error}</Text>}
 
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
+        <View style={[styles.profileHeader, { backgroundColor: tc.bgBase }]}>
           <View style={styles.avatarContainer}>
             {userInfo?.pfp ? (
               <ExpoImage source={{ uri: userInfo.pfp as string }} style={styles.avatar} contentFit="cover" />
@@ -79,18 +81,18 @@ export default function ProfileSpectate() {
               <Image source={ICONS.accountCircle} style={styles.avatar} />
             )}
           </View>
-          <Text style={styles.username}>{userInfo?.name || 'Username'}</Text>
+          <Text style={[styles.username, { color: tc.textPrimary }]}>{userInfo?.name || 'Username'}</Text>
         </View>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
         {/* Biography */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>Biography</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10, color: tc.textPrimary }]}>Biography</Text>
           </View>
           <View style={{ padding: 4 }}>
-            <Text style={{ fontSize: 14, color: userInfo?.biography ? '#333' : '#999' }}>
+            <Text style={{ fontSize: 14, color: userInfo?.biography ? tc.textPrimary : tc.textMuted }}>
               {userInfo?.biography || ''}
             </Text>
           </View>
@@ -99,10 +101,10 @@ export default function ProfileSpectate() {
         {/* Contact */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>Contact</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10, color: tc.textPrimary }]}>Contact</Text>
           </View>
           {!contactVisible ? (
-            <Text style={{ fontSize: 12, color: '#888', fontStyle: 'italic' }}>This user has hidden their contact information.</Text>
+            <Text style={{ fontSize: 12, color: tc.textSecondary, fontStyle: 'italic' }}>This user has hidden their contact information.</Text>
           ) : (() => {
             const email = userInfo?.email
             const phone = userInfo?.contactnumber
@@ -111,8 +113,8 @@ export default function ProfileSpectate() {
             const value = email || phone || ''
             return (
               <View style={styles.contactRow}>
-                <Text style={[styles.contactText, { color: '#888', marginRight: 6 }]}>{label}:</Text>
-                <Text style={styles.contactText}>{value}</Text>
+                <Text style={[styles.contactText, { color: tc.textSecondary, marginRight: 6 }]}>{label}:</Text>
+                <Text style={[styles.contactText, { color: tc.textSecondary }]}>{value}</Text>
               </View>
             )
           })()}

@@ -3,6 +3,7 @@ import { Animated, Image, Pressable, StyleSheet, Text, TouchableOpacity, View } 
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ICONS } from '@/constants/icons'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const SWITCH_TRACK_WIDTH = 66
 const SWITCH_TRACK_HEIGHT = 32
@@ -12,6 +13,7 @@ const SWITCH_TRAVEL = SWITCH_TRACK_WIDTH - SWITCH_PADDING * 2 - SWITCH_THUMB_SIZ
 
 export default function UserAccountSetting() {
   const router = useRouter()
+  const tc = useThemeColors()
   // UI-only for now: default to the "success/on" state so the switch looks correct.
   const [isDark, setIsDark] = useState(true)
   const thumbTranslate = useRef(new Animated.Value(isDark ? SWITCH_TRAVEL : 0)).current
@@ -27,21 +29,21 @@ export default function UserAccountSetting() {
   const thumbTransform = useMemo(() => [{ translateX: thumbTranslate }], [thumbTranslate])
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]}>
       <View style={styles.headerRow}>
         <View style={styles.headerSide}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+          <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgSurface }]} onPress={() => router.back()}>
+            <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.headerTitle}>Account</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>Account</Text>
         <View style={styles.headerSide} />
       </View>
 
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: tc.bgSurface }]}>
         <View style={styles.row}>
           <View style={styles.rowLeft}>
-            <Text style={styles.rowText}>Theme</Text>
+            <Text style={[styles.rowText, { color: tc.textPrimary }]}>Theme</Text>
           </View>
           <Pressable
             accessibilityRole="switch"

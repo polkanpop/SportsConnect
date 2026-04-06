@@ -11,10 +11,12 @@ import { queryKeys } from '@/hooks/query-keys'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 export default function Profile() {
   const router = useRouter()
   const { t } = useTranslation()
+  const tc = useThemeColors()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
   const userInfo = userInfoQuery.data
   
@@ -344,42 +346,42 @@ export default function Profile() {
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+      <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgSurface }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('PROFILE_HEADER_TITLE')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('PROFILE_HEADER_TITLE')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
+        <View style={[styles.profileHeader, { backgroundColor: tc.bgBase }]}>
           <View style={styles.avatarContainer}>
             {pfpOverrideUri || userInfo?.pfp ? (
               <ExpoImage source={{ uri: (pfpOverrideUri || userInfo?.pfp) as string }} style={styles.avatar} contentFit="cover" />
             ) : (
               <Image source={ICONS.accountCircle} style={styles.avatar} />
             )}
-            <TouchableOpacity style={styles.cameraBtn} onPress={handlePressCamera} disabled={uploadingPfp}>
+            <TouchableOpacity style={[styles.cameraBtn, { backgroundColor: tc.bgSurface, shadowColor: tc.shadow }]} onPress={handlePressCamera} disabled={uploadingPfp}>
               {uploadingPfp ? (
                 <ActivityIndicator size="small" color="#333" />
               ) : (
-                <Image source={ICONS.camera} style={styles.cameraIcon} />
+                <Image source={ICONS.camera} style={[styles.cameraIcon, { tintColor: tc.textPrimary }]} />
               )}
             </TouchableOpacity>
           </View>
-          <Text style={styles.username}>{userInfo?.name || t('PROFILE_USERNAME_FALLBACK')}</Text>
+          <Text style={[styles.username, { color: tc.textPrimary }]}>{userInfo?.name || t('PROFILE_USERNAME_FALLBACK')}</Text>
         </View>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
         {/* Biography */}
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10 }]}>{t('PROFILE_SECTION_BIOGRAPHY')}</Text>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, marginRight: 10, color: tc.textPrimary }]}>{t('PROFILE_SECTION_BIOGRAPHY')}</Text>
             <TouchableOpacity onPress={isEditingBio ? handleCancelEdit : handleEditBio}>
               <Image 
                 source={isEditingBio ? ICONS.cancelEdit : ICONS.edit} 
@@ -394,11 +396,12 @@ export default function Profile() {
           </View>
           
           {isEditingBio ? (
-            <View style={styles.bioContainer}>
+            <View style={[styles.bioContainer, { backgroundColor: tc.bgInput }]}>
               <TextInput
-                style={styles.bioInput}
+                style={[styles.bioInput, { color: tc.textPrimary }]}
                 multiline
                 placeholder={t('PROFILE_BIO_PLACEHOLDER')}
+                placeholderTextColor={tc.placeholder}
                 value={bio}
                 onChangeText={setBio}
                 autoFocus
@@ -415,7 +418,7 @@ export default function Profile() {
             </View>
           ) : (
             <View style={{ padding: 4 }}>
-              <Text style={{ fontSize: 14, color: bio ? '#333' : '#999' }}>
+              <Text style={{ fontSize: 14, color: bio ? tc.textPrimary : tc.textMuted }}>
                 {bio || t('PROFILE_BIO_PLACEHOLDER')}
               </Text>
             </View>
@@ -424,14 +427,14 @@ export default function Profile() {
 
         {/* Contact */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>{t('PROFILE_SECTION_CONTACT')}</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: 12, color: tc.textPrimary }]}>{t('PROFILE_SECTION_CONTACT')}</Text>
 
           {/* Email row */}
           <View style={[styles.contactRow, { marginBottom: 10 }]}>
             <Text style={[styles.contactLabel]}>{t('PROFILE_CONTACT_LABEL_EMAIL')}</Text>
             <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.email || t('PROFILE_CONTACT_FALLBACK')}</Text>
             <TouchableOpacity onPress={handleToggleEmail} style={{ paddingLeft: 8 }}>
-              <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: '#555' }} />
+              <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: tc.textSecondary }} />
             </TouchableOpacity>
           </View>
 
@@ -440,12 +443,12 @@ export default function Profile() {
             <Text style={[styles.contactLabel]}>{t('PROFILE_CONTACT_LABEL_PHONE')}</Text>
             <Text style={[styles.contactText, { flex: 1 }]}>{userInfo?.contactnumber ? (userInfo.contactnumber.startsWith('+84') && userInfo.contactnumber.length === 12 ? '0' + userInfo.contactnumber.slice(3) : userInfo.contactnumber) : t('PROFILE_CONTACT_NO_PHONE')}</Text>
             <TouchableOpacity onPress={handleTogglePhone} style={{ paddingLeft: 8 }}>
-              <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: '#555' }} />
+              <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={{ width: 16, height: 16, tintColor: tc.textSecondary }} />
             </TouchableOpacity>
           </View>
 
           {showContactLog && (
-            <Text style={{ marginTop: 6, fontSize: 12, color: '#888', fontStyle: 'italic' }}>
+            <Text style={{ marginTop: 6, fontSize: 12, color: tc.textSecondary, fontStyle: 'italic' }}>
               {showContactLog.field === 'email'
                 ? (showContactLog.visible ? t('PROFILE_EMAIL_NOW_VISIBLE') : t('PROFILE_EMAIL_NOW_HIDDEN'))
                 : (showContactLog.visible ? t('PROFILE_PHONE_NOW_VISIBLE') : t('PROFILE_PHONE_NOW_HIDDEN'))}
@@ -468,15 +471,15 @@ export default function Profile() {
           <View style={styles.modalBackdrop} />
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('PROFILE_MODAL_UNSAVED_CHANGES')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated, shadowColor: tc.shadow }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('PROFILE_MODAL_UNSAVED_CHANGES')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
                 onPress={() => setShowUnsavedModal(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>{t('PROFILE_MODAL_BTN_RETURN')}</Text>
+                <Text style={[styles.modalButtonCancelText, { color: tc.textPrimary }]}>{t('PROFILE_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
@@ -501,9 +504,9 @@ export default function Profile() {
           <View style={styles.modalBackdrop} />
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{actionModalTitle}</Text>
-            {!!actionModalMessage && <Text style={styles.modalMessage}>{actionModalMessage}</Text>}
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated, shadowColor: tc.shadow }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{actionModalTitle}</Text>
+            {!!actionModalMessage && <Text style={[styles.modalMessage, { color: tc.textSecondary }]}>{actionModalMessage}</Text>}
             <View style={actionModalLayout === 'row' || (actionModalLayout == null && actionModalButtons.length === 2) ? styles.modalButtonsRow : undefined}>
               {actionModalButtons.map((btn, idx) => {
                 const isConfirm = btn.variant === 'confirm'
@@ -525,7 +528,7 @@ export default function Profile() {
                   >
                     <Text
                       style={{
-                        color: isConfirm ? '#FFFFFF' : '#111111',
+                        color: isConfirm ? '#FFFFFF' : tc.textPrimary,
                         fontWeight: '600',
                         fontSize: 15,
                         textAlign: 'center',

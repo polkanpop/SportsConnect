@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import LottieView from 'lottie-react-native'
 import { ICONS } from '@/constants/icons'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const SUCCESS_ANIM = require('../../assets/animation/SuccessfulJoin.json')
 const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
@@ -13,6 +14,7 @@ export default function Invoice() {
   const router = useRouter()
   const params = useLocalSearchParams()
   const { t } = useTranslation()
+  const tc = useThemeColors()
 
   const [revealed, setRevealed] = useState(false)
   const finishedRef = useRef(false)
@@ -177,7 +179,7 @@ export default function Invoice() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.bgBase }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
         {/* Success Header */}
@@ -200,68 +202,68 @@ export default function Invoice() {
 
           {revealed ? (
             <>
-              <Text style={styles.successTitle}>{t('INVOICE_SUCCESS_TITLE')}</Text>
-              <Text style={styles.successSub}>{t('INVOICE_SUCCESS_SUB')}</Text>
+              <Text style={[styles.successTitle, { color: tc.textPrimary }]}>{t('INVOICE_SUCCESS_TITLE')}</Text>
+              <Text style={[styles.successSub, { color: tc.textSecondary }]}>{t('INVOICE_SUCCESS_SUB')}</Text>
             </>
           ) : null}
         </View>
 
         {revealed ? (
-          <View style={styles.card}>
-          <Text style={styles.cardHeader}>{t('INVOICE_CARD_HEADER')}</Text>
+          <View style={[styles.card, { backgroundColor: tc.bgSurface, shadowColor: tc.shadow }]}>
+          <Text style={[styles.cardHeader, { color: tc.textSecondary }]}>{t('INVOICE_CARD_HEADER')}</Text>
           
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_BOOKING_ID')}</Text>
-            <Text style={styles.value}>#{bookingId || '---'}</Text>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_BOOKING_ID')}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>#{bookingId || '---'}</Text>
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.label}>{subjectLabel}</Text>
-            <Text style={styles.value}>{normalizedTitle || 'Unknown'}</Text>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{subjectLabel}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>{normalizedTitle || 'Unknown'}</Text>
           </View>
 
           {effectiveType !== 'court' && effectiveType !== '' ? (
             <View style={styles.row}>
-              <Text style={styles.label}>{t('INVOICE_LABEL_COURT')}</Text>
-              <Text style={styles.value}>{normalizedCourtName || '---'}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_COURT')}</Text>
+              <Text style={[styles.value, { color: tc.textPrimary }]}>{normalizedCourtName || '---'}</Text>
             </View>
           ) : null}
 
           {subtitle ? (
             <View style={styles.row}>
-              <Text style={styles.label}>{t('INVOICE_LABEL_TYPE')}</Text>
-              <Text style={styles.value}>{subtitle}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_TYPE')}</Text>
+              <Text style={[styles.value, { color: tc.textPrimary }]}>{subtitle}</Text>
             </View>
           ) : null}
 
           <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_ADDRESS')}</Text>
-            <Text style={styles.value}>{location || '---'}</Text>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_ADDRESS')}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>{location || '---'}</Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_DATE')}</Text>
-            <Text style={styles.value}>{formatDate(date)}</Text>
-          </View>
-
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_TIME')}</Text>
-            <Text style={styles.value}>{timeDisplay}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_METHOD')}</Text>
-            <Text style={styles.value}>{translatePaymentMethod(paymentMethod)}</Text>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_DATE')}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>{formatDate(date)}</Text>
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.label}>{t('INVOICE_LABEL_PAYMENT_STATUS')}</Text>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_TIME')}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>{timeDisplay}</Text>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: tc.divider }]} />
+
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_PAYMENT_METHOD')}</Text>
+            <Text style={[styles.value, { color: tc.textPrimary }]}>{translatePaymentMethod(paymentMethod)}</Text>
+          </View>
+
+          <View style={styles.row}>
+            <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_PAYMENT_STATUS')}</Text>
             <Text style={[styles.value, { color: paymentStatus === 'paid' ? '#28a745' : '#FF5733' }]}>
               {translatePaymentStatus(paymentStatus)}
             </Text>
@@ -269,7 +271,7 @@ export default function Invoice() {
 
           {showBookingStatus ? (
             <View style={styles.row}>
-              <Text style={styles.label}>{t('INVOICE_LABEL_BOOKING_STATUS')}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_BOOKING_STATUS')}</Text>
               <Text style={[styles.value, { color: bookingStatusColor }]}>
                 {translateBookingStatus(bookingStatusText)}
               </Text>
@@ -278,22 +280,22 @@ export default function Invoice() {
 
           {note ? (
             <View style={styles.row}>
-              <Text style={styles.label}>{t('INVOICE_LABEL_NOTE')}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('INVOICE_LABEL_NOTE')}</Text>
               <Text style={[styles.value, { maxWidth: '60%' }]}>{note}</Text>
             </View>
           ) : null}
 
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>{t('INVOICE_TOTAL_AMOUNT')}</Text>
+          <View style={[styles.totalRow, { borderTopColor: tc.divider }]}>
+            <Text style={[styles.totalLabel, { color: tc.textPrimary }]}>{t('INVOICE_TOTAL_AMOUNT')}</Text>
             <Text style={styles.totalValue}>{formatPrice(price)}đ</Text>
           </View>
           </View>
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.detailsBtn} onPress={handleSeeDetails}>
-          <Text style={styles.detailsBtnText}>{t('INVOICE_BTN_SEE_DETAILS')}</Text>
+      <View style={[styles.footer, { backgroundColor: tc.bgSurface, borderTopColor: tc.divider }]}>
+        <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: tc.bgSurface, borderColor: tc.textPrimary }]} onPress={handleSeeDetails}>
+          <Text style={[styles.detailsBtnText, { color: tc.textPrimary }]}>{t('INVOICE_BTN_SEE_DETAILS')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.homeBtn} onPress={handleHome}>
           <Text style={styles.homeBtnText}>{t('INVOICE_BTN_BACK_HOME')}</Text>

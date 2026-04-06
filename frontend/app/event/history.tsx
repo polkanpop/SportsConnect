@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { HistoryEntry, listHistory, setHistory } from '@/storage/history'
 import {
@@ -345,6 +346,7 @@ export default function HistoryPage() {
   const router = useRouter()
   const { t, language } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
+  const tc = useThemeColors()
 
   const tHistoryStatus = (label: string): string => {
     if (label === 'Rejected') return t('HISTORY_STATUS_REJECTED')
@@ -714,22 +716,22 @@ export default function HistoryPage() {
   }, [dashboardRaw])
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: tc.bgElevated, borderBottomColor: tc.divider }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: tc.bgElevated }]}
           onPress={() => router.back()}
           hitSlop={{ top: 24, bottom: 24, left: 24, right: 24 }}
           pressRetentionOffset={{ top: 18, bottom: 18, left: 18, right: 18 }}
           activeOpacity={0.8}
         >
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text pointerEvents="none" style={styles.headerTitle}>{t('HISTORY_HEADER_TITLE')}</Text>
+        <Text pointerEvents="none" style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('HISTORY_HEADER_TITLE')}</Text>
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subHeaderTitle}>{t('HISTORY_SUB_ACTIVITY_LOGS')}</Text>
+        <Text style={[styles.subHeaderTitle, { color: tc.textSecondary }]}>{t('HISTORY_SUB_ACTIVITY_LOGS')}</Text>
       </View>
 
       <FlatList
@@ -740,8 +742,8 @@ export default function HistoryPage() {
         onRefresh={() => reload({ showRefresh: true, forceReconcile: true })}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Image source={ICONS.clock} style={styles.emptyIcon} />
-            <Text style={styles.emptyTitle}>{t('HISTORY_EMPTY_TITLE')}</Text>
+            <Image source={ICONS.clock} style={[styles.emptyIcon, { tintColor: tc.textMuted }]} />
+            <Text style={[styles.emptyTitle, { color: tc.textMuted }]}>{t('HISTORY_EMPTY_TITLE')}</Text>
           </View>
         }
         renderItem={({ item, index }) => {
@@ -954,16 +956,16 @@ export default function HistoryPage() {
           return (
             <View>
               {showDate && (
-                <Text style={styles.dateHeader}>{formatDateHeader(item.ts, language)}</Text>
+                <Text style={[styles.dateHeader, { color: tc.textPrimary }]}>{formatDateHeader(item.ts, language)}</Text>
               )}
               <View style={styles.row}>
                 <View style={styles.timelineCol}>
-                  <View style={styles.line} />
+                  <View style={[styles.line, { backgroundColor: tc.divider }]} />
                   <View style={[styles.dot, { backgroundColor: statusColors.dot }]} />
                 </View>
 
                 <TouchableOpacity
-                  style={styles.card}
+                  style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border, shadowColor: tc.shadow }]}
                   onPress={handlePress}
                   disabled={!detailsId}
                   activeOpacity={detailsId ? 0.7 : 1}
@@ -985,39 +987,39 @@ export default function HistoryPage() {
                         </View>
                       )}
                     </View>
-                    <Text style={styles.timeText}>{formatLogTime(item.ts)}</Text>
+                    <Text style={[styles.timeText, { color: tc.textSecondary }]}>{formatLogTime(item.ts)}</Text>
                   </View>
 
-                  <Text style={styles.title}>{titleAndVenue.title}</Text>
+                  <Text style={[styles.title, { color: tc.textPrimary }]}>{titleAndVenue.title}</Text>
                   {!!resolvedSchedule && (
                     <View style={styles.scheduleWrap}>
-                      <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TIME')} {resolvedSchedule.time}</Text>
+                      <Text style={[styles.scheduleText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_TIME')} {resolvedSchedule.time}</Text>
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && (
-                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
+                        <Text style={[styles.scheduleText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
                       )}
                       {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && (
-                        <Text style={styles.scheduleText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
+                        <Text style={[styles.scheduleText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
                       )}
                     </View>
                   )}
-                  {!!displaySubtitle && <Text style={styles.subtitle}>{displaySubtitle}</Text>}
+                  {!!displaySubtitle && <Text style={[styles.subtitle, { color: tc.textSecondary }]}>{displaySubtitle}</Text>}
 
                   {(item.kind === 'event_booking' || item.kind === 'session_booking' || item.kind === 'court_booking') && !!paymentMethod && (
-                    <Text style={styles.metaText}>{t('HISTORY_META_PAYMENT')} {tPaymentMethod(paymentMethod)}</Text>
+                    <Text style={[styles.metaText, { color: tc.textSecondary }]}>{t('HISTORY_META_PAYMENT')} {tPaymentMethod(paymentMethod)}</Text>
                   )}
 
                   {item.kind === 'court_booking' && !!courtType && (
-                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {tPaymentMethod(courtType)}</Text>
+                    <Text style={[styles.metaText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_TYPE')} {tPaymentMethod(courtType)}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!createdType && !resolvedSchedule && (
-                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
+                    <Text style={[styles.metaText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_TYPE')} {tCreatedType(createdType)}</Text>
                   )}
                   {(item.kind === 'created_event' || item.kind === 'created_session') && !!courtName && !resolvedSchedule && (
-                    <Text style={styles.metaText}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
+                    <Text style={[styles.metaText, { color: tc.textSecondary }]}>{t('HISTORY_SCHEDULE_COURT')} {courtName}</Text>
                   )}
 
                   {typeof item.amount === 'number' && (
-                    <Text style={styles.amount}>{t('HISTORY_META_AMOUNT')} {Math.round(item.amount).toLocaleString()}₫</Text>
+                    <Text style={[styles.amount, { color: tc.textPrimary }]}>{t('HISTORY_META_AMOUNT')} {Math.round(item.amount).toLocaleString()}₫</Text>
                   )}
                 </TouchableOpacity>
               </View>

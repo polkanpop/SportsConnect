@@ -50,6 +50,7 @@ import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
 import { useVoicePreference } from '@/hooks/use-voice-preference'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -101,7 +102,8 @@ function getStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; color: string } | 
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function SectionHeader({ title }: { title: string }) {
-  return <Text style={styles.sectionHeader}>{title}</Text>
+  const tc = useThemeColors()
+  return <Text style={[styles.sectionHeader, { color: tc.textSecondary }]}>{title}</Text>
 }
 
 function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: boolean; labelVerified: string; labelUnverified: string }) {
@@ -125,6 +127,7 @@ export default function AccountSettingsScreen() {
   const { t } = useTranslation()
   const overlay = useZaloAuthOverlay()
   const { userId: userid, userInfo: userInfoQuery } = useAppBootstrap()
+  const tc = useThemeColors()
   const userInfo = userInfoQuery.data
 
   const STRENGTH_LABELS = useMemo(() => [
@@ -635,36 +638,36 @@ export default function AccountSettingsScreen() {
   const isLocalAccount = account?.logintype?.toLowerCase() === 'local'
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+      <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('ACCT_HEADER_TITLE')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('ACCT_HEADER_TITLE')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
       {/* Search bar removed — now in settings.tsx */}
 
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+      <ScrollView style={[styles.container, { backgroundColor: tc.bgBase }]} contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
 
         {/* ── Identity ─────────────────────────────────────────────────── */}
         {<>
         <SectionHeader title={t('ACCT_SECTION_IDENTITY')} />
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
           {/* Display Name */}
-          <Text style={styles.fieldLabel}>{t('ACCT_LABEL_DISPLAY_NAME')}</Text>
+          <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_DISPLAY_NAME')}</Text>
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={nameValue}
               onChangeText={setNameValue}
               placeholder={t('ACCT_PLACEHOLDER_NAME')}
-              placeholderTextColor="#aaa"
+              placeholderTextColor={tc.placeholder}
               returnKeyType="done"
             />
-            <TouchableOpacity style={[styles.inlineBtn, (nameValue.trim() === originalName.trim()) && styles.inlineBtnDisabled]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
+            <TouchableOpacity style={[styles.inlineBtn, { backgroundColor: tc.brand }, (nameValue.trim() === originalName.trim()) && styles.inlineBtnDisabled]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
               {nameSaving
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
@@ -678,12 +681,12 @@ export default function AccountSettingsScreen() {
         {/* ── Contact ──────────────────────────────────────────────────── */}
         {<>
         <SectionHeader title={t('ACCT_SECTION_CONTACT')} />
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
 
           {/* Email */}
           <View style={styles.contactHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>{t('ACCT_LABEL_EMAIL')}</Text>
+              <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_EMAIL')}</Text>
               {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && (
                 <StatusBadge
                   verified={account?.email_verified ?? false}
@@ -694,22 +697,22 @@ export default function AccountSettingsScreen() {
             </View>
             {emailEdit.trim() && emailEdit === originalEmail ? (
               <TouchableOpacity onPress={handleToggleEmailVisible} style={styles.eyeBtn}>
-                <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                <Image source={emailVisible ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
               </TouchableOpacity>
             ) : null}
           </View>
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={emailEdit}
               onChangeText={setEmailEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
-              placeholderTextColor="#aaa"
+              placeholderTextColor={tc.placeholder}
               keyboardType="email-address"
               autoCapitalize="none"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, emailEdit.trim() === originalEmail.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand }, emailEdit.trim() === originalEmail.trim() && styles.inlineBtnDisabled]}
               onPress={handleSaveEmail}
               disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}
             >
@@ -732,7 +735,7 @@ export default function AccountSettingsScreen() {
           {/* Phone */}
           <View style={styles.contactHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>{t('ACCT_LABEL_PHONE')}</Text>
+              <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_PHONE')}</Text>
               {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && (
                 <StatusBadge
                   verified={account?.phone_verified ?? false}
@@ -743,21 +746,21 @@ export default function AccountSettingsScreen() {
             </View>
             {phoneEdit.trim() && phoneEdit === originalPhone ? (
               <TouchableOpacity onPress={handleTogglePhoneVisible} style={styles.eyeBtn}>
-                <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                <Image source={phoneVisible ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
               </TouchableOpacity>
             ) : null}
           </View>
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={phoneEdit}
               onChangeText={setPhoneEdit}
               placeholder={t('ACCT_CONTACT_NOT_SET')}
-              placeholderTextColor="#aaa"
+              placeholderTextColor={tc.placeholder}
               keyboardType="phone-pad"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, phoneEdit.trim() === originalPhone.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand }, phoneEdit.trim() === originalPhone.trim() && styles.inlineBtnDisabled]}
               onPress={handleSavePhone}
               disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}
             >
@@ -783,8 +786,8 @@ export default function AccountSettingsScreen() {
         <SectionHeader title={t('ACCT_SECTION_AUTH')} />
 
         {/* Username subsection */}
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>{t('ACCT_LABEL_USERNAME')}</Text>
+        <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
+          <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_USERNAME')}</Text>
           {account?.username ? (
             <View style={styles.readonlyRow}>
               <Text style={styles.readonlyText}>{account.username}</Text>
@@ -795,40 +798,40 @@ export default function AccountSettingsScreen() {
         </View>
 
         {/* Password / Credentials subsection */}
-        <View style={[styles.card, { marginTop: 12 }]}>
+        <View style={[styles.card, { marginTop: 12, backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
           {loadingMeta ? (
             <ActivityIndicator size="small" color="#888" style={{ marginVertical: 12 }} />
           ) : isLocalAccount ? (
             <>
               {/* Current password */}
-              <Text style={styles.fieldLabel}>{t('ACCT_LABEL_CURRENT_PASSWORD')}</Text>
+              <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_CURRENT_PASSWORD')}</Text>
               <View style={styles.pwRow}>
                 <TextInput
-                  style={styles.pwInput}
+                  style={[styles.pwInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={currentPw}
                   onChangeText={setCurrentPw}
                   secureTextEntry={!showCurrentPw}
                   placeholder="••••••••"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                 />
                 <TouchableOpacity onPress={() => setShowCurrentPw(v => !v)} style={styles.eyeBtn}>
-                  <Image source={showCurrentPw ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                  <Image source={showCurrentPw ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
                 </TouchableOpacity>
               </View>
 
               {/* New password */}
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_NEW_PASSWORD')}</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 12, color: tc.textSecondary }]}>{t('ACCT_LABEL_NEW_PASSWORD')}</Text>
               <View style={styles.pwRow}>
                 <TextInput
-                  style={styles.pwInput}
+                  style={[styles.pwInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={newPw}
                   onChangeText={setNewPw}
                   secureTextEntry={!showNewPw}
                   placeholder="••••••••"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                 />
                 <TouchableOpacity onPress={() => setShowNewPw(v => !v)} style={styles.eyeBtn}>
-                  <Image source={showNewPw ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                  <Image source={showNewPw ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
                 </TouchableOpacity>
               </View>
 
@@ -855,18 +858,18 @@ export default function AccountSettingsScreen() {
               )}
 
               {/* Confirm password */}
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_CONFIRM_PASSWORD')}</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 12, color: tc.textSecondary }]}>{t('ACCT_LABEL_CONFIRM_PASSWORD')}</Text>
               <View style={styles.pwRow}>
                 <TextInput
-                  style={styles.pwInput}
+                  style={[styles.pwInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={confirmPw}
                   onChangeText={setConfirmPw}
                   secureTextEntry={!showConfirmPw}
                   placeholder="••••••••"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                 />
                 <TouchableOpacity onPress={() => setShowConfirmPw(v => !v)} style={styles.eyeBtn}>
-                  <Image source={showConfirmPw ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                  <Image source={showConfirmPw ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
                 </TouchableOpacity>
               </View>
 
@@ -874,7 +877,7 @@ export default function AccountSettingsScreen() {
               {pwSuccess && <Text style={styles.successText}>{t('ACCT_PW_SAVE_SUCCESS')}</Text>}
 
               <TouchableOpacity
-                style={[styles.saveBtn, (!currentPw && !newPw && !confirmPw) && styles.saveBtnDisabled]}
+                style={[styles.saveBtn, { backgroundColor: tc.brand }, (!currentPw && !newPw && !confirmPw) && styles.saveBtnDisabled]}
                 onPress={handleSavePassword}
                 disabled={pwSaving || (!currentPw && !newPw && !confirmPw)}
               >
@@ -895,31 +898,31 @@ export default function AccountSettingsScreen() {
           ) : (
             <>
               {/* Set username + password for OAuth users */}
-              <Text style={styles.fieldLabel}>{t('ACCT_LABEL_NEW_USERNAME')}</Text>
+              <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_NEW_USERNAME')}</Text>
               <View style={styles.inputRow}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={newUsername}
                   onChangeText={setNewUsername}
                   placeholder="username"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
               </View>
 
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_NEW_PASSWORD')}</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 12, color: tc.textSecondary }]}>{t('ACCT_LABEL_NEW_PASSWORD')}</Text>
               <View style={styles.pwRow}>
                 <TextInput
-                  style={styles.pwInput}
+                  style={[styles.pwInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={newPwOAuth}
                   onChangeText={setNewPwOAuth}
                   secureTextEntry={!showNewPwOAuth}
                   placeholder="••••••••"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                 />
                 <TouchableOpacity onPress={() => setShowNewPwOAuth(v => !v)} style={styles.eyeBtn}>
-                  <Image source={showNewPwOAuth ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                  <Image source={showNewPwOAuth ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
                 </TouchableOpacity>
               </View>
 
@@ -938,25 +941,25 @@ export default function AccountSettingsScreen() {
                 ) : null
               })()}
 
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('ACCT_LABEL_CONFIRM_PASSWORD')}</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 12, color: tc.textSecondary }]}>{t('ACCT_LABEL_CONFIRM_PASSWORD')}</Text>
               <View style={styles.pwRow}>
                 <TextInput
-                  style={styles.pwInput}
+                  style={[styles.pwInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={confirmPwOAuth}
                   onChangeText={setConfirmPwOAuth}
                   secureTextEntry={!showConfirmPwOAuth}
                   placeholder="••••••••"
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor={tc.placeholder}
                 />
                 <TouchableOpacity onPress={() => setShowConfirmPwOAuth(v => !v)} style={styles.eyeBtn}>
-                  <Image source={showConfirmPwOAuth ? ICONS.eye : ICONS.notEye} style={styles.eyeIcon} />
+                  <Image source={showConfirmPwOAuth ? ICONS.eye : ICONS.notEye} style={[styles.eyeIcon, { tintColor: tc.iconMuted }]} />
                 </TouchableOpacity>
               </View>
 
               {credError && <Text style={styles.errorText}>{credError}</Text>}
               {credSuccess && <Text style={styles.successText}>{t('ACCT_SET_CRED_SUCCESS')}</Text>}
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddCredentials} disabled={credSaving}>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: tc.brand }]} onPress={handleAddCredentials} disabled={credSaving}>
                 {credSaving
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Text style={styles.saveBtnText}>{t('ACCT_BTN_SET_CREDENTIALS')}</Text>}
@@ -969,7 +972,7 @@ export default function AccountSettingsScreen() {
         {/* ── Linked Accounts ───────────────────────────────────────────── */}
         {<>
         <SectionHeader title={t('ACCT_SECTION_LINKED')} />
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
           {loadingMeta ? (
             <ActivityIndicator size="small" color="#888" style={{ marginVertical: 12 }} />
           ) : (
@@ -1030,17 +1033,17 @@ export default function AccountSettingsScreen() {
       {/* ── Zalo OAuth loading overlay ── */}
       {/* Use absolute View instead of Modal to prevent Android black-screen after CCT closes */}
       {linkingZalo && (
-        <View style={styles.loadingOverlayAbsolute} pointerEvents="box-only">
-          <ActivityIndicator size="large" color="#FF6017" />
-          <Text style={styles.loadingOverlayText}>Đang kết nối Zalo…</Text>
+        <View style={[styles.loadingOverlayAbsolute, { backgroundColor: tc.bgBase }]} pointerEvents="box-only">
+          <ActivityIndicator size="large" color={tc.brand} />
+          <Text style={[styles.loadingOverlayText, { color: tc.textSecondary }]}>Đang kết nối Zalo…</Text>
         </View>
       )}
 
       {/* ── Google OAuth loading overlay ── */}
       {linkingGoogle && (
-        <View style={styles.loadingOverlayAbsolute} pointerEvents="box-only">
+        <View style={[styles.loadingOverlayAbsolute, { backgroundColor: tc.bgBase }]} pointerEvents="box-only">
           <ActivityIndicator size="large" color="#4285F4" />
-          <Text style={styles.loadingOverlayText}>Đang kết nối Google…</Text>
+          <Text style={[styles.loadingOverlayText, { color: tc.textSecondary }]}>Đang kết nối Google…</Text>
         </View>
       )}
 
@@ -1053,12 +1056,12 @@ export default function AccountSettingsScreen() {
           onRequestClose={() => setLinkConfirm(null)}
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setLinkConfirm(null)}>
-            <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Pressable style={[styles.modalCard, { backgroundColor: tc.bgElevated }]} onPress={() => {}}>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setLinkConfirm(null)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Text style={[styles.modalCloseText, { color: tc.textSecondary }]}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Liên kết {linkConfirm.provider}</Text>
-              <Text style={styles.modalBody}>
+              <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>Liên kết {linkConfirm.provider}</Text>
+              <Text style={[styles.modalBody, { color: tc.textPrimary }]}>
                 Bạn sẽ có thể đăng nhập bằng {linkConfirm.provider} sau khi liên kết.{'\n\n'}
                 Lưu ý: nếu huỷ liên kết sau này, tài khoản {linkConfirm.provider} sẽ không còn được dùng để đăng nhập vào ứng dụng.
               </Text>
@@ -1070,7 +1073,7 @@ export default function AccountSettingsScreen() {
                   <Text style={styles.modalBtnCancelText}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnConfirm]}
+                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tc.brand }]}
                   onPress={() => { setLinkConfirm(null); linkConfirm.onConfirm(); }}
                 >
                   <Text style={styles.modalBtnConfirmText}>Liên kết</Text>
@@ -1090,12 +1093,12 @@ export default function AccountSettingsScreen() {
           onRequestClose={() => setUnlinkConfirm(null)}
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setUnlinkConfirm(null)}>
-            <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Pressable style={[styles.modalCard, { backgroundColor: tc.bgElevated }]} onPress={() => {}}>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setUnlinkConfirm(null)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Text style={[styles.modalCloseText, { color: tc.textSecondary }]}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Huỷ liên kết {unlinkConfirm.provider}</Text>
-              <Text style={styles.modalBody}>
+              <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>Huỷ liên kết {unlinkConfirm.provider}</Text>
+              <Text style={[styles.modalBody, { color: tc.textPrimary }]}>
                 Bạn sẽ không thể đăng nhập bằng {unlinkConfirm.provider} sau khi huỷ liên kết.
               </Text>
               <View style={styles.modalBtnRow}>
@@ -1126,12 +1129,12 @@ export default function AccountSettingsScreen() {
           onRequestClose={() => setMergePrompt(null)}
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setMergePrompt(null)}>
-            <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Pressable style={[styles.modalCard, { backgroundColor: tc.bgElevated }]} onPress={() => {}}>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setMergePrompt(null)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+                <Text style={[styles.modalCloseText, { color: tc.textSecondary }]}>✕</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{t('ACCT_MERGE_TITLE')}</Text>
-              <Text style={styles.modalBody}>
+              <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('ACCT_MERGE_TITLE')}</Text>
+              <Text style={[styles.modalBody, { color: tc.textPrimary }]}>
                 {t('ACCT_MERGE_BODY').replace('{provider}', mergePrompt.provider).replace('{email}', mergePrompt.email)}
               </Text>
               <View style={styles.modalBtnRow}>
@@ -1142,7 +1145,7 @@ export default function AccountSettingsScreen() {
                   <Text style={styles.modalBtnCancelText}>{t('ACCT_MERGE_BTN_NO')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnConfirm]}
+                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tc.brand }]}
                   onPress={handleMergeEmail}
                 >
                   <Text style={styles.modalBtnConfirmText}>{t('ACCT_MERGE_BTN_YES')}</Text>
@@ -1170,6 +1173,7 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
   iconSize?: number            // override icon size (default 24)
 }) {
   const { t } = useTranslation()
+  const tc = useThemeColors()
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
@@ -1180,9 +1184,9 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
           </View>
         )}
       </View>
-      <Text style={styles.linkedLabel}>{label}</Text>
+      <Text style={[styles.linkedLabel, { color: tc.textPrimary }]}>{label}</Text>
       {linking ? (
-        <ActivityIndicator size="small" color="#FF6017" />
+        <ActivityIndicator size="small" color={tc.brand} />
       ) : linked ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={[styles.linkedBadge, styles.linkedBadgeOn]}>

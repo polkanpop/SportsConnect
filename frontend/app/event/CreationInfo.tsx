@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'reac
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import LottieView from 'lottie-react-native'
 import { ICONS } from '../../constants/icons'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
 const EVENT_CREATE_ANIM = require('../../assets/animation/EventCreateSuccessful.json')
@@ -12,6 +13,7 @@ const CREATE_ANIM_SIZE = 220
 const CreationInfo = () => {
   const router = useRouter()
   const { type, detailsId } = useLocalSearchParams<{ type: string; detailsId?: string }>()
+  const tc = useThemeColors()
 
   const [revealed, setRevealed] = useState(false)
   const finishedRef = useRef(false)
@@ -48,7 +50,7 @@ const CreationInfo = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tc.bgBase }]}>
       {HAS_LOTTIE_NATIVE ? (
         <View style={[styles.animWrap, { width: CREATE_ANIM_SIZE, height: CREATE_ANIM_SIZE }]}> 
           <LottieView
@@ -66,11 +68,11 @@ const CreationInfo = () => {
       <Text style={[styles.title, { opacity: revealed ? 1 : 0 }]}>{title}</Text>
 
       <TouchableOpacity
-        style={[styles.detailsButton, { opacity: revealed && detailsId ? 1 : 0 }]}
+        style={[styles.detailsButton, { opacity: revealed && detailsId ? 1 : 0, backgroundColor: tc.bgSurface, borderColor: tc.textPrimary }]}
         onPress={handleSeeDetails}
         disabled={!revealed || !detailsId}
       >
-        <Text style={styles.detailsButtonText}>See details</Text>
+        <Text style={[styles.detailsButtonText, { color: tc.textPrimary }]}>See details</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

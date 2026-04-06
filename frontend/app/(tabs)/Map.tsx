@@ -1350,8 +1350,8 @@
                           pinColor: selectedMarker?.id === marker.id
                             ? COLORS.green
                             : marker.isFavorite
-                              ? COLORS.brandOrangeDeep
-                              : COLORS.brandOrangeDeep,
+                              ? tc.brand
+                              : tc.brand,
                         }))
                       : mapMode === 'events'
                       ? eventPins.map((pin): DynamicMapMarker => ({
@@ -1437,7 +1437,7 @@
                       >
                         <Image
                           source={ICONS.starCal}
-                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? COLORS.brandOrangeDeep : COLORS.neutral700 }}
+                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? tc.brand : tc.textMuted }}
                         />
                       </TouchableOpacity>
                     </View>
@@ -1960,7 +1960,7 @@
                             source={ICONS.starCal}
                             style={[
                               styles.favoriteIcon,
-                              { tintColor: isFavorite ? COLORS.brandOrangeDeep : COLORS.neutral700 },
+                              { tintColor: isFavorite ? tc.brand : tc.textMuted },
                             ]}
                           />
                         </TouchableOpacity>
@@ -2748,7 +2748,7 @@
     favoriteIcon: {
       width: 24,
       height: 24,
-      tintColor: COLORS.brandOrangeDeep,
+      tintColor: tc.brand,
     },
     bookingButton: {
       flexDirection: 'row',
@@ -2863,8 +2863,8 @@
       backgroundColor: tc.bgElevated,
     },
     subCourtSwitchPillActive: {
-      backgroundColor: COLORS.brandOrangeDeep,
-      borderColor: COLORS.brandOrangeDeep,
+      backgroundColor: tc.brand,
+      borderColor: tc.brand,
     },
     subCourtSwitchText: {
       fontSize: 13,
@@ -2997,7 +2997,7 @@
       borderRightColor: tc.border,
     },
     sheetTabBtnActive: {
-      backgroundColor: COLORS.brandOrangeDeep,
+      backgroundColor: tc.brand,
     },
     sheetTabBtnText: {
       fontSize: 14,

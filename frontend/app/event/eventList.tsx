@@ -12,6 +12,7 @@ import * as Location from 'expo-location'
 import { getCachedUserCoord, setCachedUserCoord } from '@/lib/userLocation'
 import { SkeletonList } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const SURFACE_TRANSLATION_MAP: Record<string, string> = {
   concrete: 'COURT_SURFACE_CONCRETE',
@@ -95,6 +96,7 @@ const LIST_ACCENT = '#f97316' // Events
 const EventListScreen = () => {
   const router = useRouter()
   const { t } = useTranslation()
+  const tc = useThemeColors()
   const insets = useSafeAreaInsets()
   const [allEvents, setAllEvents] = useState<CombinedEvent[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -430,25 +432,25 @@ const EventListScreen = () => {
   const handleOutsidePress = () => { if (openFilter) setOpenFilter(null) }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]}>
       {/* Back */}
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('EVENT_LIST_HEADER_TITLE')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('EVENT_LIST_HEADER_TITLE')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       {/* Search */}
       <View style={styles.searchRow}>
-        <View style={styles.searchContainer}>
-          <Image source={ICONS.search} style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: tc.searchBarBg }]}>
+          <Image source={ICONS.search} style={[styles.searchIcon, { tintColor: tc.textMuted }]} />
           <TextInput
             placeholder={t('EVENT_LIST_SEARCH_PLACEHOLDER')}
-            placeholderTextColor={COLORS.neutral750}
+            placeholderTextColor={tc.placeholder}
             value={search}
             onChangeText={setSearch}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: tc.textPrimary }]}
           />
         </View>
       </View>
@@ -628,9 +630,9 @@ const EventListScreen = () => {
           {(loading || isFetching) && visibleEvents.length === 0 && (
             <SkeletonList count={6} style={{ paddingTop: 6 }} />
           )}
-          {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>{t('EVENT_LIST_ERR_FAILED')} {error}</Text>}
+          {error && <Text style={[styles.statusText,{color: tc.error}]}>{t('EVENT_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !isFetching && !error && filteredEvents.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>{t('EVENT_LIST_NO_RESULTS')}</Text>
+            <Text style={[styles.statusText, { paddingVertical: 30, color: tc.textMuted }]}>{t('EVENT_LIST_NO_RESULTS')}</Text>
           )}
             {visibleEvents.map(ev => {
               const venues = asArray(ev.venue)
@@ -682,7 +684,7 @@ const EventListScreen = () => {
                 <TouchableOpacity
                   key={ev.eventid}
                   activeOpacity={0.85}
-                  style={styles.card}
+                  style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border, shadowColor: tc.shadow }]}
                   onPress={() => router.push(`/event/eventBooking?eventid=${ev.eventid}` as any)}
                 >
                   {/* Image section */}
@@ -716,8 +718,8 @@ const EventListScreen = () => {
 
                   {/* Info section */}
                   <View style={styles.cardInfoSection}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>{ev.title || `Event ${ev.eventid}`}</Text>
-                    <Text style={styles.cardAddress} numberOfLines={1}>{ev.address || ev.court_name || t('EVENT_LIST_EXPANDED_UNKNOWN_ADDRESS')}</Text>
+                    <Text style={[styles.cardTitle, { color: tc.textPrimary }]} numberOfLines={1}>{ev.title || `Event ${ev.eventid}`}</Text>
+                    <Text style={[styles.cardAddress, { color: tc.textSecondary }]} numberOfLines={1}>{ev.address || ev.court_name || t('EVENT_LIST_EXPANDED_UNKNOWN_ADDRESS')}</Text>
                     <View style={styles.cardMetaRow}>
                       <Text style={styles.dateText}>{dateDisplay}</Text>
                       <View style={styles.participantsInline}>
@@ -751,7 +753,7 @@ const EventListScreen = () => {
         </ScrollView>
       </View>
       {/* Floating Create Button */}
-      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/eventCreate' as any)}>
+      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12), backgroundColor: tc.brand }]} onPress={() => router.push('/event/eventCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
         <Text style={styles.fabText}>{t('EVENT_LIST_BTN_CREATE')}</Text>
       </TouchableOpacity>

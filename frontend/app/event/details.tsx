@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 import { queryKeys } from '@/hooks/query-keys'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { appendHistory } from '@/storage/history'
@@ -248,30 +249,33 @@ function parseUnifiedId(rawId: string | undefined | null): ParsedId {
   return { kind: 'unknown', id: null, raw }
 }
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <View style={styles.sectionBody}>{children}</View>
-  </View>
-)
-
-const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <View style={styles.row}>
-    <Text style={styles.rowLabel}>{label}</Text>
-    <View style={styles.rowValueWrap}>
-      {typeof value === 'string' || typeof value === 'number' ? (
-        <Text style={styles.rowValueText}>{String(value)}</Text>
-      ) : (
-        value
-      )}
-    </View>
-  </View>
-)
+// Section and Row are defined inside DetailsPage to close over tc
 
 export default function DetailsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { t, language } = useTranslation()
+  const tc = useThemeColors()
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <View style={[styles.section, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
+      <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{title}</Text>
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  )
+
+  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <View style={styles.row}>
+      <Text style={[styles.rowLabel, { color: tc.textSecondary }]}>{label}</Text>
+      <View style={styles.rowValueWrap}>
+        {typeof value === 'string' || typeof value === 'number' ? (
+          <Text style={[styles.rowValueText, { color: tc.textPrimary }]}>{String(value)}</Text>
+        ) : (
+          value
+        )}
+      </View>
+    </View>
+  )
 
   // Translate raw booking/event status strings to the current language
   const tStatus = (raw: any): string => {
@@ -1678,14 +1682,14 @@ export default function DetailsPage() {
   ])
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: tc.bgBase }]}>
+      <View style={[styles.header, { backgroundColor: tc.bgSurface, borderBottomColor: tc.divider }]}>
         <View style={styles.headerSide}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.8}>
-            <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+          <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgSurface }]} onPress={() => router.back()} activeOpacity={0.8}>
+            <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.headerTitle}>{headerTitle}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{headerTitle}</Text>
         <View style={styles.headerSide} />
       </View>
 
@@ -1699,8 +1703,8 @@ export default function DetailsPage() {
           <View style={styles.modalBackdrop} />
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('DETAILS_MODAL_CANCEL_TITLE')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('DETAILS_MODAL_CANCEL_TITLE')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -1708,7 +1712,7 @@ export default function DetailsPage() {
                 activeOpacity={0.8}
                 disabled={busy || cancelMutation.isPending}
               >
-                <Text style={styles.modalButtonCancelText}>{t('DETAILS_MODAL_BTN_RETURN')}</Text>
+                <Text style={[styles.modalButtonCancelText, { color: tc.textPrimary }]}>{t('DETAILS_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm, (busy || cancelMutation.isPending) && styles.modalButtonDisabled]}
@@ -1733,16 +1737,16 @@ export default function DetailsPage() {
           <View style={styles.modalBackdrop} />
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{resultModalTitle}</Text>
-            {!!resultModalMessage && <Text style={styles.modalMessage}>{resultModalMessage}</Text>}
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{resultModalTitle}</Text>
+            {!!resultModalMessage && <Text style={[styles.modalMessage, { color: tc.textSecondary }]}>{resultModalMessage}</Text>}
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={closeResultModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>{t('COMMON_BTN_DONE')}</Text>
+                <Text style={[styles.modalButtonCancelText, { color: tc.textPrimary }]}>{t('COMMON_BTN_DONE')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1752,12 +1756,12 @@ export default function DetailsPage() {
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
-          <Text style={styles.muted}>{t('DETAILS_LOADING')}</Text>
+          <Text style={[styles.muted, { color: tc.textSecondary }]}>{t('DETAILS_LOADING')}</Text>
         </View>
       ) : loadError ? (
         <View style={styles.center}>
           <Text style={styles.errorTitle}>{t('DETAILS_ERR_FAILED')}</Text>
-          <Text style={styles.muted}>{(loadError as any)?.message || 'Error loading record'}</Text>
+          <Text style={[styles.muted, { color: tc.textSecondary }]}>{(loadError as any)?.message || 'Error loading record'}</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -1878,7 +1882,7 @@ export default function DetailsPage() {
           {parsed.kind === 'unknown' && (
             <View style={styles.center}>
               <Text style={styles.errorTitle}>{t('DETAILS_LABEL_UNKNOWN')}</Text>
-              <Text style={styles.muted}>Could not parse id: {parsed.raw}</Text>
+              <Text style={[styles.muted, { color: tc.textSecondary }]}>Could not parse id: {parsed.raw}</Text>
             </View>
           )}
 

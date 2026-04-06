@@ -13,6 +13,7 @@ import {
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 type ReviewItem = {
   key: string
@@ -92,24 +93,13 @@ export default function ReviewsPanel() {
   const router = useRouter()
   const { t } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
+  const tc = useThemeColors()
 
   const dashboardRaw = dashboard.data
   const dashboardLoading = dashboard.isLoading
-  const courtBookingsRaw =
-    dashboardRaw?.court_bookings ??
-    dashboardRaw?.courtbookings ??
-    dashboardRaw?.booked_courts ??
-    []
-  const eventBookingsRaw =
-    dashboardRaw?.event_bookings ??
-    dashboardRaw?.eventbookings ??
-    []
-  const tsBookingsRaw =
-    dashboardRaw?.training_bookings ??
-    dashboardRaw?.training_session_bookings ??
-    dashboardRaw?.ts_bookings ??
-    dashboardRaw?.tsbookings ??
-    []
+  const courtBookingsRaw = dashboardRaw?.court_bookings ?? []
+  const eventBookingsRaw = dashboardRaw?.event_bookings ?? []
+  const tsBookingsRaw = dashboardRaw?.training_bookings ?? []
 
   const { data: eventsCombined } = useQuery<any[]>({
     queryKey: ['eventsCombined'],
@@ -208,29 +198,29 @@ export default function ReviewsPanel() {
 
   if (isLoading) {
     return (
-      <View style={styles.centerBox}>
+      <View style={[styles.centerBox, { backgroundColor: tc.bgBase }]}>
         <ActivityIndicator size="large" color={COLORS.bootstrapBlue} />
       </View>
     )
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Text style={styles.heading}>{t('REVIEW_PANEL_HEADING')}</Text>
-      <Text style={styles.subheading}>
+    <ScrollView contentContainerStyle={[styles.scroll, { backgroundColor: tc.bgBase }]} showsVerticalScrollIndicator={false}>
+      <Text style={[styles.heading, { color: tc.textPrimary }]}>{t('REVIEW_PANEL_HEADING')}</Text>
+      <Text style={[styles.subheading, { color: tc.textSecondary }]}>
         {t('REVIEW_PANEL_SUBHEADING')}
       </Text>
 
       {reviewItems.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>{t('REVIEW_PANEL_EMPTY')}</Text>
+          <Text style={[styles.emptyText, { color: tc.textSecondary }]}>{t('REVIEW_PANEL_EMPTY')}</Text>
         </View>
       ) : (
         reviewItems.map(item => (
-          <View key={item.key} style={styles.card}>
+          <View key={item.key} style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
             <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+              <Text style={[styles.cardTitle, { color: tc.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+              <Text style={[styles.cardSubtitle, { color: tc.textSecondary }]}>{item.subtitle}</Text>
             </View>
             <TouchableOpacity
               style={styles.reviewBtn}

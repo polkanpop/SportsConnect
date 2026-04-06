@@ -24,6 +24,7 @@ import { queryKeys } from '@/hooks/query-keys';
 import { useTranslation } from '@/constants/translations';
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider';
 import { ICONS } from '@/constants/icons';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 const OTP_DRAFT_KEY = '@phoneOtp:draft';
 
@@ -74,6 +75,7 @@ const COLOR = {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PhoneOtpScreen() {
   const { t } = useTranslation();
+  const tc = useThemeColors();
   const { userId: userid } = useAppBootstrap();
   const params = useLocalSearchParams<{ phone?: string; name?: string; username?: string; mode?: string }>();
 
@@ -328,7 +330,7 @@ export default function PhoneOtpScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLOR.bg }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -340,36 +342,36 @@ export default function PhoneOtpScreen() {
           >
             {/* Back */}
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-              <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+              <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
             </TouchableOpacity>
 
-            <Text style={styles.title}>{t('AUTH_OTP_TITLE')}</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: tc.brand }]}>{t('AUTH_OTP_TITLE')}</Text>
+            <Text style={[styles.subtitle, { color: tc.textSecondary }]}>
               {otpSent
                 ? `${t('AUTH_OTP_SUBTITLE_SENT_PREFIX')}${phone}`
                 : t('AUTH_OTP_SUBTITLE_PRE')}
             </Text>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={[styles.errorText, { color: tc.error }]}>{error}</Text> : null}
 
             {/* ── Phone input ── */}
             {!otpSent ? (
               <>
-                <Text style={styles.label}>{t('AUTH_OTP_LABEL_PHONE')}</Text>
+                <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_OTP_LABEL_PHONE')}</Text>
                 <TextInput
                   placeholder={t('AUTH_OTP_PLACEHOLDER_PHONE')}
-                  placeholderTextColor={COLOR.dark300}
+                  placeholderTextColor={tc.placeholder}
                   value={phone}
                   onChangeText={(text) => { setPhone(text); setError(null); AsyncStorage.setItem(OTP_DRAFT_KEY, text).catch(() => {}); }}
                   keyboardType="phone-pad"
-                  style={[styles.input, params.mode === 'add_phone' && styles.inputLocked]}
+                  style={[styles.input, { backgroundColor: tc.bgInput, color: tc.textPrimary, borderColor: tc.divider }, params.mode === 'add_phone' && styles.inputLocked]}
                   maxLength={10}
                   editable={params.mode !== 'add_phone' && !sending}
                 />
                 <TouchableOpacity
                   onPress={handleSendOtp}
                   disabled={sending}
-                  style={[styles.primaryBtn, sending && { opacity: 0.7 }]}
+                  style={[styles.primaryBtn, { backgroundColor: tc.brand, shadowColor: tc.shadow }, sending && { opacity: 0.7 }]}
                   activeOpacity={0.85}
                 >
                   {sending ? (
@@ -382,14 +384,14 @@ export default function PhoneOtpScreen() {
             ) : (
               <>
                 {/* ── OTP input ── */}
-                <Text style={styles.label}>{t('AUTH_OTP_LABEL_CODE')}</Text>
+                <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_OTP_LABEL_CODE')}</Text>
                 <TextInput
                   placeholder={t('AUTH_OTP_PLACEHOLDER_CODE')}
-                  placeholderTextColor={COLOR.dark300}
+                  placeholderTextColor={tc.placeholder}
                   value={otp}
                   onChangeText={(val) => { setOtp(val.replace(/\D/g, '').slice(0, 6)); setError(null); }}
                   keyboardType="number-pad"
-                  style={[styles.input, styles.otpInput]}
+                  style={[styles.input, styles.otpInput, { backgroundColor: tc.bgInput, color: tc.textPrimary, borderColor: tc.divider }]}
                   maxLength={6}
                   editable={!verifying}
                 />
@@ -397,7 +399,7 @@ export default function PhoneOtpScreen() {
                 <TouchableOpacity
                   onPress={handleVerifyOtp}
                   disabled={verifying || otp.length < 6}
-                  style={[styles.primaryBtn, (verifying || otp.length < 6) && { opacity: 0.7 }]}
+                  style={[styles.primaryBtn, { backgroundColor: tc.brand, shadowColor: tc.shadow }, (verifying || otp.length < 6) && { opacity: 0.7 }]}
                   activeOpacity={0.85}
                 >
                   {verifying ? (
@@ -410,19 +412,19 @@ export default function PhoneOtpScreen() {
                 {/* Resend */}
                 <View style={styles.resendRow}>
                   {resendTimer > 0 ? (
-                    <Text style={styles.resendTimer}>{`${t('AUTH_OTP_RESEND_TIMER_PREFIX')}${resendTimer}${t('AUTH_OTP_RESEND_TIMER_SUFFIX')}`}</Text>
+                    <Text style={[styles.resendTimer, { color: tc.textSecondary }]}>{`${t('AUTH_OTP_RESEND_TIMER_PREFIX')}${resendTimer}${t('AUTH_OTP_RESEND_TIMER_SUFFIX')}`}</Text>
                   ) : (
                     <Pressable onPress={handleSendOtp} disabled={sending}>
-                      <Text style={styles.resendLink}>
+                      <Text style={[styles.resendLink, { color: tc.brand }]}>
                         {sending ? t('AUTH_OTP_BTN_SENDING') : t('AUTH_OTP_BTN_RESEND')}
                       </Text>
                     </Pressable>
                   )}
                   {params.mode !== 'add_phone' && (
                     <>
-                      <Text style={styles.separatorDot}> · </Text>
+                      <Text style={[styles.separatorDot, { color: tc.textSecondary }]}> · </Text>
                       <Pressable onPress={() => { setOtpSent(false); setOtp(''); setError(null); }}>
-                        <Text style={styles.resendLink}>{t('AUTH_OTP_CHANGE_NUMBER')}</Text>
+                        <Text style={[styles.resendLink, { color: tc.brand }]}>{t('AUTH_OTP_CHANGE_NUMBER')}</Text>
                       </Pressable>
                     </>
                   )}

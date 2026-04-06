@@ -48,6 +48,7 @@ const AnimatedTabIcon = ({
 
 const MapTabButton = (props: any) => {
   const scale = useRef(new Animated.Value(1)).current;
+  const tc = useThemeColors();
 
   const handlePressIn = () => {
     Animated.spring(scale, {
@@ -87,7 +88,7 @@ const MapTabButton = (props: any) => {
           width: 76,
           height: 76,
           borderRadius: 38,
-          backgroundColor: COLORS.brandOrangeDeep,
+          backgroundColor: tc.brand,
           justifyContent: "center",
           alignItems: "center",
           overflow: 'hidden',

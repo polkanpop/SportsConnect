@@ -7,6 +7,7 @@ import {
   Alert,
   Image,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -52,7 +53,7 @@ export default function SettingsPage() {
       { key: 'account', keywords: [t('SETTINGS_ROW_ACCOUNT'), 'account', 'tài khoản', 'profile', 'hồ sơ'].join(' ').toLowerCase() },
       { key: 'notification', keywords: [t('SETTINGS_ROW_NOTIFICATION'), 'notification', 'thông báo'].join(' ').toLowerCase() },
       { key: 'language', keywords: [t('SETTINGS_ROW_LANGUAGE'), 'language', 'ngôn ngữ', t('SETTINGS_LANG_TOGGLE_LABEL')].join(' ').toLowerCase() },
-      { key: 'night_mode', keywords: [t('SETTINGS_ROW_NIGHT_MODE'), 'night', 'dark', 'theme', 'tối', 'chế độ'].join(' ').toLowerCase() },
+      { key: 'night_mode', keywords: [t('SETTINGS_ROW_THEME'), 'night', 'dark', 'theme', 'tối', 'chế độ'].join(' ').toLowerCase() },
       { key: 'feature', keywords: ['feature', 'tính năng', 'voice', 'giọng nói', 'voice automation', 'push notification'].join(' ').toLowerCase() },
       { key: 'court_register', keywords: [t('SETTINGS_ROW_COURT_REGISTER'), 'court', 'sân', 'register', 'đăng ký'].join(' ').toLowerCase() },
       { key: 'data_privacy', keywords: [t('SETTINGS_ROW_DATA_PRIVACY'), 'data', 'privacy', 'dữ liệu', 'quyền riêng tư'].join(' ').toLowerCase() },
@@ -198,13 +199,11 @@ export default function SettingsPage() {
             onValueChange={toggleLanguage}
             tc={tc}
           />}
-          {showRow.night_mode && <SettingRowSwitch
+          {showRow.night_mode && <SettingRowToggle
             icon={isDark ? ICONS.darkTheme : ICONS.lightTheme}
-            label={t('SETTINGS_ROW_NIGHT_MODE')}
-            sublabel={t('SETTINGS_NIGHT_MODE_SUBLABEL')}
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColorTrue="#4C1D95"
+            label={t('SETTINGS_ROW_THEME')}
+            valueLabel={isDark ? t('SETTINGS_THEME_DARK') : t('SETTINGS_THEME_LIGHT')}
+            onPress={toggleTheme}
             tc={tc}
           />}
         </View>
@@ -324,6 +323,34 @@ const SettingRow = ({
   </TouchableOpacity>
 );
 
+/** Theme toggle row — tappable pill that shows current mode */
+const SettingRowToggle = ({
+  icon,
+  label,
+  valueLabel,
+  onPress,
+  tc,
+}: {
+  icon: any;
+  label: string;
+  valueLabel: string;
+  onPress: () => void;
+  tc?: any;
+}) => (
+  <Pressable
+    onPress={onPress}
+    style={[styles.row, { borderBottomWidth: 0 }, tc && { borderBottomColor: tc.divider }]}
+  >
+    <View style={styles.rowLeft}>
+      <Image source={icon} style={[styles.rowIcon, { tintColor: tc?.textPrimary ?? '#000' }]} />
+      <Text style={[styles.rowText, { color: tc?.textPrimary ?? '#000' }]}>{label}</Text>
+    </View>
+    <View style={{ backgroundColor: tc?.brand ?? '#7C3AED', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 }}>
+      <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>{valueLabel}</Text>
+    </View>
+  </Pressable>
+);
+
 /** Setting Row with a Switch toggle instead of chevron */
 const SettingRowSwitch = ({
   icon,
@@ -353,7 +380,7 @@ const SettingRowSwitch = ({
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: tc?.border ?? '#D1D5DB', true: trackColorTrue ?? COLORS.brandOrangeDeep }}
+      trackColor={{ false: tc?.border ?? '#D1D5DB', true: trackColorTrue ?? tc?.brand ?? COLORS.brandOrangeDeep }}
       thumbColor="#FFFFFF"
     />
   </View>

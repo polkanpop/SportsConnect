@@ -106,7 +106,7 @@ export default function Home() {
     {
       icon: ICONS.coachIcon,
       label: t('HOME_CAT_COACH'),
-      color: COLORS.orangeSoft,
+      color: tc.brandSoft,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/tsList",
@@ -114,7 +114,7 @@ export default function Home() {
     {
       icon: ICONS.event_category,
       label: t('HOME_CAT_EVENT'),
-      color: COLORS.orangeSoft,
+      color: tc.brandSoft,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/eventList",
@@ -122,7 +122,7 @@ export default function Home() {
     {
       icon: ICONS.court,
       label: t('HOME_CAT_COURT'),
-      color: COLORS.orangeSoft,
+      color: tc.brandSoft,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       // Updated to point to the new simplified court list screen
@@ -1021,7 +1021,7 @@ export default function Home() {
                               bottom: 10,
                               fontSize: 13,
                               fontWeight: '700',
-                              color: COLORS.brandOrangeDeep,
+                              color: tc.brand,
                             }}
                           >
                             {approxDistanceLabel}

@@ -30,6 +30,7 @@ import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { useFocusEffect } from 'expo-router'
 import { appendHistory } from '@/storage/history'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 interface EnrichedBooking extends CourtBookingRow { courtName?: string; address?: string; courtid?: number }
 
@@ -75,6 +76,7 @@ export default function TsCreate() {
   const { t } = useTranslation()
   const { userId, dashboard } = useAppBootstrap()
   const qc = useQueryClient()
+  const tc = useThemeColors()
 
   const dashboardRaw = dashboard.data
   const bookingsLoading = dashboard.isLoading
@@ -600,19 +602,19 @@ export default function TsCreate() {
     const tag = isSession ? 'Training' : (isEvent ? 'Event' : (isPending ? 'Pending' : null))
     return (
       <TouchableOpacity
-        style={[styles.bookingItem, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
+        style={[styles.bookingItem, { backgroundColor: tc.bgSurface }, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
         onPress={() => { if (!disabled) setSelectedBookingId(item.courtbookingid) }}
         disabled={disabled}
       >
         <View style={{ flex: 1 }}>
           <View style={styles.bookingTitleRow}>
-            <Text style={styles.bookingTitle} numberOfLines={1}>{item.courtName || `Booking ${item.courtbookingid}`}</Text>
+            <Text style={[styles.bookingTitle, { color: tc.textPrimary }]} numberOfLines={1}>{item.courtName || `Booking ${item.courtbookingid}`}</Text>
             {tag && <View style={[styles.bookingTag, isSession ? styles.bookingTagTraining : (isEvent ? styles.bookingTagEvent : styles.bookingTagPending)]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
           </View>
-          {item.address && <Text style={styles.bookingMeta} numberOfLines={1}>{item.address}</Text>}
-          <Text style={styles.bookingMeta}>{formatRange(item.start_timestamp as any, item.end_timestamp as any)}</Text>
+          {item.address && <Text style={[styles.bookingMeta, { color: tc.textSecondary }]} numberOfLines={1}>{item.address}</Text>}
+          <Text style={[styles.bookingMeta, { color: tc.textSecondary }]}>{formatRange(item.start_timestamp as any, item.end_timestamp as any)}</Text>
         </View>
-        <Image source={ICONS.arrowright} style={styles.bookingArrow} />
+        <Image source={ICONS.arrowright} style={[styles.bookingArrow, { tintColor: tc.textPrimary }]} />
       </TouchableOpacity>
     )
   }
@@ -644,41 +646,41 @@ export default function TsCreate() {
   )
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: tc.bgBase }]}>
       <SafeAreaView edges={['top']} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 220 }}>
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-              <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+            <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgSurface }]} onPress={() => router.back()}>
+              <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{t('TS_CREATE_HEADER_TITLE')}</Text>
+            <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_HEADER_TITLE')}</Text>
           </View>
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_COURT_BOOKING')}</Text>
+              <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_SECTION_COURT_BOOKING')}</Text>
               <TouchableOpacity onPress={() => setExpandedCourts(e => !e)} style={styles.expandBtn}>
-                <Image source={ICONS.arrowdown} style={[styles.expandIcon, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
+                <Image source={ICONS.arrowdown} style={[styles.expandIcon, { tintColor: tc.textSecondary }, expandedCourts && { transform:[{ rotate: '180deg'}] }]} />
               </TouchableOpacity>
             </View>
-            {bookingSelectionLoading && <ActivityIndicator size="small" color="#555" />}
+            {bookingSelectionLoading && <ActivityIndicator size="small" color={tc.textSecondary} />}
             {bookingsError && <Text style={styles.errorText}>{(bookingsError as any)?.message || 'Failed loading bookings'}</Text>}
-            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={styles.smallText}>{t('TS_CREATE_NO_BOOKINGS')}</Text>}
+            {!bookingSelectionLoading && !bookingsError && (!enrichedBookings || enrichedBookings.length===0) && <Text style={[styles.smallText, { color: tc.textSecondary }]}>{t('TS_CREATE_NO_BOOKINGS')}</Text>}
             {!bookingSelectionLoading && !bookingsError && enrichedBookings && enrichedBookings.length>0 && availableEnrichedBookings.length===0 && (
-              <Text style={styles.smallText}>{t('TS_CREATE_NO_AVAILABLE_COURTS')}</Text>
+              <Text style={[styles.smallText, { color: tc.textSecondary }]}>{t('TS_CREATE_NO_AVAILABLE_COURTS')}</Text>
             )}
             {!bookingSelectionLoading && !bookingsError && availableEnrichedBookings.length > 0 && availableEnrichedBookings.every(b => String((b as any)?.status ?? '').toLowerCase() === 'pending') && (
-              <Text style={styles.smallText}>{t('TS_CREATE_AWAITING_APPROVAL')}</Text>
+              <Text style={[styles.smallText, { color: tc.textSecondary }]}>{t('TS_CREATE_AWAITING_APPROVAL')}</Text>
             )}
             {selectedBooking && (
-              <View style={styles.selectedBookingBox}>
+              <View style={[styles.selectedBookingBox, { backgroundColor: tc.bgSurface }]}>
                 <View style={styles.bookingTitleRow}>
-                  <Text style={styles.selectedBookingTitle}>{selectedBooking.courtName || t('TS_CREATE_SELECTED_BOOKING_FALLBACK')}</Text>
+                  <Text style={[styles.selectedBookingTitle, { color: tc.textPrimary }]}>{selectedBooking.courtName || t('TS_CREATE_SELECTED_BOOKING_FALLBACK')}</Text>
                   {usedSessionBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>Training</Text></View>}
                   {usedEventBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>Event</Text></View>}
                 </View>
-                {selectedBooking.address && <Text style={styles.selectedBookingMeta}>{selectedBooking.address}</Text>}
-                <Text style={styles.selectedBookingMeta}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
+                {selectedBooking.address && <Text style={[styles.selectedBookingMeta, { color: tc.textSecondary }]}>{selectedBooking.address}</Text>}
+                <Text style={[styles.selectedBookingMeta, { color: tc.textSecondary }]}>{formatRange(selectedBooking.start_timestamp as any, selectedBooking.end_timestamp as any)}</Text>
               </View>
             )}
             {expandedCourts && enrichedBookings && (
@@ -691,11 +693,11 @@ export default function TsCreate() {
               </View>
             )}
           </View>
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_DETAILS')}</Text>
-            <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_TITLE')}</Text>
-            <TextInput value={title} onChangeText={setTitle} placeholder={t('TS_CREATE_PLACEHOLDER_TITLE')} placeholderTextColor="#777" style={styles.input} />
-            <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_MAX_PARTICIPANTS')}</Text>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+            <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_SECTION_DETAILS')}</Text>
+            <Text style={[styles.fieldLabel, { color: tc.textPrimary }]}>{t('TS_CREATE_FIELD_TITLE')}</Text>
+            <TextInput value={title} onChangeText={setTitle} placeholder={t('TS_CREATE_PLACEHOLDER_TITLE')} placeholderTextColor={tc.placeholder} style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]} />
+            <Text style={[styles.fieldLabel, { color: tc.textPrimary }]}>{t('TS_CREATE_FIELD_MAX_PARTICIPANTS')}</Text>
             <TextInput
               value={participantsCap}
               onChangeText={(raw) => {
@@ -711,14 +713,14 @@ export default function TsCreate() {
               }}
               keyboardType="number-pad"
               placeholder={t('TS_CREATE_PLACEHOLDER_CAP')}
-              placeholderTextColor="#777"
-              style={[styles.input, participantsCapError && styles.inputError]}
+              placeholderTextColor={tc.placeholder}
+              style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }, participantsCapError && styles.inputError]}
             />
             {!!participantsCapError && <Text style={styles.inlineErrorText}>{participantsCapError}</Text>}
-            <Text style={styles.fieldLabel}>{t('COMMON_LABEL_DESCRIPTION')}</Text>
-            <TextInput value={description} onChangeText={setDescription} placeholder={t('TS_CREATE_PLACEHOLDER_DESC')} placeholderTextColor="#777" multiline style={[styles.input, styles.inputMultiline]} />
+            <Text style={[styles.fieldLabel, { color: tc.textPrimary }]}>{t('COMMON_LABEL_DESCRIPTION')}</Text>
+            <TextInput value={description} onChangeText={setDescription} placeholder={t('TS_CREATE_PLACEHOLDER_DESC')} placeholderTextColor={tc.placeholder} multiline style={[styles.input, styles.inputMultiline, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]} />
 
-            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('COMMON_LABEL_IMAGES')}</Text>
+            <Text style={[styles.fieldLabel, { color: tc.textPrimary, marginTop: 12 }]}>{t('COMMON_LABEL_IMAGES')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
               {remoteImageUrls.map((uri) => (
                 <View key={uri} style={styles.coverFrame}>
@@ -754,28 +756,28 @@ export default function TsCreate() {
               activeOpacity={0.85}
               onPress={() => setAutoApprove(v => !v)}
             >
-              <View style={[styles.checkboxBox, autoApprove && styles.checkboxBoxChecked]}>
+              <View style={[styles.checkboxBox, { backgroundColor: tc.bgBase, borderColor: tc.divider }, autoApprove && styles.checkboxBoxChecked]}>
                 {autoApprove && <Text style={styles.checkboxTick}>✓</Text>}
               </View>
-              <Text style={styles.checkboxLabel}>{t('TS_CREATE_AUTO_APPROVE_LABEL')}</Text>
+              <Text style={[styles.checkboxLabel, { color: tc.textPrimary }]}>{t('TS_CREATE_AUTO_APPROVE_LABEL')}</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_MONETIZATION')}</Text>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+            <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_SECTION_MONETIZATION')}</Text>
             <View style={styles.toggleRow}>
-              <TouchableOpacity onPress={() => setMonetize(false)} style={[styles.toggleBtn, !monetize && styles.toggleBtnActive]}>
+              <TouchableOpacity onPress={() => setMonetize(false)} style={[styles.toggleBtn, { backgroundColor: tc.bgSurface }, !monetize && styles.toggleBtnActive]}>
                 <Image source={ICONS.free} style={styles.toggleIcon} />
-                <Text style={[styles.toggleText, !monetize && styles.toggleTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
+                <Text style={[styles.toggleText, { color: tc.textSecondary }, !monetize && styles.toggleTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setMonetize(true)} style={[styles.toggleBtn, monetize && styles.toggleBtnActive]}>
+              <TouchableOpacity onPress={() => setMonetize(true)} style={[styles.toggleBtn, { backgroundColor: tc.bgSurface }, monetize && styles.toggleBtnActive]}>
                 <Image source={ICONS.charge} style={styles.toggleIcon} />
-                <Text style={[styles.toggleText, monetize && styles.toggleTextActive]}>{t('TS_CREATE_MONETIZE_CHARGE')}</Text>
+                <Text style={[styles.toggleText, { color: tc.textSecondary }, monetize && styles.toggleTextActive]}>{t('TS_CREATE_MONETIZE_CHARGE')}</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.monetizeNote}>{monetize ? t('TS_CREATE_MONETIZE_NOTE_PAID') : t('TS_CREATE_MONETIZE_NOTE_FREE')}</Text>
+            <Text style={[styles.monetizeNote, { color: tc.textSecondary }]}>{monetize ? t('TS_CREATE_MONETIZE_NOTE_PAID') : t('TS_CREATE_MONETIZE_NOTE_FREE')}</Text>
             {monetize && (
               <View style={{ marginTop: 12 }}>
-                <Text style={styles.fieldLabel}>{t('TS_CREATE_FIELD_ENTRY_FEE')}</Text>
+                <Text style={[styles.fieldLabel, { color: tc.textPrimary }]}>{t('TS_CREATE_FIELD_ENTRY_FEE')}</Text>
                 <TextInput
                   value={entryFee}
                   onChangeText={(raw) => {
@@ -791,41 +793,41 @@ export default function TsCreate() {
                   }}
                   keyboardType="number-pad"
                   placeholder={t('TS_CREATE_PLACEHOLDER_ENTRY_FEE')}
-                  placeholderTextColor="#777"
-                  style={[styles.input, entryFeeError && styles.inputError]}
+                  placeholderTextColor={tc.placeholder}
+                  style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }, entryFeeError && styles.inputError]}
                 />
                 {!!entryFeeError && <Text style={styles.inlineErrorText}>{entryFeeError}</Text>}
-                <Text style={[styles.fieldLabel,{marginTop:12}]}>{t('TS_CREATE_FIELD_PAYMENT_METHODS')}</Text>
+                <Text style={[styles.fieldLabel, { color: tc.textPrimary, marginTop:12 }]}>{t('TS_CREATE_FIELD_PAYMENT_METHODS')}</Text>
                 <View style={styles.paymentRow}>
-                  <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, payCash && styles.payMethodActive]}>
+                  <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface }, payCash && styles.payMethodActive]}>
                     <Image source={ICONS.cashIcon} style={styles.payIcon} />
-                    <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_CASH')}</Text>
+                    <Text style={[styles.payText, { color: tc.textPrimary }]}>{t('BOOKING_COURT_PAYMENT_CASH')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setPayVnPay(v => !v)} style={[styles.payMethodBtn, payVnPay && styles.payMethodActive]}>
+                  <TouchableOpacity onPress={() => setPayVnPay(v => !v)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface }, payVnPay && styles.payMethodActive]}>
                     <Image source={ICONS.vnpayIcon} style={styles.payIcon} />
-                    <Text style={styles.payText}>{t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
+                    <Text style={[styles.payText, { color: tc.textPrimary }]}>{t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
           </View>
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>{t('TS_CREATE_SECTION_PREVIEW')}</Text>
+              <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_SECTION_PREVIEW')}</Text>
               <TouchableOpacity onPress={() => setPreviewOpen(p => !p)} style={styles.expandBtn}>
-                <Image source={ICONS.arrowdown} style={[styles.expandIcon, previewOpen && { transform: [{ rotate: '180deg' }] }]} />
+                <Image source={ICONS.arrowdown} style={[styles.expandIcon, { tintColor: tc.textSecondary }, previewOpen && { transform: [{ rotate: '180deg' }] }]} />
               </TouchableOpacity>
             </View>
             {previewOpen && (
               <>
-                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_STATUS')}</Text>
-                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_LOCATION')} {selectedBookingId ? (enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.courtName || selectedBookingId) : t('TS_CREATE_PREVIEW_NONE')}</Text>
-                <Text style={styles.previewLine}>Time: {selectedBookingId ? formatRange(enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.start_timestamp as any, enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.end_timestamp as any) : t('TS_CREATE_PREVIEW_NA')}</Text>
-                <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_MAX_PARTICIPANTS')} {participantsCapNum || t('TS_CREATE_PREVIEW_NA')}</Text>
+                <Text style={[styles.previewLine, { color: tc.textSecondary }]}>{t('TS_CREATE_PREVIEW_STATUS')}</Text>
+                <Text style={[styles.previewLine, { color: tc.textSecondary }]}>{t('TS_CREATE_PREVIEW_LOCATION')} {selectedBookingId ? (enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.courtName || selectedBookingId) : t('TS_CREATE_PREVIEW_NONE')}</Text>
+                <Text style={[styles.previewLine, { color: tc.textSecondary }]}>Time: {selectedBookingId ? formatRange(enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.start_timestamp as any, enrichedBookings?.find(b=>b.courtbookingid===selectedBookingId)?.end_timestamp as any) : t('TS_CREATE_PREVIEW_NA')}</Text>
+                <Text style={[styles.previewLine, { color: tc.textSecondary }]}>{t('TS_CREATE_PREVIEW_MAX_PARTICIPANTS')} {participantsCapNum || t('TS_CREATE_PREVIEW_NA')}</Text>
                 {monetize ? (
-                  <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_ENTRY_FEE')} {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' ' + t('TS_CREATE_PREVIEW_VND') : t('TS_CREATE_PREVIEW_NA')} | {t('TS_CREATE_PREVIEW_METHODS')} {paymentMethodsValue?.join(', ') || t('TS_CREATE_PREVIEW_NONE')}</Text>
+                  <Text style={[styles.previewLine, { color: tc.textSecondary }]}>{t('TS_CREATE_PREVIEW_ENTRY_FEE')} {entryFeeNum > 0 ? entryFeeNum.toLocaleString() + ' ' + t('TS_CREATE_PREVIEW_VND') : t('TS_CREATE_PREVIEW_NA')} | {t('TS_CREATE_PREVIEW_METHODS')} {paymentMethodsValue?.join(', ') || t('TS_CREATE_PREVIEW_NONE')}</Text>
                 ) : (
-                  <Text style={styles.previewLine}>{t('TS_CREATE_PREVIEW_ENTRY_FREE')}</Text>
+                  <Text style={[styles.previewLine, { color: tc.textSecondary }]}>{t('TS_CREATE_PREVIEW_ENTRY_FREE')}</Text>
                 )}
                 {submitError && <Text style={styles.errorText}>{submitError}</Text>}
                 {successData && (
@@ -840,9 +842,9 @@ export default function TsCreate() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <View style={[styles.bottomSafeArea, { paddingBottom: 12 }]}>
-        <View style={styles.bottomBar}>
-          <TouchableOpacity onPress={() => setConfirmModalVisible(true)} disabled={!formValid || submitting} style={[styles.confirmUnifiedBtn, (!formValid || submitting) && styles.confirmBtnDisabled]}>
+      <View style={[styles.bottomSafeArea, { backgroundColor: tc.bgBase, paddingBottom: 12 }]}>
+        <View style={[styles.bottomBar, { backgroundColor: tc.bgBase, borderTopColor: tc.divider }]}>
+          <TouchableOpacity onPress={() => setConfirmModalVisible(true)} disabled={!formValid || submitting} style={[styles.confirmUnifiedBtn, { backgroundColor: tc.brand }, (!formValid || submitting) && styles.confirmBtnDisabled]}>
             {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmUnifiedText}>{t('TS_CREATE_BTN_SUBMIT')}</Text>}
           </TouchableOpacity>
         </View>
@@ -855,14 +857,14 @@ export default function TsCreate() {
         onRequestClose={() => setConfirmModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('TS_CREATE_MODAL_CONFIRM_TITLE')}</Text>
-            <Text style={styles.modalBody}>{t('TS_CREATE_MODAL_CONFIRM_BODY')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('TS_CREATE_MODAL_CONFIRM_TITLE')}</Text>
+            <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('TS_CREATE_MODAL_CONFIRM_BODY')}</Text>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.modalBtnText}>{t('COMMON_BTN_CANCEL')}</Text>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel, { backgroundColor: tc.bgSurface }]} onPress={() => setConfirmModalVisible(false)}>
+                <Text style={[styles.modalBtnText, { color: tc.textPrimary }]}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm, { backgroundColor: tc.brand }]} onPress={() => {
                 setConfirmModalVisible(false)
                 onSubmit()
               }}>
@@ -883,20 +885,20 @@ export default function TsCreate() {
         }}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_TITLE')}</Text>
-            <Text style={styles.modalBody}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_BODY')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_TITLE')}</Text>
+            <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('EVENT_PANEL_MODAL_REMOVE_IMAGE_BODY')}</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalCancel]}
+                style={[styles.modalBtn, styles.modalCancel, { backgroundColor: tc.bgSurface }]}
                 onPress={() => {
                   setRemoveImageConfirmVisible(false)
                   setRemoveImageCandidateUri(null)
                 }}
               >
-                <Text style={styles.modalBtnText}>{t('COMMON_BTN_CANCEL')}</Text>
+                <Text style={[styles.modalBtnText, { color: tc.textPrimary }]}>{t('COMMON_BTN_CANCEL')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={onConfirmRemoveImage}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm, { backgroundColor: tc.brand }]} onPress={onConfirmRemoveImage}>
                 <Text style={[styles.modalBtnText, { color: '#fff' }]}>{t('COMMON_BTN_REMOVE')}</Text>
               </TouchableOpacity>
             </View>

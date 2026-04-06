@@ -26,11 +26,13 @@ import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
 import { useVoiceAutomation, VoiceFlowState } from '@/providers/voice-automation-provider'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 export default function VoiceFocusOverlay() {
   const { flowState, partialTranscript, result, statusMessage, stopListening, dismiss, startListening, applyAndReset } = useVoiceAutomation()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
+  const tc = useThemeColors()
 
   // Fade-in animation on mount
   const fadeAnim = useRef(new Animated.Value(0)).current
@@ -55,11 +57,12 @@ export default function VoiceFocusOverlay() {
           <ListeningView
             partialTranscript={partialTranscript}
             onStop={stopListening}
+            tc={tc}
           />
         )}
 
         {flowState === 'processing' && (
-          <ProcessingView statusMessage={statusMessage} />
+          <ProcessingView statusMessage={statusMessage} tc={tc} />
         )}
 
         {flowState === 'result' && result && (
@@ -69,6 +72,7 @@ export default function VoiceFocusOverlay() {
             onRetry={startListening}
             onDismiss={dismiss}
             t={t}
+            tc={tc}
           />
         )}
 
@@ -78,6 +82,7 @@ export default function VoiceFocusOverlay() {
             onRetry={startListening}
             onDismiss={dismiss}
             t={t}
+            tc={tc}
           />
         )}
       </View>
@@ -87,7 +92,7 @@ export default function VoiceFocusOverlay() {
 
 // ── Listening ─────────────────────────────────────────────────────────────────
 
-function ListeningView({ partialTranscript, onStop }: { partialTranscript: string; onStop: () => void }) {
+function ListeningView({ partialTranscript, onStop, tc }: { partialTranscript: string; onStop: () => void; tc: ReturnType<typeof useThemeColors> }) {
   const pulseAnim = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
@@ -106,7 +111,7 @@ function ListeningView({ partialTranscript, onStop }: { partialTranscript: strin
       <Text style={styles.hintText}>Đang nghe...</Text>
 
       <Pressable onPress={onStop}>
-        <Animated.View style={[styles.micCircle, { transform: [{ scale: pulseAnim }] }]}>
+        <Animated.View style={[styles.micCircle, { backgroundColor: tc.brand, shadowColor: tc.brand, transform: [{ scale: pulseAnim }] }]}>
           <Image source={ICONS.microphone} style={{ width: 44, height: 44, tintColor: '#FFF' }} resizeMode="contain" />
         </Animated.View>
       </Pressable>
@@ -124,10 +129,10 @@ function ListeningView({ partialTranscript, onStop }: { partialTranscript: strin
 
 // ── Processing ────────────────────────────────────────────────────────────────
 
-function ProcessingView({ statusMessage }: { statusMessage: string }) {
+function ProcessingView({ statusMessage, tc }: { statusMessage: string; tc: ReturnType<typeof useThemeColors> }) {
   return (
     <View style={styles.stateContainer}>
-      <ActivityIndicator size="large" color={COLORS.brandOrangeDeep ?? '#FF6017'} />
+      <ActivityIndicator size="large" color={tc.brand} />
       <Text style={styles.hintText}>{statusMessage || 'Đang xử lý...'}</Text>
     </View>
   )
@@ -144,12 +149,13 @@ const FIELD_LABELS: Record<string, { en: string; vi: string }> = {
   note: { en: 'Note', vi: 'Ghi chú' },
 }
 
-function ResultView({ result, onApply, onRetry, onDismiss, t }: {
+function ResultView({ result, onApply, onRetry, onDismiss, t, tc }: {
   result: { transcript: string; intent: any }
   onApply: () => void
   onRetry: () => void
   onDismiss: () => void
   t: (key: any) => string
+  tc: ReturnType<typeof useThemeColors>
 }) {
   const intent = result.intent ?? {}
   const fields = Object.entries(intent).filter(([_, v]) => v != null)
@@ -185,7 +191,7 @@ function ResultView({ result, onApply, onRetry, onDismiss, t }: {
           <Text style={styles.btnSecondaryText}>↻ Thử lại</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnPrimary} onPress={onApply}>
+        <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: tc.brand }]} onPress={onApply}>
           <Image source={ICONS.check} style={{ width: 18, height: 18, tintColor: '#FFF', marginRight: 4 }} resizeMode="contain" />
           <Text style={styles.btnPrimaryText}>Áp dụng</Text>
         </TouchableOpacity>
@@ -200,11 +206,12 @@ function ResultView({ result, onApply, onRetry, onDismiss, t }: {
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
-function ErrorView({ errorMessage, onRetry, onDismiss, t }: {
+function ErrorView({ errorMessage, onRetry, onDismiss, t, tc }: {
   errorMessage: string
   onRetry: () => void
   onDismiss: () => void
   t: (key: any) => string
+  tc: ReturnType<typeof useThemeColors>
 }) {
   return (
     <View style={styles.stateContainer}>
@@ -216,7 +223,7 @@ function ErrorView({ errorMessage, onRetry, onDismiss, t }: {
           <Text style={styles.btnSecondaryText}>Đóng</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnPrimary} onPress={onRetry}>
+        <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: tc.brand }]} onPress={onRetry}>
           <Text style={styles.btnPrimaryText}>↻ Thử lại</Text>
         </TouchableOpacity>
       </View>

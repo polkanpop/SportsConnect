@@ -4,9 +4,11 @@ import { Stack, useLocalSearchParams, router } from 'expo-router'
 import { resetPassword } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const NewPasswordScreen = () => {
 	const { t } = useTranslation()
+	const tc = useThemeColors()
 	const { token } = useLocalSearchParams<{ token?: string }>()
 	const [pw1, setPw1] = useState('')
 	const [pw2, setPw2] = useState('')
@@ -42,44 +44,44 @@ const NewPasswordScreen = () => {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<View style={styles.container}>
+			<View style={[styles.container, { backgroundColor: tc.bgBase }]}>
 				<View style={styles.logoWrapper}>
 					<Image source={ICONS.app_icon} style={styles.logo} />
-					<Text style={styles.title}>{t('AUTH_NEWPASS_TITLE')}</Text>
+					<Text style={[styles.title, { color: tc.brand }]}>{t('AUTH_NEWPASS_TITLE')}</Text>
 				</View>
-			<Text style={styles.helper}>{t('AUTH_NEWPASS_HELPER')}</Text>
-			<View style={styles.passwordRow}>
+			<Text style={[styles.helper, { color: tc.textSecondary }]}>{t('AUTH_NEWPASS_HELPER')}</Text>
+			<View style={[styles.passwordRow, { backgroundColor: tc.bgInput, borderColor: tc.divider }]}>
 				<TextInput
 					placeholder={t('AUTH_NEWPASS_PLACEHOLDER_NEW')}
-						placeholderTextColor={COLORS.dark300}
+						placeholderTextColor={tc.placeholder}
 						secureTextEntry={!visible}
 						value={pw1}
 						onChangeText={(t) => { setPw1(t); if (msg) setMsg(null) }}
-						style={styles.passwordInput}
+						style={[styles.passwordInput, { color: tc.textPrimary }]}
 					/>
 					<TouchableOpacity onPress={() => setVisible(!visible)}>
-						<Image source={visible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
+						<Image source={visible ? ICONS.notEye : ICONS.eye} style={[styles.eyeIcon, { tintColor: tc.textSecondary }]} />
 					</TouchableOpacity>
 				</View>
-				<View style={styles.passwordRow}>
+				<View style={[styles.passwordRow, { backgroundColor: tc.bgInput, borderColor: tc.divider }]}>
 					<TextInput
 					placeholder={t('AUTH_LABEL_CONFIRM_PASSWORD')}
-						placeholderTextColor={COLORS.dark300}
+						placeholderTextColor={tc.placeholder}
 						secureTextEntry={!visible2}
 						value={pw2}
 						onChangeText={(t) => { setPw2(t); if (msg) setMsg(null) }}
-						style={styles.passwordInput}
+						style={[styles.passwordInput, { color: tc.textPrimary }]}
 					/>
 					<TouchableOpacity onPress={() => setVisible2(!visible2)}>
-						<Image source={visible2 ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
+						<Image source={visible2 ? ICONS.notEye : ICONS.eye} style={[styles.eyeIcon, { tintColor: tc.textSecondary }]} />
 					</TouchableOpacity>
 				</View>
-				{msg && <Text style={styles.status}>{msg}</Text>}
-				<TouchableOpacity disabled={submitting} onPress={doReset} style={[styles.button, submitting && { opacity: 0.7 }]}>
+				{msg && <Text style={[styles.status, { color: tc.textSecondary }]}>{msg}</Text>}
+				<TouchableOpacity disabled={submitting} onPress={doReset} style={[styles.button, { backgroundColor: tc.brand }, submitting && { opacity: 0.7 }]}>
 					<Text style={styles.buttonText}>{submitting ? t('AUTH_NEWPASS_BTN_UPDATING') : t('AUTH_NEWPASS_BTN_UPDATE')}</Text>
 				</TouchableOpacity>
 				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLinkWrap}>
-					<Text style={styles.backLink}>{t('AUTH_NEWPASS_BTN_BACK')}</Text>
+					<Text style={[styles.backLink, { color: tc.brand }]}>{t('AUTH_NEWPASS_BTN_BACK')}</Text>
 				</TouchableOpacity>
 			</View>
 		</>

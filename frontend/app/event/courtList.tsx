@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import * as Location from 'expo-location'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const SURFACE_TRANSLATION_MAP: Record<string, string> = {
   concrete: 'COURT_SURFACE_CONCRETE',
@@ -93,6 +94,7 @@ const CourtListScreen = () => {
   const [, setDistanceMatrixTick] = useState(0)
 
   const { profile } = useAuthContext()
+  const tc = useThemeColors()
 
   useEffect(() => {
     return subscribeDistanceMatrixCache(() => setDistanceMatrixTick(t => (t + 1) % 1_000_000))
@@ -414,25 +416,25 @@ const CourtListScreen = () => {
   }, [loadCourts, loadFavourites])
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]}>
       {/* Back button row (moved above search bar) */}
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('COURT_LIST_HEADER')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('COURT_LIST_HEADER')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       {/* Search row */}
       <View style={styles.searchRow}>
-        <View style={styles.searchContainer}>
-          <Image source={ICONS.search} style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: tc.searchBarBg }]}>
+          <Image source={ICONS.search} style={[styles.searchIcon, { tintColor: tc.textMuted }]} />
           <TextInput
             placeholder={t('COURT_LIST_SEARCH_PLACEHOLDER')}
-            placeholderTextColor={COLORS.neutral750}
+            placeholderTextColor={tc.placeholder}
             value={search}
             onChangeText={setSearch}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: tc.textPrimary }]}
           />
         </View>
       </View>
@@ -442,35 +444,35 @@ const CourtListScreen = () => {
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
             <TouchableOpacity
-              style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
-              <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
+              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterButton, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'surface' ? null : 'surface')}
             >
-              <Image source={ICONS.menu} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
+              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
               {selectedSurfaces.length > 0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterButton, showFavouritesOnly && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, showFavouritesOnly && styles.filterButtonActive]}
               onPress={() => setShowFavouritesOnly(prev => !prev)}
             >
-              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
-              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
+              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, { tintColor: tc.textMuted }, showFavouritesOnly && styles.favStarActive]} />
+              <Text style={[styles.filterText, { color: tc.textPrimary }, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterButton, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
             >
-              <Image source={ICONS.radar} style={styles.filterIcon} />
-              <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
+              <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
                 {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('COURT_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
               </Text>
             </TouchableOpacity>
@@ -481,13 +483,13 @@ const CourtListScreen = () => {
         {/* Dropdown */}
         {openFilter === 'venue' && (
           <View style={styles.dropdownWrapper}>
-            <ScrollView style={styles.dropdown}>
+            <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
                 const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{label}</Text>
+                    <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -498,13 +500,13 @@ const CourtListScreen = () => {
 
         {openFilter === 'surface' && (
           <View style={styles.dropdownWrapper}>
-            <ScrollView style={styles.dropdown}>
+            <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {surfaceOptions.map(opt => {
                 const selected = selectedSurfaces.includes(opt)
                 const label = translateSurface(opt, t)
                 return (
                   <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{label}</Text>
+                    <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -515,7 +517,7 @@ const CourtListScreen = () => {
 
         {openFilter === 'distance' && (
           <View style={[styles.dropdownWrapper, styles.distanceDropdownWrapper]}>
-            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10 }]}>
+            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               <View style={styles.distanceHeaderRow}>
                 <TouchableOpacity
                   style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
@@ -533,8 +535,8 @@ const CourtListScreen = () => {
               <Text style={styles.distanceFilterTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
               <TextInput
                 value={distanceKmInput}
-                onChangeText={(t) => {
-                  const cleaned = sanitizeKmInput(t)
+                onChangeText={(text) => {
+                  const cleaned = sanitizeKmInput(text)
                   setDistanceKmInput(cleaned)
 
                   if (cleaned.trim().length === 0) {
@@ -600,7 +602,7 @@ const CourtListScreen = () => {
           )}
           {error && <Text style={[styles.statusText, { color: COLORS.danger }]}>{t('COURT_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !error && filteredCourts.length === 0 && (
-            <Text style={styles.statusText}>{t('COURT_LIST_NO_RESULTS')}</Text>
+            <Text style={[styles.statusText, { color: tc.textMuted }]}>{t('COURT_LIST_NO_RESULTS')}</Text>
           )}
           {visibleCourts.map(c => {
             const venues = asArray(c.venue)
@@ -648,7 +650,7 @@ const CourtListScreen = () => {
               <TouchableOpacity
                 key={c.courtinfoid}
                 activeOpacity={0.85}
-                style={styles.card}
+                style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border, shadowColor: tc.shadow }]}
                 onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
               >
                 {/* Image section (80%) */}
@@ -685,10 +687,10 @@ const CourtListScreen = () => {
 
                 {/* Info section (20%) */}
                 <View style={styles.cardInfoSection}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
-                  <Text style={styles.cardAddress} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
+                  <Text style={[styles.cardTitle, { color: tc.textPrimary }]} numberOfLines={1}>{c.name || `Court ${c.courtid}`}</Text>
+                  <Text style={[styles.cardAddress, { color: tc.textSecondary }]} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
                   {surfaceText && (
-                    <Text style={styles.cardSurface} numberOfLines={1}>
+                    <Text style={[styles.cardSurface, { color: tc.textSecondary }]} numberOfLines={1}>
                       {t('COURT_REGISTER_SURFACE_PREFIX')}{surfaceText}
                     </Text>
                   )}

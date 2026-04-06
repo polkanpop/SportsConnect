@@ -18,6 +18,7 @@ import {
 } from '@/lib/backendApi'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { appendHistory } from '@/storage/history'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 // Normalise array-ish fields (duplicated helper to avoid import loops)
 function asArray(v: any): string[] {
@@ -59,6 +60,7 @@ export default function EventBooking() {
   const eventid = params.eventid ? parseInt(String(params.eventid), 10) : NaN
   const { profile } = useAuthContext()
   const { userId, dashboard } = useAppBootstrap()
+  const tc = useThemeColors()
 
   // Fetch combined events list & derive target event
   const { data: eventsCached, isLoading: loadingCached } = useQuery({
@@ -290,18 +292,18 @@ export default function EventBooking() {
   }
 
   return (
-    <View style={styles.screen}>
-      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+    <View style={[styles.screen, { backgroundColor: tc.bgBase }]}>
+      <SafeAreaView edges={['top']} style={[styles.headerSafeArea, { backgroundColor: tc.bgElevated }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+          <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+            <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('BOOKING_EVENT_HEADER')}</Text>
+          <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('BOOKING_EVENT_HEADER')}</Text>
         </View>
       </SafeAreaView>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 220, paddingTop: 12 }}>
-        <View style={styles.sectionCard}>
-          {loadingEvents && <Text style={styles.statusText}>{t('BOOKING_EVENT_LOADING')}</Text>}
+      <ScrollView style={[styles.container, { backgroundColor: tc.bgBase }]} contentContainerStyle={{ paddingBottom: 220, paddingTop: 12 }}>
+        <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+          {loadingEvents && <Text style={[styles.statusText, { color: tc.textMuted }]}>{t('BOOKING_EVENT_LOADING')}</Text>}
           {!loadingEvents && !event && <Text style={styles.errorText}>{t('BOOKING_EVENT_NOT_FOUND')}</Text>}
           {!loadingEvents && !!event && isCancelledEvent && (
             <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
@@ -311,19 +313,19 @@ export default function EventBooking() {
           )}
           {event && (
             <View style={styles.titleRowInline}>
-              <Text style={styles.eventTitle}>{event.title || `Event ${event.eventid}`}</Text>
+              <Text style={[styles.eventTitle, { color: tc.textPrimary }]}>{event.title || `Event ${event.eventid}`}</Text>
             </View>
           )}
           {event && (
             <>
-              <Text style={styles.eventTime}>{formatRange(event)}</Text>
-              <Text style={styles.eventFee}>{isFree ? t('BOOKING_EVENT_ENTRY_FREE') : `${t('BOOKING_EVENT_ENTRY_FEE_PREFIX')} ${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')}`}</Text>
-              <Text style={styles.eventDesc}>{t('BOOKING_EVENT_DESC_PREFIX')} {event.description || t('BOOKING_EVENT_NO_DESC')}</Text>
+              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event)}</Text>
+              <Text style={[styles.eventFee, { color: tc.textPrimary }]}>{isFree ? t('BOOKING_EVENT_ENTRY_FREE') : `${t('BOOKING_EVENT_ENTRY_FEE_PREFIX')} ${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')}`}</Text>
+              <Text style={[styles.eventDesc, { color: tc.textSecondary }]}>{t('BOOKING_EVENT_DESC_PREFIX')} {event.description || t('BOOKING_EVENT_NO_DESC')}</Text>
             </>
           )}
         </View>
         {event && (
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
             <View style={styles.courtHeaderRow}>
               {(() => {
                 const venueRaw = event.venue
@@ -336,57 +338,57 @@ export default function EventBooking() {
                 else if (hasOutdoor) iconSrc = ICONS.outdoorIcon
                 return iconSrc ? <Image source={iconSrc} style={styles.venueIcon} /> : null
               })()}
-              <Text style={styles.courtNameText}>{event.court_name || t('BOOKING_EVENT_COURT_FALLBACK')}</Text>
+              <Text style={[styles.courtNameText, { color: tc.textPrimary }]}>{event.court_name || t('BOOKING_EVENT_COURT_FALLBACK')}</Text>
             </View>
             <View style={styles.metaRow}>
-              <Image source={ICONS.mapPin} style={styles.metaIcon} />
-              <Text style={styles.courtAddress}>{event.address || 'Address N/A'}</Text>
+              <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
+              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{event.address || 'Address N/A'}</Text>
             </View>
             <View style={styles.metaRow}>
-              <Image source={ICONS.clock} style={styles.metaIcon} />
-              <Text style={styles.eventTime}>{formatRange(event)}</Text>
+              <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
+              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event)}</Text>
             </View>
           </View>
         )}
         {event && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{isFree ? t('BOOKING_EVENT_PAYMENT_SECTION') : `${t('BOOKING_EVENT_PAYMENT_SECTION')} (${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')})`}</Text>
+          <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+            <Text style={[styles.sectionTitle, { color: tc.textPrimary }]}>{isFree ? t('BOOKING_EVENT_PAYMENT_SECTION') : `${t('BOOKING_EVENT_PAYMENT_SECTION')} (${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')})`}</Text>
             {isFree && <Text style={styles.freeNote}>{t('BOOKING_EVENT_FREE_NOTE')}</Text>}
             {!isFree && (
               <View style={{marginTop:4}}>
-                <Text style={styles.paymentMeta}>{t('BOOKING_EVENT_SELECT_PAYMENT')}</Text>
+                <Text style={[styles.paymentMeta, { color: tc.textSecondary }]}>{t('BOOKING_EVENT_SELECT_PAYMENT')}</Text>
                 <View style={styles.paymentRow}>
                   {allowedMethods.map(m => {
                     const active = paymentMethod === m
                     return (
-                      <TouchableOpacity key={m} style={[styles.payMethodBtn, active && styles.payMethodActive]} onPress={() => setPaymentMethod(m)}>
+                      <TouchableOpacity key={m} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface }, active && { backgroundColor: tc.brand }]} onPress={() => setPaymentMethod(m)}>
                         <Image source={m === 'cash' ? ICONS.cashIcon : ICONS.vnpayIcon} style={styles.payIcon} />
-                        <Text style={styles.payText}>{m === 'cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
+                        <Text style={[styles.payText, { color: tc.textPrimary }]}>{m === 'cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                       </TouchableOpacity>
                     )
                   })}
-                  {allowedMethods.length === 0 && <Text style={styles.smallText}>{t('BOOKING_EVENT_NO_PAYMENT_METHODS')}</Text>}
+                  {allowedMethods.length === 0 && <Text style={[styles.smallText, { color: tc.textMuted }]}>{t('BOOKING_EVENT_NO_PAYMENT_METHODS')}</Text>}
                 </View>
               </View>
             )}
           </View>
         )}
         {/* Note Section */}
-        <View style={styles.sectionCard}>
-          <TouchableOpacity style={styles.noteRow} onPress={() => setNoteExpanded(n => !n)}>
+        <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+          <TouchableOpacity style={[styles.noteRow, { backgroundColor: tc.bgInput }]} onPress={() => setNoteExpanded(n => !n)}>
             <Image source={ICONS.noteIcon} style={styles.noteIcon} />
-            <Text style={styles.noteTextLabel}>{t('BOOKING_EVENT_NOTE_OPTIONAL')}</Text>
+            <Text style={[styles.noteTextLabel, { color: tc.textPrimary }]}>{t('BOOKING_EVENT_NOTE_OPTIONAL')}</Text>
             <Image source={ICONS.arrowright} style={[styles.noteArrow, noteExpanded && styles.noteArrowExpanded]} />
           </TouchableOpacity>
           {noteExpanded && (
-            <View style={styles.noteInputWrapper}>
+            <View style={[styles.noteInputWrapper, { backgroundColor: tc.bgInput, borderColor: tc.divider }]}>
               <TextInput
                 placeholder={t('BOOKING_EVENT_NOTE_PLACEHOLDER')}
-                placeholderTextColor={'#888'}
+                placeholderTextColor={tc.placeholder}
                 value={noteText}
                 onChangeText={setNoteText}
                 multiline
-                style={styles.noteInput}
+                style={[styles.noteInput, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               />
             </View>
           )}
@@ -404,10 +406,10 @@ export default function EventBooking() {
       </ScrollView>
       {/* Bottom confirm button */}
       {!confirmation && (
-        <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
-          <View style={styles.bottomBar}>
+        <SafeAreaView edges={['bottom']} style={[styles.bottomSafeArea, { backgroundColor: tc.bgBase }]}>
+          <View style={[styles.bottomBar, { backgroundColor: tc.bgBase, borderTopColor: tc.divider }]}>
             <TouchableOpacity
-              style={[styles.confirmUnifiedBtn, !canSubmit && styles.confirmBtnDisabled]}
+              style={[styles.confirmUnifiedBtn, { backgroundColor: tc.brand }, !canSubmit && styles.confirmBtnDisabled]}
               disabled={!canSubmit}
               onPress={() => setConfirmModalVisible(true)}
             >
@@ -426,14 +428,14 @@ export default function EventBooking() {
         onRequestClose={() => setConfirmModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('BOOKING_EVENT_MODAL_TITLE')}</Text>
-            <Text style={styles.modalBody}>{t('BOOKING_EVENT_MODAL_BODY')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('BOOKING_EVENT_MODAL_TITLE')}</Text>
+            <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('BOOKING_EVENT_MODAL_BODY')}</Text>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-                <Text style={styles.modalBtnText}>{t('BOOKING_EVENT_MODAL_BTN_CANCEL')}</Text>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalCancel, { backgroundColor: tc.bgSurface }]} onPress={() => setConfirmModalVisible(false)}>
+                <Text style={[styles.modalBtnText, { color: tc.textPrimary }]}>{t('BOOKING_EVENT_MODAL_BTN_CANCEL')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={() => {
+              <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm, { backgroundColor: tc.brand }]} onPress={() => {
                 setConfirmModalVisible(false)
                 handleSubmit()
               }} disabled={!canSubmit}>

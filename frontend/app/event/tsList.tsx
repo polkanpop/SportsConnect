@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 const SURFACE_TRANSLATION_MAP: Record<string, string> = {
   concrete: 'COURT_SURFACE_CONCRETE',
@@ -81,6 +82,7 @@ const TrainingSessionListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
+  const tc = useThemeColors()
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -386,56 +388,56 @@ const TrainingSessionListScreen = () => {
   const handleOutsidePress = () => { if(openFilter) setOpenFilter(null) }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]}>
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+        <TouchableOpacity style={[styles.backButton, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('TS_LIST_HEADER')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('TS_LIST_HEADER')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       <View style={styles.searchRow}>
-        <View style={styles.searchContainer}>
-          <Image source={ICONS.search} style={styles.searchIcon} />
-          <TextInput placeholder={t('TS_LIST_SEARCH_PLACEHOLDER')} placeholderTextColor={COLORS.neutral750} value={search} onChangeText={setSearch} style={styles.searchInput} />
+        <View style={[styles.searchContainer, { backgroundColor: tc.searchBarBg }]}>
+          <Image source={ICONS.search} style={[styles.searchIcon, { tintColor: tc.textMuted }]} />
+          <TextInput placeholder={t('TS_LIST_SEARCH_PLACEHOLDER')} placeholderTextColor={tc.placeholder} value={search} onChangeText={setSearch} style={[styles.searchInput, { color: tc.textPrimary }]} />
         </View>
       </View>
       <View style={styles.container}>
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
-          <TouchableOpacity style={[styles.filterButton, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
+          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
+            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter==='surface'?null:'surface')}
           >
-            <Image source={ICONS.menu} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
+            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
             {selectedSurfaces.length>0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterButton, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
-            <Image source={ICONS.freeIcon} style={styles.filterIcon} />
-            <Text style={[styles.filterText, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
+          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
+            <Image source={ICONS.freeIcon} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Text style={[styles.filterText, { color: tc.textPrimary }, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
             onPress={togglePaymentPanel}
             disabled={freeOnly}
           >
-            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, freeOnly && { tintColor: COLORS.neutral600 }]} />
-            <Text style={[styles.filterText, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>{t('TS_LIST_FILTER_PAYMENT')}</Text>
+            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, { tintColor: tc.textMuted }, freeOnly && { tintColor: COLORS.neutral600 }]} />
+            <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>{t('TS_LIST_FILTER_PAYMENT')}</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterButton, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
           >
-            <Image source={ICONS.radar} style={styles.filterIcon} />
-            <Text style={[styles.filterText, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
+            <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
               {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('TS_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
             </Text>
           </TouchableOpacity>
@@ -444,13 +446,13 @@ const TrainingSessionListScreen = () => {
         {/* Subheader removed (title is in header row) */}
         {openFilter === 'venue' && (
           <View style={styles.dropdownWrapper}>
-            <ScrollView style={styles.dropdown}>
+            <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
                 const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{label}</Text>
+                    <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -460,13 +462,13 @@ const TrainingSessionListScreen = () => {
         )}
         {openFilter === 'surface' && (
           <View style={styles.dropdownWrapper}>
-            <ScrollView style={styles.dropdown}>
+            <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {surfaceOptions.map(opt => {
                 const selected = selectedSurfaces.includes(opt)
                 const label = translateSurface(opt, t)
                 return (
                   <Pressable key={opt} onPress={() => toggleSurface(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{label}</Text>
+                    <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -476,12 +478,12 @@ const TrainingSessionListScreen = () => {
         )}
         {openFilter==='payment' && (
           <View style={styles.dropdownWrapper}>
-            <ScrollView style={styles.dropdown}>
+            <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {['cash','vnpay'].map(opt => {
                 const selected = paymentSelections.includes(opt)
                 return (
                   <Pressable key={opt} onPress={() => togglePaymentSelection(opt)} style={styles.dropdownItem}>
-                    <Text style={styles.dropdownItemText}>{opt==='cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
+                    <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{opt==='cash' ? t('BOOKING_COURT_PAYMENT_CASH') : t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                     <View style={[styles.tickBox, selected && styles.tickBoxSelected]}>{selected && <Text style={styles.tickText}>✓</Text>}</View>
                   </Pressable>
                 )
@@ -494,7 +496,7 @@ const TrainingSessionListScreen = () => {
 
         {openFilter === 'distance' && (
           <View style={styles.dropdownWrapper}>
-            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10 }]}>
+            <View style={[styles.dropdown, { paddingHorizontal: 12, paddingVertical: 10, backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               <View style={styles.distanceHeaderRow}>
                 <TouchableOpacity
                   style={[styles.closeToMeBtn, closeToMe && styles.closeToMeBtnActive]}
@@ -511,8 +513,8 @@ const TrainingSessionListScreen = () => {
               <Text style={styles.distanceFilterTitle}>{t('MAP_FILTER_DISTANCE_INPUT_TITLE')}</Text>
               <TextInput
                 value={distanceKmInput}
-                onChangeText={(t) => {
-                  const cleaned = sanitizeKmInput(t)
+                onChangeText={(text) => {
+                  const cleaned = sanitizeKmInput(text)
                   setDistanceKmInput(cleaned)
                   if (cleaned.trim().length === 0) {
                     setDistanceKmError(null)
@@ -577,7 +579,7 @@ const TrainingSessionListScreen = () => {
           )}
           {error && <Text style={[styles.statusText,{color: COLORS.danger}]}>{t('TS_LIST_ERR_FAILED')} {error}</Text>}
           {!loading && !isFetching && !error && filteredSessions.length === 0 && (
-            <Text style={[styles.statusText, { paddingVertical: 30 }]}>{t('TS_LIST_NO_RESULTS')}</Text>
+            <Text style={[styles.statusText, { paddingVertical: 30, color: tc.textMuted }]}>{t('TS_LIST_NO_RESULTS')}</Text>
           )}
           {visibleSessions.map(s => {
             const venues = asArray(s.venue)
@@ -625,7 +627,7 @@ const TrainingSessionListScreen = () => {
               <TouchableOpacity
                 key={s.sessionid}
                 activeOpacity={0.85}
-                style={styles.card}
+                style={[styles.card, { backgroundColor: tc.cardBg, borderColor: tc.border, shadowColor: tc.shadow }]}
                 onPress={() => router.push(`/event/tsBooking?sessionid=${s.sessionid}` as any)}
               >
                 {/* ---- image section ---- */}
@@ -660,10 +662,10 @@ const TrainingSessionListScreen = () => {
                 </View>
                 {/* ---- info section ---- */}
                 <View style={styles.cardInfoSection}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{s.title || `Session ${s.sessionid}`}</Text>
-                  <Text style={styles.cardAddress} numberOfLines={1}>{s.address || t('TS_LIST_NO_ADDRESS')}</Text>
+                  <Text style={[styles.cardTitle, { color: tc.textPrimary }]} numberOfLines={1}>{s.title || `Session ${s.sessionid}`}</Text>
+                  <Text style={[styles.cardAddress, { color: tc.textSecondary }]} numberOfLines={1}>{s.address || t('TS_LIST_NO_ADDRESS')}</Text>
                   <View style={styles.cardMetaRow}>
-                    <Text style={styles.dateText}>{dateDisplay}</Text>
+                    <Text style={[styles.dateText, { color: tc.textSecondary }]}>{dateDisplay}</Text>
                     <View style={styles.participantsInline}>
                       <Image source={ICONS.participants} style={styles.participantsIconSmall} />
                       <Text style={styles.participantsText}>{(s.numberofpeople ?? 0)}/{(s.participants_cap ?? 0)}</Text>
@@ -694,7 +696,7 @@ const TrainingSessionListScreen = () => {
           )}
         </ScrollView>
       </View>
-      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12) }]} onPress={() => router.push('/event/tsCreate' as any)}>
+      <TouchableOpacity style={[styles.fab, { bottom: 30 + Math.max(insets.bottom || 0, 12), backgroundColor: tc.brand }]} onPress={() => router.push('/event/tsCreate' as any)}>
         <Image source={ICONS.buttonBooking} style={styles.fabIcon} />
         <Text style={styles.fabText}>{t('TS_LIST_BTN_CREATE')}</Text>
       </TouchableOpacity>

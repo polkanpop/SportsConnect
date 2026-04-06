@@ -4,9 +4,11 @@ import { useLocalSearchParams, router, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getVerificationStatus, resendVerification } from '@/lib/backendApi';
 import { useTranslation } from '@/constants/translations';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 export default function WaitingForVerificationScreen() {
 	const { t } = useTranslation();
+	const tc = useThemeColors();
 	const { email } = useLocalSearchParams<{ email?: string }>();
 	const [statusChecked, setStatusChecked] = useState(false);
 	const [verified, setVerified] = useState(false);
@@ -60,23 +62,23 @@ export default function WaitingForVerificationScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-			<View style={styles.container}>
-			<Text style={styles.title}>{t('AUTH_WAITING_TITLE')}</Text>
-			<Text style={styles.subtitle}>{t('AUTH_WAITING_SUBTITLE')}</Text>
-				<Text style={styles.email}>{email}</Text>
-				{verified ? <Text style={styles.verified}>{t('AUTH_WAITING_VERIFIED')}</Text> : null}
+			<View style={[styles.container, { backgroundColor: tc.bgBase }]}>
+			<Text style={[styles.title, { color: tc.brand }]}>{t('AUTH_WAITING_TITLE')}</Text>
+			<Text style={[styles.subtitle, { color: tc.brand }]}>{t('AUTH_WAITING_SUBTITLE')}</Text>
+				<Text style={[styles.email, { color: tc.textSecondary }]}>{email}</Text>
+				{verified ? <Text style={[styles.verified, { color: tc.brand }]}>{t('AUTH_WAITING_VERIFIED')}</Text> : null}
 				{!verified && (
 					<>
-					<Text style={styles.info}>{t('AUTH_WAITING_INFO')}</Text>
-					<TouchableOpacity onPress={handleResend} disabled={resendLoading} style={[styles.resendBtn, resendLoading && { opacity: 0.7 }]}> 
+					<Text style={[styles.info, { color: tc.textSecondary }]}>{t('AUTH_WAITING_INFO')}</Text>
+					<TouchableOpacity onPress={handleResend} disabled={resendLoading} style={[styles.resendBtn, { backgroundColor: tc.brand }, resendLoading && { opacity: 0.7 }]}> 
 						{resendLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.resendText}>{t('AUTH_WAITING_BTN_RESEND')}</Text>}
 					</TouchableOpacity>
-					<TouchableOpacity onPress={poll} style={styles.manualCheck}><Text style={styles.manualCheckText}>{t('AUTH_WAITING_BTN_CHECK')}</Text></TouchableOpacity>
+					<TouchableOpacity onPress={poll} style={styles.manualCheck}><Text style={[styles.manualCheckText, { color: tc.brand }]}>{t('AUTH_WAITING_BTN_CHECK')}</Text></TouchableOpacity>
 					</>
 				)}
 				{!statusChecked && !error && <ActivityIndicator style={{ marginTop: 20 }} />}
 				{error && <Text style={styles.error}>{error}</Text>}
-				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLogin}><Text style={styles.backLoginText}>{t('AUTH_WAITING_BTN_BACK')}</Text></TouchableOpacity>
+				<TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backLogin}><Text style={[styles.backLoginText, { color: tc.brand }]}>{t('AUTH_WAITING_BTN_BACK')}</Text></TouchableOpacity>
 			</View>
 		</>
 	);
