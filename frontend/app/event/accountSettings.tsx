@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -298,6 +299,15 @@ export default function AccountSettingsScreen() {
     try {
       await updateUserInfo(userid, { name: nameValue.trim() })
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      // Also update the cached @backendProfile so Settings/profile reads the new name immediately
+      try {
+        const raw = await AsyncStorage.getItem('@backendProfile')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          parsed.name = nameValue.trim()
+          await AsyncStorage.setItem('@backendProfile', JSON.stringify(parsed))
+        }
+      } catch { /* ignore */ }
       setOriginalName(nameValue.trim())
       setNameSuccess(true)
       if (successTimerRef.current) clearTimeout(successTimerRef.current)

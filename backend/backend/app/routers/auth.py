@@ -306,6 +306,13 @@ def _send_verification_email(to_email: str, token: str):
     msg["From"] = f"{cfg['sender_name']} <{cfg['sender']}>"
     msg["To"] = to_email
     msg.set_content(f"Please verify your SportConnect account by visiting: {verify_link}\n\nIf you did not sign up, ignore this email.")
+    msg.add_alternative(f"""\
+<html><body style="font-family:Arial,sans-serif;padding:20px;color:#333">
+<h2 style="color:#FF6017">Confirm Your Signup</h2>
+<p>Click the button below to verify your SportConnect account:</p>
+<p style="margin:24px 0"><a href="{verify_link}" style="background:#FF6017;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Verify Email</a></p>
+<p style="color:#888;font-size:13px">If you did not sign up, you can safely ignore this email.</p>
+</body></html>""", subtype='html')
     try:
         with smtplib.SMTP(cfg['host'], cfg['port'], timeout=10) as smtp:
             smtp.starttls()

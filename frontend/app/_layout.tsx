@@ -21,9 +21,19 @@ import QueryProvider from '@/providers/query-provider'
 import { AppBootstrapProvider } from '@/providers/app-bootstrap-provider'
 import { LanguageProvider } from '@/providers/language-provider'
 import { ZaloAuthOverlayProvider } from '@/providers/zalo-auth-overlay-provider'
+import { AppThemeProvider, useTheme } from '@/providers/theme-provider'
 import { VoiceAutomationProvider } from '@/providers/voice-automation-provider'
 import FloatingVoiceButton from '@/components/voice/FloatingVoiceButton'
 import VoiceFocusOverlay from '@/components/voice/VoiceFocusOverlay'
+
+/**
+ * Status bar that adapts its foreground color to the current theme.
+ * Must sit inside AppThemeProvider.
+ */
+function ThemedStatusBar() {
+  const { isDark } = useTheme()
+  return <StatusBar style={isDark ? 'light' : 'dark'} />
+}
 
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -198,6 +208,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <ZaloAuthOverlayProvider>
+        <AppThemeProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <LanguageProvider>
             <QueryProvider>
@@ -214,12 +225,13 @@ export default function RootLayout() {
                   <FloatingVoiceButton />
                   <VoiceFocusOverlay />
                   </VoiceAutomationProvider>
-                  <StatusBar style="auto" />
+                  <ThemedStatusBar />
                 </AppBootstrapProvider>
               </AuthProvider>
             </QueryProvider>
           </LanguageProvider>
         </ThemeProvider>
+        </AppThemeProvider>
       </ZaloAuthOverlayProvider>
     </GestureHandlerRootView>
   )

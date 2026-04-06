@@ -846,7 +846,7 @@ export default function CourtRegisterPage() {
   const handleVerifyLocation = async () => {
     const a = address.trim()
     if (!a) {
-      setVerifyError('You must fill address first.')
+      setVerifyError(t('COURT_PANEL_ERR_FILL_ADDRESS'))
       return
     }
 
@@ -958,7 +958,7 @@ export default function CourtRegisterPage() {
 
     // Ensure the full procedure is complete before starting any Cloudinary upload.
     if (!verifiedCoord) {
-      setVerifyError(' Please verify court location first.')
+      setVerifyError(t('COURT_PANEL_ERR_VERIFY_LOC_FIRST'))
       return
     }
     if (!isScheduleValid) {
@@ -1083,7 +1083,7 @@ export default function CourtRegisterPage() {
       return
     }
     if (!verifiedCoord) {
-      setVerifyError(' Please verify court location first.')
+      setVerifyError(t('COURT_PANEL_ERR_VERIFY_LOC_FIRST'))
       return
     }
     if (!isScheduleValid) {

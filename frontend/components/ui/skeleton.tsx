@@ -1,6 +1,7 @@
 import React from 'react'
 import { type DimensionValue, StyleProp, StyleSheet, View, ViewStyle } from 'react-native'
 import { COLORS } from '@/constants/colors'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 import { MotiView } from 'moti'
 
 export function SkeletonPulse(props: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -23,10 +24,11 @@ export function SkeletonBox(props: {
   radius?: number
 }) {
   const { style, width = '100%', height, radius = 8 } = props
+  const tc = useThemeColors()
   return (
     <View
       style={[
-        styles.base,
+        { backgroundColor: tc.skeletonBase },
         { width, height, borderRadius: radius },
         style,
       ]}
@@ -44,8 +46,9 @@ export function SkeletonLine(props: {
 }
 
 export function SkeletonCard(props: { style?: StyleProp<ViewStyle> }) {
+  const tc = useThemeColors()
   return (
-    <View style={[styles.card, props.style]}>
+    <View style={[styles.card, { backgroundColor: tc.bgElevated, borderColor: tc.divider }, props.style]}>
       <View style={styles.cardInner}>
         <SkeletonLine width={'70%'} height={16} />
         <SkeletonLine width={'52%'} height={12} style={{ marginTop: 8 }} />

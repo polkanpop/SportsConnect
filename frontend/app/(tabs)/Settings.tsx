@@ -24,6 +24,8 @@ import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from '@/constants/translations';
 import { useLanguage } from '@/providers/language-provider';
+import { useTheme } from '@/providers/theme-provider';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useVoicePreference } from '@/hooks/use-voice-preference';
 import { usePushNotificationPreference } from '@/hooks/use-push-notification-preference';
 
@@ -31,6 +33,8 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { lang, toggleLanguage } = useLanguage();
   const isVietnamese = lang === 'vi';
+  const { isDark, toggleTheme } = useTheme();
+  const tc = useThemeColors();
   const { enabled: voiceEnabled, setEnabled: setVoiceEnabled } = useVoicePreference();
   const { enabled: pushEnabled, setEnabled: setPushEnabled } = usePushNotificationPreference();
 
@@ -48,6 +52,7 @@ export default function SettingsPage() {
       { key: 'account', keywords: [t('SETTINGS_ROW_ACCOUNT'), 'account', 'tài khoản', 'profile', 'hồ sơ'].join(' ').toLowerCase() },
       { key: 'notification', keywords: [t('SETTINGS_ROW_NOTIFICATION'), 'notification', 'thông báo'].join(' ').toLowerCase() },
       { key: 'language', keywords: [t('SETTINGS_ROW_LANGUAGE'), 'language', 'ngôn ngữ', t('SETTINGS_LANG_TOGGLE_LABEL')].join(' ').toLowerCase() },
+      { key: 'night_mode', keywords: [t('SETTINGS_ROW_NIGHT_MODE'), 'night', 'dark', 'theme', 'tối', 'chế độ'].join(' ').toLowerCase() },
       { key: 'feature', keywords: ['feature', 'tính năng', 'voice', 'giọng nói', 'voice automation', 'push notification'].join(' ').toLowerCase() },
       { key: 'court_register', keywords: [t('SETTINGS_ROW_COURT_REGISTER'), 'court', 'sân', 'register', 'đăng ký'].join(' ').toLowerCase() },
       { key: 'data_privacy', keywords: [t('SETTINGS_ROW_DATA_PRIVACY'), 'data', 'privacy', 'dữ liệu', 'quyền riêng tư'].join(' ').toLowerCase() },
@@ -57,7 +62,7 @@ export default function SettingsPage() {
   }, [t]);
   const showRow = useMemo(() => {
     const q = settingsSearch.trim().toLowerCase();
-    if (!q) return { account: true, notification: true, language: true, feature: true, court_register: true, data_privacy: true, sign_out: true };
+    if (!q) return { account: true, notification: true, language: true, night_mode: true, feature: true, court_register: true, data_privacy: true, sign_out: true };
     const result: Record<string, boolean> = {};
     for (const r of settingsRows) {
       result[r.key] = r.keywords.includes(q) || r.keywords.split(' ').some(w => w.startsWith(q));
@@ -132,13 +137,13 @@ export default function SettingsPage() {
   useFocusEffect(useCallback(() => { refreshName({ showRefresh: false }); }, [refreshName]));
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
-      <View style={styles.header}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
+      <View style={[styles.header]}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.title}>{t('SETTINGS_TITLE')}</Text>
+        <Text style={[styles.title, { color: tc.textPrimary }]}>{t('SETTINGS_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
@@ -159,52 +164,63 @@ export default function SettingsPage() {
           {profilePfp ? (
             <ExpoImage source={{ uri: profilePfp }} style={styles.profilePhoto} contentFit="cover" />
           ) : (
-            <Image source={ICONS.accountCircle} style={styles.profileIcon} />
+            <Image source={ICONS.accountCircle} style={[styles.profileIcon, { tintColor: tc.textPrimary }]} />
           )}
-          <Text style={styles.username}>{loadingName ? 'Loading...' : displayName || 'Guest'}</Text>
+          <Text style={[styles.username, { color: tc.textPrimary }]}>{loadingName ? 'Loading...' : displayName || 'Guest'}</Text>
         </TouchableOpacity>
         {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
 
         {/* Search */}
         <View style={styles.searchRow}>
-          <View style={styles.searchContainer}>
-            <Image source={ICONS.search} style={styles.searchIcon} />
+          <View style={[styles.searchContainer, { backgroundColor: tc.bgSurface }]}>
+            <Image source={ICONS.search} style={[styles.searchIcon, { tintColor: tc.textMuted }]} />
             <TextInput
               placeholder={t('SETTINGS_SEARCH_PLACEHOLDER')}
-              placeholderTextColor="#999"
+              placeholderTextColor={tc.placeholder}
               value={settingsSearch}
               onChangeText={setSettingsSearch}
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: tc.textPrimary }]}
               returnKeyType="search"
             />
           </View>
         </View>
 
-        {/* Section One: Personalization — Account + Language */}
-        {(showRow.account || showRow.language) && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('SETTINGS_SECTION_PERSONALIZATION')}</Text>
-          {showRow.account && <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} />}
+        {/* Section One: Personalization — Account + Language + Night Mode */}
+        {(showRow.account || showRow.language || showRow.night_mode) && (
+        <View style={[styles.card, { backgroundColor: tc.bgSurface }]}>
+          <Text style={[styles.sectionTitle, { color: tc.textMuted }]}>{t('SETTINGS_SECTION_PERSONALIZATION')}</Text>
+          {showRow.account && <SettingRow icon={ICONS.user} label={t('SETTINGS_ROW_ACCOUNT')} onPress={() => router.push('/event/accountSettings' as any)} tc={tc} />}
           {showRow.language && <SettingRowSwitch
             icon={ICONS.language}
             label={t('SETTINGS_ROW_LANGUAGE')}
             sublabel={t('SETTINGS_LANG_TOGGLE_LABEL')}
             value={isVietnamese}
             onValueChange={toggleLanguage}
+            tc={tc}
+          />}
+          {showRow.night_mode && <SettingRowSwitch
+            icon={isDark ? ICONS.darkTheme : ICONS.lightTheme}
+            label={t('SETTINGS_ROW_NIGHT_MODE')}
+            sublabel={t('SETTINGS_NIGHT_MODE_SUBLABEL')}
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColorTrue="#4C1D95"
+            tc={tc}
           />}
         </View>
         )}
 
         {/* Feature section: Voice Automation + Push Notifications */}
         {showRow.feature && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('SETTINGS_ROW_FEATURE')}</Text>
+        <View style={[styles.card, { backgroundColor: tc.bgSurface }]}>
+          <Text style={[styles.sectionTitle, { color: tc.textMuted }]}>{t('SETTINGS_ROW_FEATURE')}</Text>
           <SettingRowSwitch
             icon={ICONS.microphone}
             label={t('SETTINGS_FEATURE_VOICE_LABEL')}
             sublabel={t('SETTINGS_FEATURE_VOICE_SUBLABEL')}
             value={voiceEnabled}
             onValueChange={() => setVoiceEnabled(!voiceEnabled)}
+            tc={tc}
           />
           <SettingRowSwitch
             icon={ICONS.notifications}
@@ -212,16 +228,17 @@ export default function SettingsPage() {
             sublabel=""
             value={pushEnabled}
             onValueChange={() => setPushEnabled(!pushEnabled)}
+            tc={tc}
           />
         </View>
         )}
 
         {/* Section Two: Register & Policies — Court Register + Data & Privacy */}
         {(showRow.court_register || showRow.data_privacy) && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('SETTINGS_SECTION_REGISTER_POLICIES')}</Text>
-          {showRow.court_register && <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} />}
-          {showRow.data_privacy && <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} />}
+        <View style={[styles.card, { backgroundColor: tc.bgSurface }]}>
+          <Text style={[styles.sectionTitle, { color: tc.textMuted }]}>{t('SETTINGS_SECTION_REGISTER_POLICIES')}</Text>
+          {showRow.court_register && <SettingRow icon={ICONS.settingCourt} label={t('SETTINGS_ROW_COURT_REGISTER')} onPress={() => router.push('/event/courtRegister')} tc={tc} />}
+          {showRow.data_privacy && <SettingRow icon={ICONS.lock} label={t('SETTINGS_ROW_DATA_PRIVACY')} onPress={() => router.push('/event/dataPrivacy' as any)} tc={tc} />}
         </View>
         )}
 
@@ -251,15 +268,15 @@ export default function SettingsPage() {
           <View style={styles.modalBackdrop} />
         </TouchableWithoutFeedback>
         <View style={styles.modalCenteredWrapper} pointerEvents="box-none">
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('SETTINGS_MODAL_SIGN_OUT_TITLE')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('SETTINGS_MODAL_SIGN_OUT_TITLE')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
+                style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12, backgroundColor: tc.bgSurface }]}
                 onPress={closeSignOutModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonCancelText}>{t('SETTINGS_MODAL_BTN_RETURN')}</Text>
+                <Text style={[styles.modalButtonCancelText, { color: tc.textPrimary }]}>{t('SETTINGS_MODAL_BTN_RETURN')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
@@ -282,25 +299,27 @@ const SettingRow = ({
   label,
   onPress,
   disabled,
+  tc,
 }: {
   icon: any;
   label: string;
   onPress?: () => void;
   disabled?: boolean;
+  tc?: any;
 }) => (
   <TouchableOpacity
     activeOpacity={disabled ? 1 : 0.7}
-    style={[styles.row, disabled && styles.rowDisabled]}
+    style={[styles.row, disabled && styles.rowDisabled, tc && { borderBottomColor: tc.divider }]}
     onPress={disabled ? undefined : onPress}
     disabled={!!disabled}
   >
     <View style={styles.rowLeft}>
-      <Image source={icon} style={styles.rowIcon} />
-      <Text style={styles.rowText}>{label}</Text>
+      <Image source={icon} style={[styles.rowIcon, { tintColor: tc?.textPrimary ?? '#000' }]} />
+      <Text style={[styles.rowText, { color: tc?.textPrimary ?? '#000' }]}>{label}</Text>
     </View>
     <Image
       source={ICONS.arrowright}
-      style={{ width: 18, height: 18, tintColor: "#555" }}
+      style={{ width: 18, height: 18, tintColor: tc?.textMuted ?? '#555' }}
     />
   </TouchableOpacity>
 );
@@ -312,25 +331,29 @@ const SettingRowSwitch = ({
   sublabel,
   value,
   onValueChange,
+  trackColorTrue,
+  tc,
 }: {
   icon: any;
   label: string;
   sublabel: string;
   value: boolean;
   onValueChange: () => void;
+  trackColorTrue?: string;
+  tc?: any;
 }) => (
-  <View style={[styles.row, { borderBottomWidth: 0 }]}>
+  <View style={[styles.row, { borderBottomWidth: 0 }, tc && { borderBottomColor: tc.divider }]}>
     <View style={styles.rowLeft}>
-      <Image source={icon} style={styles.rowIcon} />
+      <Image source={icon} style={[styles.rowIcon, { tintColor: tc?.textPrimary ?? '#000' }]} />
       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, flexShrink: 1 }}>
-        <Text style={[styles.rowText, { flexShrink: 1 }]}>{label}</Text>
-        {sublabel ? <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8 }]}>{sublabel}</Text> : null}
+        <Text style={[styles.rowText, { flexShrink: 1, color: tc?.textPrimary ?? '#000' }]}>{label}</Text>
+        {sublabel ? <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8, color: tc?.textMuted ?? '#888' }]}>{sublabel}</Text> : null}
       </View>
     </View>
     <Switch
       value={value}
       onValueChange={onValueChange}
-      trackColor={{ false: '#D1D5DB', true: COLORS.brandOrangeDeep }}
+      trackColor={{ false: tc?.border ?? '#D1D5DB', true: trackColorTrue ?? COLORS.brandOrangeDeep }}
       thumbColor="#FFFFFF"
     />
   </View>

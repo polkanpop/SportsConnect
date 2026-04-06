@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTranslation } from '@/constants/translations'
 import { useLanguage } from '@/providers/language-provider'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { signupSchema, SignupFormData, isPhoneInput } from '@/lib/signupSchema'
@@ -36,6 +37,7 @@ const STRENGTH_COLORS = ['#dc2626', '#f97316', '#eab308', '#84cc16', '#22c55e']
 export default function SignUpScreen() {
   const { t } = useTranslation()
   const { lang } = useLanguage()
+  const tc = useThemeColors()
   const STRENGTH = [
     { label: t('AUTH_STRENGTH_VERY_WEAK'), color: STRENGTH_COLORS[0] },
     { label: t('AUTH_STRENGTH_WEAK'),      color: STRENGTH_COLORS[1] },
@@ -114,7 +116,7 @@ export default function SignUpScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLOR.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -123,66 +125,66 @@ export default function SignUpScreen() {
         >
           {/* ── Header ── */}
           <Text style={styles.screenTitle}>{t('AUTH_SIGNUP_TITLE')}</Text>
-          <Text style={styles.subtitle}>{t('AUTH_SIGNUP_SUBTITLE')}</Text>
+          <Text style={[styles.subtitle, { color: tc.textSecondary }]}>{t('AUTH_SIGNUP_SUBTITLE')}</Text>
 
           {generalError   ? <Text style={styles.feedbackError}>{generalError}</Text>   : null}
           {successMessage ? <Text style={styles.feedbackSuccess}>{successMessage}</Text> : null}
 
           {/* ── Display Name ── */}
-          <Text style={styles.label}>{t('AUTH_LABEL_DISPLAY_NAME')}</Text>
+          <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_LABEL_DISPLAY_NAME')}</Text>
           <Controller
             control={control}
             name="accountName"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 placeholder={t('AUTH_LABEL_DISPLAY_NAME')}
-                placeholderTextColor={COLOR.dark300}
+                placeholderTextColor={tc.placeholder}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
                 autoCapitalize="words"
-                style={[styles.input, !!errors.accountName && styles.inputError]}
+                style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.border, color: tc.textPrimary }, !!errors.accountName && styles.inputError]}
               />
             )}
           />
           {errors.accountName && <Text style={styles.fieldError}>{errors.accountName.message}</Text>}
 
           {/* ── Username ── */}
-          <Text style={styles.label}>{t('AUTH_LABEL_USERNAME')}</Text>
+          <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_LABEL_USERNAME')}</Text>
           <Controller
             control={control}
             name="username"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 placeholder={t('AUTH_LABEL_USERNAME')}
-                placeholderTextColor={COLOR.dark300}
+                placeholderTextColor={tc.placeholder}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={[styles.input, !!errors.username && styles.inputError]}
+                style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.border, color: tc.textPrimary }, !!errors.username && styles.inputError]}
               />
             )}
           />
           {errors.username && <Text style={styles.fieldError}>{errors.username.message}</Text>}
 
           {/* ── Email or Phone Number ── */}
-          <Text style={styles.label}>{t('AUTH_LABEL_EMAIL_OR_PHONE')}</Text>
+          <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_LABEL_EMAIL_OR_PHONE')}</Text>
           <Controller
             control={control}
             name="emailOrPhone"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 placeholder={t('AUTH_LABEL_EMAIL_OR_PHONE')}
-                placeholderTextColor={COLOR.dark300}
+                placeholderTextColor={tc.placeholder}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
                 keyboardType="default"
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={[styles.input, !!errors.emailOrPhone && styles.inputError]}
+                style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.border, color: tc.textPrimary }, !!errors.emailOrPhone && styles.inputError]}
               />
             )}
           />
@@ -198,25 +200,25 @@ export default function SignUpScreen() {
           {/* ── Password (email mode only) ── */}
           {!isPhone && (
             <>
-              <Text style={styles.label}>{t('AUTH_LABEL_PASSWORD')}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_LABEL_PASSWORD')}</Text>
               <Controller
                 control={control}
                 name="password"
                 render={({ field: { onChange, onBlur, value } }) => (
-                  <View style={[styles.passwordRow, !!errors.password && styles.inputRowError]}>
+                  <View style={[styles.passwordRow, { backgroundColor: tc.bgInput, borderColor: tc.border }, !!errors.password && styles.inputRowError]}>
                     <TextInput
                       placeholder={t('AUTH_LABEL_PASSWORD')}
-                      placeholderTextColor={COLOR.dark300}
+                      placeholderTextColor={tc.placeholder}
                       secureTextEntry={!passwordVisible}
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
-                      style={styles.passwordInput}
+                      style={[styles.passwordInput, { color: tc.textPrimary }]}
                     />
                     <Pressable onPress={() => setPasswordVisible((p) => !p)} hitSlop={8}>
                       <Image
                         source={passwordVisible ? ICONS.notEye : ICONS.eye}
-                        style={styles.eyeIcon}
+                        style={[styles.eyeIcon, { tintColor: tc.textMuted }]}
                       />
                     </Pressable>
                   </View>
@@ -247,25 +249,25 @@ export default function SignUpScreen() {
               {errors.password && <Text style={styles.fieldError}>{errors.password.message}</Text>}
 
               {/* ── Confirm Password ── */}
-              <Text style={styles.label}>{t('AUTH_LABEL_CONFIRM_PASSWORD')}</Text>
+              <Text style={[styles.label, { color: tc.textSecondary }]}>{t('AUTH_LABEL_CONFIRM_PASSWORD')}</Text>
               <Controller
                 control={control}
                 name="confirmPassword"
                 render={({ field: { onChange, onBlur, value } }) => (
-                  <View style={[styles.passwordRow, !!errors.confirmPassword && styles.inputRowError]}>
+                  <View style={[styles.passwordRow, { backgroundColor: tc.bgInput, borderColor: tc.border }, !!errors.confirmPassword && styles.inputRowError]}>
                     <TextInput
                       placeholder={t('AUTH_LABEL_CONFIRM_PASSWORD')}
-                      placeholderTextColor={COLOR.dark300}
+                      placeholderTextColor={tc.placeholder}
                       secureTextEntry={!confirmVisible}
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
-                      style={styles.passwordInput}
+                      style={[styles.passwordInput, { color: tc.textPrimary }]}
                     />
                     <Pressable onPress={() => setConfirmVisible((p) => !p)} hitSlop={8}>
                       <Image
                         source={confirmVisible ? ICONS.notEye : ICONS.eye}
-                        style={styles.eyeIcon}
+                        style={[styles.eyeIcon, { tintColor: tc.textMuted }]}
                       />
                     </Pressable>
                   </View>
@@ -284,7 +286,7 @@ export default function SignUpScreen() {
                 <View style={[styles.checkboxBase, value && styles.checkboxChecked]}>
                   {value && <Image source={ICONS.checkSmall} style={styles.checkboxTick} />}
                 </View>
-                <Text style={styles.textDark}>
+                <Text style={[styles.textDark, { color: tc.textSecondary }]}>
                   {t('AUTH_SIGNUP_TERMS_AGREE')}{' '}
                   <Text
                     style={styles.termsLink}
@@ -317,7 +319,7 @@ export default function SignUpScreen() {
 
           {/* ── Footer ── */}
           <View style={styles.footerRow}>
-            <Text style={styles.textDark}>{t('AUTH_LABEL_ALREADY_HAVE_ACCOUNT')}</Text>
+            <Text style={[styles.textDark, { color: tc.textSecondary }]}>{t('AUTH_LABEL_ALREADY_HAVE_ACCOUNT')}</Text>
             <Pressable onPress={() => router.replace('/(auth)/login')}>
               <Text style={styles.footerLink}> {t('AUTH_SIGNUP_LINK_SIGN_IN')}</Text>
             </Pressable>

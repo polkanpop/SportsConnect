@@ -63,6 +63,7 @@
   import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
   import { regionToZoom } from '@/lib/goong-map'
   import { useTranslation } from '@/constants/translations'
+  import { useThemeColors, ThemeTokens } from '@/hooks/use-theme-colors'
 
   type Region = {
     latitude: number;
@@ -277,6 +278,7 @@
   export default function App() {
     const router = useRouter();
     const { t, language } = useTranslation();
+    const tc = useThemeColors();
     // Favorite state for selected marker
     const [isFavorite, setIsFavorite] = useState(false);
     // Image zoom
@@ -1309,6 +1311,8 @@
     const handleOverlayPress = () => {
       setOpenDropdown(null);
     };
+
+    const styles = useMemo(() => createThemedStyles(tc), [tc]);
 
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -2399,7 +2403,7 @@
   }
 
   // Styles
-  const styles = StyleSheet.create({
+  function createThemedStyles(tc: ThemeTokens) { return StyleSheet.create({
     container: {
       flex: 1,
     },
@@ -2460,7 +2464,7 @@
 
     // Individual chip (no flex:1 so it sizes to content)
     filterChip: {
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
       borderRadius: 24,
       paddingHorizontal: 12,
       paddingVertical: 8,
@@ -2468,7 +2472,7 @@
       alignItems: "center",
       justifyContent: "space-between",
       elevation: 4,
-      shadowColor: "#000",
+      shadowColor: tc.shadow,
       shadowOpacity: 0.08,
       shadowRadius: 4,
       marginRight: 8, // spacing between chips
@@ -2486,6 +2490,7 @@
     filterChipText: {
       fontSize: 14,
       fontWeight: "600",
+      color: tc.textPrimary,
     },
     filterArrow: {
       width: 14,
@@ -2515,12 +2520,12 @@
       zIndex: 60,
     },
     dropdown: {
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
       borderRadius: 8,
       paddingVertical: 8,
       paddingHorizontal: 8,
       elevation: 6,
-      shadowColor: "#000",
+      shadowColor: tc.shadow,
       shadowOpacity: 0.08,
       shadowRadius: 6,
       maxHeight: 260,
@@ -2544,6 +2549,7 @@
     },
     dropdownItemText: {
       fontSize: 15,
+      color: tc.textPrimary,
     },
     optionCheck: {
       width: 20,
@@ -2552,7 +2558,7 @@
     },
     sep: {
       height: 1,
-      backgroundColor: "#eee",
+      backgroundColor: tc.divider,
       marginHorizontal: 6,
     },
     dropdownFooter: {
@@ -2567,18 +2573,18 @@
     distanceHeaderTitle: {
       fontSize: 13,
       fontWeight: "700",
-      color: COLORS.slate900,
+      color: tc.textPrimary,
       marginBottom: 6,
     },
     distanceInput: {
       borderWidth: 1,
-      borderColor: COLORS.neutral450,
+      borderColor: tc.border,
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 10,
       fontSize: 14,
-      color: COLORS.slate900,
-      backgroundColor: COLORS.neutral0,
+      color: tc.textPrimary,
+      backgroundColor: tc.bgInput,
     },
     distanceInputError: {
       borderColor: COLORS.red,
@@ -2603,12 +2609,12 @@
       top: 160,
       width: "90%",
       alignSelf: "center",
-      backgroundColor: COLORS.lightgrey,
+      backgroundColor: tc.bgSurface,
       borderRadius: 8,
       maxHeight: 205,
       zIndex: 70, // keep above MapView (Android needs elevation too)
       elevation: 8,
-      shadowColor: "#000",
+      shadowColor: tc.shadow,
       shadowOpacity: 0.12,
       shadowRadius: 8,
       padding: 8,
@@ -2616,7 +2622,7 @@
     listItem: {
       padding: 12,
       borderBottomWidth: 1,
-      borderBottomColor: "#ddd",
+      borderBottomColor: tc.divider,
     },
     listItemRow: {
       flexDirection: "row",
@@ -2631,14 +2637,15 @@
     listItemTitle: {
       fontSize: 16,
       fontWeight: "bold",
+      color: tc.textPrimary,
     },
     listItemSubtitle: {
       fontSize: 14,
-      color: "#666",
+      color: tc.textSecondary,
     },
     listItemDistanceRight: {
       fontSize: 13,
-      color: "#666",
+      color: tc.textSecondary,
       fontWeight: "600",
       marginTop: 2,
       flexShrink: 0,
@@ -2653,12 +2660,12 @@
     noResultsText: {
       paddingVertical: 10,
       paddingHorizontal: 6,
-      color: COLORS.slate600,
+      color: tc.textSecondary,
       fontSize: 14,
       fontWeight: "600",
     },
     bottomSheetBackground: {
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgSurface,
     },
     bottomSheetContent: {
       alignItems: "flex-start",
@@ -2675,18 +2682,18 @@
       borderRadius: 16,
       overflow: 'hidden',
       marginBottom: 0,
-      backgroundColor: COLORS.neutral150,
+      backgroundColor: tc.bgInput,
       position: 'relative',
     },
     sheetHeaderCard: {
       width: '100%',
       marginTop: -56,
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
       borderRadius: 16,
       paddingTop: 8,
       paddingBottom: 6,
       paddingHorizontal: 10,
-      shadowColor: '#000',
+      shadowColor: tc.shadow,
       shadowOpacity: 0.08,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 3 },
@@ -2703,20 +2710,20 @@
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: COLORS.neutral150,
+      backgroundColor: tc.bgInput,
     },
     sheetCoverTitle: {
       flex: 1,
       fontSize: 16,
       fontWeight: '700',
-      color: COLORS.neutral975,
+      color: tc.textPrimary,
       marginRight: 10,
     },
     sheetCoverAddress: {
       marginTop: 6,
       fontSize: 14,
       fontWeight: '600',
-      color: COLORS.neutral850,
+      color: tc.textSecondary,
     },
     topRightActions: {
       position: "absolute",
@@ -2731,7 +2738,7 @@
       marginTop: 0,
       padding: 6,
       borderRadius: 20,
-      backgroundColor: '#eee',
+      backgroundColor: tc.bgInput,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -2773,7 +2780,7 @@
     },
     placeholderText: {
       fontSize: 16,
-      color: "#888",
+      color: tc.textMuted,
     },
     titleRow: {
       flexDirection: 'row',
@@ -2792,6 +2799,7 @@
       flexShrink: 1,
       flex: 1,
       marginRight: 12,
+      color: tc.textPrimary,
     },
     actionRow: {
       flexDirection: 'row',
@@ -2800,7 +2808,7 @@
     },
     markerAddress: {
       fontSize: 16,
-      color: "#666",
+      color: tc.textSecondary,
       textAlign: "left",
       marginTop: 10,
       marginBottom: 16,
@@ -2808,9 +2816,9 @@
     googleMapsFloatingButton: {
       position: 'absolute',
       right: 20,
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
       borderRadius: 50,
-      shadowColor: '#000',
+      shadowColor: tc.shadow,
       shadowOpacity: 0.2,
       shadowRadius: 4,
       elevation: 5,
@@ -2823,20 +2831,20 @@
     },
     markerAddressLabel: {
       fontWeight: 'bold',
-      color: "#666",
+      color: tc.textSecondary,
     },
     priceText: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: '#333',
+      color: tc.textPrimary,
       marginBottom: 6,
     },
     scheduleBox: {
       width: '100%',
-      backgroundColor: COLORS.neutral0,
+      backgroundColor: tc.bgSurface,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: COLORS.neutral450,
+      borderColor: tc.border,
       paddingVertical: 12,
       paddingHorizontal: 12,
     },
@@ -2851,8 +2859,8 @@
       paddingVertical: 7,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: COLORS.neutral350,
-      backgroundColor: COLORS.white,
+      borderColor: tc.border,
+      backgroundColor: tc.bgElevated,
     },
     subCourtSwitchPillActive: {
       backgroundColor: COLORS.brandOrangeDeep,
@@ -2861,7 +2869,7 @@
     subCourtSwitchText: {
       fontSize: 13,
       fontWeight: '700',
-      color: COLORS.slate600,
+      color: tc.textSecondary,
     },
     subCourtSwitchTextActive: {
       color: COLORS.white,
@@ -2869,7 +2877,7 @@
     scheduleTimeText: {
       fontSize: 14,
       fontWeight: '700',
-      color: COLORS.slate900,
+      color: tc.textPrimary,
       marginBottom: 10,
     },
     scheduleTimeTextInline: {
@@ -2886,8 +2894,8 @@
       paddingVertical: 6,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: COLORS.neutral350,
-      backgroundColor: COLORS.white,
+      borderColor: tc.border,
+      backgroundColor: tc.bgElevated,
       marginRight: 8,
       marginBottom: 8,
     },
@@ -2897,7 +2905,7 @@
     scheduleDayText: {
       fontSize: 13,
       fontWeight: '700',
-      color: COLORS.slate600,
+      color: tc.textSecondary,
     },
     imagesRow: {
       paddingVertical: 6,
@@ -2911,15 +2919,15 @@
       height: DETAIL_IMAGE_TILE_HEIGHT,
       borderRadius: 12,
       marginRight: 12,
-      backgroundColor: '#eee',
+      backgroundColor: tc.bgInput,
     },
     // Custom floating “My Location” button
     myLocationButton: {
       position: "absolute",
       right: 20,
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
       borderRadius: 50,
-      shadowColor: "#000",
+      shadowColor: tc.shadow,
       shadowOpacity: 0.2,
       shadowRadius: 4,
       elevation: 5,
@@ -2970,23 +2978,23 @@
       width: '100%',
       flexDirection: 'row',
       borderWidth: 1,
-      borderColor: COLORS.neutral375,
+      borderColor: tc.border,
       borderRadius: 12,
       overflow: 'hidden',
       marginTop: 2,
       marginBottom: 12,
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
     },
     sheetTabBtn: {
       flex: 1,
       paddingVertical: 10,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: COLORS.white,
+      backgroundColor: tc.bgElevated,
     },
     sheetTabBtnDivider: {
       borderRightWidth: 1,
-      borderRightColor: COLORS.neutral375,
+      borderRightColor: tc.border,
     },
     sheetTabBtnActive: {
       backgroundColor: COLORS.brandOrangeDeep,
@@ -2994,7 +3002,7 @@
     sheetTabBtnText: {
       fontSize: 14,
       fontWeight: '700',
-      color: COLORS.slate600,
+      color: tc.textSecondary,
     },
     sheetTabBtnTextActive: {
       color: COLORS.white,
@@ -3016,7 +3024,7 @@
       width: 16,
       height: 16,
       resizeMode: 'contain',
-      tintColor: COLORS.slate600,
+      tintColor: tc.textSecondary,
       transform: [{ rotate: '0deg' }],
       marginTop: 2,
     },
@@ -3030,16 +3038,16 @@
       justifyContent: 'center',
     },
     transportErrorText: {
-      color: COLORS.slate600,
+      color: tc.textSecondary,
       fontSize: 13,
       fontWeight: '600',
     },
     transportBox: {
       width: '100%',
-      backgroundColor: COLORS.neutral0,
+      backgroundColor: tc.bgSurface,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: COLORS.neutral450,
+      borderColor: tc.border,
       overflow: 'hidden',
     },
     transportRow: {
@@ -3049,7 +3057,7 @@
       paddingVertical: 12,
       paddingHorizontal: 12,
       borderBottomWidth: 1,
-      borderBottomColor: COLORS.neutral350,
+      borderBottomColor: tc.divider,
     },
     transportRowLast: {
       flexDirection: 'row',
@@ -3072,19 +3080,19 @@
     transportLabel: {
       fontSize: 14,
       fontWeight: '700',
-      color: COLORS.slate900,
+      color: tc.textPrimary,
     },
     transportValue: {
       fontSize: 14,
       fontWeight: '700',
-      color: COLORS.slate600,
+      color: tc.textSecondary,
       marginLeft: 12,
       flexShrink: 0,
       textAlign: 'right',
     },
     modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },
-    modalCard: { width:'85%', backgroundColor:'#fff', padding:20, borderRadius:14, elevation:6 },
-    modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color:'#222' },
+    modalCard: { width:'85%', backgroundColor: tc.bgElevated, padding:20, borderRadius:14, elevation:6 },
+    modalTitle: { fontSize:16, fontWeight:'700', marginBottom:8, color: tc.textPrimary },
     modalActions: { flexDirection:'row', justifyContent:'flex-end', marginTop:18 },
     modalBtn: { paddingVertical:10, paddingHorizontal:18, borderRadius:10, marginLeft:10 },
     modalCancel: { backgroundColor: COLORS.danger },
@@ -3092,14 +3100,14 @@
     weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
     scheduleHeaderRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
     weekNavInline: { flexDirection:'row', alignItems:'center' },
-    navBtn: { padding:8, borderRadius:10, backgroundColor:'#e0e0e0', marginHorizontal:4 },
+    navBtn: { padding:8, borderRadius:10, backgroundColor: tc.bgInput, marginHorizontal:4 },
     navBtnDisabled: { opacity:0.35 },
-    navIcon: { width:20, height:20, tintColor:'#333', resizeMode:'contain' },
-    dayCell: { flex: 1, marginHorizontal: 2, paddingVertical: 10, borderRadius: 10, backgroundColor: '#e9e9e9', alignItems: 'center' },
+    navIcon: { width:20, height:20, tintColor: tc.textPrimary, resizeMode:'contain' },
+    dayCell: { flex: 1, marginHorizontal: 2, paddingVertical: 10, borderRadius: 10, backgroundColor: tc.bgInput, alignItems: 'center' },
     dayCellDisabled: { opacity: 0.35 },
-    dayLabel: { fontSize: 12, fontWeight: '600', color: '#222' },
+    dayLabel: { fontSize: 12, fontWeight: '600', color: tc.textPrimary },
     todayUnderline: { textDecorationLine: 'underline' },
-    dayDate: { fontSize: 14, fontWeight: '700', color: '#111', marginTop: 4 },
-    sectionHeader: { fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 8, color: '#333' },
-    placeholderSection: { padding: 20, backgroundColor: '#f9f9f9', borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 10 },
-  });
+    dayDate: { fontSize: 14, fontWeight: '700', color: tc.textPrimary, marginTop: 4 },
+    sectionHeader: { fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 8, color: tc.textPrimary },
+    placeholderSection: { padding: 20, backgroundColor: tc.bgSurface, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 10 },
+  }); }

@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Image, View, Pressable, StyleSheet, useWindowDimensions, Animated } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 
 const AnimatedTabIcon = ({
   focused,
@@ -105,7 +106,7 @@ const MapTabButton = (props: any) => {
     </Pressable>
   );
 };
-const TabBarBackground = ({ width, height }: { width: number; height: number }) => {
+const TabBarBackground = ({ width, height, fill }: { width: number; height: number; fill?: string }) => {
   const center = width / 2;
   
   // Geometry for the "socket" cutout
@@ -148,7 +149,7 @@ const TabBarBackground = ({ width, height }: { width: number; height: number }) 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', bottom: 0, width: width, height: height }}>
       <Svg width={width} height={height}>
-        <Path d={d} fill={COLORS.white} />
+        <Path d={d} fill={fill ?? COLORS.white} />
       </Svg>
     </View>
   );
@@ -157,10 +158,9 @@ const TabBarBackground = ({ width, height }: { width: number; height: number }) 
 const TabLayout = () => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const tc = useThemeColors();
 
   // Base height for the tab background + safe area bottom inset
-  // Lower overall tab bar height to match desired look
-  // Slightly increase height for label stability while remaining compact
   const tabBgHeight = useMemo(() => 55 + (insets?.bottom ?? 0), [insets]);
 
   return (
@@ -169,26 +169,25 @@ const TabLayout = () => {
         lazy: true,
         freezeOnBlur: true,
         tabBarShowLabel: false,
-        tabBarBackground: () => (width > 0 ? <TabBarBackground width={width} height={tabBgHeight} /> : null),
+        tabBarBackground: () => (width > 0 ? <TabBarBackground width={width} height={tabBgHeight} fill={tc.tabBg} /> : null),
         tabBarStyle: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          backgroundColor: "transparent", // Transparent to show SVG
-          height: tabBgHeight, // Match SVG height + safe area
-          elevation: 0, // Remove default shadow
+          backgroundColor: "transparent",
+          height: tabBgHeight,
+          elevation: 0,
           borderTopWidth: 0,
         },
           tabBarItemStyle: {
           justifyContent: "center",
           alignItems: "center",
           paddingTop: 8,
-          // Keep a consistent touch target without shifting layout
           height: 60,
         },
-        tabBarActiveTintColor: COLORS.brandOrangeDeep,
-        tabBarInactiveTintColor: COLORS.black,
+        tabBarActiveTintColor: tc.tabActive,
+        tabBarInactiveTintColor: tc.tabInactive,
       }}
     >
       {/* Reusable animated icon + label renderer */}
@@ -209,7 +208,8 @@ const TabLayout = () => {
             <AnimatedTabIcon
               focused={focused}
               icon={ICONS.home}
-              activeTintColor={COLORS.brandOrangeDeep}
+              activeTintColor={tc.tabActive}
+              inactiveTintColor={tc.tabInactive}
             />
           ),
         }}
@@ -220,7 +220,7 @@ const TabLayout = () => {
           title: "Activities",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.activity} xOffset={-8} />
+            <AnimatedTabIcon focused={focused} icon={ICONS.activity} xOffset={-8} activeTintColor={tc.tabActive} inactiveTintColor={tc.tabInactive} />
           ),
         }}
       />
@@ -239,7 +239,7 @@ const TabLayout = () => {
           title: "Notification",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.notifications} xOffset={8} />
+            <AnimatedTabIcon focused={focused} icon={ICONS.notifications} xOffset={8} activeTintColor={tc.tabActive} inactiveTintColor={tc.tabInactive} />
           ),
         }}
       />
@@ -249,7 +249,7 @@ const TabLayout = () => {
           title: "Settings",
           headerShown: false,
           tabBarIcon: ({ focused }: { focused: boolean }) => (
-            <AnimatedTabIcon focused={focused} icon={ICONS.settings} />
+            <AnimatedTabIcon focused={focused} icon={ICONS.settings} activeTintColor={tc.tabActive} inactiveTintColor={tc.tabInactive} />
           ),
         }}
       />

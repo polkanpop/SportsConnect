@@ -8,6 +8,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, SectionList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 
 function parseNotificationDate(raw: string): Date | null {
   if (typeof raw !== 'string') return null
@@ -41,6 +42,7 @@ function firstNonEmptyText(...values: unknown[]): string | null {
 
 export default function NotificationsPage() {
   const { t } = useTranslation();
+  const tc = useThemeColors();
   const { dashboard, notifications, userId } = useAppBootstrap()
   const [selectedCategory, setSelectedCategory] = useState<"All" | "Court" | "Event" | "Training">("All");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -528,13 +530,13 @@ export default function NotificationsPage() {
       </View>
       <View style={styles.notificationContent}>
         <View style={styles.titleTimeRow}>
-          <Text style={styles.notificationTitle} numberOfLines={1}>
+          <Text style={[styles.notificationTitle, { color: tc.textPrimary }]} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text style={styles.notificationTime}>{formatRowTime(item.time)}</Text>
+          <Text style={[styles.notificationTime, { color: tc.textMuted }]}>{formatRowTime(item.time)}</Text>
         </View>
         {expandedIds.has(item.notificationid) && (
-          <Text style={styles.notificationMessage}>{getDisplayMessage(item)}</Text>
+          <Text style={[styles.notificationMessage, { color: tc.textSecondary }]}>{getDisplayMessage(item)}</Text>
         )}
         {(item.kind || '').toLowerCase() === 'incoming_booking' && (
           <TouchableOpacity
@@ -549,23 +551,23 @@ export default function NotificationsPage() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
-      <View style={styles.header}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
+      <View style={[styles.header, { backgroundColor: tc.bgBase }]}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.headerTitle}>{t('NOTIF_HEADER_TITLE')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('NOTIF_HEADER_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
 
-      <View style={styles.topDivider} />
+      <View style={[styles.topDivider, { backgroundColor: tc.divider }]} />
 
       <View style={styles.toolbar}>
         <View style={styles.dropdownWrap}>
           <TouchableOpacity
-            style={styles.dropdownButton}
+            style={[styles.dropdownButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}
             onPress={() => setDropdownOpen(v => !v)}
             activeOpacity={0.85}
           >
-            <Text style={styles.dropdownButtonText}>
+            <Text style={[styles.dropdownButtonText, { color: tc.textPrimary }]}>
               {selectedCategory === 'All' ? t('COMMON_FILTER_ALL') :
                selectedCategory === 'Court' ? t('COMMON_FILTER_COURT') :
                selectedCategory === 'Event' ? t('COMMON_FILTER_EVENT') :
@@ -574,7 +576,7 @@ export default function NotificationsPage() {
             <Image source={ICONS.arrowdown} style={[styles.dropdownArrow, dropdownOpen ? styles.dropdownArrowOpen : null]} />
           </TouchableOpacity>
           {dropdownOpen && (
-            <View style={styles.dropdownMenu}>
+            <View style={[styles.dropdownMenu, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {(['All', 'Court', 'Event', 'Training'] as const).map(opt => (
                 <TouchableOpacity
                   key={opt}
@@ -615,7 +617,7 @@ export default function NotificationsPage() {
 
       {/* Sticky delete bar — always visible at top when in delete mode */}
       {deleteMode && (
-        <View style={styles.deleteModeBar}>
+        <View style={[styles.deleteModeBar, { backgroundColor: tc.bgSurface, borderBottomColor: tc.divider }]}>
           <TouchableOpacity style={styles.deleteWrap} onPress={exitDeleteMode} activeOpacity={0.85} disabled={actionLoading}>
             <Image source={ICONS.closeMenu} style={styles.closeIcon} />
           </TouchableOpacity>
@@ -635,8 +637,8 @@ export default function NotificationsPage() {
         keyExtractor={(item) => item.notificationid.toString()}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
-          <View style={[styles.sectionHeaderWrap, section.title === 'Today' ? styles.sectionHeaderWrapFirst : styles.sectionHeaderWrapAfterToday]}>
-            <Text style={styles.sectionHeaderText}>
+          <View style={[styles.sectionHeaderWrap, { backgroundColor: tc.bgBase }, section.title === 'Today' ? styles.sectionHeaderWrapFirst : styles.sectionHeaderWrapAfterToday]}>
+            <Text style={[styles.sectionHeaderText, { color: tc.textPrimary }]}>
               {section.title === 'Today' ? t('NOTIF_SECTION_TODAY') :
                section.title === 'Yesterday' ? t('NOTIF_SECTION_YESTERDAY') :
                section.title === 'Earlier' ? t('NOTIF_SECTION_EARLIER') :
@@ -670,9 +672,9 @@ export default function NotificationsPage() {
         onRequestClose={() => setDeleteConfirmVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('NOTIF_MODAL_DELETE_TITLE')}</Text>
-            <Text style={styles.modalText}>{t('NOTIF_MODAL_DELETE_BODY')}</Text>
+          <View style={[styles.modalCard, { backgroundColor: tc.bgElevated }]}>
+            <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('NOTIF_MODAL_DELETE_TITLE')}</Text>
+            <Text style={[styles.modalText, { color: tc.textSecondary }]}>{t('NOTIF_MODAL_DELETE_BODY')}</Text>
             <View style={styles.modalActions}>
               <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setDeleteConfirmVisible(false)}>
                 <Text style={styles.modalBtnCancelText}>{t('NOTIF_MODAL_BTN_CANCEL')}</Text>

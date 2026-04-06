@@ -56,6 +56,13 @@ def _send_password_reset_email(to_email: str, token_plain: str) -> bool:
     msg["From"] = f"{cfg['sender_name']} <{cfg['sender']}>"
     msg["To"] = to_email
     msg.set_content(f"Reset Password\n\nFollow this link to reset your password: {link}\nIf you did not request a reset, you can ignore this email.")
+    msg.add_alternative(f"""\
+<html><body style="font-family:Arial,sans-serif;padding:20px;color:#333">
+<h2 style="color:#FF6017">Reset Your Password</h2>
+<p>Click the button below to reset your password:</p>
+<p style="margin:24px 0"><a href="{link}" style="background:#FF6017;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a></p>
+<p style="color:#888;font-size:13px">If you did not request a reset, you can safely ignore this email.</p>
+</body></html>""", subtype='html')
     try:
         with smtplib.SMTP(cfg['host'], cfg['port'], timeout=10) as smtp:
             smtp.starttls()

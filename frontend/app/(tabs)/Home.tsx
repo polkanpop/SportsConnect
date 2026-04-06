@@ -27,9 +27,11 @@ import CourtPanel from "@/app/event/courtPanel";
 import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
+import { useThemeColors } from '@/hooks/use-theme-colors'
 
 export default function Home() {
   const router = useRouter();
+  const tc = useThemeColors();
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null
@@ -96,7 +98,7 @@ export default function Home() {
     fontSize: 14,
     marginTop: 6,
     textAlign: "center" as const,
-    color: '#111',
+    color: tc.textPrimary,
   };
 
   // Category data with navigation routes
@@ -521,19 +523,19 @@ export default function Home() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
         {/* Header Section */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            backgroundColor: "#ffffff",
+            backgroundColor: tc.bgBase,
             paddingBottom: 14,
             paddingHorizontal: 16,
             paddingTop: 8,
             borderBottomWidth: 1,
-            borderBottomColor: '#E5E7EB',
+            borderBottomColor: tc.divider,
           }}
         >
           {/* Menu Icon (Left) */}
@@ -551,10 +553,10 @@ export default function Home() {
           {/* Center Time/Date */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
              <Image source={getTimeIcon()} style={{ width: 24, height: 24, marginRight: 8 }} resizeMode="contain" />
-             <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>
+             <Text style={{ fontSize: 16, fontWeight: '600', color: tc.textPrimary }}>
                {timeString}
              </Text>
-             <Text style={{ fontSize: 16, fontWeight: '400', color: '#555', marginLeft: 6 }}>
+             <Text style={{ fontSize: 16, fontWeight: '400', color: tc.textSecondary, marginLeft: 6 }}>
                {dateString}
              </Text>
           </View>
@@ -567,7 +569,7 @@ export default function Home() {
             {userInfo?.pfp ? (
               <ExpoImage
                 source={{ uri: userInfo.pfp as string }}
-                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#E5E7EB' }}
+                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: tc.bgInput }}
                 contentFit="cover"
                 cachePolicy="disk"
               />
@@ -584,7 +586,7 @@ export default function Home() {
         {/* Body */}
         {activeView === 'user' && (
           <ScrollView
-            style={{ flex: 1, backgroundColor: "#ffffff", paddingHorizontal: 8 }}
+            style={{ flex: 1, backgroundColor: tc.bgBase, paddingHorizontal: 8 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 10 }}
             refreshControl={
@@ -659,11 +661,11 @@ export default function Home() {
 
           {/* Your Choices (Favorites) Section */}
           <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8, paddingHorizontal: 10 }}>
+            <Text style={{ fontWeight: "600", fontSize: 18, marginBottom: 8, paddingHorizontal: 10, color: tc.textPrimary }}>
               {t('HOME_SECTION_YOUR_CHOICES')}
             </Text>
             {favError && (
-              <Text style={{ color: 'red', marginBottom: 6 }}>{t('HOME_ERR_FAILED_LOAD_FAVOURITES')} {favError}</Text>
+              <Text style={{ color: tc.error, marginBottom: 6 }}>{t('HOME_ERR_FAILED_LOAD_FAVOURITES')} {favError}</Text>
             )}
             <ScrollView
               horizontal
@@ -693,7 +695,7 @@ export default function Home() {
                   style={{
                     paddingHorizontal: 22,
                     paddingVertical: 16,
-                    backgroundColor: '#f5f5f5',
+                    backgroundColor: tc.bgSurface,
                     borderRadius: 20,
                     marginRight: 14,
                     minWidth: 150,
@@ -701,11 +703,11 @@ export default function Home() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: '#e2e2e2'
+                    borderColor: tc.border
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#555' }}>{t('HOME_LABEL_ADD_MORE')}</Text>
-                  <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>{t('HOME_LABEL_TAP_FIND_FAVOURITE')}</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: tc.textSecondary }}>{t('HOME_LABEL_ADD_MORE')}</Text>
+                  <Text style={{ fontSize: 12, color: tc.textMuted, marginTop: 3 }}>{t('HOME_LABEL_TAP_FIND_FAVOURITE')}</Text>
                 </TouchableOpacity>
               )}
               {!loadingFavs && favoriteLocations.map(fav => {
@@ -741,7 +743,7 @@ export default function Home() {
                     }}
                   >
                     {hasImage ? (
-                      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#e6e6e6' }}>
+                      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: tc.bgInput }}>
                         <ExpoImage
                           source={{ uri: optimizedImageUri as string }}
                           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
@@ -811,7 +813,7 @@ export default function Home() {
                         </View>
                       </View>
                     ) : (
-                      <View style={{ flex: 1, backgroundColor: '#e6e6e6', justifyContent: 'flex-end' }}>
+                      <View style={{ flex: 1, backgroundColor: tc.bgInput, justifyContent: 'flex-end' }}>
                         <View
                           style={{
                             flexDirection: 'row',
@@ -865,17 +867,17 @@ export default function Home() {
                   style={{
                     paddingHorizontal: 20,
                     paddingVertical: 14,
-                    backgroundColor: '#fafafa',
+                    backgroundColor: tc.bgSurface,
                     borderRadius: 18,
                     marginRight: 12,
                     minWidth: 120,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: '#e6e6e6',
+                    borderColor: tc.border,
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#666' }}>{t('HOME_LABEL_ADD_MORE')}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: tc.textSecondary }}>{t('HOME_LABEL_ADD_MORE')}</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -883,7 +885,7 @@ export default function Home() {
 
           {/* Event Section */}
           <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontWeight: "600", fontSize: 18, marginTop: 14, marginBottom: 12, paddingHorizontal: 10 }}>
+            <Text style={{ fontWeight: "600", fontSize: 18, marginTop: 14, marginBottom: 12, paddingHorizontal: 10, color: tc.textPrimary }}>
               {t('HOME_SECTION_EVENT')}
             </Text>
             {nearbyEventsLoading ? (
@@ -905,7 +907,7 @@ export default function Home() {
                 </ScrollView>
               </SkeletonPulse>
             ) : visibleNearbyEvents.length === 0 ? (
-              <Text style={{ paddingHorizontal: 10, color: '#666' }}>
+              <Text style={{ paddingHorizontal: 10, color: tc.textSecondary }}>
                 {t('HOME_LABEL_NO_CURRENT_EVENTS')}
               </Text>
             ) : (
@@ -943,37 +945,37 @@ export default function Home() {
                         width: CARD_W,
                         height: CARD_H,
                         borderRadius: 16,
-                        backgroundColor: COLORS.neutral0,
+                        backgroundColor: tc.bgElevated,
                         marginRight: 12,
                         overflow: 'hidden',
                         borderWidth: 1,
-                        borderColor: COLORS.neutral350,
+                        borderColor: tc.border,
                       }}
                     >
                       {/* Header (20%) */}
                       <View
                         style={{
-                          backgroundColor: COLORS.neutral0,
+                          backgroundColor: tc.bgElevated,
                           paddingHorizontal: 12,
                           paddingTop: 8,
                           paddingBottom: 8,
                           minHeight: 56,
                           justifyContent: 'flex-start',
                           borderBottomWidth: 1,
-                          borderBottomColor: COLORS.neutral350,
+                          borderBottomColor: tc.border,
                         }}
                       >
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text
                             numberOfLines={3}
-                            style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: COLORS.neutral975 }}
+                            style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: tc.textPrimary }}
                           >
                             {title}
                           </Text>
                           {!!dateTimeLine && (
                             <Text
                               numberOfLines={1}
-                              style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: COLORS.neutral800 }}
+                              style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: tc.textSecondary }}
                             >
                               {dateTimeLine}
                             </Text>
@@ -981,7 +983,7 @@ export default function Home() {
                           {!!(Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue) && (
                             <Text
                               numberOfLines={1}
-                              style={{ marginTop: 2, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '600', color: COLORS.neutral600 }}
+                              style={{ marginTop: 2, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '600', color: tc.textMuted }}
                             >
                               {Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue}
                             </Text>
@@ -991,7 +993,7 @@ export default function Home() {
                       </View>
 
                       {/* Background image (80%) */}
-                      <View style={{ flex: 1, backgroundColor: COLORS.neutral150, position: 'relative' }}>
+                      <View style={{ flex: 1, backgroundColor: tc.bgInput, position: 'relative' }}>
                         {heroOptimized ? (
                           <ExpoImage
                             source={{ uri: heroOptimized as string }}
@@ -1039,7 +1041,7 @@ export default function Home() {
             )}
 
             {!locationResolved && visibleNearbyEvents.length > 0 && (
-              <Text style={{ paddingHorizontal: 10, marginTop: 8, color: '#6B7280', fontWeight: '600' }}>
+              <Text style={{ paddingHorizontal: 10, marginTop: 8, color: tc.textMuted, fontWeight: '600' }}>
                 {t('HOME_LABEL_REFINING_DISTANCE')}
               </Text>
             )}
@@ -1051,7 +1053,7 @@ export default function Home() {
           {eventPanelMounted ? (
             <EventPanel organizerId={userId} />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+            <View style={{ flex: 1, backgroundColor: tc.bgBase }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={'100%'} height={54} radius={14} />
@@ -1091,7 +1093,7 @@ export default function Home() {
           {courtPanelMounted ? (
             <CourtPanel ownerId={userId} deeplinkCourtId={deeplinkCourtId} deeplinkCourtBookingId={deeplinkCourtBookingId} deeplinkToken={deeplinkToken} />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+            <View style={{ flex: 1, backgroundColor: tc.bgBase }}>
               <View style={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={'100%'} height={54} radius={14} />
@@ -1131,7 +1133,7 @@ export default function Home() {
           {reviewsPanelMounted ? (
             <ReviewsPanel />
           ) : (
-            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+            <View style={{ flex: 1, backgroundColor: tc.bgBase }}>
               <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 20 }}>
                 <SkeletonPulse>
                   <SkeletonBox width={160} height={24} radius={8} style={{ marginBottom: 16 }} />
@@ -1156,7 +1158,7 @@ export default function Home() {
                 right: 0,
                 top: 0,
                 bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.35)',
+                backgroundColor: tc.bgOverlay,
               }}
             />
 
@@ -1168,24 +1170,24 @@ export default function Home() {
                 top: 0,
                 bottom: 0,
                 width: drawerW,
-                backgroundColor: '#FFFFFF',
+                backgroundColor: tc.bgSurface,
                 paddingTop: 18,
                 paddingHorizontal: 16,
                 transform: [{ translateX: drawerX }],
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, marginBottom: 18 }}>
-                <Text style={{ fontSize: 18, lineHeight: 32, fontWeight: '700', color: '#111' }}>{t('HOME_MENU_TITLE')}</Text>
+                <Text style={{ fontSize: 18, lineHeight: 32, fontWeight: '700', color: tc.textPrimary }}>{t('HOME_MENU_TITLE')}</Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={closeMenu}
                   style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Image source={ICONS.closeMenu} style={{ width: 20, height: 20, tintColor: '#111' }} resizeMode="contain" />
+                  <Image source={ICONS.closeMenu} style={{ width: 20, height: 20, tintColor: tc.textPrimary }} resizeMode="contain" />
                 </TouchableOpacity>
               </View>
 
-              <View style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 16 }} />
+              <View style={{ height: 1, backgroundColor: tc.divider, marginBottom: 16 }} />
 
               <ManagementPanel
                 active={activeView as ManagementPanelKey}

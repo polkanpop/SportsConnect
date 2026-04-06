@@ -14,6 +14,7 @@ import { SkeletonBox, SkeletonPulse } from "@/components/ui/skeleton";
 import { useTranslation } from '@/constants/translations';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useThemeColors } from "@/hooks/use-theme-colors";
 
 // Type definition for Unified Booking
 type UnifiedBooking = {
@@ -382,6 +383,7 @@ const getWeekDaysForOffset = (weekOffset: number, language: string) => {
 
 export default function ActivityPage() {
   const { t, language } = useTranslation();
+  const tc = useThemeColors();
   const [calendarMode, setCalendarMode] = useState<"Booking" | "Hosting">("Booking");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedActivity, setSelectedActivity] = useState<UnifiedBooking | null>(null);
@@ -687,7 +689,7 @@ export default function ActivityPage() {
           params: { id: item.id },
         })
       }
-      style={styles.eventItem}
+      style={[styles.eventItem, { backgroundColor: tc.bgElevated }]}
     >
       <Image
         source={ICONS[item.type]}
@@ -697,8 +699,8 @@ export default function ActivityPage() {
         ]}
       />
       <View style={styles.eventDetails}>
-        <Text style={styles.eventTitle} numberOfLines={2}>
-          <Text style={styles.eventTitlePrefix}>{recordTitlePrefix(item.activity)}: </Text>
+        <Text style={[styles.eventTitle, { color: tc.textPrimary }]} numberOfLines={2}>
+          <Text style={[styles.eventTitlePrefix, { color: tc.textPrimary }]}>{recordTitlePrefix(item.activity)}: </Text>
           {item.title}
         </Text>
 
@@ -718,12 +720,12 @@ export default function ActivityPage() {
           )}
         </View>
 
-        <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_DATE')}</Text> {formatDateWeekdayDDMMYYYY(item.dateTime, language) || '—'}
+        <Text style={[styles.eventMetaLine, { color: tc.textSecondary }]}>
+          <Text style={[styles.eventMetaLabel, { color: tc.textPrimary }]}>{t('ACTIVITY_CARD_DATE')}</Text> {formatDateWeekdayDDMMYYYY(item.dateTime, language) || '—'}
         </Text>
 
-        <Text style={styles.eventMetaLine}>
-          <Text style={styles.eventMetaLabel}>{t('ACTIVITY_CARD_TIME')}</Text>{" "}
+        <Text style={[styles.eventMetaLine, { color: tc.textSecondary }]}>
+          <Text style={[styles.eventMetaLabel, { color: tc.textPrimary }]}>{t('ACTIVITY_CARD_TIME')}</Text>{" "}
           {(() => {
             const start = parseTimestampLoose(item.startTimestamp ?? null);
             const end = parseTimestampLoose(item.endTimestamp ?? null);
@@ -736,8 +738,8 @@ export default function ActivityPage() {
         </Text>
 
         {item.activity !== 'court' && !!item.courtName && (
-          <Text style={styles.eventMetaLine}>
-            <Text style={styles.eventMetaLabel}>{t('ACTIVITY_EVENT_META_VENUE')}</Text> {item.courtName}
+          <Text style={[styles.eventMetaLine, { color: tc.textSecondary }]}>
+            <Text style={[styles.eventMetaLabel, { color: tc.textPrimary }]}>{t('ACTIVITY_EVENT_META_VENUE')}</Text> {item.courtName}
           </Text>
         )}
       </View>
@@ -759,7 +761,7 @@ export default function ActivityPage() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
           <SkeletonPulse>
             <SkeletonBox width={140} height={24} radius={8} style={{ marginBottom: 16 }} />
@@ -784,7 +786,7 @@ export default function ActivityPage() {
 
   if (!userIdLoading && typeof userId !== 'number') {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0, justifyContent: 'center', alignItems: 'center' }}>
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: tc.bgBase, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <Text style={{ marginTop: 10, color: COLORS.neutral850, textAlign: 'center' }}>
           Please log in to view your activity.
@@ -797,7 +799,7 @@ export default function ActivityPage() {
     dashboardError;
   if (loadError) {
     return (
-      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: COLORS.neutral0 }}>
+      <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: tc.bgBase }}>
         <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <Text style={{ marginTop: 10, color: COLORS.danger }}>
           Failed to load activity records. Check Metro logs for request details.
@@ -807,14 +809,14 @@ export default function ActivityPage() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.neutral0 }}>
-      <View style={styles.header}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
+      <View style={[styles.header, { backgroundColor: tc.bgBase }]}>
         <View style={styles.headerSideSpacer} />
-        <Text style={styles.headerTitle}>{t('ACTIVITY_HEADER_TITLE')}</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('ACTIVITY_HEADER_TITLE')}</Text>
         <View style={styles.headerSideSpacer} />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: tc.divider }]} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -822,8 +824,8 @@ export default function ActivityPage() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullToRefresh} />}
       >
-        <View style={styles.calendarContainer}>
-          <Text style={styles.monthHeader}>{monthLabel || 'Calendar'}</Text>
+        <View style={[styles.calendarContainer, { backgroundColor: tc.bgSurface }]}>
+          <Text style={[styles.monthHeader, { color: tc.textPrimary }]}>{monthLabel || 'Calendar'}</Text>
           <View style={styles.calendarControlsRow}>
             <TouchableOpacity
               disabled={weekOffset <= -2}
@@ -901,21 +903,21 @@ export default function ActivityPage() {
           </View>
         </View>
 
-        <View style={styles.upcomingSection}>
+        <View style={[styles.upcomingSection, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
           <View style={styles.upcomingHeader}>
-            <Text style={styles.subHeader}>{t('ACTIVITY_SUB_SELECTED_RECORD')}</Text>
+            <Text style={[styles.subHeader, { color: tc.textPrimary }]}>{t('ACTIVITY_SUB_SELECTED_RECORD')}</Text>
           </View>
           {selectedActivity ? (
             renderRecord(selectedActivity)
           ) : (
             <View style={{ paddingVertical: 6 }}>
-              <Text style={{ color: COLORS.neutral850 }}>{t('ACTIVITY_LABEL_TAP_ICON')}</Text>
+              <Text style={{ color: tc.textSecondary }}>{t('ACTIVITY_LABEL_TAP_ICON')}</Text>
             </View>
           )}
         </View>
 
-        <View style={styles.activityRecordsContainer}>
-          <Text style={styles.subHeader}>{t('ACTIVITY_SUB_ACTIVITY_RECORDS')}</Text>
+        <View style={[styles.activityRecordsContainer, { backgroundColor: tc.bgSurface }]}>
+          <Text style={[styles.subHeader, { color: tc.textPrimary }]}>{t('ACTIVITY_SUB_ACTIVITY_RECORDS')}</Text>
 
           <View style={styles.expandFiltersContainer}>
             <View style={styles.dropdownBarWrapper}>
@@ -927,10 +929,10 @@ export default function ActivityPage() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => setOpenFilter((v) => (v === 'status' ? null : 'status'))}
-                  style={[styles.dropdownTrigger, openFilter === 'status' && styles.dropdownTriggerActive]}
+                  style={[styles.dropdownTrigger, { backgroundColor: tc.bgElevated, borderColor: tc.border }, openFilter === 'status' && styles.dropdownTriggerActive]}
                 >
                   <View style={styles.dropdownTriggerContent}>
-                    <Text style={styles.dropdownTriggerText}>{statusLabel}</Text>
+                    <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{statusLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
                       style={[styles.dropdownCaret, openFilter === 'status' && styles.dropdownCaretOpen]}
@@ -941,10 +943,10 @@ export default function ActivityPage() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => setOpenFilter((v) => (v === 'activity' ? null : 'activity'))}
-                  style={[styles.dropdownTrigger, openFilter === 'activity' && styles.dropdownTriggerActive]}
+                  style={[styles.dropdownTrigger, { backgroundColor: tc.bgElevated, borderColor: tc.border }, openFilter === 'activity' && styles.dropdownTriggerActive]}
                 >
                   <View style={styles.dropdownTriggerContent}>
-                    <Text style={styles.dropdownTriggerText}>{activityLabel}</Text>
+                    <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{activityLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
                       style={[styles.dropdownCaret, openFilter === 'activity' && styles.dropdownCaretOpen]}
@@ -955,10 +957,10 @@ export default function ActivityPage() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => setOpenFilter((v) => (v === 'type' ? null : 'type'))}
-                  style={[styles.dropdownTrigger, openFilter === 'type' && styles.dropdownTriggerActive]}
+                  style={[styles.dropdownTrigger, { backgroundColor: tc.bgElevated, borderColor: tc.border }, openFilter === 'type' && styles.dropdownTriggerActive]}
                 >
                   <View style={styles.dropdownTriggerContent}>
-                    <Text style={styles.dropdownTriggerText}>{typeLabel}</Text>
+                    <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{typeLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
                       style={[styles.dropdownCaret, openFilter === 'type' && styles.dropdownCaretOpen]}
@@ -968,7 +970,7 @@ export default function ActivityPage() {
               </ScrollView>
 
               {openFilter !== null && (
-                <View style={styles.dropdownMenu}>
+                <View style={[styles.dropdownMenu, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
                   {(openFilter === 'status'
                     ? (['All', 'Upcoming', 'Completed', 'Cancelled', 'Missed'] as const).map((opt) => ({
                         key: opt,
@@ -1016,7 +1018,7 @@ export default function ActivityPage() {
                         pressed && styles.dropdownItemPressed,
                       ]}
                     >
-                      <Text style={styles.dropdownItemText}>{row.label}</Text>
+                      <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{row.label}</Text>
                       <View style={styles.tickBox}>
                         {row.selected ? <Text style={styles.tickText}>✓</Text> : null}
                       </View>
@@ -1033,7 +1035,7 @@ export default function ActivityPage() {
 
           {filteredData.length === 0 ? (
             <View style={{ paddingVertical: 20 }}>
-              <Text style={{ color: COLORS.neutral850 }}>{t('ACTIVITY_EMPTY_NO_RECORDS')}</Text>
+              <Text style={{ color: tc.textSecondary }}>{t('ACTIVITY_EMPTY_NO_RECORDS')}</Text>
             </View>
           ) : (
             filteredData.map((item) => <View key={item.id}>{renderRecord(item)}</View>)

@@ -13,6 +13,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, V
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/constants/translations';
 import { useLanguage } from '@/providers/language-provider';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 // Vietnam mobile: 10 digits, leading 0, second digit 3–9
 const VN_PHONE_RE = /^0[3-9]\d{8}$/;
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { lang, toggleLanguage } = useLanguage();
+  const tc = useThemeColors();
 
   const [identifier, setIdentifier] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>('unknown');
@@ -104,9 +106,9 @@ export default function LoginScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top', 'bottom']}>
-        <TouchableOpacity onPress={toggleLanguage} style={[styles.langToggle, { top: insets.top + 8 }]}>
-          <Text style={styles.langToggleText}>{lang === 'vi' ? 'Tiếng Việt' : 'English'}</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }} edges={['top', 'bottom']}>
+        <TouchableOpacity onPress={toggleLanguage} style={[styles.langToggle, { top: insets.top + 8, backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
+          <Text style={[styles.langToggleText, { color: tc.textSecondary }]}>{lang === 'vi' ? 'Tiếng Việt' : 'English'}</Text>
         </TouchableOpacity>
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -118,29 +120,29 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.formWrapper}>
-            <Text style={styles.formTitle}>{t('AUTH_LOGIN_TITLE')}</Text>
+            <Text style={[styles.formTitle, { color: tc.textSecondary }]}>{t('AUTH_LOGIN_TITLE')}</Text>
 
             <TextInput
               placeholder={t('AUTH_LOGIN_PLACEHOLDER_EMAIL_PHONE')}
-              placeholderTextColor={COLORS.dark300}
+              placeholderTextColor={tc.placeholder}
               value={identifier}
               onChangeText={handleIdentifierChange}
               autoCapitalize="none"
               keyboardType={inputMode === 'phone' ? 'phone-pad' : 'email-address'}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.border, color: tc.textPrimary }]}
             />
 
-            <View style={styles.passwordRow}>
+            <View style={[styles.passwordRow, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
               <TextInput
                 placeholder={t('AUTH_PLACEHOLDER_PASSWORD')}
-                placeholderTextColor="#6A6B6B"
+                placeholderTextColor={tc.placeholder}
                 secureTextEntry={!passwordVisible}
                 value={password}
                 onChangeText={setPassword}
-                style={styles.passwordInput}
+                style={[styles.passwordInput, { color: tc.textPrimary }]}
               />
               <Pressable onPress={() => setPasswordVisible(!passwordVisible)}>
-                <ExpoImage source={passwordVisible ? ICONS.notEye : ICONS.eye} style={styles.eyeIcon} />
+                <ExpoImage source={passwordVisible ? ICONS.notEye : ICONS.eye} style={[styles.eyeIcon, { tintColor: tc.textMuted }]} />
               </Pressable>
             </View>
 
@@ -149,7 +151,7 @@ export default function LoginScreen() {
                 <View style={[styles.checkboxBase, rememberMe && styles.checkboxChecked]}>
                   {rememberMe && (<ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} />)}
                 </View>
-                <Text style={styles.textDark}>{t('AUTH_LABEL_REMEMBER_ME')}</Text>
+                <Text style={[styles.textDark, { color: tc.textSecondary }]}>{t('AUTH_LABEL_REMEMBER_ME')}</Text>
               </Pressable>
               <Link href="/(auth)/forgotpassword">
                 <Text style={styles.forgotPassword}>{t('AUTH_LINK_FORGOT_PASSWORD')}</Text>
@@ -168,9 +170,9 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.dividerRow}>
-            <View style={[styles.dividerLine, styles.mr3]} />
-            <Text style={styles.dividerText}>{t('AUTH_DIVIDER_OR_LOGIN_WITH')}</Text>
-            <View style={[styles.dividerLine, styles.ml3]} />
+            <View style={[styles.dividerLine, styles.mr3, { backgroundColor: tc.divider }]} />
+            <Text style={[styles.dividerText, { color: tc.textMuted }]}>{t('AUTH_DIVIDER_OR_LOGIN_WITH')}</Text>
+            <View style={[styles.dividerLine, styles.ml3, { backgroundColor: tc.divider }]} />
           </View>
 
           <View style={styles.socialRow}>
@@ -180,7 +182,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.signupRow}>
-            <Text style={styles.textDark}>{t('AUTH_LOGIN_LINK_NO_ACCOUNT')}</Text>
+            <Text style={[styles.textDark, { color: tc.textSecondary }]}>{t('AUTH_LOGIN_LINK_NO_ACCOUNT')}</Text>
             <Link href="/(auth)/signup"><Text style={styles.signUpLink}>{t('AUTH_LINK_SIGN_UP')}</Text></Link>
           </View>
         </ScrollView>
