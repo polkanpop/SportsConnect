@@ -42,6 +42,7 @@ export const ICONS = {
   night: require('../assets/icons/night.png'),
   noteIcon: require('../assets/icons/Note_icon.png'),
   mic: require('../assets/icons/mic.png'),
+  microphone: require('../assets/icons/microphone.png'),
   location_icon: require('../assets/icons/location.png'),
   ggmap: require('../assets/icons/ggmap.png'),
   app_icon: require('../assets/icons/SportConnect_icon.png'),

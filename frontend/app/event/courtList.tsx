@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt } from '@/lib/backendApi'
+import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listAllPlayingCourtsCached, buildCourtSurfaceMap } from '@/lib/backendApi'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
@@ -194,8 +194,14 @@ const CourtListScreen = () => {
     try {
       // Use the shared courtinfo cache; this prevents refetching the full list on every focus.
       // Court Register now upserts the newly created court into this cache.
-      const rows = await listCourtInfoCached()
-      const available = (Array.isArray(rows) ? rows : []).filter(r => (r.availability || '').toLowerCase() === 'available')
+      const [rows, playingCourts] = await Promise.all([
+        listCourtInfoCached(),
+        listAllPlayingCourtsCached(),
+      ])
+      const surfaceMap = buildCourtSurfaceMap(playingCourts)
+      const available = (Array.isArray(rows) ? rows : [])
+        .filter(r => (r.availability || '').toLowerCase() === 'available')
+        .map(r => ({ ...r, surface: surfaceMap.get(r.courtid) ?? r.surface ?? null }))
       setAllCourts(available)
     } catch (e: any) {
       setError(e.message || String(e))
@@ -429,20 +435,19 @@ const CourtListScreen = () => {
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterButton, showFavouritesOnly && styles.filterButtonActive]}
-              onPress={() => setShowFavouritesOnly(prev => !prev)}
-            >
-              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
-              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.filterButton, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'surface' ? null : 'surface')}
             >
               <Image source={ICONS.menu} style={styles.filterIcon} />
               <Text style={[styles.filterText, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
               {selectedSurfaces.length > 0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, showFavouritesOnly && styles.filterButtonActive]}
+              onPress={() => setShowFavouritesOnly(prev => !prev)}
+            >
+              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, showFavouritesOnly && styles.favStarActive]} />
+              <Text style={[styles.filterText, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

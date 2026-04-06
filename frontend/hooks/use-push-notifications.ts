@@ -20,6 +20,7 @@ import * as Notifications from 'expo-notifications'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 import { registerDeviceToken } from '@/lib/backendApi'
+import { getPushNotificationEnabled } from '@/hooks/use-push-notification-preference'
 
 // ─── Global foreground handler ─────────────────────────────────────────────────
 // Must be configured at module level (outside any component) for Expo to pick it up.
@@ -111,6 +112,9 @@ export function usePushNotifications(
     let cancelled = false
 
     try {
+      // Respect user preference — skip registration when push notifications are off.
+      if (!getPushNotificationEnabled()) return
+
       const { status } = await Notifications.getPermissionsAsync()
       setPermissionStatus(status)
 

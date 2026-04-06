@@ -24,11 +24,15 @@ import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from '@/constants/translations';
 import { useLanguage } from '@/providers/language-provider';
+import { useVoicePreference } from '@/hooks/use-voice-preference';
+import { usePushNotificationPreference } from '@/hooks/use-push-notification-preference';
 
 export default function SettingsPage() {
   const { t } = useTranslation();
   const { lang, toggleLanguage } = useLanguage();
   const isVietnamese = lang === 'vi';
+  const { enabled: voiceEnabled, setEnabled: setVoiceEnabled } = useVoicePreference();
+  const { enabled: pushEnabled, setEnabled: setPushEnabled } = usePushNotificationPreference();
 
   const [displayName, setDisplayName] = useState<string>('Guest');
   const [loadingName, setLoadingName] = useState<boolean>(false);
@@ -44,6 +48,7 @@ export default function SettingsPage() {
       { key: 'account', keywords: [t('SETTINGS_ROW_ACCOUNT'), 'account', 'tài khoản', 'profile', 'hồ sơ'].join(' ').toLowerCase() },
       { key: 'notification', keywords: [t('SETTINGS_ROW_NOTIFICATION'), 'notification', 'thông báo'].join(' ').toLowerCase() },
       { key: 'language', keywords: [t('SETTINGS_ROW_LANGUAGE'), 'language', 'ngôn ngữ', t('SETTINGS_LANG_TOGGLE_LABEL')].join(' ').toLowerCase() },
+      { key: 'feature', keywords: ['feature', 'tính năng', 'voice', 'giọng nói', 'voice automation', 'push notification'].join(' ').toLowerCase() },
       { key: 'court_register', keywords: [t('SETTINGS_ROW_COURT_REGISTER'), 'court', 'sân', 'register', 'đăng ký'].join(' ').toLowerCase() },
       { key: 'data_privacy', keywords: [t('SETTINGS_ROW_DATA_PRIVACY'), 'data', 'privacy', 'dữ liệu', 'quyền riêng tư'].join(' ').toLowerCase() },
       { key: 'sign_out', keywords: [t('SETTINGS_BTN_SIGN_OUT'), 'sign out', 'đăng xuất', 'logout'].join(' ').toLowerCase() },
@@ -52,7 +57,7 @@ export default function SettingsPage() {
   }, [t]);
   const showRow = useMemo(() => {
     const q = settingsSearch.trim().toLowerCase();
-    if (!q) return { account: true, notification: true, language: true, court_register: true, data_privacy: true, sign_out: true };
+    if (!q) return { account: true, notification: true, language: true, feature: true, court_register: true, data_privacy: true, sign_out: true };
     const result: Record<string, boolean> = {};
     for (const r of settingsRows) {
       result[r.key] = r.keywords.includes(q) || r.keywords.split(' ').some(w => w.startsWith(q));
@@ -187,6 +192,27 @@ export default function SettingsPage() {
             value={isVietnamese}
             onValueChange={toggleLanguage}
           />}
+        </View>
+        )}
+
+        {/* Feature section: Voice Automation + Push Notifications */}
+        {showRow.feature && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('SETTINGS_ROW_FEATURE')}</Text>
+          <SettingRowSwitch
+            icon={ICONS.microphone}
+            label={t('SETTINGS_FEATURE_VOICE_LABEL')}
+            sublabel={t('SETTINGS_FEATURE_VOICE_SUBLABEL')}
+            value={voiceEnabled}
+            onValueChange={() => setVoiceEnabled(!voiceEnabled)}
+          />
+          <SettingRowSwitch
+            icon={ICONS.notifications}
+            label={t('SETTINGS_ROW_NOTIFICATION')}
+            sublabel=""
+            value={pushEnabled}
+            onValueChange={() => setPushEnabled(!pushEnabled)}
+          />
         </View>
         )}
 
@@ -367,6 +393,16 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 4,
+    marginTop: 4,
+    marginBottom: 2,
   },
 
   searchRow: {

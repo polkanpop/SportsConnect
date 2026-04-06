@@ -1488,6 +1488,31 @@ export async function patchPlayingCourtInfo(
 	}) as Promise<PlayingCourtInfoRow>
 }
 
+// Fetch ALL playing courts (no courtid filter) — returns up to 500 rows.
+export async function listAllPlayingCourts(): Promise<PlayingCourtRow[]> {
+	const data = await request('/playingcourts?limit=500', { debugLabel: 'listAllPlayingCourts' })
+	return Array.isArray(data) ? (data as PlayingCourtRow[]) : []
+}
+
+// Cached variant (5-min TTL matches backend cache; surface rarely changes).
+export async function listAllPlayingCourtsCached(): Promise<PlayingCourtRow[]> {
+	return fetchWithCache<PlayingCourtRow[]>({
+		key: 'cache:playingcourts:all:v1',
+		ttlMs: 5 * 60 * 1000,
+		swrMs: 5 * 60 * 1000,
+		fetcher: () => listAllPlayingCourts(),
+	})
+}
+
+/** Build a Map<courtid, surface> from playing-court rows (first non-null surface per court wins). */
+export function buildCourtSurfaceMap(playingCourts: PlayingCourtRow[]): Map<number, string> {
+	const m = new Map<number, string>()
+	for (const pc of playingCourts) {
+		if (pc.surface && !m.has(pc.courtid)) m.set(pc.courtid, pc.surface)
+	}
+	return m
+}
+
 // ---- Venue Booking Bundle ----
 export type VenueBookingBundle = {
 	courtinfo: CourtInfoRow | null
@@ -2149,11 +2174,12 @@ function normalizeStringArrayLoose(v: unknown): string[] {
 // Aggregate events with related meta, court info and organizer name.
 export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
-	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
+	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability, allPlayingCourts] = await Promise.all([
 		request('/events?limit=200', { debugLabel: 'listEvents' }),
 		request('/eventinfo?limit=500', { debugLabel: 'listEventInfoAll' }),
 		safeGet('/courtbookings?limit=200', 'listCourtBookingsAll'),
 		safeGet('/courtavailability?limit=500', 'listCourtAvailabilityAll'),
+		listAllPlayingCourtsCached(),
 	])
 
 	// Throw rather than silently returning [] so React Query preserves its previously-cached data
@@ -2185,6 +2211,8 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
 
+	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
+
 	const combined = events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2214,6 +2242,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			longitude: (ci as any)?.longitude ?? null,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
+			surface: (courtid != null ? surfaceByCourtId.get(courtid) : null) ?? null,
 		}
 	})
 	void autoCompletePastStatusesInBackground({ events: combined })
@@ -2224,11 +2253,12 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 export async function listEventsCombinedByOrganizerId(organizerid: number): Promise<CombinedEvent[]> {
 	// Fetch all independent sources in parallel — eliminates the sequential waterfall that caused
 	// ~15 second load times in the EventPanel when each request was awaited one by one.
-	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
+	const [eventsData, infoRowsRaw, allCourtBookings, allAvailability, allPlayingCourts] = await Promise.all([
 		request(`/events?organizerid=${encodeURIComponent(organizerid)}`, { debugLabel: 'listEventsByOrganizerId' }),
 		request('/eventinfo', { debugLabel: 'listEventInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		listAllPlayingCourtsCached(),
 	])
 	if (!Array.isArray(eventsData)) return []
 	const events: EventRow[] = eventsData as EventRow[]
@@ -2252,6 +2282,8 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 	}
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
 	return events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
@@ -2280,6 +2312,7 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			address: ci?.address ?? undefined,
 			court_name: (ci as any)?.name ?? null,
 			venue: ci?.venue,
+			surface: (courtid != null ? surfaceByCourtId.get(courtid) : null) ?? null,
 		}
 	})
 }
@@ -2365,11 +2398,12 @@ export async function createTrainingSessionWithInfo(payload: CreateTrainingSessi
 // Aggregate training sessions similarly.
 export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSession[]> {
 	// All five sources are independent — fetch in parallel to eliminate the sequential waterfall.
-	const [tsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allPlayingCourts] = await Promise.all([
 		request('/trainingsessions', { debugLabel: 'listTrainingSessions' }),
 		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		listAllPlayingCourtsCached(),
 	])
 
 	// Throw rather than silently returning [] so React Query preserves its previously-cached data
@@ -2396,6 +2430,8 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 	}
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
 	const combined = sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
@@ -2426,6 +2462,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			support_payment_method: meta?.support_payment_method ?? null,
 			participants_cap: (meta as any)?.participants_cap ?? null,
 			join_status: (meta as any)?.join_status ?? null,
+			surface: (courtid != null ? surfaceByCourtId.get(courtid) : null) ?? null,
 		}
 	})
 	void autoCompletePastStatusesInBackground({ sessions: combined })
@@ -2435,11 +2472,12 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 // Aggregate training sessions created by a specific coach.
 export async function listTrainingSessionsCombinedByCoachId(coachid: number): Promise<CombinedTrainingSession[]> {
 	// Fetch coach's sessions and all independent lookup tables in parallel.
-	const [tsData, infoRowsRaw, allCourtBookings, allAvailability] = await Promise.all([
+	const [tsData, infoRowsRaw, allCourtBookings, allAvailability, allPlayingCourts] = await Promise.all([
 		request(`/trainingsessions?coachid=${encodeURIComponent(coachid)}`, { debugLabel: 'listTrainingSessionsByCoachId' }),
 		request('/trainingsessioninfo', { debugLabel: 'listTrainingSessionInfoAll' }),
 		safeGet('/courtbookings', 'listCourtBookingsAll'),
 		safeGet('/courtavailability', 'listCourtAvailabilityAll'),
+		listAllPlayingCourtsCached(),
 	])
 
 	if (!Array.isArray(tsData)) return []
@@ -2464,6 +2502,8 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 	}
 	const courtInfoByCourtId = new Map<number, CourtInfoRow>()
 	courtInfoRows.forEach(r => courtInfoByCourtId.set(r.courtid, r))
+
+	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
 	return sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
@@ -2493,6 +2533,7 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			support_payment_method: meta?.support_payment_method ?? null,
 			participants_cap: (meta as any)?.participants_cap ?? null,
 			join_status: (meta as any)?.join_status ?? null,
+			surface: (courtid != null ? surfaceByCourtId.get(courtid) : null) ?? null,
 		}
 	})
 }

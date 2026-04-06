@@ -29,6 +29,12 @@ const BUTTON_SIZE = 56
 const EDGE_PADDING = 12
 const TAP_THRESHOLD = 8 // px movement to distinguish tap from drag
 
+// Module-level position storage so it survives component unmount/remount
+// (the button unmounts when voice flow is active, then remounts when idle)
+const _screenW = Dimensions.get('window').width
+const _screenH = Dimensions.get('window').height
+let _lastPos = { x: _screenW - BUTTON_SIZE - EDGE_PADDING, y: _screenH - 180 }
+
 export default function FloatingVoiceButton() {
   const { enabled, flowState, startListening, dismiss } = useVoiceAutomation()
   const { isLoggedIn } = useAuthContext()
@@ -44,13 +50,13 @@ export default function FloatingVoiceButton() {
 function DraggableButton({ onTap }: { onTap: () => void }) {
   const { width: screenW, height: screenH } = Dimensions.get('window')
 
-  // Start at bottom-right above tab bar
+  // Initialize from persisted position
   const pan = useRef(new Animated.ValueXY({
-    x: screenW - BUTTON_SIZE - EDGE_PADDING,
-    y: screenH - 180,
+    x: _lastPos.x,
+    y: _lastPos.y,
   })).current
 
-  const currentPos = useRef({ x: screenW - BUTTON_SIZE - EDGE_PADDING, y: screenH - 180 })
+  const currentPos = useRef({ x: _lastPos.x, y: _lastPos.y })
   const dragStart = useRef({ x: 0, y: 0 })
   const totalMovement = useRef(0)
 
@@ -60,10 +66,10 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
   // Press bounce (scale down on tap, spring back)
   const pressScale = useRef(new Animated.Value(1)).current
 
-  // Track pan offset changes
+  // Track pan offset changes and persist to module-level
   useEffect(() => {
-    const xId = pan.x.addListener(({ value }) => { currentPos.current.x = value })
-    const yId = pan.y.addListener(({ value }) => { currentPos.current.y = value })
+    const xId = pan.x.addListener(({ value }) => { currentPos.current.x = value; _lastPos.x = value })
+    const yId = pan.y.addListener(({ value }) => { currentPos.current.y = value; _lastPos.y = value })
     return () => { pan.x.removeListener(xId); pan.y.removeListener(yId) }
   }, [pan])
 
@@ -132,7 +138,7 @@ function DraggableButton({ onTap }: { onTap: () => void }) {
       ]}
     >
       <View style={styles.button}>
-        <Image source={ICONS.mic} style={{ width: 26, height: 26, tintColor: COLORS.neutral0 ?? '#FFFFFF' }} resizeMode="contain" />
+        <Image source={ICONS.microphone} style={{ width: 26, height: 26, tintColor: COLORS.neutral0 ?? '#FFFFFF' }} resizeMode="contain" />
       </View>
     </Animated.View>
   )

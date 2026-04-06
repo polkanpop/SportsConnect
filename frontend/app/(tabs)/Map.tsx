@@ -31,7 +31,7 @@
   import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
   import * as Location from "expo-location";
   import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-  import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+  import Animated, { interpolate, Extrapolation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
   import { useFocusEffect, useRouter } from 'expo-router';
   import {
     Dimensions,
@@ -346,6 +346,25 @@
     const collapsedSheetHeightPx = Math.round(mapContainerHeight * 0.30);
     const floatingButtonsBottom = Math.max(116, collapsedSheetHeightPx + 60);
     const googleButtonBottom = floatingButtonsBottom + 62;
+
+    // Shared value used by BottomSheet to report its animated Y-position (from container top).
+    const sheetAnimatedPosition = useSharedValue(mapContainerHeight);
+
+    // My-location button floats 16px above the sheet's top edge.
+    const myLocationAnimStyle = useAnimatedStyle(() => {
+      // When sheet is closed sheetAnimatedPosition.value ≈ containerHeight → default low position.
+      const sheetTop = sheetAnimatedPosition.value;
+      const bottomPos = mapContainerHeight - sheetTop + 16;
+      // Clamp: at least 16px from bottom, at most containerHeight-60 so it stays on-screen.
+      return { bottom: Math.max(16, Math.min(bottomPos, mapContainerHeight - 60)) };
+    });
+
+    // Google Maps button sits 62px above the My-location button.
+    const googleMapsAnimStyle = useAnimatedStyle(() => {
+      const sheetTop = sheetAnimatedPosition.value;
+      const bottomPos = mapContainerHeight - sheetTop + 78;
+      return { bottom: Math.max(78, Math.min(bottomPos, mapContainerHeight - 10)) };
+    });
 
     // Approximate zoom stages for DynamicMap region deltas.
     const ZOOM_STAGE_DELTAS = useRef<Array<{ latitudeDelta: number; longitudeDelta: number }>>([
@@ -1730,23 +1749,25 @@
                 )}
 
                 {/* Google Maps Redirect Button */}
-                {overlaysVisible && selectedMarker && (
-                  <TouchableOpacity
-                    style={[styles.googleMapsFloatingButton, { bottom: googleButtonBottom }]}
-                    onPress={() => { void handleOpenGoogleMaps(); }}
-                    activeOpacity={0.85}
-                    accessibilityLabel="Open in Google Maps"
-                  >
-                    <Image source={ICONS.ggmap} style={styles.googleMapsFloatingIcon} />
-                  </TouchableOpacity>
+                {selectedMarker && (
+                  <Animated.View style={[styles.googleMapsFloatingButton, googleMapsAnimStyle]}>
+                    <TouchableOpacity
+                      onPress={() => { void handleOpenGoogleMaps(); }}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Open in Google Maps"
+                      style={{ padding: 8 }}
+                    >
+                      <Image source={ICONS.ggmap} style={styles.googleMapsFloatingIcon} />
+                    </TouchableOpacity>
+                  </Animated.View>
                 )}
 
                 {/* My Location Button */}
-                {overlaysVisible && (
-                  <TouchableOpacity style={[styles.myLocationButton, { bottom: floatingButtonsBottom }]} onPress={handleMyLocationPress}>
+                <Animated.View style={[styles.myLocationButton, myLocationAnimStyle]}>
+                  <TouchableOpacity onPress={handleMyLocationPress} style={{ padding: 12 }}>
                     <Image source={ICONS.location_icon} style={styles.myLocationIcon} />
                   </TouchableOpacity>
-                )}
+                </Animated.View>
 
                 {/* BottomSheet for marker details */}
                 <BottomSheet
@@ -1758,6 +1779,7 @@
                   enablePanDownToClose={true}
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
+                  animatedPosition={sheetAnimatedPosition}
                 >
                   {selectedEventPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
@@ -2765,11 +2787,9 @@
     },
     googleMapsFloatingButton: {
       position: 'absolute',
-      bottom: 360,
       right: 20,
       backgroundColor: COLORS.white,
       borderRadius: 50,
-      padding: 8,
       shadowColor: '#000',
       shadowOpacity: 0.2,
       shadowRadius: 4,
@@ -2876,11 +2896,9 @@
     // Custom floating “My Location” button
     myLocationButton: {
       position: "absolute",
-      bottom: 300,
       right: 20,
       backgroundColor: COLORS.white,
       borderRadius: 50,
-      padding: 12,
       shadowColor: "#000",
       shadowOpacity: 0.2,
       shadowRadius: 4,

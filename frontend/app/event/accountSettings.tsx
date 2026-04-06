@@ -113,48 +113,9 @@ function StatusBadge({ verified, labelVerified, labelUnverified }: { verified: b
   )
 }
 
-function VoiceToggleSection({ t }: { t: (key: any) => string }) {
-  const { enabled, setEnabled } = useVoicePreference()
-
-  // Toggle is just a preference — no permission gating here.
-  // Mic permission is requested at use-time inside startListening()
-  // (voice-automation-provider). This avoids all the snap-back issues
-  // caused by async permission checks, surface reconstruction, etc.
-  const handleToggle = useCallback((val: boolean) => {
-    setEnabled(val)
-  }, [setEnabled])
-
-  return (
-    <>
-      <SectionHeader title={t('VOICE_SECTION_TITLE')} />
-      <View style={styles.card}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
-            <Text style={[styles.fieldLabel, { marginBottom: 0, marginTop: 0 }]}>{t('VOICE_TOGGLE_LABEL')}</Text>
-            <View style={{
-              backgroundColor: '#FF6017',
-              borderRadius: 6,
-              paddingHorizontal: 7,
-              paddingVertical: 2,
-              marginLeft: 8,
-              alignSelf: 'center',
-            }}>
-              <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5, lineHeight: 13, includeFontPadding: false }}>BETA</Text>
-            </View>
-          </View>
-          <Switch
-            value={enabled}
-            onValueChange={handleToggle}
-            trackColor={{ false: '#ccc', true: '#FF6017' }}
-            thumbColor={enabled ? '#FFF' : '#f4f3f4'}
-          />
-        </View>
-        <Text style={{ color: '#888', fontSize: 12, marginTop: 8, lineHeight: 17 }}>
-          {t('VOICE_TOGGLE_DESC')}
-        </Text>
-      </View>
-    </>
-  )
+function VoiceToggleSection(_props: { t: (key: any) => string }) {
+  // Moved to Settings.tsx "Feature" section
+  return null
 }
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -1053,9 +1014,6 @@ export default function AccountSettingsScreen() {
           )}
         </View>
         </>}
-
-        {/* ── Voice Automation ──────────────────────────────────────────── */}
-        <VoiceToggleSection t={t} />
 
       </ScrollView>
 

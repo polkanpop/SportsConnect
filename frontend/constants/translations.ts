@@ -498,6 +498,11 @@ export const en = {
   VOICE_TOGGLE_LABEL: 'Voice Booking',
   VOICE_TOGGLE_DESC: 'Use your voice to quickly fill booking forms. Tap the floating mic button to start. (Beta — Vietnamese only)',
 
+  // Settings Feature section
+  SETTINGS_ROW_FEATURE: 'Feature',
+  SETTINGS_FEATURE_VOICE_LABEL: 'Voice Booking',
+  SETTINGS_FEATURE_VOICE_SUBLABEL: 'Beta',
+
   // Review
   REVIEW_HEADER_TITLE: 'Review',
   REVIEW_SECTION_RATING: 'Your rating',
@@ -1453,6 +1458,11 @@ export const vi: Record<TranslationKey, string> = {
   VOICE_SECTION_TITLE: 'Tự động bằng giọng nói',
   VOICE_TOGGLE_LABEL: 'Đặt sân bằng giọng nói',
   VOICE_TOGGLE_DESC: 'Dùng giọng nói để điền form đặt sân nhanh hơn. Nhấn nút micro nổi để bắt đầu. (Beta — chỉ hỗ trợ tiếng Việt)',
+
+  // Settings Feature section
+  SETTINGS_ROW_FEATURE: 'Tính năng',
+  SETTINGS_FEATURE_VOICE_LABEL: 'Đặt sân bằng giọng nói',
+  SETTINGS_FEATURE_VOICE_SUBLABEL: 'Beta',
 
   // Review
   REVIEW_HEADER_TITLE: 'Đánh giá',
