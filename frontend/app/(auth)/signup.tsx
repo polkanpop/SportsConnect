@@ -119,12 +119,12 @@ export default function SignUpScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: tc.bgBase }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { backgroundColor: tc.bgBase }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           {/* ── Header ── */}
-          <Text style={styles.screenTitle}>{t('AUTH_SIGNUP_TITLE')}</Text>
+          <Text style={[styles.screenTitle, { color: tc.brand }]}>{t('AUTH_SIGNUP_TITLE')}</Text>
           <Text style={[styles.subtitle, { color: tc.textSecondary }]}>{t('AUTH_SIGNUP_SUBTITLE')}</Text>
 
           {generalError   ? <Text style={styles.feedbackError}>{generalError}</Text>   : null}

@@ -861,7 +861,8 @@ export default function CourtBooking() {
           <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
             <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginLeft: -44, color: tc.textPrimary }]}>{t('BOOKING_COURT_HEADER')}</Text>
+          <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', color: tc.textPrimary }]}>{t('BOOKING_COURT_HEADER')}</Text>
+          <View style={styles.backBtn} />
         </View>
       </SafeAreaView>
 

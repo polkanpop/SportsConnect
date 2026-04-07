@@ -1437,7 +1437,7 @@
                       >
                         <Image
                           source={ICONS.starCal}
-                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? tc.brand : tc.textMuted }}
+                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? tc.brand : tc.textPrimary }}
                         />
                       </TouchableOpacity>
                     </View>
@@ -1463,7 +1463,7 @@
                       <View style={styles.filterChipLeft}>
                         <Image
                           source={mapMode === 'events' ? ICONS.starCal : mapMode === 'training' ? ICONS.tsNoti : ICONS.courtFilter}
-                          style={[styles.filterIcon, { tintColor: COLORS.neutral925 }]}
+                          style={[styles.filterIcon, { tintColor: tc.textPrimary }]}
                         />
                         <Text style={styles.filterChipText}>
                           {mapMode === 'courts' ? t('MAP_CHIP_COURTS') : mapMode === 'events' ? t('MAP_CHIP_EVENTS') : t('MAP_CHIP_TRAINING')}
@@ -1484,7 +1484,7 @@
                       onPress={() => setOpenDropdown((prev) => (prev === "venue" ? null : "venue"))}
                     >
                       <View style={styles.filterChipLeft}>
-                        <Image source={ICONS.venueCategory} style={styles.filterIcon} />
+                        <Image source={ICONS.venueCategory} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
                         <Text style={styles.filterChipText}>
                           {selectedVenue.length === 2 ? t('MAP_CHIP_VENUE_BOTH') : selectedVenue.length === 1 ? `${t('MAP_CHIP_VENUE')}: ${selectedVenue[0].toLowerCase().includes('indoor') && selectedVenue[0].toLowerCase().includes('outdoor') ? t('MAP_LABEL_IN_OUTDOOR') : selectedVenue[0].toLowerCase().includes('indoor') ? t('MAP_LABEL_INDOOR') : t('MAP_LABEL_OUTDOOR')}` : t('MAP_CHIP_VENUE')}
                         </Text>
@@ -1507,7 +1507,7 @@
                       }
                     >
                       <View style={styles.filterChipLeft}>
-                        <Image source={ICONS.availCategory} style={styles.filterIcon} />
+                        <Image source={ICONS.availCategory} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
                         <Text style={styles.filterChipText}>
                           {selectedAvailability === 'Available' ? t('MAP_LABEL_AVAILABLE') : selectedAvailability === 'Unavailable' ? t('MAP_LABEL_UNAVAILABLE') : t('MAP_CHIP_STATUS')}
                         </Text>
@@ -1530,7 +1530,7 @@
                       }
                     >
                       <View style={styles.filterChipLeft}>
-                        <Image source={ICONS.radar} style={styles.filterIcon} />
+                        <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
                         <Text style={styles.filterChipText}>
                           {selectedDistanceKm != null ? t('MAP_CHIP_DISTANCE_KM').replace('{n}', String(selectedDistanceKm)) : t('MAP_CHIP_DISTANCE')}
                         </Text>
@@ -1789,7 +1789,7 @@
                 {/* My Location Button */}
                 <Animated.View style={[styles.myLocationButton, myLocationAnimStyle]}>
                   <TouchableOpacity onPress={handleMyLocationPress} style={{ padding: 12 }}>
-                    <Image source={ICONS.location_icon} style={styles.myLocationIcon} />
+                    <Image source={ICONS.location_icon} style={[styles.myLocationIcon, { tintColor: tc.textPrimary }]} />
                   </TouchableOpacity>
                 </Animated.View>
 
@@ -1960,7 +1960,7 @@
                             source={ICONS.starCal}
                             style={[
                               styles.favoriteIcon,
-                              { tintColor: isFavorite ? tc.brand : tc.textMuted },
+                              { tintColor: isFavorite ? tc.brand : tc.textPrimary },
                             ]}
                           />
                         </TouchableOpacity>
@@ -2094,13 +2094,13 @@
                                     activeOpacity={0.85}
                                     style={[
                                       styles.dayCell,
-                                      isSelected && { backgroundColor: '#f97316' },
-                                      isAvailable && !isSelected && { backgroundColor: '#fef9c3' },
+                                      isSelected && { backgroundColor: tc.brand },
+                                      isAvailable && !isSelected && { backgroundColor: tc.brandSoft },
                                       !isAvailable && styles.dayCellDisabled,
                                     ]}
                                   >
-                                    <Text style={[styles.dayLabel, isSelected && { color: '#fff' }, isAvailable && !isSelected && { color: '#78350f' }]}>{day.label}</Text>
-                                    <Text style={[styles.dayDate, day.isToday && styles.todayUnderline, isSelected && { color: '#fff' }]}>
+                                    <Text style={[styles.dayLabel, isSelected && { color: '#fff' }, isAvailable && !isSelected && { color: tc.brand }]}>{day.label}</Text>
+                                    <Text style={[styles.dayDate, day.isToday && styles.todayUnderline, isSelected && { color: '#fff' }, isAvailable && !isSelected && { color: tc.brand }]}>
                                       {day.date.getDate()}
                                     </Text>
                                   </TouchableOpacity>

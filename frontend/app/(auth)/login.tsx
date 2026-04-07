@@ -112,11 +112,11 @@ export default function LoginScreen() {
         </TouchableOpacity>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[styles.container, { paddingBottom: 24 + (insets?.bottom ?? 0) }]}
+          contentContainerStyle={[styles.container, { paddingBottom: 24 + (insets?.bottom ?? 0), backgroundColor: tc.bgBase }]}
         >
           <View style={styles.logoWrapper}>
             <ExpoImage source={ICONS.app_icon} style={styles.logo} contentFit="contain" />
-            <Text style={styles.appTitle}>{t('AUTH_APP_TITLE')}</Text>
+            <Text style={[styles.appTitle, { color: tc.brand }]}>{t('AUTH_APP_TITLE')}</Text>
           </View>
 
           <View style={styles.formWrapper}>
@@ -163,7 +163,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               disabled={loading}
               onPress={handleLogin}
-              style={[styles.loginButton, loading && { opacity: 0.7 }]}
+              style={[styles.loginButton, { backgroundColor: tc.brand }, loading && { opacity: 0.7 }]}
             >
               <Text style={styles.loginButtonText}>{loading ? t('AUTH_LOGIN_BTN_SIGNING_IN') : t('AUTH_LOGIN_BTN_LOGIN')}</Text>
             </TouchableOpacity>
@@ -204,7 +204,6 @@ const COLORS = {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: COLORS.bg,
     paddingHorizontal: 28,
     paddingTop: 80,
   },

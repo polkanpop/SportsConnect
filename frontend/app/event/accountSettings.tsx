@@ -303,6 +303,11 @@ export default function AccountSettingsScreen() {
       await updateUserInfo(userid, { name: nameValue.trim() })
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) })
+      // Immediately patch the in-memory dashboard cache so profile.tsx / Settings reflect
+      // the new name without waiting for the background refetch to complete.
+      queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
+        old ? { ...old, userinfo: { ...(old.userinfo ?? {}), name: nameValue.trim() } } : old
+      )
       // Also update the cached @backendProfile so Settings/profile reads the new name immediately
       try {
         const raw = await AsyncStorage.getItem('@backendProfile')

@@ -28,10 +28,14 @@ import ReviewsPanel from "@/app/event/reviewsPanel";
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useTranslation } from '@/constants/translations'
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import { useTheme } from '@/providers/theme-provider'
 
 export default function Home() {
   const router = useRouter();
   const tc = useThemeColors();
+  const { isDark } = useTheme();
+  // Toned-down orange for light mode category cards (avoids neon, still vibrant)
+  const categoryCardBg = isDark ? tc.brand : '#D95E18';
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null
@@ -106,7 +110,7 @@ export default function Home() {
     {
       icon: ICONS.coachIcon,
       label: t('HOME_CAT_COACH'),
-      color: tc.brand,
+      color: categoryCardBg,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/tsList",
@@ -114,7 +118,7 @@ export default function Home() {
     {
       icon: ICONS.event_category,
       label: t('HOME_CAT_EVENT'),
-      color: tc.brand,
+      color: categoryCardBg,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       route: "/event/eventList",
@@ -122,7 +126,7 @@ export default function Home() {
     {
       icon: ICONS.court,
       label: t('HOME_CAT_COURT'),
-      color: tc.brand,
+      color: categoryCardBg,
       iconStyle: { width: 50, height: 50 },
       labelStyle: categoryLabelStyle,
       // Updated to point to the new simplified court list screen
