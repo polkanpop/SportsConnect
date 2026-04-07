@@ -85,25 +85,25 @@ function isHiddenSessionStatus(statusRaw: unknown): boolean {
 // The panel must show ALL sessions (past, present, completed) so the coach can
 // review participants at any time. Only cancelled sessions are hidden.
 
-function formatSessionDateLabel(session: { time?: string | null }) {
+function formatSessionDateLabel(session: { time?: string | null }, datePrefix = 'Date: ', dateFallback = 'Date: -') {
   const candidate = String(session.time || '').trim()
   const d = candidate ? parseTimestampLoose(candidate) : null
-  if (!d || Number.isNaN(d.getTime())) return 'Date: -'
+  if (!d || Number.isNaN(d.getTime())) return dateFallback
   const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   const yyyy = String(d.getFullYear())
-  return `Date: ${weekday}, ${mm}-${dd}-${yyyy}`
+  return `${datePrefix}${weekday}, ${mm}-${dd}-${yyyy}`
 }
 
-function formatSessionTimeLabel(session: { start_timestamp?: string | null; end_timestamp?: string | null; time?: string | null }): string | null {
+function formatSessionTimeLabel(session: { start_timestamp?: string | null; end_timestamp?: string | null; time?: string | null }, timePrefix = 'Time: '): string | null {
   const candidate = String(session.start_timestamp || session.time || '').trim()
   const s = candidate ? parseTimestampLoose(candidate) : null
   if (!s || Number.isNaN(s.getTime())) return null
   const fmt = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   const e = session.end_timestamp ? parseTimestampLoose(session.end_timestamp) : null
-  if (e && !Number.isNaN(e.getTime())) return `Time: ${fmt(s)} - ${fmt(e)}`
-  return `Time: ${fmt(s)}`
+  if (e && !Number.isNaN(e.getTime())) return `${timePrefix}${fmt(s)} - ${fmt(e)}`
+  return `${timePrefix}${fmt(s)}`
 }
 
 function asStringArray(v: unknown): string[] {
@@ -1375,16 +1375,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         {s.title || `Session #${s.sessionid}`}
                       </Text>
                       <Text style={{ marginTop: 6, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>
-                        {formatSessionDateLabel(s)}
+                        {formatSessionDateLabel(s, t('EVENT_PANEL_DATE_PREFIX'), t('EVENT_PANEL_DATE_FALLBACK'))}
                       </Text>
-                      {!!formatSessionTimeLabel(s) && (
+                      {!!formatSessionTimeLabel(s, t('EVENT_PANEL_TIME_PREFIX')) && (
                         <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>
-                          {formatSessionTimeLabel(s)}
+                          {formatSessionTimeLabel(s, t('EVENT_PANEL_TIME_PREFIX'))}
                         </Text>
                       )}
                       {!!(Array.isArray(s.venue) ? s.venue[0] : s.venue) && (
                         <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>
-                          Venue: {Array.isArray(s.venue) ? s.venue[0] : s.venue}
+                          {t('EVENT_PANEL_VENUE_PREFIX')}{Array.isArray(s.venue) ? s.venue[0] : s.venue}
                         </Text>
                       )}
                       <Text
@@ -1397,7 +1397,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                           letterSpacing: 0.6,
                         }}
                       >
-                        PARTICIPANTS: {s.numberofpeople ?? 0}/{s.participants_cap ?? '-'}
+                        {t('EVENT_PANEL_PARTICIPANTS_PREFIX')}{s.numberofpeople ?? 0}/{s.participants_cap ?? '-'}
                       </Text>
                     </View>
                 </TouchableOpacity>
@@ -1409,8 +1409,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
 
       {sessions.length > 0 && selectedSessionId != null && (
         <>
-          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 10, marginBottom: 8, color: tc.textPrimary }}>Applicant List</Text>
-          {bookingsError && <Text style={{ color: 'red', marginBottom: 8 }}>Failed to load applicants: {bookingsError}</Text>}
+          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 10, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_APPLICANT_LIST')}</Text>
+          {bookingsError && <Text style={{ color: 'red', marginBottom: 8 }}>{t('EVENT_PANEL_APPLICANT_LOAD_ERROR')}{bookingsError}</Text>}
 
           {bookingsLoading ? (
             <SkeletonPulse>
@@ -1422,7 +1422,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             </SkeletonPulse>
           ) : applicants.length === 0 ? (
             <View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 14 }}>
-              <Text style={{ color: tc.textSecondary }}>No pending requests.</Text>
+              <Text style={{ color: tc.textSecondary }}>{t('EVENT_PANEL_NO_APPLICANTS')}</Text>
             </View>
           ) : (
             <View>
@@ -1541,7 +1541,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             </View>
           )}
 
-          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>Participant List</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_PARTICIPANT_LIST')}</Text>
           {bookingsLoading ? (
             <SkeletonPulse>
               <View style={{ paddingVertical: 12 }}>
@@ -1552,7 +1552,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             </SkeletonPulse>
           ) : participants.length === 0 ? (
             <View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 14 }}>
-              <Text style={{ color: tc.textSecondary }}>No participants yet.</Text>
+              <Text style={{ color: tc.textSecondary }}>{t('EVENT_PANEL_NO_PARTICIPANTS')}</Text>
             </View>
           ) : (
             <View>
@@ -1609,7 +1609,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             </View>
           )}
 
-          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>Host List</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_HOST_LIST')}</Text>
           <View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 14 }}>
             {hostsError ? (
               <Text style={{ color: '#B91C1C', fontWeight: '700' }}>{hostsError}</Text>
@@ -1628,7 +1628,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 </View>
               </SkeletonPulse>
             ) : hosts.length === 0 ? (
-              <Text style={{ color: tc.textSecondary }}>No hosts yet.</Text>
+              <Text style={{ color: tc.textSecondary }}>{t('EVENT_PANEL_NO_HOSTS')}</Text>
             ) : (
               <View>
                 {hosts.map((h) => (
@@ -1648,7 +1648,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         {h.name}
                       </Text>
                       <Text style={{ color: tc.textSecondary, marginTop: 2 }} numberOfLines={1}>
-                        Host
+                        {t('EVENT_PANEL_ROLE_HOST')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -1657,16 +1657,16 @@ export default function TrainingSessionPanel({ coachId }: Props) {
             )}
           </View>
 
-          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>Administrator List</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_ADMIN_LIST')}</Text>
           <View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 14 }}>
-            <Text style={{ color: tc.textSecondary }}>No administrators yet.</Text>
+            <Text style={{ color: tc.textSecondary }}>{t('EVENT_PANEL_NO_ADMINS')}</Text>
           </View>
 
-          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>Block List</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', marginTop: 14, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_BLOCK_LIST')}</Text>
           <View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 14 }}>
             <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tc.divider }}>
-              <Text style={{ flex: 1.2, fontWeight: '700', color: tc.textPrimary }}>User</Text>
-              <Text style={{ flex: 1.4, fontWeight: '700', color: tc.textPrimary }}>Blocked At</Text>
+              <Text style={{ flex: 1.2, fontWeight: '700', color: tc.textPrimary }}>{t('EVENT_PANEL_BLOCK_COL_USER')}</Text>
+              <Text style={{ flex: 1.4, fontWeight: '700', color: tc.textPrimary }}>{t('EVENT_PANEL_BLOCK_COL_AT')}</Text>
               <Text style={{ flex: 1.0, fontWeight: '700', color: tc.textPrimary, textAlign: 'right' }} />
             </View>
 
@@ -1687,7 +1687,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                 </View>
               </SkeletonPulse>
             ) : blocked.length === 0 ? (
-              <Text style={{ color: tc.textSecondary, marginTop: 10 }}>No blocked users.</Text>
+              <Text style={{ color: tc.textSecondary, marginTop: 10 }}>{t('EVENT_PANEL_NO_BLOCKED')}</Text>
             ) : (
               <View style={{ marginTop: 8 }}>
                 {blocked.map((b) => (
@@ -1727,7 +1727,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
               marginBottom: 8,
             }}
           >
-            <Text style={{ fontSize: 15, fontWeight: '700', color: tc.textPrimary }}>Event Modify</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: tc.textPrimary }}>{t('TS_PANEL_MODIFY_TITLE')}</Text>
             <TouchableOpacity
               activeOpacity={0.75}
               onPress={() => router.push({ pathname: '/event/details', params: { id: `created_session_${selectedSessionId}` } } as any)}
@@ -1780,7 +1780,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   }}
                 />
 
-                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>Images</Text>
+                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>{t('COMMON_LABEL_IMAGES')}</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -1796,9 +1796,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         alignSelf: 'flex-start',
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: COLORS.neutral350,
+                        borderColor: tc.border,
                         borderStyle: 'dashed',
-                        backgroundColor: COLORS.neutral0,
+                        backgroundColor: tc.bgElevated,
                         alignItems: 'center',
                         justifyContent: 'center',
                         overflow: 'hidden',
@@ -1817,14 +1817,12 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                           width: 28,
                           height: 28,
                           borderRadius: 14,
-                          backgroundColor: COLORS.neutral0,
-                          borderWidth: 1,
-                          borderColor: COLORS.neutral200,
+                          backgroundColor: 'rgba(0,0,0,0.45)',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
                       >
-                        <Text style={{ fontSize: 18, lineHeight: 20, fontWeight: '700', color: COLORS.neutral925, marginTop: -1 }}>×</Text>
+                        <Text style={{ fontSize: 18, lineHeight: 20, fontWeight: '700', color: '#ffffff', marginTop: -1 }}>×</Text>
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -1837,9 +1835,9 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         alignSelf: 'flex-start',
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: COLORS.neutral350,
+                        borderColor: tc.border,
                         borderStyle: 'dashed',
-                        backgroundColor: COLORS.neutral0,
+                        backgroundColor: tc.bgElevated,
                         alignItems: 'center',
                         justifyContent: 'center',
                         overflow: 'hidden',
@@ -1854,7 +1852,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         {imageUploading ? (
                           <ActivityIndicator size="small" color={COLORS.neutral800} />
                         ) : (
-                          <><Image source={ICONS.camera} style={{ width: 24, height: 24, tintColor: COLORS.neutral500, marginBottom: 2 }} resizeMode="contain" /><Text style={{ fontSize: 22, fontWeight: '600', color: COLORS.neutral600, marginTop: 2 }}>+</Text></>
+                          <Text style={{ fontSize: 22, fontWeight: '600', color: tc.textSecondary }}>+</Text>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -1898,11 +1896,11 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   </View>
                 </Modal>
 
-                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>Participants cap</Text>
+                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>{t('EVENT_PANEL_LABEL_PARTICIPANTS_CAP')}</Text>
                 <TextInput
                   value={editCap}
                   onChangeText={setEditCap}
-                  placeholder="e.g. 20"
+                  placeholder={t('EVENT_PANEL_PLACEHOLDER_CAP')}
                   keyboardType="numeric"
                   placeholderTextColor={tc.textMuted}
                   style={{ backgroundColor: tc.bgBase, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12, color: tc.textPrimary }}
@@ -1918,7 +1916,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>{saving ? 'Saving...' : 'Save changes'}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>{saving ? t('EVENT_PANEL_BTN_SAVING') : t('EVENT_PANEL_BTN_SAVE')}</Text>
                 </TouchableOpacity>
 
                 {saveSuccessMessage ? <Text style={{ marginTop: 8, color: '#15803d', fontWeight: '700', textAlign: 'center' }}>{saveSuccessMessage}</Text> : null}
@@ -1934,7 +1932,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>{cancellingSession ? 'Cancelling...' : 'Cancel Session'}</Text>
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>{cancellingSession ? t('TS_PANEL_BTN_CANCELLING_SESSION') : t('TS_PANEL_BTN_CANCEL_SESSION')}</Text>
                 </TouchableOpacity>
               </>
             )}

@@ -941,6 +941,14 @@ export default function Home() {
                     ? optimizeRemoteImageUrl(heroUri, { width: 1200, height: 700, quality: 75, resize: 'cover' })
                     : null
 
+                  const rawVenues = Array.isArray((ev as any).venue) ? (ev as any).venue as string[] : ((ev as any).venue ? [String((ev as any).venue)] : [])
+                  const lowerVenues = rawVenues.map((v: string) => String(v).toLowerCase())
+                  const venueTag = lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')
+                    ? t('MAP_LABEL_IN_OUTDOOR')
+                    : lowerVenues.includes('indoor') ? t('MAP_LABEL_INDOOR')
+                    : lowerVenues.includes('outdoor') ? t('MAP_LABEL_OUTDOOR')
+                    : null
+
                   return (
                     <TouchableOpacity
                       key={ev.eventid}
@@ -970,28 +978,27 @@ export default function Home() {
                           borderBottomColor: tc.border,
                         }}
                       >
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text
-                            numberOfLines={3}
-                            style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: tc.textPrimary }}
-                          >
-                            {title}
-                          </Text>
-                          {!!dateTimeLine && (
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                          <View style={{ flex: 1, minWidth: 0 }}>
                             <Text
-                              numberOfLines={1}
-                              style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: tc.textSecondary }}
+                              numberOfLines={2}
+                              style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: tc.textPrimary }}
                             >
-                              {dateTimeLine}
+                              {title}
                             </Text>
-                          )}
-                          {!!(Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue) && (
-                            <Text
-                              numberOfLines={1}
-                              style={{ marginTop: 2, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '600', color: tc.textMuted }}
-                            >
-                              {Array.isArray((ev as any).venue) ? (ev as any).venue[0] : (ev as any).venue}
-                            </Text>
+                            {!!dateTimeLine && (
+                              <Text
+                                numberOfLines={1}
+                                style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: tc.textSecondary }}
+                              >
+                                {dateTimeLine}
+                              </Text>
+                            )}
+                          </View>
+                          {!!venueTag && (
+                            <View style={{ marginLeft: 6, marginTop: 1, backgroundColor: tc.brand + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: tc.brand }}>{venueTag}</Text>
+                            </View>
                           )}
                         </View>
 

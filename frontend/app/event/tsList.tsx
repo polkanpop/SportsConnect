@@ -614,7 +614,7 @@ const TrainingSessionListScreen = () => {
             const dateDisplay = (() => {
               const start = (s as any)?.start_timestamp ?? s.time
               const end = (s as any)?.end_timestamp
-              if (!start) return 'Unknown date'
+              if (!start) return t('COMMON_LABEL_UNKNOWN_DATE')
               const startD = parseMaybeTimestamp(String(start)) || new Date(String(start))
               const endD = end ? (parseMaybeTimestamp(String(end)) || new Date(String(end))) : null
               const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })

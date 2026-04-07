@@ -798,18 +798,18 @@ export default function EventCreateScreen() {
             <Text style={[styles.fieldLabel, { color: tc.textPrimary, marginTop: 12 }]}>{t('COMMON_LABEL_IMAGES')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
               {remoteImageUrls.map((uri) => (
-                <View key={uri} style={styles.coverFrame}>
+                <View key={uri} style={[styles.coverFrame, { borderColor: tc.border, backgroundColor: tc.bgElevated }]}>
                   <View style={styles.coverPressable}>
                     <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                   </View>
-                  <TouchableOpacity onPress={() => requestRemoveImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                    <Text style={styles.removeXText}>×</Text>
+                  <TouchableOpacity onPress={() => requestRemoveImage(uri)} style={[styles.removeXBtn, { backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 0 }]} activeOpacity={0.85}>
+                    <Text style={[styles.removeXText, { color: '#ffffff' }]}>×</Text>
                   </TouchableOpacity>
                 </View>
               ))}
 
               {remoteImageUrls.length < 6 && (
-                <View style={styles.coverFrame}>
+                <View style={[styles.coverFrame, { borderColor: tc.border, backgroundColor: tc.bgElevated }]}>
                   <TouchableOpacity
                     onPress={pickImages}
                     disabled={imageUploading}
@@ -819,7 +819,7 @@ export default function EventCreateScreen() {
                     {imageUploading ? (
                       <ActivityIndicator size="small" color={COLORS.neutral800} />
                     ) : (
-                      <Text style={styles.addPlus}>+</Text>
+                      <Text style={[styles.addPlus, { color: tc.textSecondary }]}>+</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -877,11 +877,11 @@ export default function EventCreateScreen() {
                 {!!entryFeeError && <Text style={styles.inlineErrorText}>{entryFeeError}</Text>}
                 <Text style={[styles.fieldLabel, { color: tc.textPrimary, marginTop:12 }]}>{t('TS_CREATE_FIELD_PAYMENT_METHODS')}</Text>
                 <View style={styles.paymentRow}>
-                  <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface }, payCash && styles.payMethodActive]}>
+                  <TouchableOpacity onPress={() => setPayCash(c => !c)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface, borderWidth: 1, borderColor: tc.border }, payCash && styles.payMethodActive]}>
                     <Image source={ICONS.cashIcon} style={styles.payIcon} />
                     <Text style={[styles.payText, { color: tc.textPrimary }]}>{t('BOOKING_COURT_PAYMENT_CASH')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setPayVnPay(v => !v)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface }, payVnPay && styles.payMethodActive]}>
+                  <TouchableOpacity onPress={() => setPayVnPay(v => !v)} style={[styles.payMethodBtn, { backgroundColor: tc.bgSurface, borderWidth: 1, borderColor: tc.border }, payVnPay && styles.payMethodActive]}>
                     <Image source={ICONS.vnpayIcon} style={styles.payIcon} />
                     <Text style={[styles.payText, { color: tc.textPrimary }]}>{t('BOOKING_COURT_PAYMENT_VNPAY')}</Text>
                   </TouchableOpacity>
