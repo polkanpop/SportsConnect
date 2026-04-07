@@ -1973,7 +1973,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'approve' })); try { await updateCourtBooking(b.courtbookingid, { status: 'approved', bookingstatus: 'upcoming' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'approved', bookingstatus: 'upcoming' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || t('COURT_PANEL_ERR_APPROVE')) } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tc.brandMuted, alignItems: 'center', justifyContent: 'center', marginRight: 10, opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1 }}>
                               {mutatingBookingIds[b.courtbookingid] === 'approve' ? <ActivityIndicator size={14} /> : <Image source={ICONS.approve} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
-                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'reject' })); try { await updateCourtBooking(b.courtbookingid, { status: 'rejected', bookingstatus: 'cancelled' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'rejected', bookingstatus: 'cancelled' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || t('COURT_PANEL_ERR_REJECT')) } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1, marginRight: 8 }}>
+                            <TouchableOpacity disabled={!!mutatingBookingIds[b.courtbookingid]} onPress={async () => { setMutatingBookingIds(prev => ({ ...prev, [b.courtbookingid]: 'reject' })); try { await updateCourtBooking(b.courtbookingid, { status: 'rejected', bookingstatus: 'cancelled' }); setCourtBookings(prev => prev.map(x => x.courtbookingid === b.courtbookingid ? { ...x, status: 'rejected', bookingstatus: 'cancelled' } : x)) } catch (e: any) { Alert.alert('Error', e?.message || t('COURT_PANEL_ERR_REJECT')) } finally { setMutatingBookingIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) } }} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.18)', alignItems: 'center', justifyContent: 'center', opacity: mutatingBookingIds[b.courtbookingid] ? 0.6 : 1, marginRight: 8 }}>
                               {mutatingBookingIds[b.courtbookingid] === 'reject' ? <ActivityIndicator size={14} /> : <Image source={ICONS.reject} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
                           </>
@@ -1991,7 +1991,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 } catch (e: any) { Alert.alert('Error', e?.message || t('COMMON_LABEL_ERROR')) }
                                 finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
                               }}
-                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
+                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(34,197,94,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
                             >
                               {mutatingAttendanceIds[b.courtbookingid] === 'attended' ? <ActivityIndicator size={14} /> : <Image source={ICONS.attended} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
@@ -2005,14 +2005,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 } catch (e: any) { Alert.alert('Error', e?.message || t('COMMON_LABEL_ERROR')) }
                                 finally { setMutatingAttendanceIds(prev => { const n = { ...prev }; delete n[b.courtbookingid]; return n }) }
                               }}
-                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isNotAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
+                              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.18)', alignItems: 'center', justifyContent: 'center', marginRight: 6, opacity: (!isNotAttendedEnabled || !!mutatingAttendanceIds[b.courtbookingid]) ? 0.4 : 1 }}
                             >
                               {mutatingAttendanceIds[b.courtbookingid] === 'missed' ? <ActivityIndicator size={14} /> : <Image source={ICONS.notAttended} style={{ width: 18, height: 18 }} resizeMode="contain" />}
                             </TouchableOpacity>
                           </>
                         )}
                         <TouchableOpacity activeOpacity={0.75} onPress={() => setExpandedNoteIds(prev => { const n = new Set(prev); if (n.has(b.courtbookingid)) n.delete(b.courtbookingid); else n.add(b.courtbookingid); return n })} style={{ padding: 6 }}>
-                          <Image source={ICONS.userNote} style={{ width: 16, height: 16 }} resizeMode="contain" />
+                          <Image source={ICONS.userNote} style={{ width: 16, height: 16, tintColor: tc.iconMuted }} resizeMode="contain" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2434,7 +2434,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COMMON_LABEL_IMAGES')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {(subEditImages || []).map((uri) => (
-                  <View key={uri} style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
+                  <View key={uri} style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                     <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
                       <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
@@ -2445,14 +2445,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 ))}
 
                 {(subEditImages || []).length < 1 && (
-                  <View style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
+                  <View style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                     <TouchableOpacity
                       onPress={pickSubCourtImage}
                       disabled={imageUploading}
                       activeOpacity={0.85}
                       style={styles.coverPressable}
                     >
-                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>}
+                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>}
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2472,10 +2472,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       )
                     })}
                   </View>
-                  <Text style={[styles.label, { color: tc.textPrimary }]}>Schedule</Text>
+                  <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_PANEL_SCHEDULE')}</Text>
                   <View style={styles.weekRow}>
                     {WEEK_DAYS.map((label) => {
                       const active = scheduleDays.includes(label)
+                      const dayDisplayKey = `MAP_DAY_${label.toUpperCase()}` as any
                       return (
                         <TouchableOpacity
                           key={label}
@@ -2483,7 +2484,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           style={[styles.dayCell, { backgroundColor: tc.bgSurface, borderColor: tc.divider }, active && [styles.dayCellSelected, { backgroundColor: tc.brandSoft, borderColor: tc.brandSoft }]]}
                           activeOpacity={0.85}
                         >
-                          <Text style={[styles.dayLabel, { color: tc.textPrimary }, active && [styles.dayLabelSelected, { color: tc.brand }]]}>{label}</Text>
+                          <Text style={[styles.dayLabel, { color: tc.textPrimary }, active && [styles.dayLabelSelected, { color: tc.brand }]]}>{t(dayDisplayKey)}</Text>
                         </TouchableOpacity>
                       )
                     })}
@@ -2665,7 +2666,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       ))}
 
                       {(d.images || []).length < 1 && (
-                        <View style={[styles.serviceCoverFrame, imageUploading && styles.btnDisabled]}>
+                        <View style={[styles.serviceCoverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                           <TouchableOpacity
                             onPress={() => pickServiceImage(d.localId)}
                             disabled={imageUploading}
@@ -2675,7 +2676,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             {imageUploading ? (
                               <ActivityIndicator size="small" color={COLORS.neutral800} />
                             ) : (
-                              <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>
+                              <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>
                             )}
                           </TouchableOpacity>
                         </View>
@@ -2703,7 +2704,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
               {editImages.map((uri) => (
-                <View key={uri} style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
+                <View key={uri} style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
                     <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                   </TouchableOpacity>
@@ -2714,9 +2715,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               ))}
 
               {editImages.length < 3 && (
-                <View style={[styles.coverFrame, imageUploading && styles.btnDisabled]}>
+                <View style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity onPress={pickImage} disabled={imageUploading} activeOpacity={0.85} style={styles.coverPressable}>
-                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={styles.addPlusIcon} resizeMode="contain" /><Text style={styles.addPlus}>+</Text></>}
+                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -2942,7 +2943,7 @@ const styles = StyleSheet.create({
     height: '100%',
     paddingHorizontal: 12,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     color: '#111',
   },
   addressEditBtn: {

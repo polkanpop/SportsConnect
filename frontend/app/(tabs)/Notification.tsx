@@ -517,7 +517,8 @@ export default function NotificationsPage() {
     <TouchableOpacity
       style={[
         styles.notificationRow,
-        (item.status || '').toLowerCase() !== "unread" && styles.viewedNotification,
+        { backgroundColor: tc.bgSurface, borderBottomColor: tc.divider },
+        (item.status || '').toLowerCase() !== "unread" && { backgroundColor: tc.bgBase },
         updating === item.notificationid && styles.updatingRow,
         deleteMode && selectedIds.has(item.notificationid) && [styles.selectedNotification, { backgroundColor: tc.brandSoft }],
       ]}
