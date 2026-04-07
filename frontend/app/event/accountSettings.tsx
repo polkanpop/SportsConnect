@@ -303,7 +303,6 @@ export default function AccountSettingsScreen() {
     try {
       await updateUserInfo(userid, { name: nameValue.trim() })
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) })
       // Bust the fetchWithCache AsyncStorage entry so Settings.tsx/getUserInfoByUserIdCached
       // won't read stale data that would overwrite the new name.
       await invalidateCache(`cache:userinfo:user:${userid}:v1`)

@@ -2438,7 +2438,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => requestRemoveImage(uri, 'sub')} style={styles.removeXBtn} activeOpacity={0.85}>
-                      <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
+                      <Text style={styles.removeXText}>×</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -2658,7 +2658,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => removeServiceImage(d.localId, uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                            <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
+                            <Text style={styles.removeXText}>×</Text>
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -2707,7 +2707,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri, 'main')} style={styles.removeXBtn} activeOpacity={0.85}>
-                    <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
+                    <Text style={styles.removeXText}>×</Text>
                   </TouchableOpacity>
                 </View>
               ))}
@@ -3300,18 +3300,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   serviceHeaderDeleteCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     backgroundColor: '#ef4444',
     justifyContent: 'center',
     alignItems: 'center',
   },
   serviceHeaderDeleteCircleText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 20,
+    lineHeight: 16,
   },
   serviceChevron: {
     width: 18,

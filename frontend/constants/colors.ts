@@ -94,7 +94,7 @@ export const COLORS = {
   darkGray: '#A9A9A9',
   hotPink: '#FF69B4',
   orange500: '#FF8147',
-  gold: '#FFA024',
+  gold: '#FACC15',
   coral: '#FF5733',
 
   cyan50: '#E0F7FA',

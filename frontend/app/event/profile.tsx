@@ -12,6 +12,8 @@ import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useTranslation } from '@/constants/translations'
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { setCache } from '@/lib/cache'
 
 export default function Profile() {
   const router = useRouter()
@@ -208,7 +210,20 @@ export default function Profile() {
       const remoteUrl = await uploadToCloudinary(uri)
       await updateUserPfp(userid, remoteUrl)
       setPfpOverrideUri(remoteUrl)
-      queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      // Patch dashboard cache in-place — no invalidation avoids stale refetch race with backend Redis
+      queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
+        old ? { ...old, userinfo: { ...(old.userinfo ?? {}), pfp: remoteUrl } } : old
+      )
+      // Pre-warm AsyncStorage cache so Settings.tsx shows new pfp immediately
+      try {
+        await setCache(`cache:userinfo:user:${userid}:v1`, { ...(userInfo as any ?? {}), pfp: remoteUrl }, 60_000, 120_000)
+        const raw = await AsyncStorage.getItem('@backendProfile')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          parsed.pfp = remoteUrl
+          await AsyncStorage.setItem('@backendProfile', JSON.stringify(parsed))
+        }
+      } catch { /* ignore cache errors */ }
     } catch (e: any) {
       console.error('PFP upload failed', e)
       openActionModal({
@@ -327,7 +342,20 @@ export default function Profile() {
               setPfpOverrideUri(null)
               try {
                 await deleteMyProfilePicture()
-                queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+                // Patch dashboard cache in-place with pfp cleared
+                queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
+                  old ? { ...old, userinfo: { ...(old.userinfo ?? {}), pfp: null } } : old
+                )
+                // Pre-warm AsyncStorage cache with pfp cleared
+                try {
+                  await setCache(`cache:userinfo:user:${userid}:v1`, { ...(userInfo as any ?? {}), pfp: null }, 60_000, 120_000)
+                  const raw = await AsyncStorage.getItem('@backendProfile')
+                  if (raw) {
+                    const parsed = JSON.parse(raw)
+                    parsed.pfp = null
+                    await AsyncStorage.setItem('@backendProfile', JSON.stringify(parsed))
+                  }
+                } catch { /* ignore cache errors */ }
               } catch (e: any) {
                 console.error('Delete PFP failed', e)
                 openActionModal({

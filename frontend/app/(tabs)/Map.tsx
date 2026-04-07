@@ -1958,7 +1958,7 @@
                             source={ICONS.starCal}
                             style={[
                               styles.favoriteIcon,
-                              { tintColor: isFavorite ? tc.brand : tc.textPrimary },
+                              { tintColor: isFavorite ? COLORS.gold : tc.textPrimary },
                             ]}
                           />
                         </TouchableOpacity>
