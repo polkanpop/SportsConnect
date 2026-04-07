@@ -46,7 +46,7 @@ import {
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
-import { invalidateCache } from '@/lib/cache'
+import { invalidateCache, setCache } from '@/lib/cache'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
@@ -312,13 +312,18 @@ export default function AccountSettingsScreen() {
       queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
         old ? { ...old, userinfo: { ...(old.userinfo ?? {}), name: nameValue.trim() } } : old
       )
-      // Also update the cached @backendProfile so Settings/profile reads the new name immediately
+      // Also update the cached @backendProfile so Settings/profile reads the new name immediately.
+      // Then pre-warm fetchWithCache slot so getUserInfoByUserIdCached returns the new name
+      // even if the backend's Redis cache hasn't been invalidated yet (background-task race).
       try {
         const raw = await AsyncStorage.getItem('@backendProfile')
         if (raw) {
           const parsed = JSON.parse(raw)
           parsed.name = nameValue.trim()
           await AsyncStorage.setItem('@backendProfile', JSON.stringify(parsed))
+          // Pre-warm the userinfo cache entry so the next getUserInfoByUserIdCached call
+          // reads from AsyncStorage (with the correct name) instead of hitting the backend.
+          await setCache(`cache:userinfo:user:${userid}:v1`, parsed, 60_000, 120_000)
         }
       } catch { /* ignore */ }
       setOriginalName(nameValue.trim())
@@ -1184,17 +1189,10 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
 }) {
   const { t } = useTranslation()
   const tc = useThemeColors()
-  const isZalo = label === 'Zalo'
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
-        {isZalo ? (
-          <View style={{ width: iconSize || 24, height: iconSize || 24, borderRadius: (iconSize || 24) / 2, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
-            <Image source={icon} style={[styles.linkedIcon, { width: (iconSize || 24) - 4, height: (iconSize || 24) - 4 }]} resizeMode="contain" />
-          </View>
-        ) : (
-          <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
-        )}
+        <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
         {linked && (
           <View style={styles.linkedCheckBadge}>
             <Text style={styles.linkedCheckText}>✓</Text>

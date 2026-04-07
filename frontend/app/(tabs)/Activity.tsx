@@ -877,8 +877,8 @@ export default function ActivityPage() {
             {weekDays.map((dayInfo, index) => (
               <View key={index} style={[styles.dayContainer, dayInfo.isToday && styles.todayContainer]}>
                 <View style={[styles.dayHeader, dayInfo.isToday && styles.todayHeader]}>
-                  <Text style={styles.dateText}>{dayInfo.dateNumber}</Text>
-                  <Text style={styles.dayText}>{dayInfo.dayLetter}</Text>
+                  <Text style={[styles.dateText, { color: tc.textPrimary }]}>{dayInfo.dateNumber}</Text>
+                  <Text style={[styles.dayText, { color: tc.textPrimary }]}>{dayInfo.dayLetter}</Text>
                 </View>
                 <View style={styles.calendarDaySeparator} />
                 <View style={styles.bookingsContainer}>
@@ -935,7 +935,7 @@ export default function ActivityPage() {
                     <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{statusLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
-                      style={[styles.dropdownCaret, openFilter === 'status' && styles.dropdownCaretOpen]}
+                      style={[styles.dropdownCaret, openFilter === 'status' && styles.dropdownCaretOpen, { tintColor: tc.textPrimary }]}
                     />
                   </View>
                 </TouchableOpacity>
@@ -949,7 +949,7 @@ export default function ActivityPage() {
                     <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{activityLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
-                      style={[styles.dropdownCaret, openFilter === 'activity' && styles.dropdownCaretOpen]}
+                      style={[styles.dropdownCaret, openFilter === 'activity' && styles.dropdownCaretOpen, { tintColor: tc.textPrimary }]}
                     />
                   </View>
                 </TouchableOpacity>
@@ -963,7 +963,7 @@ export default function ActivityPage() {
                     <Text style={[styles.dropdownTriggerText, { color: tc.textPrimary }]}>{typeLabel}</Text>
                     <Image
                       source={ICONS.arrowright}
-                      style={[styles.dropdownCaret, openFilter === 'type' && styles.dropdownCaretOpen]}
+                      style={[styles.dropdownCaret, openFilter === 'type' && styles.dropdownCaretOpen, { tintColor: tc.textPrimary }]}
                     />
                   </View>
                 </TouchableOpacity>

@@ -549,7 +549,7 @@ export default function Home() {
           >
             <Image
               source={ICONS.homepageMenu}
-              style={{ width: 24, height: 24 }}
+              style={{ width: 24, height: 24, tintColor: tc.textPrimary }}
               resizeMode="contain"
             />
           </TouchableOpacity>
@@ -580,7 +580,7 @@ export default function Home() {
             ) : (
               <Image
                 source={ICONS.accountCircle}
-                style={{ width: 42, height: 42 }}
+                style={{ width: 42, height: 42, tintColor: tc.textPrimary }}
                 resizeMode="contain"
               />
             )}
