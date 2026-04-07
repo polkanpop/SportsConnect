@@ -25,6 +25,7 @@ import { ICONS } from '@/constants/icons'
 import { useVoiceAutomation } from '@/providers/voice-automation-provider'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import { useSegments } from 'expo-router'
 
 const BUTTON_SIZE = 56
 const EDGE_PADDING = 12
@@ -39,9 +40,13 @@ let _lastPos = { x: _screenW - BUTTON_SIZE - EDGE_PADDING, y: _screenH - 180 }
 export default function FloatingVoiceButton() {
   const { enabled, flowState, startListening, dismiss } = useVoiceAutomation()
   const { isLoggedIn } = useAuthContext()
+  const segments = useSegments()
 
-  // Don't render if feature is disabled, flow active, or user not logged in
-  if (!enabled || !isLoggedIn || flowState !== 'idle') return null
+  // Hide on auth screens regardless of login state
+  const isOnAuthScreen = segments[0] === '(auth)'
+
+  // Don't render if feature is disabled, flow active, user not logged in, or on auth screens
+  if (!enabled || !isLoggedIn || flowState !== 'idle' || isOnAuthScreen) return null
 
   return <DraggableButton onTap={startListening} />
 }

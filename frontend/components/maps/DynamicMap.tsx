@@ -5,6 +5,7 @@ import Mapbox from '@rnmapbox/maps'
 
 import { GOONG_MAPTILES_KEY, MAPBOX_PUBLIC_TOKEN } from '@/env'
 import { buildGoongStyleUrl, regionToZoom, zoomToRegion } from '@/lib/goong-map'
+import { useTheme } from '@/providers/theme-provider'
 
 const MAPBOX_TOKEN_RUNTIME = (
   MAPBOX_PUBLIC_TOKEN ||
@@ -138,7 +139,8 @@ export function DynamicMap({
   const commandedRegionRef = useRef<Region | undefined>(undefined)
   const executionEnvironment = readExecutionEnvironment()
   const isExpoGo = executionEnvironment === 'storeClient'
-  const goongStyleUrl = buildGoongStyleUrl(GOONG_MAPTILES_KEY)
+  const { theme: themeMode } = useTheme()
+  const goongStyleUrl = buildGoongStyleUrl(GOONG_MAPTILES_KEY, themeMode)
   const styleUrl = goongStyleUrl || 'mapbox://styles/mapbox/streets-v12'
   const canRenderMapbox = !isExpoGo && !!MAPBOX_TOKEN_RUNTIME
   const initialRegionFromCenter = useMemo(() => {

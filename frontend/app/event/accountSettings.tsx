@@ -302,6 +302,7 @@ export default function AccountSettingsScreen() {
     try {
       await updateUserInfo(userid, { name: nameValue.trim() })
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) })
       // Also update the cached @backendProfile so Settings/profile reads the new name immediately
       try {
         const raw = await AsyncStorage.getItem('@backendProfile')

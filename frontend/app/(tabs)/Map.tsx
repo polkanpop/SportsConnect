@@ -1350,8 +1350,8 @@
                           pinColor: selectedMarker?.id === marker.id
                             ? COLORS.green
                             : marker.isFavorite
-                              ? tc.brand
-                              : tc.brand,
+                              ? COLORS.gold
+                              : COLORS.brandOrangeDeep,
                         }))
                       : mapMode === 'events'
                       ? eventPins.map((pin): DynamicMapMarker => ({

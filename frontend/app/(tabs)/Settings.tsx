@@ -339,13 +339,13 @@ const SettingRowToggle = ({
 }) => (
   <Pressable
     onPress={onPress}
-    style={[styles.row, { borderBottomWidth: 0 }, tc && { borderBottomColor: tc.divider }]}
+    style={[styles.row, tc && { borderBottomColor: tc.divider }]}
   >
-    <View style={styles.rowLeft}>
+    <View style={[styles.rowLeft, { flex: 1 }]}>
       <Image source={icon} style={[styles.rowIcon, { tintColor: tc?.textPrimary ?? '#000' }]} />
-      <Text style={[styles.rowText, { color: tc?.textPrimary ?? '#000' }]}>{label}</Text>
+      <Text style={[styles.rowText, { color: tc?.textPrimary ?? '#000' }]} numberOfLines={1}>{label}</Text>
     </View>
-    <View style={{ backgroundColor: tc?.brand ?? '#7C3AED', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 }}>
+    <View style={{ backgroundColor: tc?.brand ?? '#7C3AED', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6, marginLeft: 8 }}>
       <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>{valueLabel}</Text>
     </View>
   </Pressable>
@@ -369,12 +369,12 @@ const SettingRowSwitch = ({
   trackColorTrue?: string;
   tc?: any;
 }) => (
-  <View style={[styles.row, { borderBottomWidth: 0 }, tc && { borderBottomColor: tc.divider }]}>
-    <View style={styles.rowLeft}>
+  <View style={[styles.row, tc && { borderBottomColor: tc.divider }]}>
+    <View style={[styles.rowLeft, { flex: 1 }]}>
       <Image source={icon} style={[styles.rowIcon, { tintColor: tc?.textPrimary ?? '#000' }]} />
       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, flexShrink: 1 }}>
-        <Text style={[styles.rowText, { flexShrink: 1, color: tc?.textPrimary ?? '#000' }]}>{label}</Text>
-        {sublabel ? <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8, color: tc?.textMuted ?? '#888' }]}>{sublabel}</Text> : null}
+        <Text style={[styles.rowText, { flexShrink: 1, color: tc?.textPrimary ?? '#000' }]} numberOfLines={1}>{label}</Text>
+        {sublabel ? <Text style={[styles.rowSubText, { marginTop: 0, marginLeft: 8, color: tc?.textMuted ?? '#888' }]} numberOfLines={1}>{sublabel}</Text> : null}
       </View>
     </View>
     <Switch
@@ -382,6 +382,7 @@ const SettingRowSwitch = ({
       onValueChange={onValueChange}
       trackColor={{ false: tc?.border ?? '#D1D5DB', true: trackColorTrue ?? tc?.brand ?? COLORS.brandOrangeDeep }}
       thumbColor="#FFFFFF"
+      style={{ marginLeft: 8 }}
     />
   </View>
 );

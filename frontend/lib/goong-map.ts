@@ -8,10 +8,11 @@ export type MapRegion = MapCoordinate & {
   longitudeDelta: number
 }
 
-export function buildGoongStyleUrl(apiKey: string) {
+export function buildGoongStyleUrl(apiKey: string, mode?: 'light' | 'dark') {
   const key = apiKey.trim()
   if (!key) return ''
-  return `https://tiles.goong.io/assets/goong_map_web.json?api_key=${encodeURIComponent(key)}`
+  const style = mode === 'dark' ? 'goong_map_dark' : 'goong_light_v2'
+  return `https://tiles.goong.io/assets/${style}.json?api_key=${encodeURIComponent(key)}`
 }
 
 export function regionToZoom(region: Pick<MapRegion, 'longitudeDelta'>) {
