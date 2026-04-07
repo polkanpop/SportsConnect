@@ -36,7 +36,7 @@ export default function Home() {
   const { isDark } = useTheme();
   // Category card color: brand purple in dark, soft peach in light (restored original)
   const categoryCardBg = isDark ? tc.brand : COLORS.orangeSoft;
-  const categoryLabelColor = isDark ? '#FFFFFF' : COLORS.brandOrangeDeep;
+  const categoryLabelColor = isDark ? '#FFFFFF' : tc.textPrimary;
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null

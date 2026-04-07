@@ -46,7 +46,7 @@ import {
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
-import { invalidateCache, setCache } from '@/lib/cache'
+import { getCache, invalidateCache, setCache } from '@/lib/cache'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
@@ -331,7 +331,10 @@ export default function AccountSettingsScreen() {
           await AsyncStorage.setItem('@backendProfile', JSON.stringify(parsed))
           // Pre-warm the userinfo cache entry so the next getUserInfoByUserIdCached call
           // reads from AsyncStorage (with the correct name) instead of hitting the backend.
-          await setCache(`cache:userinfo:user:${userid}:v1`, parsed, 60_000, 120_000)
+          const existingUserInfo = await getCache<any>(`cache:userinfo:user:${userid}:v1`)
+          const preWarm = { ...parsed }
+          if (existingUserInfo?.pfp) preWarm.pfp = existingUserInfo.pfp
+          await setCache(`cache:userinfo:user:${userid}:v1`, preWarm, 60_000, 120_000)
         }
       } catch { /* ignore */ }
       setOriginalName(nameValue.trim())
@@ -664,7 +667,7 @@ export default function AccountSettingsScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }]} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('ACCT_HEADER_TITLE')}</Text>
@@ -690,7 +693,7 @@ export default function AccountSettingsScreen() {
               placeholderTextColor={tc.placeholder}
               returnKeyType="done"
             />
-            <TouchableOpacity style={[styles.inlineBtn, { backgroundColor: tc.brand }, (nameValue.trim() === originalName.trim()) && { backgroundColor: tc.bgElevated }]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
+            <TouchableOpacity style={[styles.inlineBtn, { backgroundColor: tc.brand, borderLeftWidth: 1, borderLeftColor: tc.border }, (nameValue.trim() === originalName.trim()) && { backgroundColor: tc.bgElevated }]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
               {nameSaving
                 ? <ActivityIndicator size="small" color="#fff" />
                 : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: (nameValue.trim() === originalName.trim()) ? tc.textMuted : '#fff' }} />}
@@ -735,7 +738,7 @@ export default function AccountSettingsScreen() {
               autoCapitalize="none"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, { backgroundColor: tc.brand }, emailEdit.trim() === originalEmail.trim() && { backgroundColor: tc.bgElevated }]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand, borderLeftWidth: 1, borderLeftColor: tc.border }, emailEdit.trim() === originalEmail.trim() && { backgroundColor: tc.bgElevated }]}
               onPress={handleSaveEmail}
               disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}
             >
@@ -783,7 +786,7 @@ export default function AccountSettingsScreen() {
               keyboardType="phone-pad"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, { backgroundColor: tc.brand }, phoneEdit.trim() === originalPhone.trim() && { backgroundColor: tc.bgElevated }]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand, borderLeftWidth: 1, borderLeftColor: tc.border }, phoneEdit.trim() === originalPhone.trim() && { backgroundColor: tc.bgElevated }]}
               onPress={handleSavePhone}
               disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}
             >
@@ -1263,7 +1266,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
   backIcon: { width: 22, height: 22, tintColor: '#222' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
 

@@ -2089,6 +2089,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               }}
                               style={[
                                 styles.dayCell,
+                                { backgroundColor: tc.bgSurface, borderColor: tc.divider },
                                 isSelected && { backgroundColor: tc.brand, borderColor: tc.brand },
                                 hasBookings && !isSelected && { backgroundColor: tc.brandSoft, borderColor: tc.brand },
                                 isAvailable && !hasBookings && !isSelected && { backgroundColor: tc.brandSoft },
@@ -2096,7 +2097,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               ]}
                               activeOpacity={0.8}
                             >
-                              <Text style={[styles.dayLabel, (isSelected || hasBookings) && { color: tc.btnPrimaryText }]} numberOfLines={1}>{d.label}</Text>
+                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, (isSelected || hasBookings) && { color: tc.btnPrimaryText }]} numberOfLines={1}>{d.label}</Text>
                               <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
                             </TouchableOpacity>
                           )

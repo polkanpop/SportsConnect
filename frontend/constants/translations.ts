@@ -991,6 +991,14 @@ export const en = {
   EVENT_CREATE_SUCCESS_TITLE: 'Event Created!',
   EVENT_CREATE_MODAL_CONFIRM_TITLE: 'Confirm Creation',
   EVENT_CREATE_BOOKING_AWAITING_APPROVAL: 'Your court booking is awaiting approval — no approved court available yet.',
+
+  // Map Verify
+  MAP_VERIFY_TITLE: 'Map View',
+  MAP_VERIFY_BTN_SUBMIT: 'Submit Location',
+  MAP_VERIFY_BTN_EDIT_MARKER: 'Edit Marker',
+  MAP_VERIFY_ERR_MISSING_COORDS: 'Missing coordinates',
+  MAP_VERIFY_ERR_MSG: 'Please go back and verify the address again.',
+  COURT_REGISTER_PLACEHOLDER_DESCRIPTION: 'Describe something about your court',
 } as const
 
 // ─── VIETNAMESE ──────────────────────────────────────────────────
@@ -1975,6 +1983,14 @@ export const vi: Record<TranslationKey, string> = {
   EVENT_CREATE_SUCCESS_TITLE: 'Tạo sự kiện thành công!',
   EVENT_CREATE_MODAL_CONFIRM_TITLE: 'Xác nhận tạo',
   EVENT_CREATE_BOOKING_AWAITING_APPROVAL: 'Đặt sân của bạn đang chờ duyệt — chưa có sân nào được chấp thuận.',
+
+  // Map Verify
+  MAP_VERIFY_TITLE: 'Xem bản đồ',
+  MAP_VERIFY_BTN_SUBMIT: 'Xác nhận vị trí',
+  MAP_VERIFY_BTN_EDIT_MARKER: 'Chỉnh sửa điểm đánh dấu',
+  MAP_VERIFY_ERR_MISSING_COORDS: 'Thiếu tọa độ',
+  MAP_VERIFY_ERR_MSG: 'Vui lòng quay lại và xác minh địa chỉ lần nữa.',
+  COURT_REGISTER_PLACEHOLDER_DESCRIPTION: 'Mô tả về sân của bạn',
 }
 
 // ─── TYPES ───────────────────────────────────────────────────────

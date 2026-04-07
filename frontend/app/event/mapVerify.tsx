@@ -1,7 +1,9 @@
 import { COLORS } from '@/constants/colors'
+import { useTranslation } from '@/constants/translations'
 import { ICONS } from '@/constants/icons'
 import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap'
 import { setCache } from '@/lib/cache'
+import { useThemeColors } from '@/hooks/use-color-scheme'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
@@ -23,6 +25,8 @@ export default function MapVerifyPage() {
   const router = useRouter()
   const params = useLocalSearchParams()
   const insets = useSafeAreaInsets()
+  const tc = useThemeColors()
+  const { t } = useTranslation()
 
   const initial = useMemo<Coord | null>(() => {
     const latRaw = Array.isArray(params.lat) ? params.lat[0] : params.lat
@@ -104,31 +108,31 @@ export default function MapVerifyPage() {
 
   if (!initial) {
     return (
-      <View style={styles.screen}>
+      <View style={[styles.screen, { backgroundColor: tc.bgBase }]}>
         <SafeAreaView edges={['top']} />
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+        <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
+          <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+            <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Map View</Text>
+          <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('MAP_VERIFY_TITLE')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.errorBox}>
-          <Text style={styles.errorTitle}>Missing coordinates</Text>
-          <Text style={styles.errorText}>Please go back and verify the address again.</Text>
+          <Text style={[styles.errorTitle, { color: tc.textPrimary }]}>{t('MAP_VERIFY_ERR_MISSING_COORDS')}</Text>
+          <Text style={[styles.errorText, { color: tc.textSecondary }]}>{t('MAP_VERIFY_ERR_MSG')}</Text>
         </View>
       </View>
     )
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: tc.bgBase }]}>
       <SafeAreaView edges={['top']} />
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+      <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Map View</Text>
+        <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('MAP_VERIFY_TITLE')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -157,6 +161,7 @@ export default function MapVerifyPage() {
         <TouchableOpacity
           style={[
             styles.fab,
+            { backgroundColor: tc.bgElevated, borderColor: tc.border },
             {
               bottom: (bottomBarHeight || 92) + 12,
             },
@@ -166,15 +171,16 @@ export default function MapVerifyPage() {
         >
           <Image
             source={editMode ? ICONS.x : ICONS.touch}
-            style={styles.fabIcon}
+            style={[styles.fabIcon, { tintColor: tc.textPrimary }]}
           />
-          <Text style={styles.fabText}>{editMode ? 'Cancel' : 'Edit Marker'}</Text>
+          <Text style={[styles.fabText, { color: tc.textPrimary }]}>{editMode ? t('COMMON_BTN_CANCEL') : t('MAP_VERIFY_BTN_EDIT_MARKER')}</Text>
         </TouchableOpacity>
       </View>
 
       <View
         style={[
           styles.bottomBar,
+          { backgroundColor: tc.bgBase },
           {
             paddingBottom: 18 + Math.max(insets.bottom, 14),
           },
@@ -190,7 +196,7 @@ export default function MapVerifyPage() {
           disabled={!selectedCoord}
           activeOpacity={0.85}
         >
-          <Text style={styles.submitText}>Submit Location</Text>
+          <Text style={styles.submitText}>{t('MAP_VERIFY_BTN_SUBMIT')}</Text>
         </TouchableOpacity>
       </View>
     </View>

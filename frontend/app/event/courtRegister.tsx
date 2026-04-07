@@ -1396,7 +1396,7 @@ export default function CourtRegisterPage() {
           {serviceDraftVisible && (
             <View style={styles.serviceDraftInline}>
                 <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_SVC_NAME')}</Text>
-                <TextInput value={svcName} onChangeText={setSvcName} placeholder="Water" placeholderTextColor={tc.placeholder} style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]} />
+                <TextInput value={svcName} onChangeText={setSvcName} placeholder="Water" placeholderTextColor={tc.brand} style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]} />
 
                 <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_CATEGORY')}</Text>
                 <TouchableOpacity
@@ -1720,7 +1720,7 @@ export default function CourtRegisterPage() {
                       <TextInput
                         value={pcHalf1Name}
                         onChangeText={setPcHalf1Name}
-                        placeholder="Name"
+                        placeholder={t('COURT_REGISTER_LABEL_NAME')}
                         style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                       />
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
@@ -1769,7 +1769,7 @@ export default function CourtRegisterPage() {
                       <TextInput
                         value={pcHalf2Name}
                         onChangeText={setPcHalf2Name}
-                        placeholder="Name"
+                        placeholder={t('COURT_REGISTER_LABEL_NAME')}
                         style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                       />
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_PRICE')}</Text>
@@ -1824,10 +1824,10 @@ export default function CourtRegisterPage() {
                     <TouchableOpacity
                       key={s}
                       onPress={() => setPcSurface(s)}
-                      style={[styles.surfacePill, { backgroundColor: tc.bgSurface, borderColor: tc.divider }, active && styles.surfacePillActive]}
+                      style={[styles.surfacePill, { backgroundColor: tc.bgSurface, borderColor: tc.divider }, active && { backgroundColor: tc.brandSoft, borderColor: tc.brand }]}
                       activeOpacity={0.85}
                     >
-                      <Text style={[styles.surfacePillText, { color: tc.textPrimary }, active && styles.surfacePillTextActive]}>{s}</Text>
+                      <Text style={[styles.surfacePillText, { color: tc.textPrimary }, active && { color: tc.brand }]}>{t(('COURT_SURFACE_' + s.toUpperCase()) as any)}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -1837,7 +1837,7 @@ export default function CourtRegisterPage() {
               <TextInput
                 value={pcDescription}
                 onChangeText={setPcDescription}
-                placeholder="Describe something about your court"
+                placeholder={t('COURT_REGISTER_PLACEHOLDER_DESCRIPTION')}
                 style={[styles.input, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary, minHeight: 80, textAlignVertical: 'top' }]}
                 multiline
               />

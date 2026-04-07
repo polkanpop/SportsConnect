@@ -86,7 +86,7 @@ export default function SettingsPage() {
           if (parsed?.userid) {
             const row = await getUserInfoByUserIdCached(parsed.userid);
             if (row?.name) setDisplayName(row.name);
-            setProfilePfp((row as any)?.pfp ?? null);
+            setProfilePfp(prev => (row as any)?.pfp ?? prev);
           }
         } catch {/* ignore parse errors */}
       } else {
