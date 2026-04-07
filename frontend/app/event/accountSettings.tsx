@@ -288,6 +288,8 @@ export default function AccountSettingsScreen() {
         setOriginalEmail(effectiveEmail)
         setEmailEdit(effectiveEmail)
       }
+      // Reset so the verify link shows again on revisit when email is still pending
+      if (acct?.pending_email) setVerifSent(false)
       const effectivePhone = acct?.pending_phone ?? acct?.unverified_phone
       if (effectivePhone) {
         const localPhone = toLocalPhone(effectivePhone)
@@ -373,13 +375,18 @@ export default function AccountSettingsScreen() {
     }
     setEmailSaving(true); setEmailEditError(null); setEmailSuccess(false)
     try {
-      await registerPendingEmail(trimmed)
-      // Show the new pending email immediately; badge switches to Unverified.
-      // loadMeta will confirm by reading unverified_users on next focus.
+      const result: any = await registerPendingEmail(trimmed)
+      // Immediately reflect pending state so badge shows Unverified and verify link appears.
+      if (result?.alreadyVerified) {
+        // User re-submitted their own already-verified email — no pending needed
+        setAccount(prev => prev ? { ...prev, pending_email: null, email_verified: true } : prev)
+      } else {
+        setAccount(prev => prev ? { ...prev, pending_email: trimmed, email_verified: false } : prev)
+      }
       setOriginalEmail(trimmed)
       setEmailEdit(trimmed)
-      setVerifSent(true)
       setEmailSuccess(true)
+      void loadMeta()
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
       successTimerRef.current = setTimeout(() => setEmailSuccess(false), 5000)
     } catch (e: any) {
@@ -399,8 +406,12 @@ export default function AccountSettingsScreen() {
     }
     setPhoneSaving(true); setPhoneEditError(null); setPhoneSuccess(false)
     try {
-      await registerPendingPhone(trimmed)
+      const result = await registerPendingPhone(trimmed)
       setOriginalPhone(trimmed)
+      if (result?.alreadyVerified) {
+        // User re-submitted their own already-verified phone — no pending needed
+        setAccount(prev => prev ? { ...prev, pending_phone: null, phone_verified: true } : prev)
+      }
       void loadMeta()
       setPhoneSuccess(true)
       if (successTimerRef.current) clearTimeout(successTimerRef.current)
@@ -435,15 +446,18 @@ export default function AccountSettingsScreen() {
 
   // ── Resend email verification ─────────────────────────────────────────────
   const handleSendVerification = async () => {
-    // Use the pending email from unverified_users (originalEmail) as the target,
-    // not userInfo.email which is only updated after clicking the link.
-    const emailToVerify = originalEmail.trim() || userInfo?.email
+    const emailToVerify = account?.pending_email || originalEmail.trim() || userInfo?.email
     if (!emailToVerify) return
     setSendingVerif(true)
     setVerifError(null)
-    setVerifSent(false)
     try {
-      await resendVerification(emailToVerify)
+      if (account?.pending_email) {
+        // Email is in pending_verifications — re-send via registerPendingEmail
+        await registerPendingEmail(account.pending_email)
+      } else {
+        // Email is in unverified_users (original signup flow) — use resend endpoint
+        await resendVerification(emailToVerify)
+      }
       setVerifSent(true)
     } catch (e: any) {
       setVerifError(e?.message || t('ACCT_ERR_GENERIC'))
@@ -795,7 +809,7 @@ export default function AccountSettingsScreen() {
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
           {phoneEditError && <Text style={styles.errorText}>{phoneEditError}</Text>}
-          {!loadingMeta && originalPhone.trim() && !(account?.phone_verified) && (
+          {!loadingMeta && originalPhone.trim() && (!(account?.phone_verified) || !!account?.pending_phone) && (
             <TouchableOpacity
               onPress={() => router.push(`/(auth)/phone-otp?phone=${encodeURIComponent(originalPhone.trim())}&mode=add_phone` as any)}
               style={styles.linkBtn}

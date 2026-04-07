@@ -1579,7 +1579,7 @@
                                 </View>
                                 <Image
                                   source={mapMode === opt ? ICONS.tick : undefined}
-                                  style={styles.optionCheck}
+                                  style={[styles.optionCheck, { tintColor: tc.textPrimary }]}
                                 />
                               </TouchableOpacity>
                               {idx < arr.length - 1 && <View style={styles.sep} />}
@@ -1615,7 +1615,7 @@
                                   </View>
                                   <Image
                                     source={selected ? ICONS.tick : ""}
-                                    style={styles.optionCheck}
+                                    style={[styles.optionCheck, { tintColor: tc.textPrimary }]}
                                   />
                                 </TouchableOpacity>
                               );
@@ -1657,7 +1657,7 @@
                                   </View>
                                   <Image
                                     source={selected ? ICONS.tick : ""}
-                                    style={styles.optionCheck}
+                                    style={[styles.optionCheck, { tintColor: tc.textPrimary }]}
                                   />
                                 </TouchableOpacity>
                               );

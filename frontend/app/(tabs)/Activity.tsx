@@ -841,10 +841,10 @@ export default function ActivityPage() {
                   setCalendarMode('Booking');
                   setSelectedActivity(null);
                 }}
-                style={[styles.modeSegment, calendarMode === 'Booking' && [styles.modeSegmentActive, { backgroundColor: tc.brandSoft }]]}
+                style={[styles.modeSegment, calendarMode === 'Booking' && [styles.modeSegmentActive, { backgroundColor: tc.brand }]]}
               >
                 <Text
-                  style={[styles.modeSegmentText, calendarMode === 'Booking' && [styles.modeSegmentTextActive, { color: tc.brand }]]}
+                  style={[styles.modeSegmentText, { color: tc.brand }, calendarMode === 'Booking' && { color: '#fff' }]}
                 >
                   {t('ACTIVITY_FILTER_BOOKING')}
                 </Text>
@@ -854,10 +854,10 @@ export default function ActivityPage() {
                   setCalendarMode('Hosting');
                   setSelectedActivity(null);
                 }}
-                style={[styles.modeSegment, calendarMode === 'Hosting' && [styles.modeSegmentActive, { backgroundColor: tc.brandSoft }]]}
+                style={[styles.modeSegment, calendarMode === 'Hosting' && [styles.modeSegmentActive, { backgroundColor: tc.brand }]]}
               >
                 <Text
-                  style={[styles.modeSegmentText, calendarMode === 'Hosting' && [styles.modeSegmentTextActive, { color: tc.brand }]]}
+                  style={[styles.modeSegmentText, { color: tc.brand }, calendarMode === 'Hosting' && { color: '#fff' }]}
                 >
                   {t('ACTIVITY_FILTER_HOSTING')}
                 </Text>

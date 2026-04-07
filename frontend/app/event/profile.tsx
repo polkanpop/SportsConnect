@@ -413,7 +413,7 @@ export default function Profile() {
             <TouchableOpacity onPress={isEditingBio ? handleCancelEdit : handleEditBio}>
               <Image 
                 source={isEditingBio ? ICONS.cancelEdit : ICONS.edit} 
-                style={{ width: 14, height: 14 }} 
+                style={{ width: 14, height: 14, tintColor: tc.textPrimary }} 
               />
             </TouchableOpacity>
             {showBioSuccess && (

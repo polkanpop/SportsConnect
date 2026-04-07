@@ -45,6 +45,7 @@ import {
   updateTrainingSessionInfo,
 } from '@/lib/backendApi'
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 
 type Props = {
   coachId: number | null
@@ -220,6 +221,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
   const tc = useThemeColors()
+  const { userInfo: bootstrapUserInfo } = useAppBootstrap()
 
   // Subscribe to TQ so new sessions created via tsCreate.tsx appear immediately
   const sessionsQuery = useQuery({
@@ -1355,21 +1357,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     />
                   </View>
 
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      width: 46,
-                      height: 46,
-                      opacity: selected ? 0.95 : 0.9,
-                      zIndex: 2,
-                    }}
-                  >
-                    <Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
-                  </View>
-
                     <View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
                       <Text numberOfLines={2} style={{ fontWeight: '700', fontSize: 14, lineHeight: 18, color: selected ? '#fff' : tc.textPrimary }}>
                         {s.title || `Session #${s.sessionid}`}
@@ -1401,6 +1388,20 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       </Text>
                     </View>
                 </TouchableOpacity>
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      width: 46,
+                      height: 46,
+                      opacity: selected ? 0.95 : 0.9,
+                      zIndex: 2,
+                    }}
+                  >
+                    <Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+                  </View>
               </View>
             )
           })}
@@ -1631,28 +1632,33 @@ export default function TrainingSessionPanel({ coachId }: Props) {
               <Text style={{ color: tc.textSecondary }}>{t('EVENT_PANEL_NO_HOSTS')}</Text>
             ) : (
               <View>
-                {hosts.map((h) => (
+                {hosts.map((h) => {
+                  const liveInfo = h.userid === coachId ? bootstrapUserInfo.data : null
+                  const displayName = liveInfo?.name || h.name
+                  const displayPfp = liveInfo?.pfp || h.pfp
+                  return (
                   <TouchableOpacity
                     key={h.userid}
                     activeOpacity={0.75}
                     onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(h.userid) } } as any)}
                     style={{ flexDirection: 'row', alignItems: 'center' }}
                   >
-                    {h.pfp ? (
-                      <ExpoImage source={{ uri: h.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
+                    {displayPfp ? (
+                      <ExpoImage source={{ uri: displayPfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                     )}
                     <View style={{ marginLeft: 10, flex: 1 }}>
                       <Text style={{ fontWeight: '700', fontSize: 14, color: tc.textPrimary }} numberOfLines={1}>
-                        {h.name}
+                        {displayName}
                       </Text>
                       <Text style={{ color: tc.textSecondary, marginTop: 2 }} numberOfLines={1}>
                         {t('EVENT_PANEL_ROLE_HOST')}
                       </Text>
                     </View>
                   </TouchableOpacity>
-                ))}
+                  )
+                })}
               </View>
             )}
           </View>
@@ -1753,7 +1759,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
               <Text style={{ color: '#B91C1C', fontWeight: '700' }}>{infoError}</Text>
             ) : (
               <>
-                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>Title</Text>
+                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>{t('EVENT_PANEL_LABEL_TITLE')}</Text>
                 <TextInput
                   value={editTitle}
                   onChangeText={setEditTitle}
@@ -1762,7 +1768,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   style={{ backgroundColor: tc.bgBase, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10, color: tc.textPrimary }}
                 />
 
-                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>Description</Text>
+                <Text style={{ fontWeight: '700', marginBottom: 6, color: tc.textPrimary }}>{t('COMMON_LABEL_DESCRIPTION')}</Text>
                 <TextInput
                   value={editDescription}
                   onChangeText={setEditDescription}

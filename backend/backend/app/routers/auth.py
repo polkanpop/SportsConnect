@@ -21,7 +21,7 @@ from jose import jwt
 import firebase_admin
 import firebase_admin.auth as fb_auth
 from firebase_admin import credentials as fb_credentials
-from ..db import rest_select, rest_upsert, rest_update, rest_rpc, RpcError
+from ..db import rest_select, rest_upsert, rest_update, rest_delete, rest_rpc, RpcError
 from ..auth import get_jwt_secret, HS_ALGORITHM, decode_token
 from ..token_utils import create_user_tokens, verify_and_refresh, revoke_refresh_token, touch_refresh_token
 from ..login_rules import (
@@ -1660,6 +1660,16 @@ def register_pending_phone(payload: dict, authorization: Optional[str] = Header(
     if existing_info and existing_info.get('userid') != userid:
         raise HTTPException(status_code=409, detail="Phone number already in use by another account")
 
+    # If the user is re-submitting their own already-verified phone, delete any stale pending and return early.
+    unverified_phone_row = find_unverified_by_phone(phone_e164)
+    if unverified_phone_row and unverified_phone_row.get('userid') == userid and unverified_phone_row.get('phone_verified'):
+        try:
+            rest_delete("pending_verifications", {"userid": userid, "verification_type": "phone"})
+        except Exception:
+            pass
+        logger.info(f"/auth/register-phone alreadyVerified userid={userid} phone={phone_e164}")
+        return {"status": "ok", "alreadyVerified": True}
+
     token_hash_val = f"PHONE_PENDING:{hashlib.sha256(f'{userid}:{phone_e164}'.encode()).hexdigest()[:24]}"
     token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
@@ -1957,6 +1967,17 @@ def register_pending_email(payload: dict, background_tasks: BackgroundTasks, aut
     existing_info = find_user_by_email(new_email)
     if existing_info and existing_info.get('userid') != userid:
         raise HTTPException(status_code=409, detail="Email already in use by another account")
+
+    # If this is the user's own already-verified email, delete any stale pending and return early.
+    # This handles the case where the user reverts to their original verified credential.
+    unverified_row = find_unverified_by_email(new_email)
+    if unverified_row and unverified_row.get('userid') == userid and unverified_row.get('email_verified'):
+        try:
+            rest_delete("pending_verifications", {"userid": userid, "verification_type": "email"})
+        except Exception:
+            pass
+        logger.info(f"/auth/register-pending-email alreadyVerified userid={userid} email={new_email}")
+        return {"status": "ok", "alreadyVerified": True}
 
     # Reject if another user already has a pending verification for this email
     existing_pending = rest_select("pending_verifications", "id, userid",

@@ -2462,7 +2462,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       activeOpacity={0.85}
                       style={styles.coverPressable}
                     >
-                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>}
+                      {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text>}
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2665,7 +2665,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COMMON_LABEL_IMAGES')}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                       {(d.images || []).map((uri) => (
-                        <View key={uri} style={[styles.serviceCoverFrame, imageUploading && styles.btnDisabled]}>
+                        <View key={uri} style={[styles.serviceCoverFrame, { borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                           <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
                             <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
                           </TouchableOpacity>
@@ -2686,7 +2686,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             {imageUploading ? (
                               <ActivityIndicator size="small" color={COLORS.neutral800} />
                             ) : (
-                              <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>
+                              <Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text>
                             )}
                           </TouchableOpacity>
                         </View>
@@ -2727,7 +2727,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               {editImages.length < 3 && (
                 <View style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity onPress={pickImage} disabled={imageUploading} activeOpacity={0.85} style={styles.coverPressable}>
-                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <><Image source={ICONS.camera} style={[styles.addPlusIcon, { tintColor: tc.textMuted }]} resizeMode="contain" /><Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text></>}
+                    {imageUploading ? <ActivityIndicator size="small" color={COLORS.neutral800} /> : <Text style={[styles.addPlus, { color: tc.textMuted }]}>+</Text>}
                   </TouchableOpacity>
                 </View>
               )}

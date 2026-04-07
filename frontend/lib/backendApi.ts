@@ -1085,23 +1085,24 @@ export async function addLocalCredentials(username: string, newPassword: string)
 	if (!res || res.status !== 'ok') throw new Error('Failed to set credentials')
 }
 
-export async function registerPendingPhone(phone: string): Promise<void> {
+export async function registerPendingPhone(phone: string): Promise<{ alreadyVerified?: boolean }> {
 	const res = await request('/auth/register-phone', {
 		method: 'POST',
 		body: JSON.stringify({ phone }),
 		debugLabel: 'registerPendingPhone',
-	}) as { status?: string } | null
+	}) as { status?: string; alreadyVerified?: boolean } | null
 	if (!res || res.status !== 'ok') throw new Error('Failed to register phone')
+	return { alreadyVerified: res.alreadyVerified ?? false }
 }
 
-export async function registerPendingEmail(email: string): Promise<{ emailSent: boolean }> {
+export async function registerPendingEmail(email: string): Promise<{ emailSent: boolean; alreadyVerified?: boolean }> {
 	const res = await request('/auth/register-pending-email', {
 		method: 'POST',
 		body: JSON.stringify({ email }),
 		debugLabel: 'registerPendingEmail',
-	}) as { status?: string; emailSent?: boolean } | null
+	}) as { status?: string; emailSent?: boolean; alreadyVerified?: boolean } | null
 	if (!res || res.status !== 'ok') throw new Error('Failed to register pending email')
-	return { emailSent: res.emailSent ?? false }
+	return { emailSent: res.emailSent ?? false, alreadyVerified: res.alreadyVerified ?? false }
 }
 
 export async function linkZaloProvider(data: { access_token: string; zalo_id: string; zalo_name: string }): Promise<void> {

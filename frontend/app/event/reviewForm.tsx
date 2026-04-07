@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, Modal, ScrollView,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native'
+import { Svg, Path } from 'react-native-svg'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ICONS } from '@/constants/icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -41,13 +42,17 @@ export default function ReviewForm() {
   }, [title, venueName, targettype])
 
   const mutation = useMutation({
-    mutationFn: () =>
-      postReview({
-        targettype: String(targettype ?? ''),
+    mutationFn: () => {
+      const validTypes = ['court', 'event', 'trainingsession']
+      const normalized = String(targettype ?? '').toLowerCase().trim()
+      const safeType = validTypes.includes(normalized) ? normalized : 'court'
+      return postReview({
+        targettype: safeType,
         targetid: numericId,
         rating,
         comment: comment.trim(),
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'reviews' })
       setConfirmVisible(false)
@@ -101,9 +106,16 @@ export default function ReviewForm() {
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TouchableOpacity key={star} onPress={() => setRating(star)} style={styles.starBtn}>
-                  <Text style={[styles.starChar, star <= rating ? styles.starFilled : styles.starEmpty]}>
-                    ★
-                  </Text>
+                  <Svg width={40} height={40} viewBox="0 0 24 24">
+                    <Path
+                      d="M12 2L14.4 9.3H22.1L16 13.6L18.4 20.9L12 16.6L5.6 20.9L8 13.6L1.9 9.3H9.6Z"
+                      fill={star <= rating ? '#FBBF24' : (COLORS.neutral425 ?? '#ccc')}
+                      stroke={star <= rating ? '#F59E0B' : 'transparent'}
+                      strokeWidth={1}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </Svg>
                 </TouchableOpacity>
               ))}
             </View>
@@ -152,9 +164,16 @@ export default function ReviewForm() {
             </Text>
             <View style={styles.starsRowSmall}>
               {[1, 2, 3, 4, 5].map(star => (
-                <Text key={star} style={[styles.starCharSmall, star <= rating ? styles.starFilled : styles.starEmpty]}>
-                  ★
-                </Text>
+                <Svg key={star} width={28} height={28} viewBox="0 0 24 24">
+                  <Path
+                    d="M12 2L14.4 9.3H22.1L16 13.6L18.4 20.9L12 16.6L5.6 20.9L8 13.6L1.9 9.3H9.6Z"
+                    fill={star <= rating ? '#FBBF24' : (COLORS.neutral425 ?? '#ccc')}
+                    stroke={star <= rating ? '#F59E0B' : 'transparent'}
+                    strokeWidth={1}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                </Svg>
               ))}
             </View>
             <Text style={[styles.modalComment, { color: tc.textSecondary }]} numberOfLines={4}>{comment.trim()}</Text>
@@ -268,6 +287,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 6,
+    justifyContent: 'center',
   },
   starBtn: {
     padding: 4,
@@ -356,6 +376,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     marginBottom: 8,
+    justifyContent: 'center',
   },
   starCharSmall: {
     fontSize: 28,
