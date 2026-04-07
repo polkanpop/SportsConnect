@@ -235,13 +235,13 @@ const EventListScreen = () => {
   }, [userCoord])
 
   const venueOptions = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>(['Indoor', 'Outdoor', 'Both'])
     allEvents.forEach(ev => asArray(ev.venue).forEach(v => set.add(v)))
     return [...set].sort((a,b) => a.localeCompare(b))
   }, [allEvents])
 
   const surfaceOptions = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay'])
     allEvents.forEach(ev => { if (ev.surface) set.add(ev.surface) })
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [allEvents])

@@ -1145,7 +1145,7 @@ export async function unlinkProvider(provider: string): Promise<void> {
 	})
 }
 
-export type MyAccountInfo = { username: string | null; logintype: string | null; email_verified: boolean; phone_verified: boolean; unverified_email: string | null; unverified_phone: string | null }
+export type MyAccountInfo = { username: string | null; logintype: string | null; email_verified: boolean; phone_verified: boolean; unverified_email: string | null; unverified_phone: string | null; pending_email: string | null; pending_phone: string | null }
 
 export async function getMyAccount(): Promise<MyAccountInfo | null> {
 	const data = await request('/me/account', { debugLabel: 'getMyAccount' }) as MyAccountInfo | null

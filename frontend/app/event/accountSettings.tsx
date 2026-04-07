@@ -281,15 +281,16 @@ export default function AccountSettingsScreen() {
       const [acct, provs] = await Promise.all([getMyAccount(), getMyProviders()])
       setAccount(acct)
       setProviders(provs)
-      // Source email/phone from unverified_users — always reflects the pending/current state.
-      // unverified_users.email is set on signup and updated by registerPendingEmail.
-      // unverified_users.phone is set by registerPendingPhone.
-      if (acct?.unverified_email) {
-        setOriginalEmail(acct.unverified_email)
-        setEmailEdit(acct.unverified_email)
+      // Source email/phone — prefer pending_verifications (in-progress change) over
+      // the current unverified_users value, so the field reflects the latest submission.
+      const effectiveEmail = acct?.pending_email ?? acct?.unverified_email
+      if (effectiveEmail) {
+        setOriginalEmail(effectiveEmail)
+        setEmailEdit(effectiveEmail)
       }
-      if (acct?.unverified_phone) {
-        const localPhone = toLocalPhone(acct.unverified_phone)
+      const effectivePhone = acct?.pending_phone ?? acct?.unverified_phone
+      if (effectivePhone) {
+        const localPhone = toLocalPhone(effectivePhone)
         setOriginalPhone(localPhone)
         setPhoneEdit(localPhone)
       }
@@ -689,10 +690,10 @@ export default function AccountSettingsScreen() {
               placeholderTextColor={tc.placeholder}
               returnKeyType="done"
             />
-            <TouchableOpacity style={[styles.inlineBtn, { backgroundColor: tc.brand }, (nameValue.trim() === originalName.trim()) && styles.inlineBtnDisabled]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
+            <TouchableOpacity style={[styles.inlineBtn, { backgroundColor: tc.brand }, (nameValue.trim() === originalName.trim()) && { backgroundColor: tc.bgElevated }]} onPress={handleSaveName} disabled={nameSaving || nameValue.trim() === originalName.trim()}>
               {nameSaving
                 ? <ActivityIndicator size="small" color="#fff" />
-                : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
+                : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: (nameValue.trim() === originalName.trim()) ? tc.textMuted : '#fff' }} />}
             </TouchableOpacity>
           </View>
           {nameSuccess && <Text style={styles.successText}>{t('ACCT_NAME_SAVE_SUCCESS')}</Text>}
@@ -711,7 +712,7 @@ export default function AccountSettingsScreen() {
               <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_EMAIL')}</Text>
               {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && (
                 <StatusBadge
-                  verified={account?.email_verified ?? false}
+                  verified={!account?.pending_email && (account?.email_verified ?? false)}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
@@ -734,16 +735,16 @@ export default function AccountSettingsScreen() {
               autoCapitalize="none"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, { backgroundColor: tc.brand }, emailEdit.trim() === originalEmail.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand }, emailEdit.trim() === originalEmail.trim() && { backgroundColor: tc.bgElevated }]}
               onPress={handleSaveEmail}
               disabled={emailSaving || emailEdit.trim() === originalEmail.trim()}
             >
-              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
+              {emailSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: emailEdit.trim() === originalEmail.trim() ? tc.textMuted : '#fff' }} />}
             </TouchableOpacity>
           </View>
           {emailSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
           {emailEditError && <Text style={styles.errorText}>{emailEditError}</Text>}
-          {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && !(account?.email_verified) && (
+          {!loadingMeta && emailEdit.trim() && emailEdit === originalEmail && (!!account?.pending_email || !(account?.email_verified)) && (
             verifSent
               ? <Text style={styles.successText}>{t('ACCT_VERIF_SENT')}</Text>
               : <TouchableOpacity onPress={handleSendVerification} disabled={sendingVerif} style={styles.linkBtn}>
@@ -760,7 +761,7 @@ export default function AccountSettingsScreen() {
               <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_PHONE')}</Text>
               {!loadingMeta && phoneEdit.trim() && phoneEdit === originalPhone && (
                 <StatusBadge
-                  verified={account?.phone_verified ?? false}
+                  verified={!account?.pending_phone && (account?.phone_verified ?? false)}
                   labelVerified={t('ACCT_BADGE_VERIFIED')}
                   labelUnverified={t('ACCT_BADGE_UNVERIFIED')}
                 />
@@ -782,11 +783,11 @@ export default function AccountSettingsScreen() {
               keyboardType="phone-pad"
             />
             <TouchableOpacity
-              style={[styles.inlineBtn, { backgroundColor: tc.brand }, phoneEdit.trim() === originalPhone.trim() && styles.inlineBtnDisabled]}
+              style={[styles.inlineBtn, { backgroundColor: tc.brand }, phoneEdit.trim() === originalPhone.trim() && { backgroundColor: tc.bgElevated }]}
               onPress={handleSavePhone}
               disabled={phoneSaving || phoneEdit.trim() === originalPhone.trim()}
             >
-              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: '#fff' }} />}
+              {phoneSaving ? <ActivityIndicator size="small" color="#fff" /> : <Image source={ICONS.tick} style={{ width: 16, height: 16, tintColor: phoneEdit.trim() === originalPhone.trim() ? tc.textMuted : '#fff' }} />}
             </TouchableOpacity>
           </View>
           {phoneSuccess && <Text style={styles.successText}>{t('ACCT_CONTACT_SAVED')}</Text>}
@@ -811,11 +812,11 @@ export default function AccountSettingsScreen() {
         <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
           <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_USERNAME')}</Text>
           {account?.username ? (
-            <View style={styles.readonlyRow}>
-              <Text style={styles.readonlyText}>{account.username}</Text>
+            <View style={[styles.readonlyRow, { backgroundColor: tc.bgInput }]}>
+              <Text style={[styles.readonlyText, { color: tc.textSecondary }]}>{account.username}</Text>
             </View>
           ) : (
-            <Text style={styles.mutedText}>{t('ACCT_NO_USERNAME')}</Text>
+            <Text style={[styles.mutedText, { color: tc.textMuted }]}>{t('ACCT_NO_USERNAME')}</Text>
           )}
         </View>
 

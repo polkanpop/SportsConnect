@@ -831,11 +831,123 @@ def login(payload: dict):
     }
 
 
+def _verify_pending_email_change(pending_row: dict, token_hash: str):
+    """Handle email verification for a pending email change (from Account Settings).
+
+    Unlike initial signup verification (which only flips email_verified on an existing
+    unverified_users row), this flow:
+      1. Validates token expiry.
+      2. Marks the pending_verifications row as verified.
+      3. Atomically updates unverified_users (email + email_verified=true).
+      4. Updates userinfo.email to the new address.
+    Because unverified_users is only touched HERE (after success), the user's login
+    is never broken during the pending verification window.
+    """
+    if pending_row.get("verified"):
+        redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
+        if redirect_url:
+            params = {"status": "ok", "alreadyVerified": "true", "email": pending_row.get("new_value")}
+            return RedirectResponse(f"{redirect_url}?{urlencode({k:v for k,v in params.items() if v is not None})}")
+        return {"status": "ok", "alreadyVerified": True}
+
+    exp_raw = pending_row.get('token_expires_at')
+    try:
+        exp_dt = datetime.fromisoformat(exp_raw.replace('Z', '+00:00')) if exp_raw else None
+    except Exception:
+        exp_dt = None
+    if exp_dt and exp_dt.tzinfo is None:
+        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    if exp_dt and exp_dt < now_utc:
+        raise HTTPException(status_code=400, detail="Token expired")
+
+    userid = pending_row.get("userid")
+    new_email = pending_row.get("new_value")
+
+    # Mark pending_verifications row as verified; scramble token to prevent replay
+    try:
+        rest_update("pending_verifications", {"id": pending_row.get("id")}, {
+            "verified": True,
+            "token_hash": f"VERIFIED:{token_hash[:12]}",
+        })
+    except Exception as e:
+        logger.exception(f"_verify_pending_email_change: failed marking verified err={e}")
+        raise HTTPException(status_code=500, detail="Failed marking verified")
+
+    # Atomically update unverified_users: set email + email_verified=true
+    try:
+        existing_unver = rest_select("unverified_users", "unverifiedid", {"userid": userid}, single=True)
+        if existing_unver:
+            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {
+                "email": new_email,
+                "email_verified": True,
+                "token_hash": f"VERIFIED:{token_hash[:12]}",
+            })
+        else:
+            # User may not have an unverified_users row yet (e.g. Google/Apple social login)
+            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
+            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
+            rest_upsert("unverified_users", {
+                "unverifiedid": next_id,
+                "userid": userid,
+                "email": new_email,
+                "email_verified": True,
+                "token_hash": f"VERIFIED:{token_hash[:12]}",
+                "token_expires_at": "2099-01-01T00:00:00+00:00",
+                "resend_count": 0,
+            })
+    except Exception as e:
+        logger.warning(f"_verify_pending_email_change: failed updating unverified_users userid={userid} err={e}")
+
+    # Update userinfo.email to the newly verified address
+    try:
+        rest_update("userinfo", {"userid": userid}, {"email": new_email})
+        logger.info(f"_verify_pending_email_change: updated userinfo.email={new_email} for userid={userid}")
+    except Exception as e:
+        logger.warning(f"_verify_pending_email_change: could not update userinfo.email: {e}")
+
+    # Redirect / auto-login (same pattern as original verify_email)
+    redirect_url = os.getenv("EMAIL_VERIFY_REDIRECT_URL")
+    auto_login = os.getenv("EMAIL_VERIFY_AUTO_LOGIN", "").lower() == "true"
+    if redirect_url:
+        params: dict = {"status": "ok", "verified": "true", "email": new_email}
+        if auto_login:
+            try:
+                userlogin_row = rest_select("userlogin", "loginid, userid, username", {"userid": userid}, single=True)
+                info_row = rest_select("userinfo", "infoid, userid, name, email", {"userid": userid}, single=True)
+                tokens = create_user_tokens(userid, userlogin_row.get("username") if userlogin_row else None, info_row.get("email") if info_row else new_email, remember_me=False)
+                params.update({
+                    "accessToken": tokens.get("access_token"),
+                    "accessTokenExpiresAt": tokens.get("access_token_expires_at"),
+                    "refreshToken": tokens.get("refresh_token"),
+                    "refreshTokenExpiresAt": tokens.get("refresh_token_expires_at"),
+                    "userid": userid,
+                    "username": (userlogin_row.get("username") if userlogin_row else None) or "",
+                    "name": (info_row.get("name") if info_row else "") or "",
+                })
+            except Exception as e:
+                logger.warning(f"auto-login issuance failed userid={userid} err={e}")
+        return RedirectResponse(f"{redirect_url}?{urlencode({k:v for k,v in params.items() if v is not None})}")
+    return {"status": "ok", "verified": True}
+
+
 @router.get('/verify-email')
 def verify_email(token: str = Query(..., description="Plaintext email verification token")):
     if not token:
         raise HTTPException(status_code=400, detail="Missing token")
     token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+    # ── 1. Check pending_verifications first (email-change flow from Account Settings) ──
+    pending_row = rest_select(
+        "pending_verifications",
+        "id, userid, new_value, token_expires_at, verified, verification_type",
+        {"token_hash": token_hash},
+        single=True,
+    )
+    if pending_row and pending_row.get("verification_type") == "email":
+        return _verify_pending_email_change(pending_row, token_hash)
+
+    # ── 2. Fall back to unverified_users (initial signup verification flow) ──
     row = rest_select(
         "unverified_users",
         "unverifiedid, userid, email, token_expires_at, email_verified",
@@ -1516,8 +1628,10 @@ def sync_social_user(
 @router.post('/register-phone')
 def register_pending_phone(payload: dict, authorization: Optional[str] = Header(None)):
     """Register a phone number for OTP verification (authenticated).
-    Writes to unverified_users with phone_verified=false.
-    Does NOT update userinfo.contactnumber — that only happens after OTP is confirmed via /verify-phone.
+    Writes to pending_verifications (waiting room) with verified=false.
+    Does NOT update userinfo.contactnumber or unverified_users — that only happens
+    after OTP is confirmed via /verify-phone.
+    This prevents login breakage during the verification window.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -1549,30 +1663,19 @@ def register_pending_phone(payload: dict, authorization: Optional[str] = Header(
     token_hash_val = f"PHONE_PENDING:{hashlib.sha256(f'{userid}:{phone_e164}'.encode()).hexdigest()[:24]}"
     token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
-    # Upsert unverified_users record
+    # Upsert into pending_verifications (waiting room)
     try:
-        existing_unver = rest_select("unverified_users", "unverifiedid", {"userid": userid}, single=True)
-        if existing_unver:
-            rest_update("unverified_users", {"unverifiedid": existing_unver.get("unverifiedid")}, {
-                "phone": phone_e164,
-                "phone_verified": False,
-                "token_hash": token_hash_val,
-                "token_expires_at": token_expires,
-            })
-        else:
-            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
-            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
-            rest_upsert("unverified_users", {
-                "unverifiedid": next_id,
-                "userid": userid,
-                "phone": phone_e164,
-                "phone_verified": False,
-                "token_hash": token_hash_val,
-                "token_expires_at": token_expires,
-                "resend_count": 0,
-            })
+        rest_upsert("pending_verifications", {
+            "userid": userid,
+            "verification_type": "phone",
+            "new_value": phone_e164,
+            "token_hash": token_hash_val,
+            "token_expires_at": token_expires,
+            "verified": False,
+            "resend_count": 0,
+        }, on_conflict="userid,verification_type")
     except Exception as e:
-        logger.warning(f"/register-phone unverified_users write failed userid={userid} err={e}")
+        logger.warning(f"/register-phone pending_verifications write failed userid={userid} err={e}")
         raise HTTPException(status_code=500, detail="Failed to register phone")
 
     logger.info(f"/register-phone SUCCESS userid={userid} phone={phone_e164}")
@@ -1582,7 +1685,9 @@ def register_pending_phone(payload: dict, authorization: Optional[str] = Header(
 @router.post('/verify-phone')
 def verify_phone_for_account(payload: dict, authorization: Optional[str] = Header(None)):
     """Verify phone OTP via Firebase token for an already-logged-in user.
-    Updates userinfo.contactnumber and marks unverified_users.phone_verified=true.
+    Checks pending_verifications first (Account Settings flow), then falls back to
+    direct unverified_users update (legacy/initial registration).
+    Updates userinfo.contactnumber and marks phone_verified=true.
     Does NOT issue new session tokens.
     """
     if not authorization or not authorization.startswith("Bearer "):
@@ -1610,8 +1715,6 @@ def verify_phone_for_account(payload: dict, authorization: Optional[str] = Heade
         raise HTTPException(status_code=400, detail="Firebase token does not contain phone_number")
 
     # Release phone from any prior owner so it can be reassigned cleanly.
-    # This handles the case where userId A had the number, then userId B verifies it —
-    # we clear A's contactnumber before writing B's, preventing a uniqueness conflict.
     try:
         prior_owner = rest_select("userinfo", "userid", {"contactnumber": phone_number}, single=True)
         if prior_owner and prior_owner.get("userid") != userid:
@@ -1627,7 +1730,17 @@ def verify_phone_for_account(payload: dict, authorization: Optional[str] = Heade
         logger.error(f"/verify-phone userinfo update failed userid={userid} err={e}")
         raise HTTPException(status_code=500, detail="Failed to update contact number")
 
-    # Update unverified_users.phone_verified = true
+    # ── Check pending_verifications first (Account Settings phone-change flow) ──
+    pending_row = rest_select("pending_verifications", "id, userid, new_value",
+        {"userid": userid, "verification_type": "phone"}, single=True)
+    if pending_row:
+        # Mark pending row as verified
+        try:
+            rest_update("pending_verifications", {"id": pending_row.get("id")}, {"verified": True})
+        except Exception as e:
+            logger.warning(f"/verify-phone pending_verifications update failed userid={userid} err={e}")
+
+    # Update unverified_users.phone + phone_verified = true
     try:
         existing_unver = rest_select("unverified_users", "unverifiedid", {"userid": userid}, single=True)
         if existing_unver:
@@ -1816,13 +1929,16 @@ def phone_login(payload: dict):
 def register_pending_email(payload: dict, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
     """Register a new email address for the currently authenticated user (pending verification).
 
-    This does NOT update userinfo.email immediately.  Instead it:
-      1. Validates the new email is not taken by another account.
-      2. Creates/updates an unverified_users row with email_verified=False.
-      3. Emails the user a verification link.
+    Writes to `pending_verifications` (waiting room) — does NOT touch `unverified_users`
+    until the user actually clicks the verification link.  This prevents login breakage
+    when changing an already-verified email address.
 
-    When the user clicks the link, /auth/verify-email marks email_verified=True
-    AND updates userinfo.email to the new address.
+    Flow:
+      1. Validates the new email is not taken by another account.
+      2. Upserts a pending_verifications row (one per user per type).
+      3. Emails the user a verification link.
+      4. /auth/verify-email detects the pending row, marks it verified,
+         then atomically updates unverified_users + userinfo.email.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -1842,41 +1958,30 @@ def register_pending_email(payload: dict, background_tasks: BackgroundTasks, aut
     if existing_info and existing_info.get('userid') != userid:
         raise HTTPException(status_code=409, detail="Email already in use by another account")
 
+    # Reject if another user already has a pending verification for this email
+    existing_pending = rest_select("pending_verifications", "id, userid",
+        {"verification_type": "email", "new_value": new_email}, single=True)
+    if existing_pending and existing_pending.get('userid') != userid:
+        raise HTTPException(status_code=409, detail="Email already pending verification for another account")
+
     cfg = _email_settings()
     token_plain = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token_plain.encode('utf-8')).hexdigest()
     expires_at = (datetime.utcnow() + timedelta(hours=cfg['expiry_hours'])).isoformat()
 
-    # Lookup existing unverified_users record for this email
-    existing_pending = find_unverified_by_email(new_email)
-    if existing_pending:
-        if existing_pending.get('userid') not in (userid, None):
-            raise HTTPException(status_code=409, detail="Email already pending verification for another account")
-        try:
-            rest_update("unverified_users", {"unverifiedid": existing_pending.get("unverifiedid")}, {
-                "userid": userid,
-                "token_hash": token_hash,
-                "token_expires_at": expires_at,
-                "email_verified": False,
-                "resend_count": 0,
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed updating verification record: {e}")
-    else:
-        try:
-            max_row = rest_select("unverified_users", "unverifiedid", single=True, order={"column": "unverifiedid", "desc": True})
-            next_id = ((max_row.get("unverifiedid") if max_row else None) or 0) + 1
-            rest_upsert("unverified_users", {
-                "unverifiedid": next_id,
-                "userid": userid,
-                "email": new_email,
-                "token_hash": token_hash,
-                "token_expires_at": expires_at,
-                "resend_count": 0,
-                "email_verified": False,
-            })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed creating verification record: {e}")
+    # Upsert into pending_verifications (UNIQUE on userid + verification_type)
+    try:
+        rest_upsert("pending_verifications", {
+            "userid": userid,
+            "verification_type": "email",
+            "new_value": new_email,
+            "token_hash": token_hash,
+            "token_expires_at": expires_at,
+            "verified": False,
+            "resend_count": 0,
+        }, on_conflict="userid,verification_type")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed creating verification record: {e}")
 
     email_sent = False
     if _can_send_verification_email():

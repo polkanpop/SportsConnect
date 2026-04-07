@@ -494,6 +494,23 @@ async def get_account(user_sub: str = Depends(get_current_user)):
             if row.get("phone") and not unverified_phone:
                 unverified_phone = row.get("phone")
 
+    # Check pending_verifications for in-progress email/phone changes
+    pending_email = None
+    pending_phone = None
+    try:
+        pending_rows = rest_select("pending_verifications", "verification_type, new_value, verified",
+            {"userid": userid})
+        if isinstance(pending_rows, list):
+            for prow in pending_rows:
+                if prow.get("verified"):
+                    continue  # already completed — ignore
+                if prow.get("verification_type") == "email":
+                    pending_email = prow.get("new_value")
+                elif prow.get("verification_type") == "phone":
+                    pending_phone = prow.get("new_value")
+    except Exception as e:
+        logger.warning(f"/me/account pending_verifications read failed userid={userid} err={e}")
+
     return {
         "username": (login_row or {}).get("username"),
         "logintype": (login_row or {}).get("logintype"),
@@ -501,6 +518,8 @@ async def get_account(user_sub: str = Depends(get_current_user)):
         "phone_verified": phone_verified,
         "unverified_email": unverified_email,
         "unverified_phone": unverified_phone,
+        "pending_email": pending_email,
+        "pending_phone": pending_phone,
     }
 
 

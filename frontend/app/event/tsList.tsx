@@ -218,12 +218,12 @@ const TrainingSessionListScreen = () => {
   }, [userCoord])
 
   const venueOptions = useMemo(() => {
-    const s = new Set<string>(); allSessions.forEach(r => asArray(r.venue).forEach(x => s.add(x)))
+    const s = new Set<string>(['Indoor', 'Outdoor', 'Both']); allSessions.forEach(r => asArray(r.venue).forEach(x => s.add(x)))
     return [...s].sort((a,b)=>a.localeCompare(b))
   }, [allSessions])
 
   const surfaceOptions = useMemo(() => {
-    const s = new Set<string>(); allSessions.forEach(r => { if (r.surface) s.add(r.surface) })
+    const s = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay']); allSessions.forEach(r => { if (r.surface) s.add(r.surface) })
     return [...s].sort((a, b) => a.localeCompare(b))
   }, [allSessions])
 
@@ -406,7 +406,7 @@ const TrainingSessionListScreen = () => {
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
           <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
-            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
@@ -414,12 +414,12 @@ const TrainingSessionListScreen = () => {
             style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter==='surface'?null:'surface')}
           >
-            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
             {selectedSurfaces.length>0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
-            <Image source={ICONS.freeIcon} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Image source={ICONS.freeIcon} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -427,7 +427,7 @@ const TrainingSessionListScreen = () => {
             onPress={togglePaymentPanel}
             disabled={freeOnly}
           >
-            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, { tintColor: tc.textMuted }, freeOnly && { tintColor: COLORS.neutral600 }]} />
+            <Image source={ICONS.paymentMethod} style={[styles.filterIcon, { tintColor: tc.textPrimary }, freeOnly && { tintColor: COLORS.neutral600 }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterTextActive, freeOnly && { color: COLORS.neutral650 }]}>{t('TS_LIST_FILTER_PAYMENT')}</Text>
             {paymentSelections.length>0 && !freeOnly && <Text style={styles.countBadge}>{paymentSelections.length}</Text>}
           </TouchableOpacity>
@@ -436,7 +436,7 @@ const TrainingSessionListScreen = () => {
             style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
           >
-            <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+            <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
               {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('TS_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
             </Text>

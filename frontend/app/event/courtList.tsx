@@ -257,7 +257,7 @@ const CourtListScreen = () => {
 
   // Derive unique venue options
   const venueOptions = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>(['Indoor', 'Outdoor', 'Both'])
     allCourts.forEach(c => {
       asArray(c.venue).forEach(v => set.add(v))
     })
@@ -266,7 +266,7 @@ const CourtListScreen = () => {
 
   // Derive unique surface options
   const surfaceOptions = useMemo(() => {
-    const set = new Set<string>()
+    const set = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay'])
     allCourts.forEach(c => { if (c.surface) set.add(c.surface) })
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [allCourts])
@@ -447,7 +447,7 @@ const CourtListScreen = () => {
               style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
-              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
               <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
@@ -455,7 +455,7 @@ const CourtListScreen = () => {
               style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'surface' ? null : 'surface')}
             >
-              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
               <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
               {selectedSurfaces.length > 0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
             </TouchableOpacity>
@@ -463,7 +463,7 @@ const CourtListScreen = () => {
               style={[styles.filterButton, { backgroundColor: tc.bgElevated }, showFavouritesOnly && styles.filterButtonActive]}
               onPress={() => setShowFavouritesOnly(prev => !prev)}
             >
-              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, { tintColor: tc.textMuted }, showFavouritesOnly && styles.favStarActive]} />
+              <Image source={ICONS.favouriteStar} style={[styles.filterIcon, { tintColor: tc.textPrimary }, showFavouritesOnly && styles.favStarActive]} />
               <Text style={[styles.filterText, { color: tc.textPrimary }, showFavouritesOnly && styles.filterTextActive]}>{t('COURT_LIST_FILTER_FAVOURITE')}</Text>
             </TouchableOpacity>
 
@@ -471,7 +471,7 @@ const CourtListScreen = () => {
               style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
             >
-              <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textMuted }]} />
+              <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
               <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'distance' || distanceFilterActive) && styles.filterTextActive]}>
                 {selectedDistanceKm != null ? `${t('MAP_CHIP_DISTANCE')}: ${selectedDistanceKm}km` : (closeToMe ? t('COURT_LIST_FILTER_NEARBY') : t('MAP_CHIP_DISTANCE'))}
               </Text>
