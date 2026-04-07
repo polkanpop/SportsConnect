@@ -646,7 +646,7 @@ export default function NotificationsPage() {
                section.title}
             </Text>
             {section.title === 'Today' && !deleteMode ? (
-              <TouchableOpacity style={styles.markAllWrap} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
+              <TouchableOpacity style={[styles.markAllWrap, { backgroundColor: tc.bgElevated, borderColor: tc.border }]} onPress={handleMarkAllRead} activeOpacity={0.85} disabled={actionLoading}>
                 <Text style={[styles.markAllText, { color: tc.brand }]}>{t('NOTIF_BTN_MARK_ALL_READ')}</Text>
               </TouchableOpacity>
             ) : (

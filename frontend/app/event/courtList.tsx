@@ -444,7 +444,7 @@ const CourtListScreen = () => {
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
             <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'venue' || selectedVenues.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'venue' ? null : 'venue')}
             >
               <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
@@ -452,7 +452,7 @@ const CourtListScreen = () => {
               {selectedVenues.length > 0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'surface' || selectedSurfaces.length > 0) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'surface' ? null : 'surface')}
             >
               <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
@@ -460,7 +460,7 @@ const CourtListScreen = () => {
               {selectedSurfaces.length > 0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, showFavouritesOnly && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, showFavouritesOnly && styles.filterButtonActive]}
               onPress={() => setShowFavouritesOnly(prev => !prev)}
             >
               <Image source={ICONS.favouriteStar} style={[styles.filterIcon, { tintColor: tc.textPrimary }, showFavouritesOnly && styles.favStarActive]} />
@@ -468,7 +468,7 @@ const CourtListScreen = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+              style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
               onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
             >
               <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
@@ -743,6 +743,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    borderWidth: 1,
   },
   filterIcon: { width: 16, height: 16, tintColor: COLORS.neutral800, marginRight: 6, resizeMode: 'contain' },
   filterText: { color: COLORS.neutral950, fontSize: 13, fontWeight: '600' },

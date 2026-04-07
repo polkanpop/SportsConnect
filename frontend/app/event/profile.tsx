@@ -424,7 +424,7 @@ export default function Profile() {
           </View>
           
           {isEditingBio ? (
-            <View style={[styles.bioContainer, { backgroundColor: tc.bgInput }]}>
+            <View style={[styles.bioContainer, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
               <TextInput
                 style={[styles.bioInput, { color: tc.textPrimary }]}
                 multiline
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, marginBottom: 24 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#222', marginBottom: 8 },
   
-  bioContainer: { backgroundColor: '#f5f5f5', borderRadius: 12, padding: 4 },
+  bioContainer: { backgroundColor: '#f5f5f5', borderRadius: 12, padding: 4, borderWidth: 1 },
   bioInput: { minHeight: 100, padding: 12, fontSize: 14, color: '#333', textAlignVertical: 'top' },
   
   contactRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

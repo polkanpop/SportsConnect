@@ -21,7 +21,7 @@ export default function DataPrivacyScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: tc.divider }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={[styles.backBtn, { backgroundColor: tc.bgElevated }]}>
           <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </Pressable>
         <Text style={[styles.title, { color: tc.textPrimary }]}>{t('SETTINGS_ROW_DATA_PRIVACY')}</Text>
@@ -68,7 +68,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   backBtn: {
-    width: 36,
+    width: 44,
+    height: 44,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backIcon: {
     width: 22,

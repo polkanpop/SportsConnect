@@ -830,12 +830,12 @@ export default function ActivityPage() {
             <TouchableOpacity
               disabled={weekOffset <= -2}
               onPress={() => setWeekOffset((w) => (w <= -2 ? w : w - 1))}
-              style={[styles.weekNavBtn, weekOffset <= -2 && styles.weekNavBtnDisabled]}
+              style={[styles.weekNavBtn, { backgroundColor: tc.bgElevated }, weekOffset <= -2 && styles.weekNavBtnDisabled]}
             >
-              <Image source={ICONS.arrowright} style={[styles.weekNavIcon, { transform: [{ rotate: '180deg' }] }]} />
+              <Image source={ICONS.arrowright} style={[styles.weekNavIcon, { tintColor: tc.textPrimary, transform: [{ rotate: '180deg' }] }]} />
             </TouchableOpacity>
 
-            <View style={styles.modeSegmentContainer}>
+            <View style={[styles.modeSegmentContainer, { borderColor: tc.border, backgroundColor: tc.bgElevated }]}>
               <TouchableOpacity
                 onPress={() => {
                   setCalendarMode('Booking');
@@ -867,9 +867,9 @@ export default function ActivityPage() {
             <TouchableOpacity
               disabled={weekOffset >= 2}
               onPress={() => setWeekOffset((w) => (w >= 2 ? w : w + 1))}
-              style={[styles.weekNavBtn, weekOffset >= 2 && styles.weekNavBtnDisabled]}
+              style={[styles.weekNavBtn, { backgroundColor: tc.bgElevated }, weekOffset >= 2 && styles.weekNavBtnDisabled]}
             >
-              <Image source={ICONS.arrowright} style={styles.weekNavIcon} />
+              <Image source={ICONS.arrowright} style={[styles.weekNavIcon, { tintColor: tc.textPrimary }]} />
             </TouchableOpacity>
           </View>
           

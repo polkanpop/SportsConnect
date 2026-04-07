@@ -27,6 +27,16 @@ const COURT_REGISTER_VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 type WeekDayKey = typeof WEEK_DAYS[number]
 
+const WEEKDAY_TRANSLATION_KEYS: Record<WeekDayKey, string> = {
+  Mon: 'MAP_DAY_MON',
+  Tue: 'MAP_DAY_TUE',
+  Wed: 'MAP_DAY_WED',
+  Thu: 'MAP_DAY_THU',
+  Fri: 'MAP_DAY_FRI',
+  Sat: 'MAP_DAY_SAT',
+  Sun: 'MAP_DAY_SUN',
+}
+
 const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
 const IMAGE_TILE_HEIGHT = 120
 
@@ -118,6 +128,7 @@ export default function CourtRegisterPage() {
   const isMountedRef = useRef(true)
   const { t } = useTranslation()
   const tc = useThemeColors()
+  const coverFrameDynamic = { backgroundColor: tc.bgElevated, borderColor: tc.border }
 
   useEffect(() => {
     return () => {
@@ -1120,8 +1131,8 @@ export default function CourtRegisterPage() {
     <View style={[styles.screen, { backgroundColor: tc.bgBase }]}>
       <SafeAreaView edges={['top']} />
       <View style={[styles.headerRow, { borderBottomColor: tc.divider }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Image source={ICONS.arrowLeft} style={styles.backIcon} />
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
+          <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('COURT_REGISTER_TITLE')}</Text>
         <View style={styles.headerSpacer} />
@@ -1297,7 +1308,7 @@ export default function CourtRegisterPage() {
           )
         })}
 
-        <View style={[styles.coverFrame, styles.addCourtCover, { borderColor: tc.brand }, (submitting || imageUploading) && styles.btnDisabled]}>
+        <View style={[styles.coverFrame, coverFrameDynamic, styles.addCourtCover, { borderColor: tc.brand }, (submitting || imageUploading) && styles.btnDisabled]}>
           <TouchableOpacity
             onPress={openPlayingCourtModal}
             disabled={submitting || imageUploading}
@@ -1381,7 +1392,7 @@ export default function CourtRegisterPage() {
               )
             })}
 
-            <View style={[styles.coverFrame, styles.addServiceCover, submitting && styles.btnDisabled]}>
+            <View style={[styles.coverFrame, coverFrameDynamic, styles.addServiceCover, submitting && styles.btnDisabled]}>
               <TouchableOpacity
                 onPress={openAddService}
                 disabled={submitting}
@@ -1469,7 +1480,7 @@ export default function CourtRegisterPage() {
                 <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES_OPT')}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                   {svcImages.map((uri) => (
-                    <View key={uri} style={styles.coverFrame}>
+                    <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
                       <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                         <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                       </TouchableOpacity>
@@ -1479,7 +1490,7 @@ export default function CourtRegisterPage() {
                     </View>
                   ))}
                   {svcImages.length < 6 && (
-                    <View style={styles.coverFrame}>
+                    <View style={[styles.coverFrame, coverFrameDynamic]}>
                       <TouchableOpacity
                         onPress={pickServiceImage}
                         disabled={imageUploading}
@@ -1523,7 +1534,7 @@ export default function CourtRegisterPage() {
         contentContainerStyle={styles.imagesRow}
       >
         {remoteImageUrls.map((uri) => (
-          <View key={uri} style={[styles.coverFrame, (submitting || imageUploading) && styles.btnDisabled]}>
+          <View key={uri} style={[styles.coverFrame, coverFrameDynamic, (submitting || imageUploading) && styles.btnDisabled]}>
             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
             </TouchableOpacity>
@@ -1538,7 +1549,7 @@ export default function CourtRegisterPage() {
         ))}
 
         {remoteImageUrls.length < 6 && (
-          <View style={[styles.coverFrame, (submitting || imageUploading) && styles.btnDisabled]}>
+          <View style={[styles.coverFrame, coverFrameDynamic, (submitting || imageUploading) && styles.btnDisabled]}>
             <TouchableOpacity
               onPress={pickImages}
               disabled={submitting || imageUploading}
@@ -1612,7 +1623,7 @@ export default function CourtRegisterPage() {
                       style={[styles.dayCell, { backgroundColor: tc.bgSurface, borderColor: tc.divider }, active && [styles.dayCellSelected, { backgroundColor: tc.brandSoft, borderColor: tc.brand }]]}
                       activeOpacity={0.85}
                     >
-                      <Text style={[styles.dayLabel, { color: tc.textPrimary }, active && [styles.dayLabelSelected, { color: tc.brand }]]}>{label}</Text>
+                      <Text style={[styles.dayLabel, { color: tc.textPrimary }, active && [styles.dayLabelSelected, { color: tc.brand }]]}>{t(WEEKDAY_TRANSLATION_KEYS[label])}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -1650,7 +1661,7 @@ export default function CourtRegisterPage() {
               <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {pcImages.map((uri) => (
-                  <View key={uri} style={styles.coverFrame}>
+                  <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
                     <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                       <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
@@ -1660,7 +1671,7 @@ export default function CourtRegisterPage() {
                   </View>
                 ))}
                 {pcImages.length < 6 && (
-                  <View style={styles.coverFrame}>
+                  <View style={[styles.coverFrame, coverFrameDynamic]}>
                     <TouchableOpacity
                       onPress={() => pickPlayingCourtImage('full')}
                       disabled={imageUploading}
@@ -1739,7 +1750,7 @@ export default function CourtRegisterPage() {
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf1Images.map((uri) => (
-                          <View key={uri} style={styles.coverFrame}>
+                          <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
@@ -1749,7 +1760,7 @@ export default function CourtRegisterPage() {
                           </View>
                         ))}
                         {pcHalf1Images.length < 6 && (
-                          <View style={styles.coverFrame}>
+                          <View style={[styles.coverFrame, coverFrameDynamic]}>
                             <TouchableOpacity
                               onPress={() => pickPlayingCourtImage('half1')}
                               disabled={imageUploading}
@@ -1788,7 +1799,7 @@ export default function CourtRegisterPage() {
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf2Images.map((uri) => (
-                          <View key={uri} style={styles.coverFrame}>
+                          <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
@@ -1798,7 +1809,7 @@ export default function CourtRegisterPage() {
                           </View>
                         ))}
                         {pcHalf2Images.length < 6 && (
-                          <View style={styles.coverFrame}>
+                          <View style={[styles.coverFrame, coverFrameDynamic]}>
                             <TouchableOpacity
                               onPress={() => pickPlayingCourtImage('half2')}
                               disabled={imageUploading}
@@ -2248,7 +2259,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.neutral350,
     borderStyle: 'dashed',
-    backgroundColor: COLORS.neutral0,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -2256,7 +2266,7 @@ const styles = StyleSheet.create({
   imagesRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 6, paddingBottom: 6 },
   coverPressable: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  addPlus: { fontSize: 28, fontWeight: '700', color: COLORS.neutral800, marginTop: -1 },
+  addPlus: { fontSize: 28, fontWeight: '700', color: COLORS.neutral600, marginTop: -1 },
   coverHint: { marginTop: 6, color: COLORS.neutral600, fontWeight: '500', fontSize: 12 },
   removeXBtn: {
     position: 'absolute',
@@ -2265,13 +2275,11 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.neutral0,
-    borderWidth: 1,
-    borderColor: COLORS.neutral200,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  removeXText: { fontSize: 20, lineHeight: 20, fontWeight: '900', color: COLORS.neutral925, marginTop: -1 },
+  removeXText: { fontSize: 20, lineHeight: 20, fontWeight: '900', color: '#ffffff', marginTop: -1 },
 
   truthRow: {
     flexDirection: 'row',

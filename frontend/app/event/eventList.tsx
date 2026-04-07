@@ -458,25 +458,25 @@ const EventListScreen = () => {
         {/* Filters */}
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersInner}>
-          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
+          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterButtonActive]} onPress={() => setOpenFilter(openFilter==='venue'?null:'venue')}>
             <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'venue' || selectedVenues.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SPACE')}</Text>
             {selectedVenues.length>0 && <Text style={styles.countBadge}>{selectedVenues.length}</Text>}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter==='surface'?null:'surface')}
           >
             <Image source={ICONS.menu} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, (openFilter === 'surface' || selectedSurfaces.length>0) && styles.filterTextActive]}>{t('COURT_LIST_FILTER_SURFACE')}</Text>
             {selectedSurfaces.length>0 && <Text style={styles.countBadge}>{selectedSurfaces.length}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated }, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
+          <TouchableOpacity style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, freeOnly && styles.filterButtonActive]} onPress={toggleFree}>
             <Image source={ICONS.freeIcon} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
             <Text style={[styles.filterText, { color: tc.textPrimary }, freeOnly && styles.filterTextActive]}>{t('COMMON_LABEL_FREE')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'payment' || (paymentSelections.length>0 && !freeOnly)) && styles.filterButtonActive, freeOnly && styles.filterButtonDisabled]}
             onPress={togglePaymentFilterPanel}
             disabled={freeOnly}
           >
@@ -486,7 +486,7 @@ const EventListScreen = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterButton, { backgroundColor: tc.bgElevated }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
+            style={[styles.filterButton, { backgroundColor: tc.bgElevated, borderColor: tc.border }, (openFilter === 'distance' || distanceFilterActive) && styles.filterButtonActive]}
             onPress={() => setOpenFilter(openFilter === 'distance' ? null : 'distance')}
           >
             <Image source={ICONS.radar} style={[styles.filterIcon, { tintColor: tc.textPrimary }]} />
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
   container:{flex:1,paddingHorizontal:12,paddingTop:4},
   filterRow:{marginBottom:12},
   filtersInner:{flexDirection:'row',gap:10,paddingRight:4},
-  filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:COLORS.neutral125,paddingHorizontal:12,paddingVertical:6,borderRadius:20},
+  filterButton:{flexDirection:'row',alignItems:'center',backgroundColor:COLORS.neutral125,paddingHorizontal:12,paddingVertical:6,borderRadius:20,borderWidth:1},
   filterButtonActive:{backgroundColor:COLORS.limeGreen},
   filterButtonDisabled:{backgroundColor:COLORS.neutral200, opacity:0.6},
   filterIcon:{width:16,height:16,tintColor:COLORS.neutral800,marginRight:6,resizeMode:'contain'},

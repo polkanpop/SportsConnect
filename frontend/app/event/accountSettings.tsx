@@ -667,7 +667,7 @@ export default function AccountSettingsScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: tc.bgBase }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.headerRow, { backgroundColor: tc.bgBase }]}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: tc.bgElevated }]} onPress={() => router.back()}>
           <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t('ACCT_HEADER_TITLE')}</Text>
@@ -1266,7 +1266,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 28 },
   backIcon: { width: 22, height: 22, tintColor: '#222' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
 
