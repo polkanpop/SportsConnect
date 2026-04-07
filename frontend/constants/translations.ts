@@ -231,7 +231,7 @@ export const en = {
   SETTINGS_SECTION_REGISTER_POLICIES: 'Register & Policies',
   SETTINGS_ROW_ACCOUNT: 'Account',
   SETTINGS_ROW_NOTIFICATION: 'Notification',
-  SETTINGS_ROW_COURT_REGISTER: 'Court Register',
+  SETTINGS_ROW_COURT_REGISTER: 'Venue Register',
   SETTINGS_ROW_DATA_PRIVACY: 'Data & Privacy',
   SETTINGS_ROW_LANGUAGE: 'Language',
   SETTINGS_LANG_TOGGLE_LABEL: 'English',
@@ -1501,7 +1501,7 @@ export const vi: Record<TranslationKey, string> = {
   SETTINGS_ROW_FEATURE: 'Tính năng',
   SETTINGS_FEATURE_VOICE_LABEL: 'Đặt sân bằng giọng nói',
   SETTINGS_FEATURE_VOICE_SUBLABEL: 'Beta',
-  SETTINGS_FEATURE_PUSH_LABEL: 'Thông báo đẩy',
+  SETTINGS_FEATURE_PUSH_LABEL: 'Thông báo',
 
   // Invoice translations
   INVOICE_SUBJECT_EVENT: 'Sự kiện',

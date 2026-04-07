@@ -8,7 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import MaterialIcons from '@expo/vector-icons/MaterialIcons'
+// MaterialIcons import removed – text labels used instead of icon glyphs
 
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useTranslation } from '@/constants/translations'
@@ -2438,7 +2438,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => requestRemoveImage(uri, 'sub')} style={styles.removeXBtn} activeOpacity={0.85}>
-                      <MaterialIcons name="close" size={18} color={COLORS.neutral925} />
+                      <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -2551,7 +2551,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           style={[styles.serviceHeaderDeleteCircle, { backgroundColor: tc.error }]}
                           hitSlop={8}
                         >
-                          <MaterialIcons name="remove" size={16} color="#fff" />
+                          <Text style={styles.serviceHeaderDeleteCircleText}>Xóa</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? false) }))}
@@ -2658,7 +2658,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => removeServiceImage(d.localId, uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                            <MaterialIcons name="close" size={18} color={COLORS.neutral925} />
+                            <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -2707,7 +2707,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri, 'main')} style={styles.removeXBtn} activeOpacity={0.85}>
-                    <MaterialIcons name="close" size={18} color={COLORS.neutral925} />
+                    <Text style={[styles.removeXText, { color: '#ef4444', fontSize: 18, lineHeight: 20 }]}>×</Text>
                   </TouchableOpacity>
                 </View>
               ))}

@@ -1035,6 +1035,7 @@ export default function AccountSettingsScreen() {
                     icon={ICONS.user}
                     label="Tài khoản cục bộ"
                     linked
+                    iconTintColor={tc.textPrimary}
                   />
                 </>
               )}
@@ -1176,7 +1177,7 @@ export default function AccountSettingsScreen() {
 }
 
 // ─── Linked account row ───────────────────────────────────────────────────────
-function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking, unlinkExpanded, iconSize }: {
+function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress, unlinking, unlinkExpanded, iconSize, iconTintColor }: {
   icon: any
   label: string
   linked: boolean
@@ -1186,13 +1187,14 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
   unlinking?: boolean
   unlinkExpanded?: boolean     // whether the Unlink button is currently visible
   iconSize?: number            // override icon size (default 24)
+  iconTintColor?: string       // optional tint for monochrome icons (e.g. user icon in dark mode)
 }) {
   const { t } = useTranslation()
   const tc = useThemeColors()
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
-        <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
+        <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined, iconTintColor ? { tintColor: iconTintColor } : undefined]} resizeMode="contain" />
         {linked && (
           <View style={styles.linkedCheckBadge}>
             <Text style={styles.linkedCheckText}>✓</Text>

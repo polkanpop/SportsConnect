@@ -877,8 +877,8 @@ export default function ActivityPage() {
             {weekDays.map((dayInfo, index) => (
               <View key={index} style={[styles.dayContainer, dayInfo.isToday && styles.todayContainer]}>
                 <View style={[styles.dayHeader, dayInfo.isToday && styles.todayHeader]}>
-                  <Text style={[styles.dateText, { color: tc.textPrimary }]}>{dayInfo.dateNumber}</Text>
-                  <Text style={[styles.dayText, { color: tc.textPrimary }]}>{dayInfo.dayLetter}</Text>
+                  <Text style={[styles.dateText, { color: dayInfo.isToday ? COLORS.neutral900 : tc.textPrimary }]}>{dayInfo.dateNumber}</Text>
+                  <Text style={[styles.dayText, { color: dayInfo.isToday ? COLORS.neutral900 : tc.textPrimary }]}>{dayInfo.dayLetter}</Text>
                 </View>
                 <View style={styles.calendarDaySeparator} />
                 <View style={styles.bookingsContainer}>

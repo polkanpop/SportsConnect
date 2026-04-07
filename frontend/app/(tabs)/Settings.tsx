@@ -199,11 +199,12 @@ export default function SettingsPage() {
             onValueChange={toggleLanguage}
             tc={tc}
           />}
-          {showRow.night_mode && <SettingRowToggle
+          {showRow.night_mode && <SettingRowSwitch
             icon={isDark ? ICONS.darkTheme : ICONS.lightTheme}
             label={t('SETTINGS_ROW_THEME')}
-            valueLabel={isDark ? t('SETTINGS_THEME_DARK') : t('SETTINGS_THEME_LIGHT')}
-            onPress={toggleTheme}
+            sublabel={isDark ? t('SETTINGS_THEME_DARK') : t('SETTINGS_THEME_LIGHT')}
+            value={isDark}
+            onValueChange={toggleTheme}
             tc={tc}
           />}
         </View>
