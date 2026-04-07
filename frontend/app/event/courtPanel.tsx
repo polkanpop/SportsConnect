@@ -2551,7 +2551,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           style={[styles.serviceHeaderDeleteCircle, { backgroundColor: tc.error }]}
                           hitSlop={8}
                         >
-                          <Text style={styles.serviceHeaderDeleteCircleText}>Xóa</Text>
+                          <Text style={styles.serviceHeaderDeleteCircleText}>{t('COMMON_BTN_DELETE')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? false) }))}

@@ -259,9 +259,16 @@ export default function PhoneOtpScreen() {
 
       if (params.mode === 'add_phone') {
         await verifyPhoneAddition(firebaseIdToken);
-        // Invalidate the dashboard cache so accountSettings.tsx gets fresh
-        // userInfo.contactnumber immediately on the next render cycle.
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) });
+        // Patch dashboard cache in-place with the newly verified phone number.
+        // Do NOT call invalidateQueries(dashboard) — that triggers a background
+        // refetch which returns stale Redis data and overwrites any prior name/
+        // field patches (e.g. from handleSaveName) causing a full snap-back.
+        if (userid != null) {
+          const e164Phone = phone.trim().startsWith('+') ? phone.trim() : '+84' + phone.trim().slice(1)
+          queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
+            old ? { ...old, userinfo: { ...(old.userinfo ?? {}), contactnumber: e164Phone } } : old
+          )
+        }
         queryClient.invalidateQueries({ queryKey: [...queryKeys.userId] });
         AsyncStorage.removeItem(OTP_DRAFT_KEY).catch(() => {});
         _pendingOtp = null;

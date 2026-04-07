@@ -1471,6 +1471,7 @@
                         source={ICONS.arrowdown}
                         style={[
                           styles.filterArrow,
+                          { tintColor: tc.textPrimary },
                           openDropdown === 'mode' ? styles.arrowOpen : null,
                         ]}
                       />
@@ -1491,6 +1492,7 @@
                         source={ICONS.arrowdown}
                         style={[
                           styles.filterArrow,
+                          { tintColor: tc.textPrimary },
                           openDropdown === "venue" ? styles.arrowOpen : null,
                         ]}
                       />
@@ -1514,6 +1516,7 @@
                         source={ICONS.arrowdown}
                         style={[
                           styles.filterArrow,
+                          { tintColor: tc.textPrimary },
                           openDropdown === "availability" ? styles.arrowOpen : null,
                         ]}
                       />
@@ -1537,6 +1540,7 @@
                         source={ICONS.arrowdown}
                         style={[
                           styles.filterArrow,
+                          { tintColor: tc.textPrimary },
                           openDropdown === "distance" ? styles.arrowOpen : null,
                         ]}
                       />
@@ -2741,7 +2745,7 @@
       justifyContent: 'center',
     },
     favoriteActive: {
-      backgroundColor: '#F0F0F0', // light grey
+      backgroundColor: 'rgba(255,255,255,0.22)', // neutral grey (matches search bar star)
     },
     favoriteIcon: {
       width: 24,
