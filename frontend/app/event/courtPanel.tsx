@@ -1737,7 +1737,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           onPress={() => setSelectedCourtId(courtid)}
           style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.divider }, selectedCard && [styles.cardSelected, { borderColor: tc.brand }]]}
         >
-          <View style={styles.cardImageWrap}>
+          <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
             {imageUri ? (
               <ExpoImage
                 source={{ uri: optimizeRemoteImageUrl(imageUri) }}
@@ -1745,7 +1745,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 contentFit="cover"
               />
             ) : (
-              <View style={styles.cardImageFallback}>
+              <View style={[styles.cardImageFallback, { backgroundColor: tc.bgElevated }]}>
                 <Image source={ICONS.court} style={{ width: 44, height: 44, tintColor: tc.iconMuted }} resizeMode="contain" />
               </View>
             )}
@@ -1929,6 +1929,16 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               }
               const slotSelectedBooking = bookingSelectedSlot ? (slotToBookingMap.get(bookingSelectedSlot) ?? null) : null
 
+              const translateBookingStatus = (s: string) => {
+                const lower = s.toLowerCase()
+                if (lower === 'pending') return t('COURT_PANEL_STATUS_PENDING')
+                if (lower === 'approved') return t('COURT_PANEL_STATUS_APPROVED')
+                if (lower === 'rejected') return t('COURT_PANEL_STATUS_REJECTED')
+                if (lower === 'upcoming') return t('COURT_PANEL_STATUS_UPCOMING')
+                if (lower === 'cancelled' || lower === 'canceled') return t('COURT_PANEL_STATUS_CANCELLED')
+                return s
+              }
+
               const renderBookingRow = (b: CourtBookingRow, showActions: boolean, overrideTime?: string, showAttendance?: boolean) => {
                 const uid = b.userid
                 const displayName = bookingUserNames[uid] || `User ${uid}`
@@ -1963,7 +1973,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           <Text style={{ color: tc.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp, t('COURT_PANEL_UNKNOWN_TIME'))}</Text>
                           <Text style={{ color: tc.textSecondary, fontSize: 12, marginTop: 1 }}>
                             <Text style={{ fontWeight: '700', color: tc.textSecondary }}>{t('COURT_PANEL_STATUS_PREFIX')}</Text>
-                            <Text>{statusRaw || t('COURT_PANEL_STATUS_PENDING')}</Text>
+                            <Text>{translateBookingStatus(statusRaw) || t('COURT_PANEL_STATUS_PENDING')}</Text>
                           </Text>
                         </View>
                       </TouchableOpacity>

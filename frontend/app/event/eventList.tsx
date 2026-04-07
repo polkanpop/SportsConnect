@@ -241,7 +241,7 @@ const EventListScreen = () => {
   }, [allEvents])
 
   const surfaceOptions = useMemo(() => {
-    const set = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay'])
+    const set = new Set<string>(['hardwood', 'concrete', 'synthetic'])
     allEvents.forEach(ev => { if (ev.surface) set.add(ev.surface) })
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [allEvents])
@@ -502,7 +502,7 @@ const EventListScreen = () => {
             <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
-                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
+                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt.toLowerCase() === 'both' ? t('COURT_LIST_FILTER_BOTH') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
                     <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
@@ -688,11 +688,11 @@ const EventListScreen = () => {
                   onPress={() => router.push(`/event/eventBooking?eventid=${ev.eventid}` as any)}
                 >
                   {/* Image section */}
-                  <View style={styles.cardImageWrap}>
+                  <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
                     {imageUrl ? (
                       <Image source={{ uri: imageUrl }} style={styles.cardImage} />
                     ) : (
-                      <View style={styles.cardImagePlaceholder}>
+                      <View style={[styles.cardImagePlaceholder, { backgroundColor: tc.bgElevated }]}>
                         <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />
                       </View>
                     )}

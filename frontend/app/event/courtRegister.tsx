@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions, ActivityIndicator, Pressable, useWindowDimensions } from 'react-native'
@@ -1889,7 +1889,7 @@ export default function CourtRegisterPage() {
         <View style={[styles.bottomBar, { backgroundColor: tc.bgBase, borderTopColor: tc.divider }]}>
           <View style={styles.bottomSummaryRow}>
             <Text style={[styles.bottomSummaryText, { color: tc.textSecondary }]}>
-              {playingCourts.length} {playingCourts.length === 1 ? 'court' : 'courts'} � {remoteImageUrls.length} {remoteImageUrls.length === 1 ? 'image' : 'images'} � {services.length} {services.length === 1 ? 'service' : 'services'}
+              {playingCourts.length} {t('COURT_REGISTER_UNIT_COURTS')} ◆ {remoteImageUrls.length} {t('COURT_REGISTER_UNIT_IMAGES')} ◆ {services.length} {t('COURT_REGISTER_UNIT_SERVICES')}
             </Text>
           </View>
           <TouchableOpacity

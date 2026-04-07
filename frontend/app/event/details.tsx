@@ -70,7 +70,7 @@ const formatDateWeekdayDDMMYYYY = (dt: Date, lang?: string) => {
   const dd = pad2(dt.getDate())
   const mm = pad2(dt.getMonth() + 1)
   const yyyy = dt.getFullYear()
-  return `${wd} ${dd}-${mm}-${yyyy}`
+  return `${wd}, ${dd}-${mm}-${yyyy}`
 }
 
 const formatStatusTitleCase = (raw: any) => {

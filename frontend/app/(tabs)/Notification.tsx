@@ -367,10 +367,10 @@ export default function NotificationsPage() {
     const d = parseNotificationDate(iso)
     if (!d) return ''
     const delta = Math.max(0, Date.now() - d.getTime())
-    if (delta < 60_000) return 'now'
-    if (delta < 60 * 60_000) return `${Math.floor(delta / 60_000)}m ago`
-    if (delta < 24 * 60 * 60_000) return `${Math.floor(delta / (60 * 60_000))}h ago`
-    if (delta < 7 * 24 * 60 * 60_000) return `${Math.floor(delta / (24 * 60 * 60_000))}d ago`
+    if (delta < 60_000) return t('NOTIF_TIME_NOW')
+    if (delta < 60 * 60_000) return t('NOTIF_TIME_MINS_AGO').replace('{n}', String(Math.floor(delta / 60_000)))
+    if (delta < 24 * 60 * 60_000) return t('NOTIF_TIME_HOURS_AGO').replace('{n}', String(Math.floor(delta / (60 * 60_000))))
+    if (delta < 7 * 24 * 60 * 60_000) return t('NOTIF_TIME_DAYS_AGO').replace('{n}', String(Math.floor(delta / (24 * 60 * 60_000))))
     return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
   }
 
@@ -544,7 +544,7 @@ export default function NotificationsPage() {
             style={{ alignSelf: 'flex-start' }}
             onPress={() => router.push({ pathname: '/(tabs)/Home' as any, params: { panel: 'court', courtid: String(item.data?.courtid ?? ''), courtbookingid: String(item.data?.courtbookingid ?? ''), _t: String(Date.now()) } })}
           >
-            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>View booking</Text>
+            <Text style={{ color: '#3B82F6', textDecorationLine: 'underline', fontSize: 12, marginTop: 4 }}>{t('NOTIF_BTN_VIEW_BOOKING')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -619,13 +619,13 @@ export default function NotificationsPage() {
       {/* Sticky delete bar — always visible at top when in delete mode */}
       {deleteMode && (
         <View style={[styles.deleteModeBar, { backgroundColor: tc.bgSurface, borderBottomColor: tc.divider }]}>
-          <TouchableOpacity style={styles.deleteWrap} onPress={exitDeleteMode} activeOpacity={0.85} disabled={actionLoading}>
-            <Image source={ICONS.closeMenu} style={styles.closeIcon} />
+          <TouchableOpacity style={[styles.deleteWrap, { backgroundColor: tc.bgElevated, borderColor: tc.border }]} onPress={exitDeleteMode} activeOpacity={0.85} disabled={actionLoading}>
+            <Image source={ICONS.closeMenu} style={[styles.closeIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteWrap} onPress={onPressDeleteSelected} activeOpacity={0.85} disabled={actionLoading}>
-            <Image source={ICONS.deleteAll} style={styles.deleteIcon} />
+          <TouchableOpacity style={[styles.deleteWrap, { backgroundColor: tc.bgElevated, borderColor: tc.border }]} onPress={onPressDeleteSelected} activeOpacity={0.85} disabled={actionLoading}>
+            <Image source={ICONS.deleteAll} style={[styles.deleteIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.markAllWrap, { flex: 1 }]} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
+          <TouchableOpacity style={[styles.markAllWrap, { flex: 1, backgroundColor: tc.bgElevated, borderColor: tc.border }]} onPress={handleSelectAll} activeOpacity={0.85} disabled={actionLoading}>
             <Text style={[styles.markAllText, { color: tc.brand }]}>{t('NOTIF_BTN_SELECT_ALL')}</Text>
           </TouchableOpacity>
         </View>

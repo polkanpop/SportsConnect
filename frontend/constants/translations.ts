@@ -254,6 +254,11 @@ export const en = {
   NOTIF_MODAL_DELETE_BODY: 'Selected notifications will be deleted permanently.',
   NOTIF_MODAL_BTN_CANCEL: 'Cancel',
   NOTIF_MODAL_BTN_DELETE: 'Delete',
+  NOTIF_BTN_VIEW_BOOKING: 'View booking',
+  NOTIF_TIME_NOW: 'now',
+  NOTIF_TIME_MINS_AGO: '{n}m ago',
+  NOTIF_TIME_HOURS_AGO: '{n}h ago',
+  NOTIF_TIME_DAYS_AGO: '{n}d ago',
 
   // Court Booking
   BOOKING_COURT_HEADER: 'Court Booking',
@@ -575,6 +580,8 @@ export const en = {
   ACTIVITY_BADGE_JOINED: 'Joined',
   ACTIVITY_BADGE_CANCELLED: 'Cancelled',
 
+  COURT_LIST_FILTER_BOTH: 'Both',
+
   // Notification section headers
   NOTIF_SECTION_TODAY: 'Today',
   NOTIF_SECTION_YESTERDAY: 'Yesterday',
@@ -688,6 +695,10 @@ export const en = {
   COURT_PANEL_NO_ADMINS: 'No administrators yet.',
   COURT_PANEL_STATUS_PREFIX: 'Status: ',
   COURT_PANEL_STATUS_PENDING: 'pending',
+  COURT_PANEL_STATUS_APPROVED: 'approved',
+  COURT_PANEL_STATUS_REJECTED: 'rejected',
+  COURT_PANEL_STATUS_UPCOMING: 'upcoming',
+  COURT_PANEL_STATUS_CANCELLED: 'cancelled',
   COURT_PANEL_NO_TIME_SLOTS: 'No time slots available.',
   COURT_PANEL_BOOKING_PREFIX: 'Booking: ',
   COURT_PANEL_OPEN_PREFIX: 'Open: ',
@@ -845,6 +856,9 @@ export const en = {
   COURT_REGISTER_HALF_BOOKING_ON: 'Half Court Booking: On',
   COURT_REGISTER_HALF_BOOKING_OFF: 'Half Court Booking: Off',
   COURT_REGISTER_SURFACE_PREFIX: 'Surface: ',
+  COURT_REGISTER_UNIT_COURTS: 'courts',
+  COURT_REGISTER_UNIT_IMAGES: 'images',
+  COURT_REGISTER_UNIT_SERVICES: 'services',
   COURT_REGISTER_HALF1_PREFIX: 'Half Court 1: ',
   COURT_REGISTER_HALF2_PREFIX: 'Half Court 2: ',
   COURT_REGISTER_FULL_COURT_IMAGES_PREFIX: 'Full Court Images: ',
@@ -1246,6 +1260,11 @@ export const vi: Record<TranslationKey, string> = {
   NOTIF_MODAL_DELETE_BODY: 'Các thông báo đã chọn sẽ bị xóa vĩnh viễn.',
   NOTIF_MODAL_BTN_CANCEL: 'Hủy',
   NOTIF_MODAL_BTN_DELETE: 'Xóa',
+  NOTIF_BTN_VIEW_BOOKING: 'Xem đặt sân',
+  NOTIF_TIME_NOW: 'vừa xong',
+  NOTIF_TIME_MINS_AGO: '{n} phút trước',
+  NOTIF_TIME_HOURS_AGO: '{n} giờ trước',
+  NOTIF_TIME_DAYS_AGO: '{n} ngày trước',
 
   // Court Booking
   BOOKING_COURT_HEADER: 'Đặt sân',
@@ -1567,6 +1586,8 @@ export const vi: Record<TranslationKey, string> = {
   ACTIVITY_BADGE_JOINED: 'Đã tham gia',
   ACTIVITY_BADGE_CANCELLED: 'Đã hủy',
 
+  COURT_LIST_FILTER_BOTH: 'Cả hai',
+
   // Notification section headers
   NOTIF_SECTION_TODAY: 'Hôm nay',
   NOTIF_SECTION_YESTERDAY: 'Hôm qua',
@@ -1680,6 +1701,10 @@ export const vi: Record<TranslationKey, string> = {
   COURT_PANEL_NO_ADMINS: 'Chưa có quản trị viên.',
   COURT_PANEL_STATUS_PREFIX: 'Trạng thái: ',
   COURT_PANEL_STATUS_PENDING: 'chờ xử lý',
+  COURT_PANEL_STATUS_APPROVED: 'đã duyệt',
+  COURT_PANEL_STATUS_REJECTED: 'đã từ chối',
+  COURT_PANEL_STATUS_UPCOMING: 'sắp tới',
+  COURT_PANEL_STATUS_CANCELLED: 'đã hủy',
   COURT_PANEL_NO_TIME_SLOTS: 'Không có khung giờ nào.',
   COURT_PANEL_BOOKING_PREFIX: 'Đặt chỗ: ',
   COURT_PANEL_OPEN_PREFIX: 'Mở: ',
@@ -1837,6 +1862,9 @@ export const vi: Record<TranslationKey, string> = {
   COURT_REGISTER_HALF_BOOKING_ON: 'Đặt nửa sân: Bật',
   COURT_REGISTER_HALF_BOOKING_OFF: 'Đặt nửa sân: Tắt',
   COURT_REGISTER_SURFACE_PREFIX: 'Bề mặt: ',
+  COURT_REGISTER_UNIT_COURTS: 'sân',
+  COURT_REGISTER_UNIT_IMAGES: 'hình ảnh',
+  COURT_REGISTER_UNIT_SERVICES: 'dịch vụ',
   COURT_REGISTER_HALF1_PREFIX: 'Nửa sân 1: ',
   COURT_REGISTER_HALF2_PREFIX: 'Nửa sân 2: ',
   COURT_REGISTER_FULL_COURT_IMAGES_PREFIX: 'Hình sân đầy đủ: ',

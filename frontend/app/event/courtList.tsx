@@ -266,7 +266,7 @@ const CourtListScreen = () => {
 
   // Derive unique surface options
   const surfaceOptions = useMemo(() => {
-    const set = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay'])
+    const set = new Set<string>(['hardwood', 'concrete', 'synthetic'])
     allCourts.forEach(c => { if (c.surface) set.add(c.surface) })
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [allCourts])
@@ -486,7 +486,7 @@ const CourtListScreen = () => {
             <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
-                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
+                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt.toLowerCase() === 'both' ? t('COURT_LIST_FILTER_BOTH') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
                     <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
@@ -654,11 +654,11 @@ const CourtListScreen = () => {
                 onPress={() => router.push(`/event/courtBooking?courtid=${c.courtid}` as any)}
               >
                 {/* Image section (80%) */}
-                <View style={styles.cardImageWrap}>
+                <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
                   {imageUrl ? (
                     <Image source={{ uri: imageUrl }} style={styles.cardImage} />
                   ) : (
-                    <View style={styles.cardImagePlaceholder}>
+                    <View style={[styles.cardImagePlaceholder, { backgroundColor: tc.bgElevated }]}>
                       <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />
                     </View>
                   )}
@@ -691,7 +691,7 @@ const CourtListScreen = () => {
                   <Text style={[styles.cardAddress, { color: tc.textSecondary }]} numberOfLines={1}>{c.address || (c as any).venue_name || c.name || ('Court ' + c.courtid)}</Text>
                   {surfaceText && (
                     <Text style={[styles.cardSurface, { color: tc.textSecondary }]} numberOfLines={1}>
-                      {t('COURT_REGISTER_SURFACE_PREFIX')}{surfaceText}
+                      {t('COURT_REGISTER_SURFACE_PREFIX')}{translateSurface(surfaceText, t)}
                     </Text>
                   )}
                 </View>

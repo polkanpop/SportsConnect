@@ -223,7 +223,7 @@ const TrainingSessionListScreen = () => {
   }, [allSessions])
 
   const surfaceOptions = useMemo(() => {
-    const s = new Set<string>(['hardwood', 'concrete', 'synthetic', 'grass', 'clay']); allSessions.forEach(r => { if (r.surface) s.add(r.surface) })
+    const s = new Set<string>(['hardwood', 'concrete', 'synthetic']); allSessions.forEach(r => { if (r.surface) s.add(r.surface) })
     return [...s].sort((a, b) => a.localeCompare(b))
   }, [allSessions])
 
@@ -449,7 +449,7 @@ const TrainingSessionListScreen = () => {
             <ScrollView style={[styles.dropdown, { backgroundColor: tc.bgElevated, borderColor: tc.border }]}>
               {venueOptions.map(opt => {
                 const selected = selectedVenues.includes(opt)
-                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt
+                const label = opt.toLowerCase() === 'indoor' ? t('MAP_LABEL_INDOOR') : opt.toLowerCase() === 'outdoor' ? t('MAP_LABEL_OUTDOOR') : opt.toLowerCase() === 'both' ? t('COURT_LIST_FILTER_BOTH') : opt
                 return (
                   <Pressable key={opt} onPress={() => toggleVenue(opt)} style={styles.dropdownItem}>
                     <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{label}</Text>
@@ -631,11 +631,11 @@ const TrainingSessionListScreen = () => {
                 onPress={() => router.push(`/event/tsBooking?sessionid=${s.sessionid}` as any)}
               >
                 {/* ---- image section ---- */}
-                <View style={styles.cardImageWrap}>
+                <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
                   {imageUrl ? (
                     <Image source={{ uri: imageUrl }} style={styles.cardImage} />
                   ) : (
-                    <View style={styles.cardImagePlaceholder}>
+                    <View style={[styles.cardImagePlaceholder, { backgroundColor: tc.bgElevated }]}>
                       <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />
                     </View>
                   )}
