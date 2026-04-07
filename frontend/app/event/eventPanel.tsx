@@ -1531,6 +1531,7 @@ export default function EventPanel({ organizerId }: Props) {
 					<Text style={{ fontSize: 15, fontWeight: "700", marginTop: 10, marginBottom: 8, color: tc.textPrimary }}>{t('EVENT_PANEL_APPLICANT_LIST')}</Text>
 					{bookingsError && (
 					<Text style={{ color: "red", marginBottom: 8 }}>{t('EVENT_PANEL_APPLICANT_LOAD_ERROR')}{bookingsError}</Text>
+					)}
 
 					{bookingsLoading ? (
 						<SkeletonPulse>
