@@ -1571,7 +1571,7 @@
                                 <View style={styles.dropdownItemLeft}>
                                   <Image
                                     source={opt === 'events' ? ICONS.starCal : opt === 'training' ? ICONS.tsNoti : ICONS.courtFilter}
-                                    style={[styles.optionIcon, (opt === 'events' || opt === 'training') && { tintColor: '#111' }]}
+                                    style={[styles.optionIcon, { tintColor: tc.textPrimary }]}
                                   />
                                   <Text style={styles.dropdownItemText}>
                                     {opt === 'courts' ? t('MAP_CHIP_COURTS') : opt === 'events' ? t('MAP_CHIP_EVENTS') : t('MAP_CHIP_TRAINING')}
@@ -1604,7 +1604,7 @@
                                   onPress={() => toggleVenue(item)}
                                 >
                                   <View style={styles.dropdownItemLeft}>
-                                    <Image source={leftIcon as any} style={styles.optionIcon} />
+                                    <Image source={leftIcon as any} style={[styles.optionIcon, { tintColor: tc.textPrimary }]} />
                                     <Text style={styles.dropdownItemText}>
                                       {item.toLowerCase().includes('indoor') && item.toLowerCase().includes('outdoor')
                                         ? t('MAP_LABEL_IN_OUTDOOR')
@@ -1651,7 +1651,7 @@
                                   <View style={styles.dropdownItemLeft}>
                                     <Image
                                       source={item === "Available" ? ICONS.check : ICONS.x}
-                                      style={styles.optionIcon}
+                                      style={[styles.optionIcon, { tintColor: tc.textPrimary }]}
                                     />
                                     <Text style={styles.dropdownItemText}>{item === 'Available' ? t('MAP_LABEL_AVAILABLE') : t('MAP_LABEL_UNAVAILABLE')}</Text>
                                   </View>

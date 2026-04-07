@@ -17,6 +17,16 @@
       "source": "/index",
       "destination": "/",
       "permanent": true
+    },
+    {
+      "source": "/terms-vi",
+      "destination": "/terms_vi",
+      "permanent": true
+    },
+    {
+      "source": "/privacy-vi",
+      "destination": "/privacy_vi",
+      "permanent": true
     }
   ]
 }

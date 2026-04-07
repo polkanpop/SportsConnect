@@ -34,8 +34,9 @@ export default function Home() {
   const router = useRouter();
   const tc = useThemeColors();
   const { isDark } = useTheme();
-  // Category card color: brand purple in dark, standard brand orange in light
-  const categoryCardBg = isDark ? tc.brand : COLORS.brandOrangeLight;
+  // Category card color: brand purple in dark, soft peach in light (restored original)
+  const categoryCardBg = isDark ? tc.brand : COLORS.orangeSoft;
+  const categoryLabelColor = isDark ? '#FFFFFF' : COLORS.brandOrangeDeep;
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null
@@ -102,7 +103,7 @@ export default function Home() {
     fontSize: 14,
     marginTop: 6,
     textAlign: "center" as const,
-    color: '#FFFFFF',
+    color: categoryLabelColor,
   };
 
   // Category data with navigation routes

@@ -15,8 +15,8 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 export default function DataPrivacyScreen() {
   const { t, language } = useTranslation()
   const tc = useThemeColors()
-  const termsUrl = language === 'vi' ? 'https://sportconnects.org/terms-vi' : 'https://sportconnects.org/terms'
-  const privacyUrl = language === 'vi' ? 'https://sportconnects.org/privacy-vi' : 'https://sportconnects.org/privacy'
+  const termsUrl = language === 'vi' ? 'https://sportconnects.org/terms_vi' : 'https://sportconnects.org/terms'
+  const privacyUrl = language === 'vi' ? 'https://sportconnects.org/privacy_vi' : 'https://sportconnects.org/privacy'
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: tc.bgBase }]}>
       {/* Header */}

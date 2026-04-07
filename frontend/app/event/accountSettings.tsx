@@ -249,18 +249,26 @@ export default function AccountSettingsScreen() {
   }
 
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guard: only sync email/phone from dashboard on first mount.
+  // After the first load, loadMeta (useFocusEffect) sources these from unverified_users
+  // so they reflect any pending changes. Without this, a background dashboard refetch
+  // would overwrite the user's just-saved pending email/phone with the old verified value.
+  const initializedFromDashboard = useRef(false)
 
   // ── Sync visibility from bootstrap data ──────────────────────────────────
   useEffect(() => {
     if (userInfo) {
       setNameValue(userInfo.name ?? '')
       setOriginalName(userInfo.name ?? '')
-      const em = userInfo.email ?? ''
-      const ph = toLocalPhone(userInfo.contactnumber ?? '')
-      setEmailEdit(em)
-      setOriginalEmail(em)
-      setPhoneEdit(ph)
-      setOriginalPhone(ph)
+      if (!initializedFromDashboard.current) {
+        initializedFromDashboard.current = true
+        const em = userInfo.email ?? ''
+        const ph = toLocalPhone(userInfo.contactnumber ?? '')
+        setEmailEdit(em)
+        setOriginalEmail(em)
+        setPhoneEdit(ph)
+        setOriginalPhone(ph)
+      }
       if (typeof userInfo.emailvisiblestatus === 'boolean') setEmailVisible(userInfo.emailvisiblestatus)
       if (typeof userInfo.phonevisiblestatus === 'boolean') setPhoneVisible(userInfo.phonevisiblestatus)
     }
