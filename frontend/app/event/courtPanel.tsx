@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Image as ExpoImage } from 'expo-image'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 import { useThemeColors } from '@/hooks/use-theme-colors'
 import { useTranslation } from '@/constants/translations'
@@ -2274,7 +2275,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                               setSelectedVenueCourtBaseName(base)
                               setVenueCourtBaseEditName(base)
                             }}
-                            style={[styles.input, { justifyContent: 'center' }]}
+                            style={[styles.input, { justifyContent: 'center', backgroundColor: tc.bgSurface, borderColor: tc.divider }]}
                           >
                             <Text style={{ fontSize: 14, color: tc.textPrimary }} numberOfLines={1}>{base}</Text>
                           </TouchableOpacity>
@@ -2437,7 +2438,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => requestRemoveImage(uri, 'sub')} style={styles.removeXBtn} activeOpacity={0.85}>
-                      <Text style={styles.removeXText}>Ã—</Text>
+                      <Ionicons name="close" size={18} color={COLORS.neutral925} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -2550,7 +2551,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           style={[styles.serviceHeaderDeleteCircle, { backgroundColor: tc.error }]}
                           hitSlop={8}
                         >
-                          <Text style={styles.serviceHeaderDeleteCircleText}>âˆ’</Text>
+                          <Ionicons name="remove" size={16} color="#fff" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setServiceExpanded((prev) => ({ ...prev, [d.localId]: !(prev[d.localId] ?? false) }))}
@@ -2657,7 +2658,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                             <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => removeServiceImage(d.localId, uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                            <Text style={styles.removeXText}>Ã—</Text>
+                            <Ionicons name="close" size={18} color={COLORS.neutral925} />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -2706,7 +2707,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                     <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri, 'main')} style={styles.removeXBtn} activeOpacity={0.85}>
-                    <Text style={styles.removeXText}>Ã—</Text>
+                    <Ionicons name="close" size={18} color={COLORS.neutral925} />
                   </TouchableOpacity>
                 </View>
               ))}

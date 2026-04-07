@@ -1314,7 +1314,7 @@ export default function CourtBooking() {
         <TouchableOpacity
           disabled={!canConfirm || submitting}
           onPress={onPressConfirm}
-          style={[styles.confirmUnifiedBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled, { backgroundColor: (!canConfirm || submitting) ? undefined : tc.brand }]}
+          style={[styles.confirmUnifiedBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled, { backgroundColor: (!canConfirm || submitting) ? tc.bgElevated : tc.brand }]}
         >
           <Text style={styles.confirmUnifiedText}>{submitting ? 'Processing...' : formattedAmount}</Text>
         </TouchableOpacity>

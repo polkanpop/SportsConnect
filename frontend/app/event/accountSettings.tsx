@@ -46,6 +46,7 @@ import {
 } from '@/lib/backendApi'
 import { queryClient } from '@/providers/query-provider'
 import { queryKeys } from '@/hooks/query-keys'
+import { invalidateCache } from '@/lib/cache'
 import { useTranslation } from '@/constants/translations'
 import { API_BASE_URL } from '@/env'
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider'
@@ -303,6 +304,9 @@ export default function AccountSettingsScreen() {
       await updateUserInfo(userid, { name: nameValue.trim() })
       queryClient.invalidateQueries({ queryKey: queryKeys.userInfo(userid) })
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(userid) })
+      // Bust the fetchWithCache AsyncStorage entry so Settings.tsx/getUserInfoByUserIdCached
+      // won't read stale data that would overwrite the new name.
+      await invalidateCache(`cache:userinfo:user:${userid}:v1`)
       // Immediately patch the in-memory dashboard cache so profile.tsx / Settings reflect
       // the new name without waiting for the background refetch to complete.
       queryClient.setQueryData(queryKeys.dashboard(userid), (old: any) =>
@@ -664,7 +668,7 @@ export default function AccountSettingsScreen() {
         <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.border }]}>
           {/* Display Name */}
           <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_DISPLAY_NAME')}</Text>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
             <TextInput
               style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={nameValue}
@@ -707,7 +711,7 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
             <TextInput
               style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={emailEdit}
@@ -756,7 +760,7 @@ export default function AccountSettingsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
             <TextInput
               style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
               value={phoneEdit}
@@ -905,7 +909,7 @@ export default function AccountSettingsScreen() {
             <>
               {/* Set username + password for OAuth users */}
               <Text style={[styles.fieldLabel, { color: tc.textSecondary }]}>{t('ACCT_LABEL_NEW_USERNAME')}</Text>
-              <View style={styles.inputRow}>
+              <View style={[styles.inputRow, { backgroundColor: tc.bgInput, borderColor: tc.border }]}>
                 <TextInput
                   style={[styles.input, { color: tc.textPrimary, backgroundColor: tc.bgInput }]}
                   value={newUsername}
@@ -1180,10 +1184,17 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
 }) {
   const { t } = useTranslation()
   const tc = useThemeColors()
+  const isZalo = label === 'Zalo'
   const inner = (
     <View style={[styles.linkedRow, (linking || unlinking) && { opacity: 0.6 }]}>
       <View style={{ position: 'relative', marginRight: 12 }}>
-        <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
+        {isZalo ? (
+          <View style={{ width: iconSize || 24, height: iconSize || 24, borderRadius: (iconSize || 24) / 2, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' }}>
+            <Image source={icon} style={[styles.linkedIcon, { width: (iconSize || 24) - 4, height: (iconSize || 24) - 4 }]} resizeMode="contain" />
+          </View>
+        ) : (
+          <Image source={icon} style={[styles.linkedIcon, iconSize ? { width: iconSize, height: iconSize } : undefined]} resizeMode="contain" />
+        )}
         {linked && (
           <View style={styles.linkedCheckBadge}>
             <Text style={styles.linkedCheckText}>✓</Text>
@@ -1278,7 +1289,7 @@ const styles = StyleSheet.create({
 
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
 
-  inputRow: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden', backgroundColor: '#fff' },
+  inputRow: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden' },
   input: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#111' },
   inlineBtn: { backgroundColor: '#FF6017', width: 48, justifyContent: 'center', alignItems: 'center', borderTopRightRadius: 9, borderBottomRightRadius: 9 },
 

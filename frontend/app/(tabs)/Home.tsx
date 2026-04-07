@@ -34,8 +34,8 @@ export default function Home() {
   const router = useRouter();
   const tc = useThemeColors();
   const { isDark } = useTheme();
-  // Toned-down orange for light mode category cards (avoids neon, still vibrant)
-  const categoryCardBg = isDark ? tc.brand : '#D95E18';
+  // Category card color: brand purple in dark, standard brand orange in light
+  const categoryCardBg = isDark ? tc.brand : COLORS.brandOrangeDeep;
   const { panel: panelParam, courtid: deeplinkCourtIdParam, courtbookingid: deeplinkCourtBookingIdParam, _t: deeplinkToken } = useLocalSearchParams<{ panel?: string; courtid?: string; courtbookingid?: string; _t?: string }>();
   const deeplinkCourtId = deeplinkCourtIdParam ? (Number(deeplinkCourtIdParam) || null) : null
   const deeplinkCourtBookingId = deeplinkCourtBookingIdParam ? (Number(deeplinkCourtBookingIdParam) || null) : null

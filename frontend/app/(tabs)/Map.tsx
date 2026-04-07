@@ -356,36 +356,34 @@
     // 30% sheet → sheetTop ≈ containerHeight * 0.70
     // 70% sheet → sheetTop ≈ containerHeight * 0.30
     // 100% sheet → sheetTop ≈ 0
-    const snap70ThresholdPx = mapContainerHeight * 0.35; // midpoint between 30% and 70%
     const snap100ThresholdPx = mapContainerHeight * 0.10; // near full-open
+    // Reserve pixels from the top for the search bar + filter bar
+    const searchBarSafePx = 150;
 
-    // My-location button: fixed above the 30% collapsed sheet, hide at 100%
+    // My-location button: dynamically sits just above the BottomSheet top lip,
+    // clamped so it never overlaps the search bar area. Hidden at 100%.
     const myLocationAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
-      // If sheet is near 100% open, hide the button
+      // At 100% (full screen): hide completely
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      // When sheet is at 70% (2nd snap), lower the button so it doesn't touch searchbar
-      if (sheetTop < snap70ThresholdPx) {
-        const bottomPos = mapContainerHeight - sheetTop - 8;
-        return { bottom: Math.max(8, Math.min(bottomPos, mapContainerHeight * 0.3)), opacity: 1 };
-      }
-      // Default: fixed position above collapsed sheet (30%)
-      return { bottom: collapsedSheetHeightPx + 16, opacity: 1 };
+      // Position 12px above the sheet's top lip
+      const ideal = mapContainerHeight - sheetTop + 12;
+      // Clamp so it doesn't overlap the search bar area
+      const maxBottom = mapContainerHeight - searchBarSafePx;
+      return { bottom: Math.min(ideal, maxBottom), opacity: 1 };
     });
 
-    // Google Maps button sits 62px above the My-location button.
+    // Google Maps button sits ~56px above the My-location button.
     const googleMapsAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      if (sheetTop < snap70ThresholdPx) {
-        const bottomPos = mapContainerHeight - sheetTop + 54;
-        return { bottom: Math.max(70, Math.min(bottomPos, mapContainerHeight * 0.3 + 62)), opacity: 1 };
-      }
-      return { bottom: collapsedSheetHeightPx + 78, opacity: 1 };
+      const ideal = mapContainerHeight - sheetTop + 68;
+      const maxBottom = mapContainerHeight - searchBarSafePx + 56;
+      return { bottom: Math.min(ideal, maxBottom), opacity: 1 };
     });
 
     // Approximate zoom stages for DynamicMap region deltas.
@@ -1437,7 +1435,7 @@
                       >
                         <Image
                           source={ICONS.starCal}
-                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? tc.brand : tc.textPrimary }}
+                          style={{ width:22, height:22, tintColor: showFavoritesOnly ? '#FFD700' : tc.textPrimary }}
                         />
                       </TouchableOpacity>
                     </View>
