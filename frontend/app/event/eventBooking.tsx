@@ -31,7 +31,13 @@ function asArray(v: any): string[] {
   return []
 }
 
-function formatRange(ev: CombinedEvent | null): string {
+const VI_WEEKDAYS = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
+const EN_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const VI_MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
+const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+function formatRange(ev: CombinedEvent | null, lang = 'vi'): string {
   if (!ev) return ''
   const start = ev.start_timestamp || ev.time
   const end = ev.end_timestamp
@@ -39,9 +45,13 @@ function formatRange(ev: CombinedEvent | null): string {
   try {
     const startD = new Date(start)
     const endD = end ? new Date(end) : null
-    const day = startD.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
-    const startTime = startD.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    const endTime = endD ? endD.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''
+    const wd = lang === 'vi' ? VI_WEEKDAYS[startD.getDay()] : EN_WEEKDAYS[startD.getDay()]
+    const mo = lang === 'vi' ? VI_MONTHS[startD.getMonth()] : EN_MONTHS[startD.getMonth()]
+    const day = lang === 'vi'
+      ? `${wd}, ${startD.getDate()} ${mo}`
+      : `${wd}, ${mo} ${startD.getDate()}`
+    const startTime = `${pad2(startD.getHours())}:${pad2(startD.getMinutes())}`
+    const endTime = endD ? `${pad2(endD.getHours())}:${pad2(endD.getMinutes())}` : ''
     return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
   } catch { return 'Unknown date' }
 }
@@ -56,7 +66,7 @@ export default function EventBooking() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const params = useLocalSearchParams()
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const eventid = params.eventid ? parseInt(String(params.eventid), 10) : NaN
   const { profile } = useAuthContext()
   const { userId, dashboard } = useAppBootstrap()
@@ -318,7 +328,7 @@ export default function EventBooking() {
           )}
           {event && (
             <>
-              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event)}</Text>
+              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event, language)}</Text>
               <Text style={[styles.eventFee, { color: tc.textPrimary }]}>{isFree ? t('BOOKING_EVENT_ENTRY_FREE') : `${t('BOOKING_EVENT_ENTRY_FEE_PREFIX')} ${formatCurrency(event.entry_fee)}${t('BOOKING_EVENT_PER_PLAYER')}`}</Text>
               <Text style={[styles.eventDesc, { color: tc.textSecondary }]}>{t('BOOKING_EVENT_DESC_PREFIX')} {event.description || t('BOOKING_EVENT_NO_DESC')}</Text>
             </>
@@ -346,7 +356,7 @@ export default function EventBooking() {
             </View>
             <View style={styles.metaRow}>
               <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event)}</Text>
+              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event, language)}</Text>
             </View>
           </View>
         )}
@@ -471,10 +481,10 @@ const styles = StyleSheet.create({
   courtNameText: { fontSize: 18, fontWeight: '700', color: '#222' },
   courtHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   expandIcon: { width: 18, height: 18, tintColor: '#333', resizeMode: 'contain' },
-  courtAddress: { fontSize: 13, color: '#555', marginTop: 4 },
+  courtAddress: { flex: 1, fontSize: 13, color: '#555', marginTop: 0, lineHeight: 18, flexWrap: 'wrap' },
   venueIcon: { width:28, height:28, resizeMode:'contain', marginRight:8 },
-  metaRow: { flexDirection:'row', alignItems:'center', marginTop:8 },
-  metaIcon: { width:18, height:18, tintColor:'#555', marginRight:8, resizeMode:'contain' },
+  metaRow: { flexDirection:'row', alignItems:'flex-start', marginTop:8 },
+  metaIcon: { width:18, height:18, tintColor:'#555', marginRight:8, resizeMode:'contain', marginTop: 1 },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   tag: { backgroundColor: '#eee', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, marginRight: 6, marginBottom: 6 },
   tagFallback: { backgroundColor: '#eee' },

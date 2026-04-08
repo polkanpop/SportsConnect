@@ -925,14 +925,15 @@ export default function Home() {
                   const CARD_W = 320
                   const CARD_H = 190
                   const title = getEventTitle(ev) ?? eventTitleFallbackMap[Number((ev as any)?.eventid)] ?? `Event ${ev.eventid}`
-                  const dateTimeLine = formatEventDateTimeLine(ev)
+                  const address = typeof (ev as any)?.address === 'string' && (ev as any).address.trim() ? (ev as any).address.trim() : null
                   const origin = nearbyEventsOrigin
                   const coords = getEventCoords(ev)
                   const distanceKm = origin && coords
                     ? haversineKm(origin.latitude, origin.longitude, coords.lat, coords.lon)
                     : null
-                  const distanceLabel = distanceKm != null ? formatKmLabel(distanceKm) : null
-                  const approxDistanceLabel = distanceLabel ? `≈ ${distanceLabel}` : null
+                  const distanceBadge = distanceKm != null && Number.isFinite(distanceKm)
+                    ? `${String(distanceKm < 10 ? Math.round(distanceKm * 10) / 10 : Math.round(distanceKm)).replace('.', ',')}km`
+                    : null
 
                   const images = asStringArrayLoose((ev as any)?.images)
                   const heroUriRaw = images[0]
@@ -965,46 +966,38 @@ export default function Home() {
                         borderColor: tc.border,
                       }}
                     >
-                      {/* Header (20%) */}
+                      {/* Header: title + address only */}
                       <View
                         style={{
                           backgroundColor: tc.bgElevated,
                           paddingHorizontal: 12,
                           paddingTop: 8,
                           paddingBottom: 8,
-                          minHeight: 56,
-                          justifyContent: 'flex-start',
+                          minHeight: 48,
+                          justifyContent: 'center',
                           borderBottomWidth: 1,
                           borderBottomColor: tc.border,
                         }}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              numberOfLines={2}
-                              style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: tc.textPrimary }}
-                            >
-                              {title}
-                            </Text>
-                            {!!dateTimeLine && (
-                              <Text
-                                numberOfLines={1}
-                                style={{ marginTop: 4, marginBottom: 0, fontSize: 12, lineHeight: 16, fontWeight: '700', color: tc.textSecondary }}
-                              >
-                                {dateTimeLine}
-                              </Text>
-                            )}
-                          </View>
-                          {!!venueTag && (
-                            <View style={{ marginLeft: 6, marginTop: 1, backgroundColor: tc.brand + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: tc.brand }}>{venueTag}</Text>
-                            </View>
-                          )}
-                        </View>
-
+                        <Text
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{ fontSize: 14, lineHeight: 19, fontWeight: '700', color: tc.textPrimary }}
+                        >
+                          {title}
+                        </Text>
+                        {!!address && (
+                          <Text
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                            style={{ marginTop: 3, fontSize: 11, lineHeight: 15, color: tc.textSecondary }}
+                          >
+                            {address}
+                          </Text>
+                        )}
                       </View>
 
-                      {/* Background image (80%) */}
+                      {/* Banner image with top-left badges */}
                       <View style={{ flex: 1, backgroundColor: tc.bgInput, position: 'relative' }}>
                         {heroOptimized ? (
                           <ExpoImage
@@ -1025,19 +1018,20 @@ export default function Home() {
                           </View>
                         )}
 
-                        {!!approxDistanceLabel && (
-                          <Text
-                            style={{
-                              position: 'absolute',
-                              right: 12,
-                              bottom: 10,
-                              fontSize: 13,
-                              fontWeight: '700',
-                              color: tc.brand,
-                            }}
-                          >
-                            {approxDistanceLabel}
-                          </Text>
+                        {/* Top-left overlay: venue badge + distance badge */}
+                        {(!!venueTag || !!distanceBadge) && (
+                          <View style={{ position: 'absolute', top: 8, left: 8, flexDirection: 'row', gap: 6 }}>
+                            {!!venueTag && (
+                              <View style={{ backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>{venueTag}</Text>
+                              </View>
+                            )}
+                            {!!distanceBadge && (
+                              <View style={{ backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>{distanceBadge}</Text>
+                              </View>
+                            )}
+                          </View>
                         )}
                       </View>
                     </TouchableOpacity>

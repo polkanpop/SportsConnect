@@ -28,6 +28,9 @@ type AvailabilityRow = {
 }
 
 const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
+// sectionCard has marginHorizontal:16 (32px) + padding:16 each side (32px) = 64px total
+// 4 cols with 3 gaps of 8px between them → btnW = (screenW - 64 - 24) / 4
+const SLOT_BTN_W = Math.floor((Dimensions.get('window').width - 88) / 4)
 const IMAGE_TILE_HEIGHT = 120
 
 // Format helpers
@@ -1376,7 +1379,7 @@ const styles = StyleSheet.create({
   subHeading: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   smallText: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 4 },
   slotRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  slotBtn: { width: 62, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
+  slotBtn: { width: SLOT_BTN_W, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
   slotBtnActive: { backgroundColor: COLORS.brandOrangeDeep },
   slotBtnDisabled: { opacity: 0.45 },
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },
