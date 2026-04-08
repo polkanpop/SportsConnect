@@ -770,9 +770,9 @@ export default function AccountSettingsScreen() {
           )}
           {verifError && <Text style={styles.errorText}>{verifError}</Text>}
 
-          <View style={styles.contactDivider} />
+          <View style={[styles.contactDivider, { backgroundColor: tc.divider }]} />
 
-          {/* Phone */}
+          {/* Phone */
           <View style={styles.contactHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_PHONE')}</Text>
@@ -1035,7 +1035,7 @@ export default function AccountSettingsScreen() {
                 unlinking={unlinkingProvider === 'Google'}
                 iconSize={30}
               />
-              <View style={styles.contactDivider} />
+              <View style={[styles.contactDivider, { backgroundColor: tc.divider }]} />
               <LinkedAccountRow
                 icon={ICONS.zaloIcon}
                 label="Zalo"
@@ -1055,7 +1055,7 @@ export default function AccountSettingsScreen() {
               />
               {providers.includes('Local') && (
                 <>
-                  <View style={styles.contactDivider} />
+                  <View style={[styles.contactDivider, { backgroundColor: tc.divider }]} />
                   <LinkedAccountRow
                     icon={ICONS.user}
                     label="Tài khoản cục bộ"
@@ -1108,10 +1108,10 @@ export default function AccountSettingsScreen() {
               </Text>
               <View style={styles.modalBtnRow}>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { backgroundColor: tc.bgBase }]}
                   onPress={() => setLinkConfirm(null)}
                 >
-                  <Text style={styles.modalBtnCancelText}>Huỷ</Text>
+                  <Text style={[styles.modalBtnCancelText, { color: tc.textSecondary }]}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tc.brand }]}
@@ -1144,10 +1144,10 @@ export default function AccountSettingsScreen() {
               </Text>
               <View style={styles.modalBtnRow}>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { backgroundColor: tc.bgBase }]}
                   onPress={() => setUnlinkConfirm(null)}
                 >
-                  <Text style={styles.modalBtnCancelText}>Huỷ</Text>
+                  <Text style={[styles.modalBtnCancelText, { color: tc.textSecondary }]}>Huỷ</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnDanger]}
@@ -1180,10 +1180,10 @@ export default function AccountSettingsScreen() {
               </Text>
               <View style={styles.modalBtnRow}>
                 <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { backgroundColor: tc.bgBase }]}
                   onPress={() => setMergePrompt(null)}
                 >
-                  <Text style={styles.modalBtnCancelText}>{t('ACCT_MERGE_BTN_NO')}</Text>
+                  <Text style={[styles.modalBtnCancelText, { color: tc.textSecondary }]}>{t('ACCT_MERGE_BTN_NO')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tc.brand }]}
@@ -1248,8 +1248,8 @@ function LinkedAccountRow({ icon, label, linked, onPress, linking, onUnlinkPress
           )}
         </View>
       ) : (
-        <View style={[styles.linkedBadge, styles.linkedBadgeOff]}>
-          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff]}>{t('ACCT_UNLINKED_BADGE')}</Text>
+        <View style={[styles.linkedBadge, styles.linkedBadgeOff, { backgroundColor: tc.bgInput }]}>
+          <Text style={[styles.linkedBadgeText, styles.linkedBadgeTextOff, { color: tc.textMuted }]}>{t('ACCT_UNLINKED_BADGE')}</Text>
         </View>
       )}
     </View>

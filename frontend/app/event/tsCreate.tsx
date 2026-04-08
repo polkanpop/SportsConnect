@@ -602,7 +602,7 @@ export default function TsCreate() {
     const tag = isSession ? 'Training' : (isEvent ? 'Event' : (isPending ? 'Pending' : null))
     return (
       <TouchableOpacity
-        style={[styles.bookingItem, { backgroundColor: tc.bgSurface }, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
+        style={[styles.bookingItem, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
         onPress={() => { if (!disabled) setSelectedBookingId(item.courtbookingid) }}
         disabled={disabled}
       >
@@ -673,7 +673,7 @@ export default function TsCreate() {
               <Text style={[styles.smallText, { color: tc.textSecondary }]}>{t('TS_CREATE_AWAITING_APPROVAL')}</Text>
             )}
             {selectedBooking && (
-              <View style={[styles.selectedBookingBox, { backgroundColor: tc.bgSurface }]}>
+              <View style={[styles.selectedBookingBox, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }]}>
                 <View style={styles.bookingTitleRow}>
                   <Text style={[styles.selectedBookingTitle, { color: tc.textPrimary }]}>{selectedBooking.courtName || t('TS_CREATE_SELECTED_BOOKING_FALLBACK')}</Text>
                   {usedSessionBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagTraining]}><Text style={styles.bookingTagText}>Training</Text></View>}

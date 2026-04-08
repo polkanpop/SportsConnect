@@ -1332,8 +1332,8 @@ export default function CourtBooking() {
           <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('BOOKING_COURT_MODAL_TITLE')}</Text>
           <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('BOOKING_COURT_MODAL_BODY')}</Text>
           <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={() => setConfirmModalVisible(false)}>
-              <Text style={styles.modalBtnText}>{t('BOOKING_COURT_MODAL_BTN_CANCEL')}</Text>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalCancel, { backgroundColor: tc.bgBase }]} onPress={() => setConfirmModalVisible(false)}>
+              <Text style={[styles.modalBtnText, { color: tc.textPrimary }]}>{t('BOOKING_COURT_MODAL_BTN_CANCEL')}</Text>
             </TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm, { backgroundColor: tc.brand }]} onPress={() => {
               setConfirmModalVisible(false)

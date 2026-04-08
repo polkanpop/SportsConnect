@@ -1014,13 +1014,13 @@ export default function ActivityPage() {
                       onPress={row.onPress}
                       style={({ pressed }) => [
                         styles.dropdownItem,
-                        row.selected && styles.dropdownItemSelected,
-                        pressed && styles.dropdownItemPressed,
+                        row.selected && [styles.dropdownItemSelected, { backgroundColor: tc.accentPrimarySoft }],
+                        pressed && { backgroundColor: tc.bgBase },
                       ]}
                     >
                       <Text style={[styles.dropdownItemText, { color: tc.textPrimary }]}>{row.label}</Text>
                       <View style={styles.tickBox}>
-                        {row.selected ? <Text style={styles.tickText}>✓</Text> : null}
+                        {row.selected ? <Text style={[styles.tickText, { color: tc.brand }]}>✓</Text> : null}
                       </View>
                     </Pressable>
                   ))}

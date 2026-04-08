@@ -581,13 +581,13 @@ export default function NotificationsPage() {
               {(['All', 'Court', 'Event', 'Training'] as const).map(opt => (
                 <TouchableOpacity
                   key={opt}
-                  style={styles.dropdownItem}
+                  style={[styles.dropdownItem, { borderBottomColor: tc.divider }]}
                   onPress={() => {
                     setSelectedCategory(opt)
                     setDropdownOpen(false)
                   }}
                 >
-                  <Text style={[styles.dropdownItemText, opt === selectedCategory ? [styles.dropdownItemTextSelected, { color: tc.brand }] : null]}>
+                  <Text style={[styles.dropdownItemText, { color: tc.textPrimary }, opt === selectedCategory ? [styles.dropdownItemTextSelected, { color: tc.brand }] : null]}>
                     {opt === 'All' ? t('COMMON_FILTER_ALL') :
                      opt === 'Court' ? t('COMMON_FILTER_COURT') :
                      opt === 'Event' ? t('COMMON_FILTER_EVENT') :
@@ -677,8 +677,8 @@ export default function NotificationsPage() {
             <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('NOTIF_MODAL_DELETE_TITLE')}</Text>
             <Text style={[styles.modalText, { color: tc.textSecondary }]}>{t('NOTIF_MODAL_DELETE_BODY')}</Text>
             <View style={styles.modalActions}>
-              <Pressable style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setDeleteConfirmVisible(false)}>
-                <Text style={styles.modalBtnCancelText}>{t('NOTIF_MODAL_BTN_CANCEL')}</Text>
+              <Pressable style={[styles.modalBtn, styles.modalBtnCancel, { backgroundColor: tc.bgBase }]} onPress={() => setDeleteConfirmVisible(false)}>
+                <Text style={[styles.modalBtnCancelText, { color: tc.textPrimary }]}>{t('NOTIF_MODAL_BTN_CANCEL')}</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnDelete]}

@@ -1707,7 +1707,7 @@ export default function DetailsPage() {
             <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('DETAILS_MODAL_CANCEL_TITLE')}</Text>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+                style={[styles.modalButton, styles.modalButtonCancel, { backgroundColor: tc.bgSurface }]}
                 onPress={closeCancelModal}
                 activeOpacity={0.8}
                 disabled={busy || cancelMutation.isPending}
@@ -1742,7 +1742,7 @@ export default function DetailsPage() {
             {!!resultModalMessage && <Text style={[styles.modalMessage, { color: tc.textSecondary }]}>{resultModalMessage}</Text>}
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+                style={[styles.modalButton, styles.modalButtonCancel, { backgroundColor: tc.bgSurface }]}
                 onPress={closeResultModal}
                 activeOpacity={0.8}
               >

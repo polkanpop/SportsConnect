@@ -670,7 +670,7 @@ export default function EventCreateScreen() {
     const tag = isEvent ? t('COMMON_TAG_EVENT') : (isTraining ? t('COMMON_TAG_TRAINING') : (isPending ? t('COMMON_TAG_PENDING') : null))
     return (
       <TouchableOpacity
-        style={[styles.bookingItem, { backgroundColor: tc.bgSurface }, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
+        style={[styles.bookingItem, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }, selectedBookingId === item.courtbookingid && !disabled && styles.bookingItemSelected, disabled && styles.bookingItemDisabled]}
         onPress={() => { if (!disabled) setSelectedBookingId(item.courtbookingid) }}
         disabled={disabled}
       >
@@ -746,7 +746,7 @@ export default function EventCreateScreen() {
               <Text style={[styles.smallText, { color: tc.textSecondary }]}>{t('EVENT_CREATE_BOOKING_AWAITING_APPROVAL')}</Text>
             )}
             {selectedBooking && (
-              <View style={[styles.selectedBookingBox, { backgroundColor: tc.bgSurface }]}>
+              <View style={[styles.selectedBookingBox, { backgroundColor: tc.bgElevated, borderWidth: 1, borderColor: tc.border }]}>
                 <View style={styles.bookingTitleRow}>
                   <Text style={[styles.selectedBookingTitle, { color: tc.textPrimary }]}>{selectedBooking.courtName || t('TS_CREATE_SELECTED_BOOKING_FALLBACK')}</Text>
                   {usedEventBookingIds.has(selectedBooking.courtbookingid) && <View style={[styles.bookingTag, styles.bookingTagEvent]}><Text style={styles.bookingTagText}>{t('COMMON_TAG_EVENT')}</Text></View>}
