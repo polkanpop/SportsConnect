@@ -455,14 +455,14 @@ export default function CourtBooking() {
     return dt.getTime() <= Date.now()
   }, [selectedDateStr, startSlot])
 
-  // Derived validity and button enable state
+  // Derived validity and button enable state.
+  // Only restrict by specific pre-scheduled dates; weekday keys are informational only.
   const isDaySelectable = useCallback(
-    (dayKey: string, dateStr: string) => {
+    (_dayKey: string, dateStr: string) => {
       if (availableDateSet.size > 0) return availableDateSet.has(dateStr)
-      if (availableWeekdaySet.size > 0) return availableWeekdaySet.has(dayKey)
       return true
     },
-    [availableDateSet, availableWeekdaySet]
+    [availableDateSet]
   )
 
   // Reset schedule and part selection when base court changes

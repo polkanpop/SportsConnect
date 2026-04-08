@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, TextInput, Modal } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { ICONS } from '@/constants/icons'
@@ -19,6 +20,7 @@ import {
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { appendHistory } from '@/storage/history'
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 
 function asArray(v: any): string[] {
   if (!v) return []
@@ -311,27 +313,67 @@ export default function TrainingSessionBooking() {
         </View>
       </SafeAreaView>
       <ScrollView style={[styles.container, { backgroundColor: tc.bgBase }]} contentContainerStyle={{ paddingBottom: 220, paddingTop: 12 }}>
-        <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
-          {loadingSessions && <Text style={[styles.statusText, { color: tc.textMuted }]}>{t('BOOKING_TS_LOADING')}</Text>}
-          {!loadingSessions && !session && <Text style={styles.errorText}>{t('BOOKING_TS_NOT_FOUND')}</Text>}
-          {!loadingSessions && !!session && isCancelledSession && (
-            <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
-              <Text style={{ color: '#cc0000', fontWeight: '700' }}>{t('BOOKING_TS_CANCELLED')}</Text>
-              <Text style={{ color: '#cc0000', marginTop: 2 }}>{t('BOOKING_TS_BOOKING_DISABLED')}</Text>
-            </View>
-          )}
-          {session && (
-            <View style={styles.titleRowInline}>
-              <Text style={[styles.sessionTitle, { color: tc.textPrimary }]}>{session.title || `Session ${session.sessionid}`}</Text>
-            </View>
-          )}
-          {session && (
-            <>
-              <Text style={[styles.sessionTime, { color: tc.textSecondary }]}>{formatTime(session, language)}</Text>
-              <Text style={[styles.sessionFee, { color: tc.textPrimary }]}>{isFree ? t('BOOKING_TS_ENTRY_FREE') : `${t('BOOKING_TS_ENTRY_FEE_PREFIX')} ${formatCurrency(session.entry_fee)}${t('BOOKING_TS_PER_PLAYER')}`}</Text>
-              <Text style={[styles.sessionDesc, { color: tc.textSecondary }]}>{t('BOOKING_TS_DESC_PREFIX')} {session.description || t('BOOKING_TS_NO_DESC')}</Text>
-            </>
-          )}
+        <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface, padding: 0, overflow: 'hidden' }]}>
+          {loadingSessions && <Text style={[styles.statusText, { color: tc.textMuted, padding: 16 }]}>{t('BOOKING_TS_LOADING')}</Text>}
+          {!loadingSessions && !session && <Text style={[styles.errorText, { padding: 16 }]}>{t('BOOKING_TS_NOT_FOUND')}</Text>}
+          {session && (() => {
+            const heroRaw = asArray(session.images)[0] ?? null
+            const bannerUri = heroRaw ? optimizeRemoteImageUrl(heroRaw, { width: 800, height: 400, quality: 80, resize: 'cover' }) : null
+            const lowerVenues = asArray(session.venue).map(v => v.toLowerCase())
+            const venueTag = lowerVenues.includes('indoor') && lowerVenues.includes('outdoor')
+              ? t('MAP_LABEL_IN_OUTDOOR')
+              : lowerVenues.includes('indoor') ? t('MAP_LABEL_INDOOR')
+              : lowerVenues.includes('outdoor') ? t('MAP_LABEL_OUTDOOR')
+              : null
+            return (
+              <>
+                {/* Banner image */}
+                <View style={{ height: 160, backgroundColor: tc.bgInput, position: 'relative' }}>
+                  {bannerUri ? (
+                    <ExpoImage
+                      source={{ uri: bannerUri }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                      cachePolicy="disk"
+                      transition={0}
+                    />
+                  ) : (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                      <Image source={ICONS.event_category} style={{ width: 44, height: 44, tintColor: tc.textMuted, resizeMode: 'contain' }} />
+                    </View>
+                  )}
+                  {/* Top-left overlay badges */}
+                  {(!!venueTag || !isFree) && (
+                    <View style={{ position: 'absolute', top: 8, left: 8, flexDirection: 'row', gap: 6 }}>
+                      {!!venueTag && (
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>{venueTag}</Text>
+                        </View>
+                      )}
+                      {!isFree && (
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#fff' }}>{formatCurrency(session.entry_fee)}đ</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+                {/* Info section below banner */}
+                <View style={{ padding: 14 }}>
+                  {isCancelledSession && (
+                    <View style={{ backgroundColor: '#ffe5e5', borderColor: '#cc0000', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 10 }}>
+                      <Text style={{ color: '#cc0000', fontWeight: '700' }}>{t('BOOKING_TS_CANCELLED')}</Text>
+                      <Text style={{ color: '#cc0000', marginTop: 2 }}>{t('BOOKING_TS_BOOKING_DISABLED')}</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.sessionTitle, { color: tc.textPrimary }]}>{session.title || `Session ${session.sessionid}`}</Text>
+                  <Text style={[styles.sessionTime, { color: tc.textSecondary }]}>{formatTime(session, language)}</Text>
+                  <Text style={[styles.sessionFee, { color: tc.textPrimary }]}>{isFree ? t('BOOKING_TS_ENTRY_FREE') : `${t('BOOKING_TS_ENTRY_FEE_PREFIX')} ${formatCurrency(session.entry_fee)}${t('BOOKING_TS_PER_PLAYER')}`}</Text>
+                  <Text style={[styles.sessionDesc, { color: tc.textSecondary }]}>{t('BOOKING_TS_DESC_PREFIX')} {session.description || t('BOOKING_TS_NO_DESC')}</Text>
+                </View>
+              </>
+            )
+          })()}
         </View>
         {session && (
           <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>

@@ -81,7 +81,11 @@ const LIST_ACCENT = COLORS.orangeAccent // Training sessions
 const TrainingSessionListScreen = () => {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
+  const VI_WEEKDAYS = ['CN','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7']
+  const EN_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const VI_MONTHS = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12']
+  const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const tc = useThemeColors()
   const [allSessions, setAllSessions] = useState<CombinedTrainingSession[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -617,9 +621,16 @@ const TrainingSessionListScreen = () => {
               if (!start) return t('COMMON_LABEL_UNKNOWN_DATE')
               const startD = parseMaybeTimestamp(String(start)) || new Date(String(start))
               const endD = end ? (parseMaybeTimestamp(String(end)) || new Date(String(end))) : null
-              const day = startD.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })
-              const startTime = startD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' })
-              const endTime = endD ? endD.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) : ''
+              const isVi = language === 'vi'
+              const wdArr = isVi ? VI_WEEKDAYS : EN_WEEKDAYS
+              const moArr = isVi ? VI_MONTHS : EN_MONTHS
+              const wd = wdArr[startD.getDay()]
+              const mo = moArr[startD.getMonth()]
+              const dd = startD.getDate()
+              const day = isVi ? `${wd}, ${dd} ${mo}` : `${wd}, ${mo} ${dd}`
+              const pad2 = (n: number) => String(n).padStart(2, '0')
+              const startTime = `${pad2(startD.getHours())}:${pad2(startD.getMinutes())}`
+              const endTime = endD ? `${pad2(endD.getHours())}:${pad2(endD.getMinutes())}` : ''
               return `${day}, ${startTime}${endTime ? ` - ${endTime}` : ''}`
             })()
 
@@ -673,7 +684,7 @@ const TrainingSessionListScreen = () => {
                   </View>
                   {expanded && (
                     <View style={styles.expandedContent}>
-                      <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName || s.coachid}</Text>
+                      {s.coachName ? <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName}</Text> : null}
                       <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
                       <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || t('TS_LIST_NO_DESC')}</Text>
                     </View>
