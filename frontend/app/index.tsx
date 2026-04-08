@@ -1,6 +1,5 @@
 import { useAuthContext } from '@/hooks/use-auth-context';
 import { Redirect } from 'expo-router';
-import { useEffect, useState } from 'react';
 
 /**
  * Root index route.
@@ -10,17 +9,15 @@ import { useEffect, useState } from 'react';
  * had nothing to render and fell back to the welcome screen.
  *
  * This file becomes the leaf route for "/" and immediately redirects based on auth state.
+ * We wait for isLoading=false before redirecting so that AsyncStorage-backed auth state
+ * (rememberMe, backendAuth tokens) is fully resolved before we decide the destination.
+ * Without this gate, the redirect fires while isLoggedIn is still false (tokens not yet
+ * read from AsyncStorage), causing a brief flash of the login screen on cold start.
  */
 export default function Index() {
-  const { isLoggedIn } = useAuthContext();
-  const [ready, setReady] = useState(false);
+  const { isLoggedIn, isLoading } = useAuthContext();
 
-  // In case auth context initializes asynchronously, wait a tick if undefined
-  useEffect(() => {
-    if (typeof isLoggedIn === 'boolean') setReady(true);
-  }, [isLoggedIn]);
-
-  if (!ready) return null; // Could place a splash/loading component here
+  if (isLoading) return null;
 
   return <Redirect href={isLoggedIn ? '/(tabs)/Home' : '/(auth)/login'} />;
 }

@@ -285,7 +285,7 @@ export default function EventCreateScreen() {
         const courtid = availability?.courtid
         let ci: CourtInfoRow | undefined
         if (courtid && Array.isArray(allCourtInfo)) ci = allCourtInfo.find(c => c.courtid === courtid)
-        result.push({ ...b, courtName: ci?.name ?? undefined, address: ci?.address ?? undefined, courtid })
+        result.push({ ...b, courtName: (b as any).court_name || (b as any).selected_base_name || ci?.name || undefined, address: ci?.address ?? undefined, courtid })
       }
       return result
     }
@@ -676,7 +676,7 @@ export default function EventCreateScreen() {
       >
         <View style={{ flex: 1 }}>
           <View style={styles.bookingTitleRow}>
-            <Text style={[styles.bookingTitle, { color: tc.textPrimary }]} numberOfLines={1}>{item.courtName || `Booking ${item.courtbookingid}`}</Text>
+            <Text style={[styles.bookingTitle, { color: tc.textPrimary }]} numberOfLines={1}>{item.courtName || (item as any).court_name || (item as any).selected_base_name || `Booking ${item.courtbookingid}`}</Text>
             {tag && <View style={[styles.bookingTag, isEvent ? styles.bookingTagEvent : (isTraining ? styles.bookingTagTraining : styles.bookingTagPending)]}><Text style={styles.bookingTagText}>{tag}</Text></View>}
           </View>
           {item.address && <Text style={[styles.bookingMeta, { color: tc.textSecondary }]} numberOfLines={1}>{item.address}</Text>}
