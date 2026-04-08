@@ -1,4 +1,4 @@
-﻿import { ICONS } from "@/constants/icons";
+import { ICONS } from "@/constants/icons";
 import { queryKeys } from "@/hooks/query-keys";
 import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {
@@ -189,7 +189,7 @@ function formatPaymentLabel(opts: { isFree: boolean; payment: Awaited<ReturnType
 	if (!opts.payment) return "Unpaid";
 	const method = String(opts.payment.method || "").toUpperCase();
 	const status = String(opts.payment.status || "").toUpperCase();
-	return `${method || "PAYMENT"} • ${status || "UNKNOWN"}`;
+	return `${method || "PAYMENT"} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ ${status || "UNKNOWN"}`;
 }
 
 function FreeBadge() {
@@ -268,7 +268,7 @@ export default function EventPanel({ organizerId }: Props) {
 		// Guard: if TQ background refetch returned FEWER events than currently displayed,
 		// merge in the missing ones instead of pruning the list (stale partial Redis cache).
 		// Preserve locally incremented participant counts that have not yet been confirmed
-		// by the server — Redis cache (30 s TTL) may return a stale lower value after approval.
+		// by the server ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Redis cache (30 s TTL) may return a stale lower value after approval.
 		const preserveCounts = (rows: CombinedEvent[]): CombinedEvent[] => rows.map((ev: any) => {
 			const local = hostEventsRef.current.find((e: any) => Number(e.eventid) === Number(ev.eventid));
 			if (!local) return ev;
@@ -300,7 +300,7 @@ export default function EventPanel({ organizerId }: Props) {
 			}
 		}
 		const filtered = applyEventInfoOverrides(preserveCounts(hostEventsQuery.data.filter((ev: any) => {
-			// Only hide cancelled events — never filter by timestamp in the organizer panel.
+			// Only hide cancelled events ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â never filter by timestamp in the organizer panel.
 			if (isHiddenEventStatus((ev as any)?.status)) return false;
 			return true;
 		})));
@@ -400,7 +400,7 @@ export default function EventPanel({ organizerId }: Props) {
 
 	const invalidateMutationCaches = useCallback(async () => {
 		// Do NOT call invalidateEventsCombinedCache / invalidateTrainingSessionsCombinedCache here.
-		// Approve/reject/save-edit mutations update TQ in-memory via setQueryData — there is no need
+		// Approve/reject/save-edit mutations update TQ in-memory via setQueryData ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â there is no need
 		// to bust the AsyncStorage cache.  Clearing it races with any in-flight listEventsCombinedCached
 		// fetch, and if that fetch returns an unexpected value the event list on Home vanishes.
 		//
@@ -512,7 +512,7 @@ export default function EventPanel({ organizerId }: Props) {
 			const rows = await listEventsCombinedByOrganizerId(organizerId);
 			let normalized = Array.isArray(rows) ? rows : [];
 			// Guard: if backend returned zero rows but we currently display events,
-			// this is almost certainly a Redis cache race — keep existing state.
+			// this is almost certainly a Redis cache race ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â keep existing state.
 			// Use hostEventsRef (currently displayed) not a TQ snapshot because TQ can be
 			// overwritten by a concurrent background refetch while the await above runs.
 			if (normalized.length === 0) {
@@ -529,7 +529,7 @@ export default function EventPanel({ organizerId }: Props) {
 				normalized = [...normalized, ...missingFromNetwork]
 					.sort((a: any, b: any) => Number(b.eventid) - Number(a.eventid));
 			}
-			// Preserve locally incremented participant counts — Redis (30 s TTL) may return
+			// Preserve locally incremented participant counts ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Redis (30 s TTL) may return
 			// a stale lower numberofpeople after a recent organizer approval.
 			normalized = normalized.map((ev: any) => {
 				const local = hostEventsRef.current.find((e: any) => Number(e.eventid) === Number(ev.eventid));
@@ -539,7 +539,7 @@ export default function EventPanel({ organizerId }: Props) {
 				return localNop > serverNop ? { ...ev, numberofpeople: localNop } : ev;
 			});
 			const filtered = applyEventInfoOverrides(normalized.filter((ev) => {
-				// Only hide cancelled events — never filter by timestamp in the organizer panel.
+				// Only hide cancelled events ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â never filter by timestamp in the organizer panel.
 				if (isHiddenEventStatus((ev as any)?.status)) return false;
 				return true;
 			}));
@@ -616,7 +616,7 @@ export default function EventPanel({ organizerId }: Props) {
 		async (eventid: number) => {
 			const loadId = ++bookingsLoadIdRef.current;
 			// Show skeleton only when switching to a different event.
-			// Pull-to-refresh on the same event updates bookings silently — no disruptive flash.
+			// Pull-to-refresh on the same event updates bookings silently ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no disruptive flash.
 			if (displayedBookingsEventIdRef.current !== eventid) {
 				setBookingsLoading(true);
 			}
@@ -792,7 +792,7 @@ export default function EventPanel({ organizerId }: Props) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedHostEventId]);
 
-	// TQ subscription — when a participant books via eventBooking.tsx, that screen
+	// TQ subscription ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â when a participant books via eventBooking.tsx, that screen
 	// calls invalidateQueries for this key, causing a background re-fetch here that
 	// updates the applicants list without requiring manual pull-to-refresh.
 	const rawEventBookingsQuery = useQuery({
@@ -855,7 +855,7 @@ export default function EventPanel({ organizerId }: Props) {
 		if (sig === lastRawEventBookingSigRef.current) return
 		lastRawEventBookingSigRef.current = sig
 		let cancelled = false
-		// Silent background update — no loading spinner to avoid racing with loadBookingsForEvent
+		// Silent background update ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no loading spinner to avoid racing with loadBookingsForEvent
 		void (async () => {
 			try {
 				const meta = hostEventsRef.current.find((e) => e.eventid === selectedHostEventId)
@@ -1228,7 +1228,7 @@ export default function EventPanel({ organizerId }: Props) {
 				})
 			}
 			setConfirmCancelVisible(false);
-			// Do NOT call loadHostEvents here — stale Redis may restore the cancelled event.
+			// Do NOT call loadHostEvents here ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â stale Redis may restore the cancelled event.
 			// The TQ updates above keep all caches clean; navigation handles the rest.
 			await invalidateMutationCaches();
 			const detailsId = `created_event_${selectedHostEventId}`;
@@ -1307,7 +1307,7 @@ export default function EventPanel({ organizerId }: Props) {
 						await loadHostEvents();
 						if (selectedHostEventId != null) {
 							// Invalidate booking TQ so rawEventBookingsQuery silently refreshes in the bg.
-							// Not awaited — bookings update quietly without blocking the spinner.
+							// Not awaited ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â bookings update quietly without blocking the spinner.
 							queryClient.invalidateQueries({ queryKey: queryKeys.eventBookingsByEvent(selectedHostEventId) });
 							void loadBlockedForTarget(selectedHostEventId);
 						}
@@ -1450,7 +1450,7 @@ export default function EventPanel({ organizerId }: Props) {
 											}}
 										/>
 									</View>
-									<View style={{ flex: 1, minWidth: 0, paddingRight: 62 }}>
+									<View style={{ flex: 1, minWidth: 0 }}>
 										<Text numberOfLines={2} style={{ fontWeight: "700", fontSize: 14, lineHeight: 18, color: selected ? "#fff" : tc.textPrimary }}>
 											{ev.title || `Event #${ev.eventid}`}
 										</Text>
@@ -1508,20 +1508,6 @@ export default function EventPanel({ organizerId }: Props) {
 										</Text>
 									</View>
 								</TouchableOpacity>
-							<View
-								pointerEvents="none"
-								style={{
-									position: "absolute",
-									top: 6,
-									right: 6,
-									width: 46,
-									height: 46,
-									opacity: selected ? 0.95 : 0.9,
-									zIndex: 2,
-								}}
-							>
-								<Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: "100%", height: "100%" }} />
-							</View>
 							</View>
 						);
 					})}
@@ -1906,6 +1892,7 @@ export default function EventPanel({ organizerId }: Props) {
 								minHeight: 70,
 								marginBottom: 10,
 								color: tc.textPrimary,
+								textAlignVertical: 'top',
 							}}
 						/>
 
@@ -1951,7 +1938,7 @@ export default function EventPanel({ organizerId }: Props) {
 											justifyContent: "center",
 										}}
 									>
-										<Text style={{ fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#ffffff", marginTop: -1 }}>×</Text>
+										<Text style={{ fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#ffffff", marginTop: -1 }}>ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</Text>
 									</TouchableOpacity>
 								</View>
 							))}

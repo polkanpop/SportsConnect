@@ -1357,7 +1357,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     />
                   </View>
 
-                    <View style={{ flex: 1, minWidth: 0, paddingRight: 56 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={2} style={{ fontWeight: '700', fontSize: 14, lineHeight: 18, color: selected ? '#fff' : tc.textPrimary }}>
                         {s.title || `Session #${s.sessionid}`}
                       </Text>
@@ -1388,20 +1388,6 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       </Text>
                     </View>
                 </TouchableOpacity>
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      width: 46,
-                      height: 46,
-                      opacity: selected ? 0.95 : 0.9,
-                      zIndex: 2,
-                    }}
-                  >
-                    <Image source={ICONS.eventDeco} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
-                  </View>
               </View>
             )
           })}
@@ -1783,6 +1769,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     minHeight: 70,
                     marginBottom: 10,
                     color: tc.textPrimary,
+                    textAlignVertical: 'top',
                   }}
                 />
 
