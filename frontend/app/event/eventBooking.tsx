@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   bottomSafeArea: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#ffffff' },
   confirmUnifiedBtn: { width: '90%', backgroundColor: '#FF5733', paddingVertical: 18, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
   confirmUnifiedText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  confirmBtnDisabled: { backgroundColor: '#ccc' },
+  confirmBtnDisabled: { opacity: 0.45 },
   successTitle: { fontSize: 14, fontWeight: '700', color: '#0a7a0a' },
   successLine: { fontSize: 12, color: '#0a7a0a', marginTop: 4 },
   modalOverlay: { position: 'absolute', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.35)', justifyContent:'center', alignItems:'center' },

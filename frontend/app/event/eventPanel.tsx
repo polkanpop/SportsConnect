@@ -1491,7 +1491,7 @@ export default function EventPanel({ organizerId }: Props) {
 													lineHeight: 16,
 												}}
 											>
-											{t('EVENT_PANEL_VENUE_PREFIX')}{Array.isArray(ev.venue) ? ev.venue[0] : ev.venue}
+											{t('EVENT_PANEL_VENUE_PREFIX')}{(v => v === 'Indoor' ? t('MAP_LABEL_INDOOR') : v === 'Outdoor' ? t('MAP_LABEL_OUTDOOR') : v === 'Both' ? t('COURT_PANEL_VENUE_BOTH') : v)(Array.isArray(ev.venue) ? ev.venue[0] : ev.venue)}
 											</Text>
 										)}
 										<Text
@@ -2001,7 +2001,8 @@ export default function EventPanel({ organizerId }: Props) {
 							disabled={savingEvent || !isDirty}
 							onPress={onSaveEventInfo}
 							style={{
-								backgroundColor: savingEvent || !isDirty ? "#F4C9A6" : tc.brand,
+								backgroundColor: tc.brand,
+								opacity: savingEvent || !isDirty ? 0.45 : 1,
 								paddingVertical: 12,
 								borderRadius: 10,
 								alignItems: "center",

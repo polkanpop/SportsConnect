@@ -1371,7 +1371,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       )}
                       {!!(Array.isArray(s.venue) ? s.venue[0] : s.venue) && (
                         <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>
-                          {t('EVENT_PANEL_VENUE_PREFIX')}{Array.isArray(s.venue) ? s.venue[0] : s.venue}
+                          {t('EVENT_PANEL_VENUE_PREFIX')}{(v => v === 'Indoor' ? t('MAP_LABEL_INDOOR') : v === 'Outdoor' ? t('MAP_LABEL_OUTDOOR') : v === 'Both' ? t('COURT_PANEL_VENUE_BOTH') : v)(Array.isArray(s.venue) ? s.venue[0] : s.venue)}
                         </Text>
                       )}
                       <Text
@@ -1916,7 +1916,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                   disabled={saving || !isDirty}
                   onPress={onSave}
                   style={{
-                    backgroundColor: saving || !isDirty ? '#F4C9A6' : tc.brand,
+                    backgroundColor: tc.brand,
+                    opacity: saving || !isDirty ? 0.45 : 1,
                     paddingVertical: 12,
                     borderRadius: 10,
                     alignItems: 'center',
