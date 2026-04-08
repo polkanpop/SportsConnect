@@ -1,4 +1,4 @@
-import { ICONS } from "@/constants/icons";
+﻿import { ICONS } from "@/constants/icons";
 import { queryKeys } from "@/hooks/query-keys";
 import TrainingSessionPanel from "@/app/event/trainingSessionPanel";
 import {

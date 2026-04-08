@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
-import { useVoiceAutomation, VoiceFlowState } from '@/providers/voice-automation-provider'
+import { useVoiceAutomation, VoiceFlowState, VoiceResult, VoiceReplyType } from '@/providers/voice-automation-provider'
 import { useTranslation } from '@/constants/translations'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 
@@ -78,7 +78,7 @@ export default function VoiceFocusOverlay() {
 
         {flowState === 'error' && result && (
           <ErrorView
-            errorMessage={result.error_message ?? 'Có lỗi xảy ra.'}
+            errorMessage={result.reply_message ?? result.error_message ?? 'Có lỗi xảy ra.'}
             onRetry={startListening}
             onDismiss={dismiss}
             t={t}
@@ -140,25 +140,97 @@ function ProcessingView({ statusMessage, tc }: { statusMessage: string; tc: Retu
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-const FIELD_LABELS: Record<string, { en: string; vi: string }> = {
-  date: { en: 'Date', vi: 'Ngày' },
-  time: { en: 'Time', vi: 'Giờ' },
-  duration_minutes: { en: 'Duration', vi: 'Thời lượng' },
-  court_type: { en: 'Court type', vi: 'Loại sân' },
-  payment_method: { en: 'Payment', vi: 'Thanh toán' },
-  note: { en: 'Note', vi: 'Ghi chú' },
+const EXTRACTED_LABELS: Record<string, { en: string; vi: string }> = {
+  court_name_raw: { en: 'Court', vi: 'Sân' },
+  court_half: { en: 'Half court', vi: 'Nửa sân' },
+  date_raw: { en: 'Date', vi: 'Ngày' },
+  time_start_raw: { en: 'Time', vi: 'Giờ' },
+  duration_raw: { en: 'Duration', vi: 'Thời lượng' },
+  player_count: { en: 'Players', vi: 'Số người chơi' },
+  event_name_raw: { en: 'Event', vi: 'Sự kiện' },
+  event_id_raw: { en: 'Event ID', vi: 'Mã sự kiện' },
+  booking_ref_raw: { en: 'Booking ref', vi: 'Mã đặt chỗ' },
+  cancel_type: { en: 'Cancel type', vi: 'Hủy loại' },
+}
+
+const INTENT_TITLES: Record<string, { en: string; vi: string }> = {
+  book_court: { en: 'Court Booking', vi: 'Đặt sân' },
+  book_training_session: { en: 'Training Session', vi: 'Đăng ký buổi tập' },
+  book_event: { en: 'Event Registration', vi: 'Đăng ký sự kiện' },
+  cancel_booking: { en: 'Cancel Booking', vi: 'Hủy đặt chỗ' },
+  check_availability: { en: 'Check Availability', vi: 'Kiểm tra lịch trống' },
+  query_schedule: { en: 'View Schedule', vi: 'Xem lịch trình' },
 }
 
 function ResultView({ result, onApply, onRetry, onDismiss, t, tc }: {
-  result: { transcript: string; intent: any }
+  result: VoiceResult
   onApply: () => void
   onRetry: () => void
   onDismiss: () => void
   t: (key: any) => string
   tc: ReturnType<typeof useThemeColors>
 }) {
-  const intent = result.intent ?? {}
-  const fields = Object.entries(intent).filter(([_, v]) => v != null)
+  const { intent, booking_type, reply_type, reply_message, extracted, clarification_needed, confidence } = result
+
+  // ── Non-booking intents (greeting, off_topic, unclear, clarification) ──
+  if (reply_type === 'greeting' || reply_type === 'off_topic' || reply_type === 'unclear') {
+    return (
+      <View style={styles.stateContainer}>
+        <Image
+          source={ICONS.microphone}
+          style={{ width: 48, height: 48, tintColor: reply_type === 'greeting' ? '#4CAF50' : '#FFA726', marginBottom: 12 }}
+          resizeMode="contain"
+        />
+        <Text style={styles.replyMessage}>{reply_message ?? 'Bạn hãy thử lại nhé.'}</Text>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.btnSecondary} onPress={onDismiss}>
+            <Text style={styles.btnSecondaryText}>Đóng</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: tc.brand }]} onPress={onRetry}>
+            <Text style={styles.btnPrimaryText}>↻ Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
+
+  // ── Clarification needed ──
+  if (reply_type === 'clarification') {
+    return (
+      <View style={styles.stateContainer}>
+        <Image source={ICONS.microphone} style={{ width: 48, height: 48, tintColor: '#FFA726', marginBottom: 12 }} resizeMode="contain" />
+
+        {/* Show what we have so far */}
+        <View style={styles.transcriptBox}>
+          <Text style={styles.transcriptLabel}>Bạn nói:</Text>
+          <Text style={styles.transcriptText}>"{result.transcript}"</Text>
+        </View>
+
+        {/* Clarification prompt */}
+        <View style={[styles.intentCard, { borderLeftWidth: 3, borderLeftColor: '#FFA726' }]}>
+          <Text style={[styles.intentTitle, { color: '#FFA726' }]}>Cần thêm thông tin</Text>
+          <Text style={styles.replyMessageSmall}>{reply_message}</Text>
+        </View>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.btnSecondary} onPress={onDismiss}>
+            <Text style={styles.btnSecondaryText}>Đóng</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.btnPrimary, { backgroundColor: tc.brand }]} onPress={onRetry}>
+            <Image source={ICONS.microphone} style={{ width: 18, height: 18, tintColor: '#FFF', marginRight: 4 }} resizeMode="contain" />
+            <Text style={styles.btnPrimaryText}>Nói lại</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
+
+  // ── Optimistic / booking result ──
+  const title = intent ? (INTENT_TITLES[intent]?.vi ?? 'Yêu cầu') : 'Yêu cầu'
+  const extractedFields = extracted
+    ? Object.entries(extracted).filter(([_, v]) => v != null && v !== false)
+    : []
 
   return (
     <View style={styles.stateContainer}>
@@ -171,18 +243,32 @@ function ResultView({ result, onApply, onRetry, onDismiss, t, tc }: {
       </View>
 
       {/* Intent summary */}
-      {fields.length > 0 && (
+      {extractedFields.length > 0 && (
         <View style={styles.intentCard}>
-          <Text style={styles.intentTitle}>Thông tin đặt sân</Text>
-          {fields.map(([key, value]) => (
+          <View style={styles.intentHeader}>
+            <Text style={styles.intentTitle}>{title}</Text>
+            {booking_type && (
+              <View style={[styles.badge, { backgroundColor: tc.brand }]}>
+                <Text style={styles.badgeText}>
+                  {booking_type === 'court' ? 'Sân' : booking_type === 'training_session' ? 'Buổi tập' : 'Sự kiện'}
+                </Text>
+              </View>
+            )}
+          </View>
+          {extractedFields.map(([key, value]) => (
             <View key={key} style={styles.intentRow}>
-              <Text style={styles.intentLabel}>{FIELD_LABELS[key]?.vi ?? key}:</Text>
+              <Text style={styles.intentLabel}>{EXTRACTED_LABELS[key]?.vi ?? key}:</Text>
               <Text style={styles.intentValue}>
-                {key === 'duration_minutes' ? `${value} phút` : String(value)}
+                {typeof value === 'boolean' ? 'Có' : String(value)}
               </Text>
             </View>
           ))}
         </View>
+      )}
+
+      {/* Optimistic message */}
+      {reply_message && reply_type === 'optimistic' && (
+        <Text style={styles.optimisticText}>{reply_message}</Text>
       )}
 
       {/* Actions */}
@@ -375,5 +461,42 @@ const styles = StyleSheet.create({
   dismissText: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 14,
+  },
+  replyMessage: {
+    color: '#FFF',
+    fontSize: 18,
+    textAlign: 'center',
+    lineHeight: 26,
+    marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  replyMessageSmall: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 4,
+  },
+  intentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  optimisticText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 })

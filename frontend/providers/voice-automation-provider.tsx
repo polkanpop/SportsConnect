@@ -21,18 +21,53 @@ import { useVoicePreference } from '@/hooks/use-voice-preference'
 
 export type VoiceFlowState = 'idle' | 'listening' | 'processing' | 'result' | 'error'
 
-export interface BookingIntent {
-  date?: string | null
-  time?: string | null
-  duration_minutes?: number | null
-  court_type?: string | null
-  payment_method?: string | null
-  note?: string | null
+export type VoiceIntentType =
+  | 'book_court'
+  | 'book_training_session'
+  | 'book_event'
+  | 'cancel_booking'
+  | 'check_availability'
+  | 'query_schedule'
+  | 'greeting'
+  | 'off_topic'
+  | 'unclear'
+
+export type VoiceBookingType = 'court' | 'training_session' | 'event'
+
+export type VoiceReplyType =
+  | 'noise'
+  | 'greeting'
+  | 'off_topic'
+  | 'unclear'
+  | 'clarification'
+  | 'optimistic'
+  | 'error'
+
+export interface ExtractedFields {
+  court_name_raw?: string | null
+  court_half?: boolean | null
+  date_raw?: string | null
+  time_start_raw?: string | null
+  duration_raw?: string | null
+  player_count?: number | null
+  event_name_raw?: string | null
+  event_id_raw?: string | null
+  booking_ref_raw?: string | null
+  cancel_type?: string | null
 }
 
 export interface VoiceResult {
   transcript: string
-  intent: BookingIntent | null
+  intent: VoiceIntentType | null
+  booking_type: VoiceBookingType | null
+  confidence: number
+  noise_signal: boolean
+  noise_reason?: string | null
+  language_detected?: string | null
+  extracted: ExtractedFields | null
+  clarification_needed: string[]
+  reply_type: VoiceReplyType | null
+  reply_message: string | null
   error_code?: string | null
   error_message?: string | null
 }
@@ -105,6 +140,13 @@ export function VoiceAutomationProvider({ children }: { children: React.ReactNod
       setResult({
         transcript: '',
         intent: null,
+        booking_type: null,
+        confidence: 0,
+        noise_signal: true,
+        extracted: null,
+        clarification_needed: [],
+        reply_type: 'error',
+        reply_message: 'Không nhận được giọng nói. Vui lòng thử lại.',
         error_code: 'recognition_failed',
         error_message: 'Không nhận được giọng nói. Vui lòng thử lại.',
       })
@@ -127,6 +169,13 @@ export function VoiceAutomationProvider({ children }: { children: React.ReactNod
       setResult({
         transcript: '',
         intent: null,
+        booking_type: null,
+        confidence: 0,
+        noise_signal: true,
+        extracted: null,
+        clarification_needed: [],
+        reply_type: 'noise',
+        reply_message: 'Không nhận được giọng nói. Vui lòng thử lại.',
         error_code: 'no_speech',
         error_message: 'Không nhận được giọng nói. Vui lòng thử lại.',
       })
@@ -150,21 +199,51 @@ export function VoiceAutomationProvider({ children }: { children: React.ReactNod
 
       const data = await resp.json()
 
-      setResult({
+      const voiceResult: VoiceResult = {
         transcript: data.transcript ?? transcript,
         intent: data.intent ?? null,
+        booking_type: data.booking_type ?? null,
+        confidence: data.confidence ?? 0,
+        noise_signal: data.noise_signal ?? false,
+        noise_reason: data.noise_reason ?? null,
+        language_detected: data.language_detected ?? null,
+        extracted: data.extracted ?? null,
+        clarification_needed: data.clarification_needed ?? [],
+        reply_type: data.reply_type ?? null,
+        reply_message: data.reply_message ?? null,
         error_code: data.error_code ?? null,
         error_message: data.error_message ?? null,
-      })
+      }
 
-      setFlowState(data.error_code ? 'error' : 'result')
-      setStatusMessage('')
+      setResult(voiceResult)
+
+      // Determine flow state based on reply_type
+      const rt = voiceResult.reply_type
+      if (rt === 'error' || rt === 'noise') {
+        setFlowState('error')
+      } else {
+        setFlowState('result')
+      }
+
+      // Update status message for optimistic feedback
+      if (rt === 'optimistic' && voiceResult.reply_message) {
+        setStatusMessage(voiceResult.reply_message)
+      } else {
+        setStatusMessage('')
+      }
     } catch (err: any) {
       console.error('[Voice] Parse intent failed:', err)
       setFlowState('error')
       setResult({
         transcript,
         intent: null,
+        booking_type: null,
+        confidence: 0,
+        noise_signal: false,
+        extracted: null,
+        clarification_needed: [],
+        reply_type: 'error',
+        reply_message: 'Không thể kết nối máy chủ. Vui lòng thử lại.',
         error_code: 'network_error',
         error_message: 'Không thể kết nối máy chủ. Vui lòng thử lại.',
       })
@@ -182,6 +261,13 @@ export function VoiceAutomationProvider({ children }: { children: React.ReactNod
       setResult({
         transcript: '',
         intent: null,
+        booking_type: null,
+        confidence: 0,
+        noise_signal: false,
+        extracted: null,
+        clarification_needed: [],
+        reply_type: 'error',
+        reply_message: 'Cần quyền truy cập micro để sử dụng tính năng giọng nói.',
         error_code: 'permission_denied',
         error_message: 'Cần quyền truy cập micro để sử dụng tính năng giọng nói.',
       })
