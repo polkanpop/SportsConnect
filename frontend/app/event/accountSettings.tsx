@@ -772,7 +772,7 @@ export default function AccountSettingsScreen() {
 
           <View style={[styles.contactDivider, { backgroundColor: tc.divider }]} />
 
-          {/* Phone */
+          {/* Phone */}
           <View style={styles.contactHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.fieldLabel, { marginBottom: 0, color: tc.textSecondary }]}>{t('ACCT_LABEL_PHONE')}</Text>
