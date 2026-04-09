@@ -163,7 +163,7 @@ export default function SettingsPage() {
           onPress={() => router.push("/event/profile")}
         >
           {profilePfp ? (
-            <ExpoImage source={{ uri: profilePfp }} style={styles.profilePhoto} contentFit="cover" />
+            <ExpoImage source={{ uri: profilePfp }} style={styles.profilePhoto} contentFit="cover" cachePolicy="disk" />
           ) : (
             <Image source={ICONS.accountCircle} style={[styles.profileIcon, { tintColor: tc.textPrimary }]} />
           )}

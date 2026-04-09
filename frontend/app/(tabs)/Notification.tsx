@@ -319,7 +319,59 @@ export default function NotificationsPage() {
     )
   }, [courtBookingById])
 
+  // ── Translation resolver for message_key-based notifications ──
+  const MESSAGE_KEY_TO_TRANSLATION: Record<string, { title: string; message: string }> = {
+    court_booking_approved:  { title: 'NOTIF_TITLE_COURT_BOOKING_APPROVED',  message: 'NOTIF_MSG_COURT_BOOKING_APPROVED' },
+    court_booking_submitted: { title: 'NOTIF_TITLE_COURT_BOOKING_SUBMITTED', message: 'NOTIF_MSG_COURT_BOOKING_SUBMITTED' },
+    court_booking_rejected:  { title: 'NOTIF_TITLE_COURT_BOOKING_REJECTED',  message: 'NOTIF_MSG_COURT_BOOKING_REJECTED' },
+    court_booking_incoming:  { title: 'NOTIF_TITLE_COURT_BOOKING_INCOMING',  message: 'NOTIF_MSG_COURT_BOOKING_INCOMING' },
+    event_booking_approved:  { title: 'NOTIF_TITLE_EVENT_BOOKING_APPROVED',  message: 'NOTIF_MSG_EVENT_BOOKING_APPROVED' },
+    event_booking_submitted: { title: 'NOTIF_TITLE_EVENT_BOOKING_SUBMITTED', message: 'NOTIF_MSG_EVENT_BOOKING_SUBMITTED' },
+    event_booking_rejected:  { title: 'NOTIF_TITLE_EVENT_BOOKING_REJECTED',  message: 'NOTIF_MSG_EVENT_BOOKING_REJECTED' },
+    event_booking_incoming:  { title: 'NOTIF_TITLE_EVENT_BOOKING_INCOMING',  message: 'NOTIF_MSG_EVENT_BOOKING_INCOMING' },
+    ts_booking_approved:     { title: 'NOTIF_TITLE_TS_BOOKING_APPROVED',     message: 'NOTIF_MSG_TS_BOOKING_APPROVED' },
+    ts_booking_submitted:    { title: 'NOTIF_TITLE_TS_BOOKING_SUBMITTED',    message: 'NOTIF_MSG_TS_BOOKING_SUBMITTED' },
+    ts_booking_rejected:     { title: 'NOTIF_TITLE_TS_BOOKING_REJECTED',     message: 'NOTIF_MSG_TS_BOOKING_REJECTED' },
+    ts_booking_incoming:     { title: 'NOTIF_TITLE_TS_BOOKING_INCOMING',     message: 'NOTIF_MSG_TS_BOOKING_INCOMING' },
+    event_created:           { title: 'NOTIF_TITLE_EVENT_CREATED',           message: 'NOTIF_MSG_EVENT_CREATED' },
+    ts_created:              { title: 'NOTIF_TITLE_TS_CREATED',              message: 'NOTIF_MSG_TS_CREATED' },
+  }
+
+  const resolveTemplate = (template: string, params: Record<string, any>) => {
+    return Object.entries(params).reduce(
+      (text, [key, val]) => text.replace(`{{${key}}}`, String(val ?? '')),
+      template,
+    )
+  }
+
+  const resolveTitle = (row: NotificationRow): string => {
+    if (row.message_key) {
+      const mapping = MESSAGE_KEY_TO_TRANSLATION[row.message_key]
+      if (mapping) {
+        const template = t(mapping.title as any)
+        return row.message_params ? resolveTemplate(template, row.message_params) : template
+      }
+    }
+    return row.title
+  }
+
+  const resolveMessage = (row: NotificationRow): string => {
+    if (row.message_key) {
+      const mapping = MESSAGE_KEY_TO_TRANSLATION[row.message_key]
+      if (mapping) {
+        const template = t(mapping.message as any)
+        return row.message_params ? resolveTemplate(template, row.message_params) : template
+      }
+    }
+    return row.message
+  }
+
   const getDisplayMessage = (row: NotificationRow) => {
+    // Use message_key-based translation if available (new records)
+    if (row.message_key) {
+      return resolveMessage(row)
+    }
+    // Legacy fallback for old records without message_key
     const decision = getBookingDecision(row)
     const category = getRowCategory(row)
     const kind = String(row.kind || '').toLowerCase()
@@ -532,7 +584,7 @@ export default function NotificationsPage() {
       <View style={styles.notificationContent}>
         <View style={styles.titleTimeRow}>
           <Text style={[styles.notificationTitle, { color: tc.textPrimary }]} numberOfLines={1}>
-            {item.title}
+            {resolveTitle(item)}
           </Text>
           <Text style={[styles.notificationTime, { color: tc.textMuted }]}>{formatRowTime(item.time)}</Text>
         </View>

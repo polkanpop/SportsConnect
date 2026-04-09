@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
+import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { makeDistanceMatrixCacheKey, peekDistanceMatrixCached, prefetchDistanceMatrixBatchCached, subscribeDistanceMatrixCache, listCourtInfoCached, CourtInfoRow, listFavouriteCourtsCached, FavouriteCourt, listAllPlayingCourtsCached, buildCourtSurfaceMap } from '@/lib/backendApi'
@@ -622,6 +624,7 @@ const CourtListScreen = () => {
 
             // First image from court images, or thumbnail fallback
             const imageUrl = (Array.isArray(c.images) && c.images.length > 0) ? c.images[0] : c.thumbnail
+            const optimizedImageUrl = imageUrl ? optimizeRemoteImageUrl(imageUrl, { width: 600, height: 400, quality: 75, resize: 'cover' }) : null
 
             const distanceText = (() => {
               if (!distanceFilterActive) return null
@@ -655,8 +658,8 @@ const CourtListScreen = () => {
               >
                 {/* Image section (80%) */}
                 <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
-                  {imageUrl ? (
-                    <Image source={{ uri: imageUrl }} style={styles.cardImage} />
+                  {optimizedImageUrl ? (
+                    <ExpoImage source={{ uri: optimizedImageUrl }} style={styles.cardImage} contentFit="cover" cachePolicy="disk" transition={0} />
                   ) : (
                     <View style={[styles.cardImagePlaceholder, { backgroundColor: tc.bgElevated }]}>
                       <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />

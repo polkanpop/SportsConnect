@@ -324,6 +324,8 @@ async def create_training_session_with_info(body: dict, request: Request, backgr
                 title="Training session created",
                 message=f"Your training session '{title}' was created successfully.",
                 data={"sessionid": int(sessionid), "courtbookingid": int(courtbookingid)},
+                message_key="ts_created",
+                message_params={"title": title},
             )
         except Exception:
             pass

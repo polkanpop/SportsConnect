@@ -145,6 +145,8 @@ def create_event_booking(body: dict, request: Request, background_tasks: Backgro
                 title="Event booking confirmed" if desired_status == "joined" else "Event booking submitted",
                 message="Your event booking is confirmed." if desired_status == "joined" else "Your event booking is pending approval.",
                 data={"eventid": eventid, "eventbookingid": booking_id, "status": desired_status},
+                message_key="event_booking_approved" if desired_status == "joined" else "event_booking_submitted",
+                message_params={},
             )
             # Organizer incoming booking
             ev = rest_select("events", "eventid,organizerid", filters={"eventid": eventid}, single=True)
@@ -159,6 +161,8 @@ def create_event_booking(body: dict, request: Request, background_tasks: Backgro
                     title="New event booking",
                     message="Someone requested to join your event.",
                     data={"eventid": eventid, "eventbookingid": booking_id, "booker_userid": userid, "status": desired_status},
+                    message_key="event_booking_incoming",
+                    message_params={},
                 )
         except Exception as e:
             print("[eventbookings] notification insert failed:", str(e))
@@ -258,6 +262,8 @@ def update_event_booking(eventbookingid: int, body: dict, request: Request, back
                             title="Event booking approved",
                             message="Your event booking has been approved.",
                             data={"eventid": int(existing.get("eventid")), "eventbookingid": int(eventbookingid), "status": new_status},
+                            message_key="event_booking_approved",
+                            message_params={},
                         )
                     elif new_status.lower() == "rejected":
                         create_notification(
@@ -269,6 +275,8 @@ def update_event_booking(eventbookingid: int, body: dict, request: Request, back
                             title="Event booking rejected",
                             message="Your event booking was rejected.",
                             data={"eventid": int(existing.get("eventid")), "eventbookingid": int(eventbookingid), "status": new_status},
+                            message_key="event_booking_rejected",
+                            message_params={},
                         )
         except Exception as e:
             print("[eventbookings] notification update failed:", str(e))

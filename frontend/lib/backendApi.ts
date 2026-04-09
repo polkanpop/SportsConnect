@@ -210,6 +210,8 @@ export type NotificationRow = {
 	kind?: string | null
 	data?: Record<string, any> | null
 	read_at?: string | null
+	message_key?: string | null
+	message_params?: Record<string, any> | null
 }
 
 export async function listNotifications(params: {

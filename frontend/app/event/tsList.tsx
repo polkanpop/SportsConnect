@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
+import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -610,6 +612,7 @@ const TrainingSessionListScreen = () => {
             })()
 
             const imageUrl = Array.isArray((s as any).images) && (s as any).images.length > 0 ? (s as any).images[0] : null
+            const optimizedImageUrl = imageUrl ? optimizeRemoteImageUrl(imageUrl, { width: 600, height: 400, quality: 75, resize: 'cover' }) : null
 
             const entryFee = (s as any).entry_fee
             const entryFeeLabel = entryFee == null ? t('TS_LIST_ENTRY_FREE') : `${String(Math.round(Number(entryFee))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${t('TS_LIST_PER_PLAYER')}`
@@ -643,8 +646,8 @@ const TrainingSessionListScreen = () => {
               >
                 {/* ---- image section ---- */}
                 <View style={[styles.cardImageWrap, { backgroundColor: tc.bgElevated }]}>
-                  {imageUrl ? (
-                    <Image source={{ uri: imageUrl }} style={styles.cardImage} />
+                  {optimizedImageUrl ? (
+                    <ExpoImage source={{ uri: optimizedImageUrl }} style={styles.cardImage} contentFit="cover" cachePolicy="disk" transition={0} />
                   ) : (
                     <View style={[styles.cardImagePlaceholder, { backgroundColor: tc.bgElevated }]}>
                       <Image source={ICONS.sillball} style={styles.cardPlaceholderIcon} />

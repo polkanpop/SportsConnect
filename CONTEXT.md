@@ -45,6 +45,17 @@
 - [2026-04] Language labels in UI are `"Tiếng Việt"` / `"English"` — not the codes `"vi"` / `"en"`.
 - [2026-04] All new UI text must be added to `constants/translations.ts` before shipping. No hardcoded strings.
 
+### Notifications
+- [2026-06] Push notification delivery implemented via Expo Push API (`exp.host/--/api/v2/push/send`). Backend `push_service.py` queries `user_devices` for active push tokens and sends after every DB insert. Best-effort: logs errors, never raises. No Firebase needed for push (only for Phone OTP).
+- [2026-06] Notification translation system: `message_key` + `message_params` stored alongside legacy `title`/`message` in notifications table. Frontend resolves templates at render time using `resolveMessage()`/`resolveTitle()` helpers against `translations.ts` dictionary. Old records fall back to legacy English text. 14 unique message keys cover court/event/training booking lifecycle.
+- [2026-06] SQL migration required: `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS message_key text; ALTER TABLE notifications ADD COLUMN IF NOT EXISTS message_params jsonb;`
+
+### Performance
+- [2026-06] List screen images (courtList, eventList, tsList) migrated from RN `Image` to `expo-image` (`ExpoImage`) with `cachePolicy="disk"`, `transition={0}`, and Cloudinary `optimizeRemoteImageUrl()` transforms (600×400, quality 75).
+- [2026-06] `cachePolicy="disk"` added to all remote-URI ExpoImage instances across Map, Settings, courtPanel, eventPanel, trainingSessionPanel.
+- [2026-06] Home phantom spinner fixed: `loadingFavs` now uses only `isLoading` (not `isFetching`) to prevent skeleton flash on cached data.
+- [2026-06] Activity tab focus throttle increased from 5s to 60s. Redundant manual hosting query refetches removed from useFocusEffect (queries handle own staleness via `refetchOnMount: true` + `staleTime: 60s`).
+
 ### Maps
 - [2026-03] Goong Maps is the primary map provider (Vietnamese tiles). Mapbox (`@rnmapbox/maps`) kept as fallback/secondary. Goong keys: `GOONG_MAPTILES_KEY` (tiles) + `GOONG_GEO_API_KEY` (geocoding) + `GOONG_DISTANCE_API_KEY` (distance matrix).
 
@@ -74,7 +85,7 @@
 
 ---
 
-## Feature Status Snapshot (as of 2026-04-07)
+## Feature Status Snapshot (as of 2026-06)
 
 | Feature | Status |
 |---|---|
@@ -89,12 +100,14 @@
 | Court booking | ✅ Done |
 | Events (create/join) | ✅ Done |
 | Training sessions (create/join) | ✅ Done |
-| Push notifications | ✅ Done |
+| Push notifications (Expo Push API) | ✅ Done |
+| Notification translation (message_key) | ✅ Done |
 | Voice booking (on-device STT) | ✅ Done |
 | Voice booking (audio upload) | 🔲 Future |
 | Payment (VNPay) | 🔲 In progress |
 | Reviews + reactions | ✅ Done |
 | Court owner registration flow | ✅ Done |
+| Image caching (ExpoImage disk) | ✅ Done |
 | Firebase OTP SMS branding | 🔲 Pending |
 | Google OAuth branding | ⚠️ Verification in progress |
 

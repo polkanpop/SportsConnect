@@ -637,6 +637,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
                     title="Booking confirmed",
                     message=f"Your court booking for {venue_name} has been approved.",
                     data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
+                    message_key="court_booking_approved",
+                    message_params={"venue": venue_name},
                 )
             else:
                 create_notification(
@@ -648,6 +650,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
                     title="Booking submitted",
                     message=f"Your court booking for {venue_name} is pending approval.",
                     data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
+                    message_key="court_booking_submitted",
+                    message_params={"venue": venue_name},
                 )
 
             # Owner notification (incoming booking)
@@ -664,6 +668,8 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
                         title="New booking request",
                         message=f"A user requested to book {base_name}.",
                         data={"courtbookingid": booking_id, "courtid": courtid, "base_name": base_name, "booker_userid": final_userid},
+                        message_key="court_booking_incoming",
+                        message_params={"venue": base_name},
                     )
         except Exception as e:
             print("[courtbookings] notification insert failed:", str(e))
@@ -782,6 +788,8 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                             title="Booking approved",
                             message=f"Your court booking for {venue_name} has been approved.",
                             data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
+                            message_key="court_booking_approved",
+                            message_params={"venue": venue_name},
                         )
                     elif new_status.lower() == "rejected":
                         create_notification(
@@ -793,6 +801,8 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                             title="Booking rejected",
                             message=f"Your court booking for {venue_name} has been rejected.",
                             data={"courtbookingid": int(courtbookingid), "courtid": courtid, "base_name": base_name, "venue_name": venue_name},
+                            message_key="court_booking_rejected",
+                            message_params={"venue": venue_name},
                         )
         except Exception as e:
             print("[courtbookings] notification update failed:", str(e))

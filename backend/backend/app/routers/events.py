@@ -406,6 +406,8 @@ async def create_event_with_info(body: dict, request: Request, background_tasks:
             title="Event created",
             message=f"Your event '{title}' was created successfully.",
             data={"eventid": int(eventid), "courtbookingid": int(courtbookingid)},
+            message_key="event_created",
+            message_params={"title": title},
         )
     except Exception:
         pass

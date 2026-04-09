@@ -500,7 +500,7 @@ export default function Home() {
   })
 
   const favoriteLocations = favoriteLocationsQuery.data ?? []
-  const loadingFavs = favoriteLocationsQuery.isLoading || (favoriteLocationsQuery.isFetching && !pullRefreshingFavs)
+  const loadingFavs = favoriteLocationsQuery.isLoading
   const favError = favoriteLocationsQuery.error instanceof Error
     ? favoriteLocationsQuery.error.message
     : favoriteLocationsQuery.error

@@ -1434,7 +1434,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                   >
                     {a.pfp ? (
-                      <ExpoImage source={{ uri: a.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
+                      <ExpoImage source={{ uri: a.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" cachePolicy="disk" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                     )}
@@ -1563,7 +1563,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                   >
                     {p.pfp ? (
-                      <ExpoImage source={{ uri: p.pfp }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E7EB' }} contentFit="cover" />
+                      <ExpoImage source={{ uri: p.pfp }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E7EB' }} contentFit="cover" cachePolicy="disk" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 40, height: 40 }} resizeMode="contain" />
                     )}
@@ -1632,7 +1632,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                     style={{ flexDirection: 'row', alignItems: 'center' }}
                   >
                     {displayPfp ? (
-                      <ExpoImage source={{ uri: displayPfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" />
+                      <ExpoImage source={{ uri: displayPfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E5E7EB' }} contentFit="cover" cachePolicy="disk" />
                     ) : (
                       <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                     )}
@@ -1800,7 +1800,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                       }}
                     >
                       <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                        <ExpoImage source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                        <ExpoImage source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="disk" />
                       </View>
                       <TouchableOpacity
                         activeOpacity={0.85}

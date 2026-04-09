@@ -1896,6 +1896,7 @@
                                 source={{ uri: coverImageUri }}
                                 style={styles.sheetCoverImage}
                                 contentFit="cover"
+                                cachePolicy="disk"
                               />
                             ) : (
                               <View style={styles.sheetCoverPlaceholder}>
@@ -2278,6 +2279,7 @@
                                   source={{ uri: image }}
                                   style={styles.detailImageTile}
                                   contentFit="cover"
+                                  cachePolicy="disk"
                                 />
                               </TouchableOpacity>
                             ))}

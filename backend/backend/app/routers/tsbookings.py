@@ -127,6 +127,8 @@ def create_ts_booking(body: dict, request: Request, background_tasks: Background
                 title="Training booking confirmed" if desired_status == "joined" else "Training booking submitted",
                 message="Your training booking is confirmed." if desired_status == "joined" else "Your training booking is pending approval.",
                 data={"sessionid": sessionid, "tsbookingid": booking_id, "status": desired_status},
+                message_key="ts_booking_approved" if desired_status == "joined" else "ts_booking_submitted",
+                message_params={},
             )
 
             sess = rest_select("trainingsessions", "sessionid,coachid", filters={"sessionid": sessionid}, single=True)
@@ -141,6 +143,8 @@ def create_ts_booking(body: dict, request: Request, background_tasks: Background
                     title="New training booking",
                     message="Someone requested to join your training session.",
                     data={"sessionid": sessionid, "tsbookingid": booking_id, "booker_userid": userid, "status": desired_status},
+                    message_key="ts_booking_incoming",
+                    message_params={},
                 )
         except Exception as e:
             print("[tsbookings] notification insert failed:", str(e))
@@ -226,6 +230,8 @@ def update_ts_booking(tsbookingid: int, body: dict, request: Request, background
                             title="Training booking approved",
                             message="Your training booking has been approved.",
                             data={"sessionid": int(existing.get("sessionid")), "tsbookingid": int(tsbookingid), "status": new_status},
+                            message_key="ts_booking_approved",
+                            message_params={},
                         )
                     elif new_status.lower() == "rejected":
                         create_notification(
@@ -237,6 +243,8 @@ def update_ts_booking(tsbookingid: int, body: dict, request: Request, background
                             title="Training booking rejected",
                             message="Your training booking was rejected.",
                             data={"sessionid": int(existing.get("sessionid")), "tsbookingid": int(tsbookingid), "status": new_status},
+                            message_key="ts_booking_rejected",
+                            message_params={},
                         )
         except Exception as e:
             print("[tsbookings] notification update failed:", str(e))

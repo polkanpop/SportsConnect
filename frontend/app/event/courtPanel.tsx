@@ -1743,6 +1743,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 source={{ uri: optimizeRemoteImageUrl(imageUri) }}
                 style={styles.cardImage}
                 contentFit="cover"
+                cachePolicy="disk"
               />
             ) : (
               <View style={[styles.cardImageFallback, { backgroundColor: tc.bgElevated }]}>
@@ -1967,7 +1968,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   <View key={`${b.courtbookingid}-${overrideTime ?? ''}`} style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 12, marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <TouchableOpacity activeOpacity={0.75} onPress={() => router.push({ pathname: '/event/profileSpectate', params: { userid: String(uid) } } as any)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                        {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tc.divider }} contentFit="cover" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
+                        {pfpUri ? <ExpoImage source={{ uri: pfpUri }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tc.divider }} contentFit="cover" cachePolicy="disk" /> : <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />}
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={{ fontWeight: '700', fontSize: 13, color: tc.textPrimary }} numberOfLines={1}>{displayName}</Text>
                           <Text style={{ color: tc.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{overrideTime ?? formatBookingTimeOnly(b.start_timestamp, b.end_timestamp, t('COURT_PANEL_UNKNOWN_TIME'))}</Text>
@@ -2229,7 +2230,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         style={{ flexDirection: 'row', alignItems: 'center' }}
                       >
                         {bookingOwner.pfp ? (
-                          <ExpoImage source={{ uri: bookingOwner.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tc.divider }} contentFit="cover" />
+                          <ExpoImage source={{ uri: bookingOwner.pfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tc.divider }} contentFit="cover" cachePolicy="disk" />
                         ) : (
                           <Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
                         )}
@@ -2446,7 +2447,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                 {(subEditImages || []).map((uri) => (
                   <View key={uri} style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                     <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                      <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
+                      <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" cachePolicy="disk" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => requestRemoveImage(uri, 'sub')} style={styles.removeXBtn} activeOpacity={0.85}>
                       <Text style={styles.removeXText}>×</Text>
@@ -2667,7 +2668,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       {(d.images || []).map((uri) => (
                         <View key={uri} style={[styles.serviceCoverFrame, { borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                           <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                            <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" />
+                            <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.serviceCoverImage} contentFit="cover" cachePolicy="disk" />
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => removeServiceImage(d.localId, uri)} style={styles.removeXBtn} activeOpacity={0.85}>
                             <Text style={styles.removeXText}>×</Text>
@@ -2716,7 +2717,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               {editImages.map((uri) => (
                 <View key={uri} style={[styles.coverFrame, { backgroundColor: tc.bgElevated, borderColor: tc.border }, imageUploading && styles.btnDisabled]}>
                   <TouchableOpacity style={styles.coverPressable} activeOpacity={0.9} onPress={() => setZoomImageUri(uri)}>
-                    <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" />
+                    <ExpoImage source={{ uri: optimizeRemoteImageUrl(uri) }} style={styles.coverImage} contentFit="cover" cachePolicy="disk" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => requestRemoveImage(uri, 'main')} style={styles.removeXBtn} activeOpacity={0.85}>
                     <Text style={styles.removeXText}>×</Text>

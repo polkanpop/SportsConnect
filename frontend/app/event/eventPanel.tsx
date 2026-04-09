@@ -1769,7 +1769,7 @@ export default function EventPanel({ organizerId }: Props) {
 										style={{ flexDirection: "row", alignItems: "center" }}
 									>
 										{displayPfp ? (
-											<ExpoImage source={{ uri: displayPfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }} contentFit="cover" />
+											<ExpoImage source={{ uri: displayPfp }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#E5E7EB" }} contentFit="cover" cachePolicy="disk" />
 										) : (
 											<Image source={ICONS.accountCircle} style={{ width: 44, height: 44 }} resizeMode="contain" />
 										)}
@@ -1923,7 +1923,7 @@ export default function EventPanel({ organizerId }: Props) {
 									}}
 								>
 									<View style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
-										<ExpoImage source={{ uri }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+										<ExpoImage source={{ uri }} style={{ width: "100%", height: "100%" }} contentFit="cover" cachePolicy="disk" />
 									</View>
 									<TouchableOpacity
 										activeOpacity={0.85}

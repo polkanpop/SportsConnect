@@ -430,18 +430,16 @@ export default function ActivityPage() {
   const lastFocusInvalidateRef = useRef<number>(0)
 
   // Refresh dashboard whenever the user focuses this tab.
-  // Throttled to 5 s to avoid spamming the backend on rapid tab switches,
-  // but short enough that coming back right after a booking creation gets fresh data.
+  // Throttled to 60 s to avoid spamming the backend on rapid tab switches.
+  // Hosting queries have refetchOnMount:true and staleTime:60s so they
+  // handle their own staleness — no need to manually refetch them here.
   useFocusEffect(
     useCallback(() => {
       if (typeof userId !== 'number') return;
       const now = Date.now()
-      if (now - lastFocusInvalidateRef.current < 5_000) return
+      if (now - lastFocusInvalidateRef.current < 60_000) return
       lastFocusInvalidateRef.current = now
       void queryClient.refetchQueries({ queryKey: queryKeys.dashboard(userId), type: 'active' })
-      // Also keep hosting queries fresh so Hosting tab is fast and reflects new events
-      void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingEvents(userId), type: 'all' })
-      void queryClient.refetchQueries({ queryKey: queryKeys.activityHostingSessions(userId), type: 'all' })
     }, [queryClient, userId])
   );
 
