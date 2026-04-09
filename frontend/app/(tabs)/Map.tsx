@@ -1801,6 +1801,7 @@
                   ref={bottomSheetRef}
                   snapPoints={snapPoints}
                   index={0}
+                  enableDynamicSizing={false}
                   bottomInset={0}
                   enableContentPanningGesture
                   enablePanDownToClose={false}
