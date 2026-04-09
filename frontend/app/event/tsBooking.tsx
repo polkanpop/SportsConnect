@@ -339,7 +339,7 @@ export default function TrainingSessionBooking() {
                     />
                   ) : (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Image source={ICONS.sillball} style={{ width: 80, height: 80, resizeMode: 'contain', opacity: 0.45 }} />
+                      <Image source={ICONS.sillball} style={{ width: 80, height: 80, resizeMode: 'contain', opacity: 0.45, tintColor: '#FF8147' }} />
                     </View>
                   )}
                   {/* Top-left overlay badges */}

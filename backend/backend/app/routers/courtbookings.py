@@ -620,7 +620,7 @@ def create_court_booking(request: Request, body: dict, background_tasks: Backgro
             venue_name = payload.get("venue_name") or base_name
             if courtid is not None and venue_name == base_name:
                 try:
-                    court_row = rest_select("courts", "name", filters={"courtid": courtid}, single=True)
+                    court_row = rest_select("courtinfo", "name", filters={"courtid": courtid}, single=True)
                     if isinstance(court_row, dict) and court_row.get("name"):
                         venue_name = str(court_row.get("name"))
                 except Exception:
@@ -773,7 +773,7 @@ def update_court_booking(request: Request, courtbookingid: int, body: dict, back
                     venue_name = row.get("venue_name") or base_name
                     if courtid is not None and venue_name == base_name:
                         try:
-                            court_row = rest_select("courts", "name", filters={"courtid": courtid}, single=True)
+                            court_row = rest_select("courtinfo", "name", filters={"courtid": courtid}, single=True)
                             if isinstance(court_row, dict) and court_row.get("name"):
                                 venue_name = str(court_row.get("name"))
                         except Exception:

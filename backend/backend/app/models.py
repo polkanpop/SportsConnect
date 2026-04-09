@@ -30,6 +30,8 @@ class Notification(BaseModel):
     kind: Optional[str] = None  # submitted | approved | rejected | created | incoming_booking | etc.
     data: Optional[dict] = None
     read_at: Optional[str] = None
+    message_key: Optional[str] = None
+    message_params: Optional[dict] = None
 
 class Profile(BaseModel):
     id: str

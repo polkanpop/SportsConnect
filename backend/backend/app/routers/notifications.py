@@ -24,6 +24,8 @@ EXPECTED_FIELDS = {
     "kind",
     "data",
     "read_at",
+    "message_key",
+    "message_params",
 }
 
 
