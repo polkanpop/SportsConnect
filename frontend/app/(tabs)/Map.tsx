@@ -362,16 +362,16 @@
 
     // My-location button: dynamically sits just above the BottomSheet top lip,
     // clamped so it never overlaps the search bar area. Hidden at 100%.
-    // Also hidden when sheet is closed or at index 0 (30% snap) — only shows at index 1+.
+    // When sheet is fully closed, use a fixed resting position instead of tracking.
     const myLocationAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
       // At 100% (full screen): hide completely
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      // Hide when sheet is closed or at index 0 (sheetTop > 50% of container)
-      if (sheetTop > mapContainerHeight * 0.50) {
-        return { bottom: -100, opacity: 0 };
+      // Sheet is closed (sheetTop near container bottom): use fixed resting position
+      if (sheetTop >= mapContainerHeight * 0.92) {
+        return { bottom: floatingButtonsBottom, opacity: 1 };
       }
       // Position 12px above the sheet's top lip
       const ideal = mapContainerHeight - sheetTop + 12;
@@ -386,9 +386,9 @@
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      // Hide when sheet is closed or at index 0
-      if (sheetTop > mapContainerHeight * 0.50) {
-        return { bottom: -100, opacity: 0 };
+      // Sheet is closed: use fixed resting position
+      if (sheetTop >= mapContainerHeight * 0.92) {
+        return { bottom: floatingButtonsBottom + 56, opacity: 1 };
       }
       const ideal = mapContainerHeight - sheetTop + 68;
       const maxBottom = mapContainerHeight - searchBarSafePx + 56;
