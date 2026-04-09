@@ -722,7 +722,7 @@
     // Auto-expand BottomSheet to full height when a day is selected so all time slots are visible
     useEffect(() => {
       if (selectedMapScheduleDate) {
-        bottomSheetRef.current?.snapToIndex(3)
+        bottomSheetRef.current?.snapToIndex(2)
       }
     }, [selectedMapScheduleDate])
 
@@ -953,8 +953,6 @@
     useFocusEffect(useCallback(() => {
       fetchMarkers({ onlyIfCacheMissing: true, showLoading: false });
       refreshFavouritesOnly();
-      setSelectedMarker(null);
-      bottomSheetRef.current?.snapToIndex(0);
     }, [fetchMarkers, refreshFavouritesOnly]));
 
     const availabilityOptions = ["Available", "Unavailable"];
@@ -2114,16 +2112,16 @@
                             </View>
                             {/* Time slot expansion for selected date (view-only) */}
                             {selectedMapScheduleDate && mapTimeSlots.length > 0 && (
-                              <View style={{ marginTop: 10, backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#9a3412', marginBottom: 6 }}>
+                              <View style={{ marginTop: 10, backgroundColor: tc.brandSoft, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: tc.brandMuted }}>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: tc.brand, marginBottom: 6 }}>
                                   {`${t('COURT_PANEL_OPEN_PREFIX')}${String(availability!.start_time || '').slice(0, 5)} – ${String(availability!.end_time || '').slice(0, 5)}`}
                                 </Text>
                                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                                   {mapTimeSlots.map((slot) => {
                                     const isBooked = mapBookedSlots.has(slot)
                                     return (
-                                      <View key={slot} style={{ width: 52, backgroundColor: isBooked ? '#f97316' : '#1e1e1e', borderRadius: 6, paddingVertical: 4, margin: 2, alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ fontSize: 11, color: '#fff', fontWeight: '600' }}>{slot}</Text>
+                                      <View key={slot} style={{ width: 52, backgroundColor: isBooked ? tc.brand : tc.bgElevated, borderRadius: 6, paddingVertical: 4, margin: 2, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 11, color: isBooked ? '#fff' : tc.textPrimary, fontWeight: '600' }}>{slot}</Text>
                                       </View>
                                     )
                                   })}
