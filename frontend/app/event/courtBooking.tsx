@@ -6,13 +6,12 @@ import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
-import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow, addFavouriteCourt, removeFavouriteCourt, listFavouriteCourtsCached, type FavouriteCourt } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
-import { favouritesEvents } from '@/lib/favouritesEvents'
 import { appendHistory } from '@/storage/history'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -193,11 +192,7 @@ export default function CourtBooking() {
   const [servicesExpanded, setServicesExpanded] = useState(true)
   const [serviceQtyById, setServiceQtyById] = useState<Record<number, number>>({})
   const [serviceTouchedById, setServiceTouchedById] = useState<Record<number, boolean>>({})
-  // Details dropdown (court selector, schedule, payment — hidden by default)
-  const [detailsExpanded, setDetailsExpanded] = useState(false)
-  // Favourite state
-  const [isFavourite, setIsFavourite] = useState(false)
-  const [favouriteRecord, setFavouriteRecord] = useState<FavouriteCourt | null>(null)  // Playing court selector
+  // Playing court selector
   const [selectedPlayingCourtId, setSelectedPlayingCourtId] = useState<number | null>(null)
   const [selectedBaseName, setSelectedBaseName] = useState<string | null>(null)
   // Week navigation (0 = current week, can move forward to +2)
@@ -215,16 +210,6 @@ export default function CourtBooking() {
   const { userId } = useAppBootstrap()
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
 
-  // Load favourite status for this court
-  useEffect(() => {
-    if (userId == null || !Number.isFinite(courtid)) return
-    void listFavouriteCourtsCached({ userid: userId }).then((rows) => {
-      const favRows = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) as FavouriteCourt[] : []
-      const match = favRows.find(r => r.courtid === courtid)
-      setIsFavourite(!!match)
-      setFavouriteRecord(match ?? null)
-    }).catch(() => {})
-  }, [userId, courtid])
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
   const { data: allCourtBookingsRaw, refetch: refetchCourtBookingsByCourtId } = useQuery({
     queryKey: ['courtBookingsByCourtId', courtid],
@@ -885,161 +870,46 @@ export default function CourtBooking() {
         </View>
       </SafeAreaView>
 
-      {/* Section 1: Court banner + info card (Map bottom-sheet style) */}
-      {(() => {
-        const rawImages = asArray((courtInfo as any)?.images)
-        const coverRaw = rawImages[0] ?? null
-        const coverUri = coverRaw
-          ? optimizeRemoteImageUrl(coverRaw, { width: 800, height: 400, quality: 80, resize: 'cover' })
-          : null
-
-        const venueTokens = asArray(courtInfo?.venue).map(v => v.toLowerCase())
-        const hasIndoor = venueTokens.some(v => v.includes('indoor'))
-        const hasOutdoor = venueTokens.some(v => v.includes('outdoor'))
-        const venueLabel = hasIndoor && hasOutdoor
-          ? t('MAP_LABEL_IN_OUTDOOR')
-          : hasIndoor ? t('MAP_LABEL_INDOOR')
-          : hasOutdoor ? t('MAP_LABEL_OUTDOOR')
-          : null
-
-        return (
-          <View style={{ marginHorizontal: 16, marginBottom: 20 }}>
-            {/* Cover image frame */}
-            <View style={{ width: '100%', height: 182, borderRadius: 16, overflow: 'hidden', backgroundColor: tc.bgInput }}>
-              {loading ? (
-                <SkeletonPulse>
-                  <SkeletonBox width={'100%'} height={182} radius={16} />
-                </SkeletonPulse>
-              ) : coverUri ? (
-                <ExpoImage
-                  source={{ uri: coverUri }}
-                  style={{ width: '100%', height: '100%' }}
-                  contentFit="cover"
-                  cachePolicy="disk"
-                  transition={0}
-                />
-              ) : (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: tc.bgInput }}>
-                  <Image source={ICONS.court} style={{ width: 48, height: 48, tintColor: tc.textMuted, resizeMode: 'contain' }} />
-                </View>
-              )}
+      {/* Section 1: Court details (title removed) */}
+      <View style={[styles.sectionCard, { backgroundColor: tc.bgSurface }]}>
+        {loading && (
+          <SkeletonPulse>
+            <SkeletonBox width={'55%'} height={22} radius={8} style={{ marginBottom: 12 }} />
+            <SkeletonBox width={'100%'} height={14} radius={7} style={{ marginBottom: 8 }} />
+            <SkeletonBox width={'70%'} height={14} radius={7} />
+          </SkeletonPulse>
+        )}
+        {error && <Text style={styles.errorText}>{error}</Text>}
+        {!loading && !error && (
+          <View>
+            <View style={styles.courtHeaderRow}>
+              {(() => {
+                const venueRaw = courtInfo?.venue
+                const venueTokens = asArray(venueRaw).map(v => v.toLowerCase())
+                const hasIndoor = venueTokens.some(t => t.includes('indoor'))
+                const hasOutdoor = venueTokens.some(t => t.includes('outdoor'))
+                let iconSrc = null
+                if (hasIndoor && hasOutdoor) iconSrc = ICONS.bothVenue
+                else if (hasIndoor) iconSrc = ICONS.indoorIcon
+                else if (hasOutdoor) iconSrc = ICONS.outdoorIcon
+                return iconSrc ? <Image source={iconSrc} style={styles.venueIcon} /> : null
+              })()}
+              <Text style={[styles.courtName, { color: tc.textPrimary }]}>{courtInfo?.name || `Court ${courtid}`}</Text>
             </View>
-
-            {/* Overlapping info card */}
-            <View style={{
-              marginTop: -52,
-              backgroundColor: tc.bgElevated,
-              borderRadius: 16,
-              paddingTop: 10,
-              paddingBottom: 10,
-              paddingHorizontal: 12,
-              shadowColor: tc.shadow,
-              shadowOpacity: 0.10,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 4,
-              zIndex: 6,
-            }}>
-              {loading ? (
-                <SkeletonPulse>
-                  <SkeletonBox width={'55%'} height={20} radius={8} style={{ marginBottom: 10 }} />
-                  <SkeletonBox width={'100%'} height={13} radius={7} style={{ marginBottom: 7 }} />
-                  <SkeletonBox width={'70%'} height={13} radius={7} />
-                </SkeletonPulse>
-              ) : error ? (
-                <Text style={styles.errorText}>{error}</Text>
-              ) : (
-                <>
-                  {/* Name row with favourite star + dropdown chevron */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    {(() => {
-                      let iconSrc = null
-                      if (hasIndoor && hasOutdoor) iconSrc = ICONS.bothVenue
-                      else if (hasIndoor) iconSrc = ICONS.indoorIcon
-                      else if (hasOutdoor) iconSrc = ICONS.outdoorIcon
-                      return iconSrc ? <Image source={iconSrc} style={[styles.venueIcon, { marginRight: 6 }]} /> : null
-                    })()}
-                    <Text style={[styles.courtName, { flex: 1, color: tc.textPrimary }]} numberOfLines={1}>
-                      {courtInfo?.name || `Court ${courtid}`}
-                    </Text>
-                    {/* Favourite star */}
-                    <TouchableOpacity
-                      style={{ padding: 8 }}
-                      onPress={async () => {
-                        if (userId == null) return
-                        const wasAdded = !isFavourite
-                        setIsFavourite(wasAdded)
-                        try {
-                          if (wasAdded) {
-                            const created = await addFavouriteCourt(userId, courtid)
-                            setFavouriteRecord(created)
-                            favouritesEvents.emitFavouriteChanged(userId)
-                          } else {
-                            if (favouriteRecord) {
-                              await removeFavouriteCourt(favouriteRecord.favouriteid)
-                              setFavouriteRecord(null)
-                              favouritesEvents.emitFavouriteChanged(userId)
-                            }
-                          }
-                        } catch {
-                          setIsFavourite(!wasAdded)
-                        }
-                      }}
-                    >
-                      <Image
-                        source={ICONS.starCal}
-                        style={{ width: 22, height: 22, tintColor: isFavourite ? COLORS.gold : tc.textSecondary }}
-                      />
-                    </TouchableOpacity>
-                    {/* Dropdown chevron */}
-                    <TouchableOpacity
-                      style={{ padding: 8 }}
-                      onPress={() => setDetailsExpanded(prev => !prev)}
-                    >
-                      <Image
-                        source={ICONS.arrowdown}
-                        style={{
-                          width: 20, height: 20,
-                          tintColor: tc.textSecondary,
-                          transform: [{ rotate: detailsExpanded ? '180deg' : '0deg' }],
-                        }}
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Address */}
-                  <View style={[styles.metaRow, { marginTop: 2 }]}>
-                    <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-                    <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{courtInfo?.address || ''}</Text>
-                  </View>
-
-                  {/* Opening hours */}
-                  {availability && (
-                    <View style={[styles.metaRow, { marginTop: 4 }]}>
-                      <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-                      <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-                        {t('MAP_OPENING_TIME')} {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Venue tag */}
-                  {!!venueLabel && (
-                    <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                      <View style={{ backgroundColor: tc.brand, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#fff' }}>{venueLabel}</Text>
-                      </View>
-                    </View>
-                  )}
-                </>
-              )}
+            {(() => { return null })()}
+            <View style={styles.metaRow}>
+              <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
+              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{courtInfo?.address || ''}</Text>
             </View>
+            {availability && (
+              <View style={styles.metaRow}>
+                <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
+                <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>{t('MAP_OPENING_TIME')} {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}</Text>
+              </View>
+            )}
           </View>
-        )
-      })()}
-
-      {/* Expandable booking form — hidden until user taps the chevron on the banner */}
-      {detailsExpanded && <>
+        )}
+      </View>
 
       {/* Court selector: Step 1 pills → Step 2 schedule → Step 3 image cards */}
       {(playingCourtsLoading || playingCourts.length > 0) && (
@@ -1440,8 +1310,6 @@ export default function CourtBooking() {
         </View>
       </View>
 
-      {/* End expandable booking form */}
-      </>}
     </ScrollView>
     {/* Fixed Bottom Booking Bar inside SafeArea */}
     <SafeAreaView edges={['bottom']} style={[styles.bottomSafeArea, { backgroundColor: tc.bgBase }]}>
