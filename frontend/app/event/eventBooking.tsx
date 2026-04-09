@@ -396,10 +396,6 @@ export default function EventBooking() {
               <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
               <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{event.address || 'Address N/A'}</Text>
             </View>
-            <View style={styles.metaRow}>
-              <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-              <Text style={[styles.eventTime, { color: tc.textSecondary }]}>{formatRange(event, language)}</Text>
-            </View>
           </View>
         )}
         {event && (

@@ -2214,6 +2214,17 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 
 	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
+	// Fetch organizer names in parallel (best-effort, no failures if some userids are missing)
+	const uniqueOrganizerIds = [...new Set(events.map(e => e.organizerid).filter((id): id is number => id != null))]
+	const organizerNameMap = new Map<number, string | null>()
+	if (uniqueOrganizerIds.length) {
+		const nameResults = await Promise.allSettled(uniqueOrganizerIds.map(id => getUserInfoByUserId(id)))
+		nameResults.forEach((result, i) => {
+			const id = uniqueOrganizerIds[i]
+			organizerNameMap.set(id, result.status === 'fulfilled' && result.value?.name ? result.value.name : null)
+		})
+	}
+
 	const combined = events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2226,7 +2237,7 @@ export async function listEventsCombined(): Promise<CombinedEvent[]> {
 			status: e.status,
 			courtbookingid: e.courtbookingid,
 			organizerid: e.organizerid,
-			organizerName: null,
+			organizerName: organizerNameMap.get(e.organizerid) ?? null,
 			title: meta?.title,
 			description: meta?.description,
 			images: normalizeStringArrayLoose(meta?.images),
@@ -2286,6 +2297,13 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 
 	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
+	// Single name lookup since all events share the same organizerid
+	let resolvedOrganizerName: string | null = null
+	try {
+		const ui = await getUserInfoByUserId(organizerid)
+		if (ui?.name) resolvedOrganizerName = ui.name
+	} catch {}
+
 	return events.map(e => {
 		const booking = bookingById.get(e.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2298,7 +2316,7 @@ export async function listEventsCombinedByOrganizerId(organizerid: number): Prom
 			status: e.status,
 			courtbookingid: e.courtbookingid,
 			organizerid: e.organizerid,
-			organizerName: null,
+			organizerName: resolvedOrganizerName,
 			title: meta?.title,
 			description: meta?.description,
 			images: normalizeStringArrayLoose(meta?.images),
@@ -2434,6 +2452,17 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 
 	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
+	// Fetch coach names in parallel (best-effort)
+	const uniqueCoachIds = [...new Set(sessions.map(s => s.coachid).filter((id): id is number => id != null))]
+	const coachNameMap = new Map<number, string | null>()
+	if (uniqueCoachIds.length) {
+		const nameResults = await Promise.allSettled(uniqueCoachIds.map(id => getUserInfoByUserId(id)))
+		nameResults.forEach((result, i) => {
+			const id = uniqueCoachIds[i]
+			coachNameMap.set(id, result.status === 'fulfilled' && result.value?.name ? result.value.name : null)
+		})
+	}
+
 	const combined = sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2446,7 +2475,7 @@ export async function listTrainingSessionsCombined(): Promise<CombinedTrainingSe
 			status: s.status,
 			courtbookingid: s.courtbookingid,
 			coachid: s.coachid,
-			coachName: null,
+			coachName: coachNameMap.get(s.coachid) ?? null,
 			title: meta?.title,
 			description: meta?.description,
 			images: normalizeStringArrayLoose(meta?.images),
@@ -2506,6 +2535,13 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 
 	const surfaceByCourtId = buildCourtSurfaceMap(allPlayingCourts)
 
+	// Single name lookup since all sessions share the same coachid
+	let resolvedCoachName: string | null = null
+	try {
+		const ui = await getUserInfoByUserId(coachid)
+		if (ui?.name) resolvedCoachName = ui.name
+	} catch {}
+
 	return sessions.map(s => {
 		const booking = bookingById.get(s.courtbookingid)
 		const availability = booking ? availabilityById.get(booking.availabilityid) : null
@@ -2518,7 +2554,7 @@ export async function listTrainingSessionsCombinedByCoachId(coachid: number): Pr
 			status: s.status,
 			courtbookingid: s.courtbookingid,
 			coachid: s.coachid,
-			coachName: null,
+			coachName: resolvedCoachName,
 			title: meta?.title,
 			description: meta?.description,
 			numberofpeople: meta?.numberofpeople ?? null,

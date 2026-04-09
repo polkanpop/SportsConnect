@@ -960,9 +960,16 @@ export default function CourtBooking() {
                     <Text style={[styles.courtName, { flex: 1, color: tc.textPrimary }]} numberOfLines={1}>
                       {courtInfo?.name || `Court ${courtid}`}
                     </Text>
-                    {/* Favourite star */}
+                    {/* Favourite star — circle container matching Map.tsx favoriteButton */}
                     <TouchableOpacity
-                      style={{ padding: 8, backgroundColor: tc.border, borderRadius: 6 }}
+                      style={[{
+                        padding: 6,
+                        borderRadius: 20,
+                        backgroundColor: tc.bgInput,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginLeft: 8,
+                      }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite
@@ -996,16 +1003,6 @@ export default function CourtBooking() {
                     <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
                     <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{courtInfo?.address || ''}</Text>
                   </View>
-
-                  {/* Opening hours */}
-                  {availability && (
-                    <View style={[styles.metaRow, { marginTop: 4 }]}>
-                      <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-                      <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-                        {t('MAP_OPENING_TIME')} {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}
-                      </Text>
-                    </View>
-                  )}
 
                   {/* Venue tag */}
                   {!!venueLabel && (
@@ -1076,11 +1073,6 @@ export default function CourtBooking() {
                       </TouchableOpacity>
                     </View>
                   </View>
-                  {scheduleDisplayAvailability && (
-                    <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-                      {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
-                    </Text>
-                  )}
                   <View style={styles.weekRow}>
                     {weekDaysDetailed.map((d) => {
                       const today = new Date()
@@ -1092,7 +1084,7 @@ export default function CourtBooking() {
                         <TouchableOpacity
                           key={d.key}
                           onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }}
-                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled, { backgroundColor: selected ? tc.brand : (isAvailable && !isPast ? tc.brandSoft : tc.bgElevated) }]}
+                          style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled, { backgroundColor: selected ? tc.brand : tc.bgElevated }]}
                           activeOpacity={0.8}
                         >
                           <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline, { color: tc.textPrimary }]}>{d.label}</Text>
@@ -1215,11 +1207,6 @@ export default function CourtBooking() {
               </TouchableOpacity>
             </View>
           </View>
-          {scheduleDisplayAvailability && (
-            <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-              {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
-            </Text>
-          )}
           <View style={styles.weekRow}>
             {weekDaysDetailed.map((d) => {
               const today = new Date()
@@ -1228,7 +1215,7 @@ export default function CourtBooking() {
               const isAvailable = isDaySelectable(d.key, d.dateStr)
               const selected = selectedDateStr === d.dateStr
               return (
-                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled, { backgroundColor: selected ? tc.brand : (isAvailable && !isPast ? tc.brandSoft : tc.bgElevated) }]}>
+                <TouchableOpacity key={d.key} onPress={() => { if (!isAvailable || isPast) return; onSelectDay(d.dateStr, d.key) }} style={[styles.dayCell, selected && styles.dayCellSelected, isAvailable && !selected && !isPast && styles.dayCellAvailable, (!isAvailable || isPast) && styles.dayCellDisabled, { backgroundColor: selected ? tc.brand : tc.bgElevated }]}>
                   <Text style={[styles.dayLabel, d.isToday && styles.todayUnderline, { color: tc.textPrimary }]}>{d.label}</Text>
                   <Text style={[styles.dayDate, selected && styles.dayCellSelectedText, { color: selected ? '#fff' : tc.textPrimary }]}>{d.date.getDate()}</Text>
                 </TouchableOpacity>

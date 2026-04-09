@@ -81,11 +81,13 @@ function isHiddenEventStatus(statusRaw: unknown): boolean {
 	return st === "cancelled" || st === "completed";
 }
 
-function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: string | null }, datePrefix = 'Date: ', dateFallback = 'Date: -') {
+const VI_WEEKDAYS_EP = ['CN', 'Th\u1ee9 2', 'Th\u1ee9 3', 'Th\u1ee9 4', 'Th\u1ee9 5', 'Th\u1ee9 6', 'Th\u1ee9 7']
+
+function formatEventDateLabel(ev: { start_timestamp?: string | null; time?: string | null }, datePrefix = 'Date: ', dateFallback = 'Date: -', language = 'vi') {
 	const candidate = (ev.start_timestamp || ev.time || "").trim();
 	const d = candidate ? parseTimestampLoose(candidate) : null;
 	if (!d || Number.isNaN(d.getTime())) return dateFallback;
-	const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+	const weekday = language === 'vi' ? VI_WEEKDAYS_EP[d.getDay()] : d.toLocaleDateString("en-US", { weekday: "short" });
 	const mm = String(d.getMonth() + 1).padStart(2, "0");
 	const dd = String(d.getDate()).padStart(2, "0");
 	const yyyy = String(d.getFullYear());
@@ -218,7 +220,7 @@ function FreeBadge() {
 export default function EventPanel({ organizerId }: Props) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const { t } = useTranslation();
+	const { t, language } = useTranslation();
 	const tc = useThemeColors();
 	const { userInfo: bootstrapUserInfo } = useAppBootstrap();
 
@@ -1464,7 +1466,7 @@ export default function EventPanel({ organizerId }: Props) {
 												lineHeight: 16,
 											}}
 										>
-											{formatEventDateLabel(ev, t('EVENT_PANEL_DATE_PREFIX'), t('EVENT_PANEL_DATE_FALLBACK'))}
+											{formatEventDateLabel(ev, t('EVENT_PANEL_DATE_PREFIX'), t('EVENT_PANEL_DATE_FALLBACK'), language)}
 										</Text>
 										{!!formatEventTimeLabel(ev, t('EVENT_PANEL_TIME_PREFIX')) && (
 											<Text
