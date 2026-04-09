@@ -110,10 +110,6 @@
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
   const VN_MAX_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_MIN_LNG_DELTA });
-
-  // Module-level persistence: survives tab-switch remounts and screen navigation.
-  // Cleared only when the JS bundle unloads (app fully killed).
-  let _persistedMarker: MarkerType | null = null;
   // Collapsed sheet is 30%; shift focused markers into the upper-third of the visible 70%.
   const MAP_FOCUS_LAT_OFFSET_RATIO = 0.20;
   // Push the map floor up so markers never sit behind the 30% collapsed sheet.
@@ -509,8 +505,8 @@
     }, []);
 
     // Snap points for the BottomSheet
-    // Level 1=peek(cover image), 2=info card, 3=tabs+content
-    const snapPoints = useMemo(() => ["17%", "50%", "88%"], []);
+    // Level 1=peek(cover image), 2=info card, 3=tabs+content, 4=near-full
+    const snapPoints = useMemo(() => ["17%","35%","67%", "100%"], []);
 
     // Reset tab state when selecting a new marker
     useEffect(() => {
@@ -954,20 +950,10 @@
     // On focus:
     // - Only refetch court markers if the courtinfo cache was invalidated (e.g., after Court Register)
     // - Still refresh favourites (cached) so fav pins stay in sync
-    // - Restore last selected marker so the sheet stays populated after tab switches / screen navigation
     useFocusEffect(useCallback(() => {
       fetchMarkers({ onlyIfCacheMissing: true, showLoading: false });
       refreshFavouritesOnly();
-      if (_persistedMarker) {
-        // Restore state if remounted (cold start / component unmount)
-        if (!selectedMarker) {
-          setSelectedMarker(_persistedMarker);
-          setIsFavorite(favoriteIds.includes(_persistedMarker.courtid));
-        }
-        // Always re-snap so the sheet visually restores after tab-switch or app background
-        setTimeout(() => bottomSheetRef.current?.snapToIndex(1), 200);
-      }
-    }, [fetchMarkers, refreshFavouritesOnly, selectedMarker, favoriteIds]));
+    }, [fetchMarkers, refreshFavouritesOnly]));
 
     const availabilityOptions = ["Available", "Unavailable"];
 
@@ -999,7 +985,6 @@
 
     // Handle marker when pressed
     const handleMarkerPress = async (marker: MarkerType) => {
-      _persistedMarker = marker; // persist across tab switches / screen navigation
       setSelectedMarker(marker);
       setSelectedEventPin(null);
       setSelectedTSPin(null);
@@ -1061,8 +1046,8 @@
       setBottomSheetIndex(index);
     }, []);
 
-    // Keep map UI overlays visible at all snap levels (sheet max is 88%, searchbar is above)
-    const overlaysVisible = true;
+    // Keep map UI overlays from overlapping the BottomSheet at 100% (index 2)
+    const overlaysVisible = bottomSheetIndex < 3;
 
     // Toggle venue in multi-select
     const toggleVenue = (venue: string) => {

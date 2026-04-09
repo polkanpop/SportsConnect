@@ -684,7 +684,7 @@ const TrainingSessionListScreen = () => {
                   </View>
                   {expanded && (
                     <View style={styles.expandedContent}>
-                      {s.coachName ? <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName}</Text> : null}
+                      <Text style={styles.expandedLine}>{t('TS_LIST_COACH_PREFIX')} {s.coachName || String(s.coachid)}</Text>
                       <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
                       <Text style={styles.expandedDesc} numberOfLines={4}>{s.description || t('TS_LIST_NO_DESC')}</Text>
                     </View>

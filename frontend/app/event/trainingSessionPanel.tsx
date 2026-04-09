@@ -86,11 +86,13 @@ function isHiddenSessionStatus(statusRaw: unknown): boolean {
 // The panel must show ALL sessions (past, present, completed) so the coach can
 // review participants at any time. Only cancelled sessions are hidden.
 
-function formatSessionDateLabel(session: { time?: string | null }, datePrefix = 'Date: ', dateFallback = 'Date: -') {
+const VI_WEEKDAYS_TSP = ['CN', 'Th\u1ee9 2', 'Th\u1ee9 3', 'Th\u1ee9 4', 'Th\u1ee9 5', 'Th\u1ee9 6', 'Th\u1ee9 7']
+
+function formatSessionDateLabel(session: { time?: string | null }, datePrefix = 'Date: ', dateFallback = 'Date: -', language = 'vi') {
   const candidate = String(session.time || '').trim()
   const d = candidate ? parseTimestampLoose(candidate) : null
   if (!d || Number.isNaN(d.getTime())) return dateFallback
-  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
+  const weekday = language === 'vi' ? VI_WEEKDAYS_TSP[d.getDay()] : d.toLocaleDateString('en-US', { weekday: 'short' })
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   const yyyy = String(d.getFullYear())
@@ -219,7 +221,7 @@ function FreeBadge() {
 export default function TrainingSessionPanel({ coachId }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const tc = useThemeColors()
   const { userInfo: bootstrapUserInfo } = useAppBootstrap()
 
@@ -1362,7 +1364,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
                         {s.title || `Session #${s.sessionid}`}
                       </Text>
                       <Text style={{ marginTop: 6, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>
-                        {formatSessionDateLabel(s, t('EVENT_PANEL_DATE_PREFIX'), t('EVENT_PANEL_DATE_FALLBACK'))}
+                        {formatSessionDateLabel(s, t('EVENT_PANEL_DATE_PREFIX'), t('EVENT_PANEL_DATE_FALLBACK'), language)}
                       </Text>
                       {!!formatSessionTimeLabel(s, t('EVENT_PANEL_TIME_PREFIX')) && (
                         <Text numberOfLines={1} style={{ marginTop: 2, color: selected ? 'rgba(255,255,255,0.92)' : tc.textSecondary, fontWeight: '700', fontSize: 12 }}>

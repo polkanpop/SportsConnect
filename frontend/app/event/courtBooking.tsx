@@ -960,16 +960,9 @@ export default function CourtBooking() {
                     <Text style={[styles.courtName, { flex: 1, color: tc.textPrimary }]} numberOfLines={1}>
                       {courtInfo?.name || `Court ${courtid}`}
                     </Text>
-                    {/* Favourite star — circle container matching Map.tsx favoriteButton */}
+                    {/* Favourite star */}
                     <TouchableOpacity
-                      style={[{
-                        padding: 6,
-                        borderRadius: 20,
-                        backgroundColor: tc.bgInput,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginLeft: 8,
-                      }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                      style={{ padding: 8, backgroundColor: tc.bgElevated, borderRadius: 6 }}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite
@@ -1003,6 +996,16 @@ export default function CourtBooking() {
                     <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
                     <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{courtInfo?.address || ''}</Text>
                   </View>
+
+                  {/* Opening hours */}
+                  {availability && (
+                    <View style={[styles.metaRow, { marginTop: 4 }]}>
+                      <Image source={ICONS.clock} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
+                      <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
+                        {t('MAP_OPENING_TIME')} {formatHm(scheduleAvailability?.start_time ?? availability.start_time)} - {formatHm(scheduleAvailability?.end_time ?? availability.end_time)}
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Venue tag */}
                   {!!venueLabel && (
@@ -1073,6 +1076,11 @@ export default function CourtBooking() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  {scheduleDisplayAvailability && (
+                    <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
+                      {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+                    </Text>
+                  )}
                   <View style={styles.weekRow}>
                     {weekDaysDetailed.map((d) => {
                       const today = new Date()
@@ -1207,6 +1215,11 @@ export default function CourtBooking() {
               </TouchableOpacity>
             </View>
           </View>
+          {scheduleDisplayAvailability && (
+            <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
+              {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
+            </Text>
+          )}
           <View style={styles.weekRow}>
             {weekDaysDetailed.map((d) => {
               const today = new Date()

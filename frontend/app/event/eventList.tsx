@@ -740,7 +740,7 @@ const EventListScreen = () => {
                     </View>
                     {expanded && (
                       <View style={styles.expandedContent}>
-                        {ev.organizerName ? <Text style={styles.expandedLine}>{t('EVENT_LIST_EXPANDED_ORGANIZER')} {ev.organizerName}</Text> : null}
+                        <Text style={styles.expandedLine}>{t('EVENT_LIST_EXPANDED_ORGANIZER')} {ev.organizerName || String(ev.organizerid)}</Text>
                         <Text style={styles.expandedDescLabel}>{t('COMMON_LABEL_DESCRIPTION')}:</Text>
                         <Text style={styles.expandedDesc} numberOfLines={4}>{ev.description || t('EVENT_LIST_EXPANDED_NO_DESC')}</Text>
                       </View>
