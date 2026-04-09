@@ -340,7 +340,7 @@ export default function EventBooking() {
                     />
                   ) : (
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Image source={ICONS.event_category} style={{ width: 44, height: 44, tintColor: tc.textMuted, resizeMode: 'contain' }} />
+                      <Image source={ICONS.sillball} style={{ width: 80, height: 80, resizeMode: 'contain', opacity: 0.45 }} />
                     </View>
                   )}
                   {/* Top-left overlay badges */}

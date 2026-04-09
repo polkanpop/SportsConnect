@@ -31,7 +31,7 @@ type AvailabilityRow = {
 const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
 // sectionCard has marginHorizontal:16 (32px) + padding:16 each side (32px) = 64px total
 // 4 cols: each button has marginRight: 8, so total margin = 4×8 = 32; plus 64px for card margins+padding
-const SLOT_BTN_W = Math.floor((Dimensions.get('window').width - 96) / 4)
+const SLOT_BTN_W = Math.floor((Dimensions.get('window').width - 88) / 4)
 const IMAGE_TILE_HEIGHT = 120
 
 // Format helpers
@@ -918,7 +918,7 @@ export default function CourtBooking() {
                 />
               ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: tc.bgInput }}>
-                  <Image source={ICONS.court} style={{ width: 48, height: 48, tintColor: tc.textMuted, resizeMode: 'contain' }} />
+                  <Image source={ICONS.sillball} style={{ width: 80, height: 80, resizeMode: 'contain', opacity: 0.45 }} />
                 </View>
               )}
             </View>
@@ -962,7 +962,7 @@ export default function CourtBooking() {
                     </Text>
                     {/* Favourite star */}
                     <TouchableOpacity
-                      style={[{ padding: 6, borderRadius: 20, backgroundColor: tc.bgInput, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                      style={[{ padding: 6, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite

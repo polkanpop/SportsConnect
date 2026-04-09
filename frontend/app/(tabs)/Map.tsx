@@ -506,7 +506,7 @@
 
     // Snap points for the BottomSheet
     // Level 1=peek(cover image), 2=info card, 3=tabs+content, 4=near-full
-    const snapPoints = useMemo(() => ["17%","35%","64%", "100%"], []);
+    const snapPoints = useMemo(() => ["17%","35%","62%", "100%"], []);
 
     // Reset tab state when selecting a new marker
     useEffect(() => {
@@ -2741,7 +2741,7 @@
       marginTop: 0,
       padding: 6,
       borderRadius: 20,
-      backgroundColor: tc.bgInput,
+      backgroundColor: 'rgba(255,255,255,0.12)',
       alignItems: 'center',
       justifyContent: 'center',
     },
