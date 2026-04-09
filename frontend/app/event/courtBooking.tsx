@@ -29,8 +29,8 @@ type AvailabilityRow = {
 
 const IMAGE_TILE_WIDTH = Math.round((Dimensions.get('window').width - 36) * 0.7)
 // sectionCard has marginHorizontal:16 (32px) + padding:16 each side (32px) = 64px total
-// 4 cols with 3 gaps of 8px between them → btnW = (screenW - 64 - 24) / 4
-const SLOT_BTN_W = Math.floor((Dimensions.get('window').width - 88) / 4)
+// 4 cols: each button has marginRight: 8, so total margin = 4×8 = 32; plus 64px for card margins+padding
+const SLOT_BTN_W = Math.floor((Dimensions.get('window').width - 96) / 4)
 const IMAGE_TILE_HEIGHT = 120
 
 // Format helpers
@@ -865,7 +865,7 @@ export default function CourtBooking() {
             <Image source={ICONS.arrowLeft} style={[styles.backIcon, { tintColor: tc.textPrimary }]} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', color: tc.textPrimary }]}>{t('BOOKING_COURT_HEADER')}</Text>
-          <View style={styles.backBtn} />
+          <View style={[styles.backBtn, { backgroundColor: 'transparent' }]} />
         </View>
       </SafeAreaView>
 

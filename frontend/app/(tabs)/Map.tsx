@@ -362,10 +362,15 @@
 
     // My-location button: dynamically sits just above the BottomSheet top lip,
     // clamped so it never overlaps the search bar area. Hidden at 100%.
+    // Also hidden when sheet is closed or at index 0 (30% snap) — only shows at index 1+.
     const myLocationAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
       // At 100% (full screen): hide completely
       if (sheetTop < snap100ThresholdPx) {
+        return { bottom: -100, opacity: 0 };
+      }
+      // Hide when sheet is closed or at index 0 (sheetTop > 50% of container)
+      if (sheetTop > mapContainerHeight * 0.50) {
         return { bottom: -100, opacity: 0 };
       }
       // Position 12px above the sheet's top lip
@@ -379,6 +384,10 @@
     const googleMapsAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
       if (sheetTop < snap100ThresholdPx) {
+        return { bottom: -100, opacity: 0 };
+      }
+      // Hide when sheet is closed or at index 0
+      if (sheetTop > mapContainerHeight * 0.50) {
         return { bottom: -100, opacity: 0 };
       }
       const ideal = mapContainerHeight - sheetTop + 68;
