@@ -6,12 +6,13 @@ import { Image as ExpoImage } from 'expo-image'
 import { ICONS } from '@/constants/icons'
 import { COLORS } from '@/constants/colors'
 import { useTranslation } from '@/constants/translations'
-import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow } from '@/lib/backendApi'
+import { CourtBookingRow, createServiceBookings, getVenueBookingData, listCourtAvailabilityCached, listCourtBookingsByCourtId, type PlayingCourtRow, type ServiceBookingCreateRow, type ServiceRow, addFavouriteCourt, removeFavouriteCourt, listFavouriteCourtsCached, type FavouriteCourt } from '@/lib/backendApi'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthContext } from '@/hooks/use-auth-context'
 import { useCreateBookingWithPayment, useUserCourtBookings } from '@/hooks/use-court-data'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
+import { favouritesEvents } from '@/lib/favouritesEvents'
 import { appendHistory } from '@/storage/history'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import { useThemeColors } from '@/hooks/use-theme-colors'
@@ -192,7 +193,11 @@ export default function CourtBooking() {
   const [servicesExpanded, setServicesExpanded] = useState(true)
   const [serviceQtyById, setServiceQtyById] = useState<Record<number, number>>({})
   const [serviceTouchedById, setServiceTouchedById] = useState<Record<number, boolean>>({})
-  // Playing court selector
+  // Details dropdown (court selector, schedule, payment — hidden by default)
+  const [detailsExpanded, setDetailsExpanded] = useState(false)
+  // Favourite state
+  const [isFavourite, setIsFavourite] = useState(false)
+  const [favouriteRecord, setFavouriteRecord] = useState<FavouriteCourt | null>(null)  // Playing court selector
   const [selectedPlayingCourtId, setSelectedPlayingCourtId] = useState<number | null>(null)
   const [selectedBaseName, setSelectedBaseName] = useState<string | null>(null)
   // Week navigation (0 = current week, can move forward to +2)
@@ -209,6 +214,17 @@ export default function CourtBooking() {
   // Resolve numeric userid similar to other screens via query
   const { userId } = useAppBootstrap()
   const { data: existingBookings, refetch: refetchUserBookings } = useUserCourtBookings(userId)
+
+  // Load favourite status for this court
+  useEffect(() => {
+    if (userId == null || !Number.isFinite(courtid)) return
+    void listFavouriteCourtsCached({ userid: userId }).then((rows) => {
+      const favRows = Array.isArray(rows) ? (rows as any[]).filter(r => typeof r === 'object' && 'courtid' in r) as FavouriteCourt[] : []
+      const match = favRows.find(r => r.courtid === courtid)
+      setIsFavourite(!!match)
+      setFavouriteRecord(match ?? null)
+    }).catch(() => {})
+  }, [userId, courtid])
   const bookings = Array.isArray(existingBookings) ? existingBookings : []
   const { data: allCourtBookingsRaw, refetch: refetchCourtBookingsByCourtId } = useQuery({
     queryKey: ['courtBookingsByCourtId', courtid],
@@ -934,7 +950,7 @@ export default function CourtBooking() {
                 <Text style={styles.errorText}>{error}</Text>
               ) : (
                 <>
-                  {/* Name row */}
+                  {/* Name row with favourite star + dropdown chevron */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                     {(() => {
                       let iconSrc = null
@@ -946,6 +962,49 @@ export default function CourtBooking() {
                     <Text style={[styles.courtName, { flex: 1, color: tc.textPrimary }]} numberOfLines={1}>
                       {courtInfo?.name || `Court ${courtid}`}
                     </Text>
+                    {/* Favourite star */}
+                    <TouchableOpacity
+                      style={{ padding: 8 }}
+                      onPress={async () => {
+                        if (userId == null) return
+                        const wasAdded = !isFavourite
+                        setIsFavourite(wasAdded)
+                        try {
+                          if (wasAdded) {
+                            const created = await addFavouriteCourt(userId, courtid)
+                            setFavouriteRecord(created)
+                            favouritesEvents.emitFavouriteChanged(userId)
+                          } else {
+                            if (favouriteRecord) {
+                              await removeFavouriteCourt(favouriteRecord.favouriteid)
+                              setFavouriteRecord(null)
+                              favouritesEvents.emitFavouriteChanged(userId)
+                            }
+                          }
+                        } catch {
+                          setIsFavourite(!wasAdded)
+                        }
+                      }}
+                    >
+                      <Image
+                        source={ICONS.starCal}
+                        style={{ width: 22, height: 22, tintColor: isFavourite ? COLORS.gold : tc.textSecondary }}
+                      />
+                    </TouchableOpacity>
+                    {/* Dropdown chevron */}
+                    <TouchableOpacity
+                      style={{ padding: 8 }}
+                      onPress={() => setDetailsExpanded(prev => !prev)}
+                    >
+                      <Image
+                        source={ICONS.arrowdown}
+                        style={{
+                          width: 20, height: 20,
+                          tintColor: tc.textSecondary,
+                          transform: [{ rotate: detailsExpanded ? '180deg' : '0deg' }],
+                        }}
+                      />
+                    </TouchableOpacity>
                   </View>
 
                   {/* Address */}
@@ -978,6 +1037,9 @@ export default function CourtBooking() {
           </View>
         )
       })()}
+
+      {/* Expandable booking form — hidden until user taps the chevron on the banner */}
+      {detailsExpanded && <>
 
       {/* Court selector: Step 1 pills → Step 2 schedule → Step 3 image cards */}
       {(playingCourtsLoading || playingCourts.length > 0) && (
@@ -1377,6 +1439,9 @@ export default function CourtBooking() {
           )}
         </View>
       </View>
+
+      {/* End expandable booking form */}
+      </>}
     </ScrollView>
     {/* Fixed Bottom Booking Bar inside SafeArea */}
     <SafeAreaView edges={['bottom']} style={[styles.bottomSafeArea, { backgroundColor: tc.bgBase }]}>

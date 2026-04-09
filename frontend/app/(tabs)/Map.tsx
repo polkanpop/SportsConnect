@@ -95,17 +95,17 @@
   };
 
   const VN_BOUNDS = {
-    minLat: 7.5,
-    maxLat: 24.0,
-    minLng: 101.5,
-    maxLng: 111.0,
+    minLat: 4.0,
+    maxLat: 26.0,
+    minLng: 97.0,
+    maxLng: 118.0,
   } as const;
 
   const VN_MAX_LAT_DELTA = (VN_BOUNDS.maxLat - VN_BOUNDS.minLat);
   const VN_MAX_LNG_DELTA = (VN_BOUNDS.maxLng - VN_BOUNDS.minLng);
-  // Keep max zoom-out slightly tighter than whole-country width so panning remains possible.
-  const VN_VIEW_MAX_LAT_DELTA = VN_MAX_LAT_DELTA * 0.74;
-  const VN_VIEW_MAX_LNG_DELTA = VN_MAX_LNG_DELTA * 0.74;
+  // Allow zooming out to show neighboring SE Asian countries.
+  const VN_VIEW_MAX_LAT_DELTA = VN_MAX_LAT_DELTA * 1.3;
+  const VN_VIEW_MAX_LNG_DELTA = VN_MAX_LNG_DELTA * 1.3;
   const VN_MIN_LAT_DELTA = 0.01;
   const VN_MIN_LNG_DELTA = 0.01;
   const VN_MIN_ZOOM_LEVEL = regionToZoom({ longitudeDelta: VN_VIEW_MAX_LNG_DELTA });
@@ -335,7 +335,7 @@
     const [selectedMarker, setSelectedMarker] = useState<MarkerType | null>(null); // State to store selected marker
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null); // State to store user location
     const [isFlatListVisible, setFlatListVisible] = useState(false); // To show/hide the FlatList
-    const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(-1); // Track BottomSheet index
+    const [bottomSheetIndex, setBottomSheetIndex] = useState<number>(0); // Track BottomSheet index
     const [favoriteIds, setFavoriteIds] = useState<number[]>([]); // ids of favorited courts (courtinfoid assumed)
     const [favouriteRecords, setFavouriteRecords] = useState<FavouriteCourt[]>([]); // full favourite rows
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false); // toggle viewing only favorites
@@ -362,22 +362,16 @@
 
     // My-location button: dynamically sits just above the BottomSheet top lip,
     // clamped so it never overlaps the search bar area. Hidden at 100%.
-    // When sheet is fully closed, use a fixed resting position instead of tracking.
     const myLocationAnimStyle = useAnimatedStyle(() => {
       const sheetTop = sheetAnimatedPosition.value;
       // At 100% (full screen): hide completely
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      // Sheet is closed (sheetTop near container bottom): use fixed resting position
-      if (sheetTop >= mapContainerHeight * 0.92) {
-        return { bottom: floatingButtonsBottom, opacity: 1 };
-      }
-      // Position 12px above the sheet's top lip
+      // Position 12px above the sheet's top lip, with a minimum so it stays above tab bar
       const ideal = mapContainerHeight - sheetTop + 12;
-      // Clamp so it doesn't overlap the search bar area
       const maxBottom = mapContainerHeight - searchBarSafePx;
-      return { bottom: Math.min(ideal, maxBottom), opacity: 1 };
+      return { bottom: Math.max(80, Math.min(ideal, maxBottom)), opacity: 1 };
     });
 
     // Google Maps button sits ~56px above the My-location button.
@@ -386,13 +380,9 @@
       if (sheetTop < snap100ThresholdPx) {
         return { bottom: -100, opacity: 0 };
       }
-      // Sheet is closed: use fixed resting position
-      if (sheetTop >= mapContainerHeight * 0.92) {
-        return { bottom: floatingButtonsBottom + 56, opacity: 1 };
-      }
       const ideal = mapContainerHeight - sheetTop + 68;
       const maxBottom = mapContainerHeight - searchBarSafePx + 56;
-      return { bottom: Math.min(ideal, maxBottom), opacity: 1 };
+      return { bottom: Math.max(136, Math.min(ideal, maxBottom)), opacity: 1 };
     });
 
     // Approximate zoom stages for DynamicMap region deltas.
@@ -461,7 +451,7 @@
       setSelectedTSPin(null);
       if (mapMode !== 'courts') {
         setSelectedMarker(null);
-        bottomSheetRef.current?.close();
+        bottomSheetRef.current?.snapToIndex(0);
       }
     }, [mapMode]);
 
@@ -513,8 +503,8 @@
       setFilteredMarkers((prev) => (sameMarkerList(prev, nextMarkers) ? prev : nextMarkers));
     }, []);
 
-    // Snap points for the BottomSheet
-    const snapPoints = useMemo(() => ["30%", "70%", "100%"], []);
+    // Snap points for the BottomSheet — 30px is just the drag handle (non-closeable minimum)
+    const snapPoints = useMemo(() => [30, "70%", "100%"], []);
 
     // Reset tab state when selecting a new marker
     useEffect(() => {
@@ -962,7 +952,7 @@
       fetchMarkers({ onlyIfCacheMissing: true, showLoading: false });
       refreshFavouritesOnly();
       setSelectedMarker(null);
-      bottomSheetRef.current?.close();
+      bottomSheetRef.current?.snapToIndex(0);
     }, [fetchMarkers, refreshFavouritesOnly]));
 
     const availabilityOptions = ["Available", "Unavailable"];
@@ -1005,7 +995,7 @@
       // After that, 50 ms is sufficient for subsequent taps.
       const delay = bottomSheetHasOpenedRef.current ? 50 : 300;
       setTimeout(() => {
-        bottomSheetRef.current?.snapToIndex(0);
+        bottomSheetRef.current?.snapToIndex(1); // index 1 = 70% open
         bottomSheetHasOpenedRef.current = true;
       }, delay);
     };
@@ -1046,7 +1036,7 @@
       focusMapRegion(marker.latitude, marker.longitude, MARKER_FOCUS_STAGE);
       const delay = bottomSheetHasOpenedRef.current ? 50 : 300;
       setTimeout(() => {
-        bottomSheetRef.current?.snapToIndex(0);
+        bottomSheetRef.current?.snapToIndex(1); // index 1 = 70% open
         bottomSheetHasOpenedRef.current = true;
       }, delay); // Open BottomSheet after state commits
     };
@@ -1388,7 +1378,7 @@
                         setSelectedMarker(null);
                         focusMapRegion(pin.latitude, pin.longitude, MARKER_FOCUS_STAGE);
                         setTimeout(() => {
-                          bottomSheetRef.current?.snapToIndex(0);
+                          bottomSheetRef.current?.snapToIndex(1); // index 1 = 70% open
                           bottomSheetHasOpenedRef.current = true;
                         }, bottomSheetHasOpenedRef.current ? 50 : 300);
                       }
@@ -1400,7 +1390,7 @@
                         setSelectedMarker(null);
                         focusMapRegion(pin.latitude, pin.longitude, MARKER_FOCUS_STAGE);
                         setTimeout(() => {
-                          bottomSheetRef.current?.snapToIndex(0);
+                          bottomSheetRef.current?.snapToIndex(1); // index 1 = 70% open
                           bottomSheetHasOpenedRef.current = true;
                         }, bottomSheetHasOpenedRef.current ? 50 : 300);
                       }
@@ -1808,12 +1798,13 @@
                 <BottomSheet
                   ref={bottomSheetRef}
                   snapPoints={snapPoints}
-                  index={-1}
+                  index={0}
                   bottomInset={0}
                   enableContentPanningGesture
-                  enablePanDownToClose={true}
+                  enablePanDownToClose={false}
                   onChange={handleSheetChange} // Listen to sheet index change
                   backgroundStyle={styles.bottomSheetBackground}
+                  handleIndicatorStyle={{ backgroundColor: tc.textMuted, width: 36, height: 4, borderRadius: 2 }}
                   animatedPosition={sheetAnimatedPosition}
                 >
                   {selectedEventPin ? (
