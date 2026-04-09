@@ -962,7 +962,7 @@ export default function CourtBooking() {
                     </Text>
                     {/* Favourite star */}
                     <TouchableOpacity
-                      style={{ padding: 8, backgroundColor: tc.bgElevated, borderRadius: 6 }}
+                      style={[{ padding: 6, borderRadius: 20, backgroundColor: tc.bgInput, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite
@@ -1076,11 +1076,6 @@ export default function CourtBooking() {
                       </TouchableOpacity>
                     </View>
                   </View>
-                  {scheduleDisplayAvailability && (
-                    <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-                      {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
-                    </Text>
-                  )}
                   <View style={styles.weekRow}>
                     {weekDaysDetailed.map((d) => {
                       const today = new Date()
@@ -1215,11 +1210,6 @@ export default function CourtBooking() {
               </TouchableOpacity>
             </View>
           </View>
-          {scheduleDisplayAvailability && (
-            <Text style={[styles.availabilityMeta, { color: tc.textMuted }]}>
-              {t('MAP_OPENING_TIME')} {formatHm(scheduleDisplayAvailability.start_time)} - {formatHm(scheduleDisplayAvailability.end_time)}
-            </Text>
-          )}
           <View style={styles.weekRow}>
             {weekDaysDetailed.map((d) => {
               const today = new Date()
@@ -1489,14 +1479,14 @@ const styles = StyleSheet.create({
   dayDate: { fontSize: 14, fontWeight: '700', color: '#111', marginTop: 4 },
   subHeading: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   smallText: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 4 },
-  slotRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  slotBtn: { width: SLOT_BTN_W, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, marginRight: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'center' },
+  slotRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  slotBtn: { width: SLOT_BTN_W, height: 38, backgroundColor: '#1e1e1e', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   slotBtnActive: { backgroundColor: COLORS.brandOrangeDeep },
   slotBtnDisabled: { opacity: 0.45 },
   slotText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   slotTextDisabled: { color: '#6B7280' },
-  paymentRow: { flexDirection: 'row', marginTop: 20 },
-  payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', marginRight: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
+  paymentRow: { flexDirection: 'row', marginTop: 20, gap: 10 },
+  payMethodBtn: { flex: 1, paddingVertical: 14, paddingHorizontal: 12, backgroundColor: '#eaeaea', borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
   servicesHeaderText: { fontSize: 14, fontWeight: '700', color: '#222' },
   servicesWrapper: { marginTop: 10 },
