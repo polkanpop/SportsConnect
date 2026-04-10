@@ -8,7 +8,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors'
 const HAS_LOTTIE_NATIVE = !!(UIManager as any)?.getViewManagerConfig?.('LottieAnimationView')
 const EVENT_CREATE_ANIM = require('../../assets/animation/EventCreateSuccessful.json')
 const TRAINING_CREATE_ANIM = require('../../assets/animation/TrainingSessionCreateSuccessful.json')
-const CREATE_ANIM_SIZE = 220
+const CREATE_ANIM_SIZE = 180
 
 const CreationInfo = () => {
   const router = useRouter()
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
     padding: 20,
-    paddingBottom: 130,
+    paddingBottom: 70,
   },
   icon: {
     width: 120,
@@ -106,6 +106,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   anim: {
     width: '100%',

@@ -23,6 +23,7 @@
     type MapBounds,
     type MapEventPin,
     type MapTSPin,
+    listReviews,
   } from '@/lib/backendApi';
   import { favouritesEvents } from '@/lib/favouritesEvents';
   import { getCache, setCache } from '@/lib/cache';
@@ -554,6 +555,14 @@
       queryFn: () => listCourtBookingsByCourtId(selectedMarker!.courtid),
       enabled: !!selectedMarker?.courtid,
       staleTime: 30_000,
+    })
+
+    // Fetch reviews for selected court (loaded when Reviews tab is active)
+    const { data: courtReviews = [], isLoading: reviewsLoading } = useQuery<any[]>({
+      queryKey: ['reviews', selectedMarker?.courtid ?? null],
+      queryFn: () => listReviews({ targettype: 'court', targetid: selectedMarker!.courtid }),
+      enabled: !!selectedMarker?.courtid && activeSheetTab === 'Reviews',
+      staleTime: 60_000,
     })
 
     // Lazy-load playing courts and their info images using TanStack Query (only fires when a court pin is tapped)
@@ -2280,7 +2289,7 @@
 
                               <View style={styles.transportRowLast}>
                                 <View style={styles.transportLeft}>
-                                  <Image source={ICONS.walk} style={styles.transportIcon} />
+                                  <Image source={ICONS.walk} style={[styles.transportIcon, { tintColor: tc.textPrimary }]} />
                                   <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                                 </View>
                                 <Text style={styles.transportValue}>{approxWalkLabel}</Text>
@@ -2310,7 +2319,7 @@
 
                               <View style={styles.transportRowLast}>
                                 <View style={styles.transportLeft}>
-                                  <Image source={ICONS.walk} style={styles.transportIcon} />
+                                  <Image source={ICONS.walk} style={[styles.transportIcon, { tintColor: tc.textPrimary }]} />
                                   <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                                 </View>
                                 <Text style={styles.transportValue}>{approxWalkSecs != null ? approxWalkLabel : t('MAP_LABEL_UNAVAILABLE')}</Text>
@@ -2346,7 +2355,7 @@
 
                             <View style={styles.transportRowLast}>
                               <View style={styles.transportLeft}>
-                                <Image source={ICONS.walk} style={styles.transportIcon} />
+                                <Image source={ICONS.walk} style={[styles.transportIcon, { tintColor: tc.textPrimary }]} />
                                 <Text style={styles.transportLabel}>{t('MAP_TRANSPORT_WALK_TIME')}</Text>
                               </View>
                               <Text style={styles.transportValue}>{walkLabel}</Text>
@@ -2391,8 +2400,51 @@
                       ))}
 
                       {activeSheetTab === 'Reviews' && (
-                        <View style={styles.placeholderSection}>
-                          <Text style={styles.placeholderText}>{t('MAP_REVIEWS_PLACEHOLDER')}</Text>
+                        <View style={styles.reviewsContainer}>
+                          {reviewsLoading ? (
+                            <View style={styles.placeholderSection}>
+                              <Text style={styles.placeholderText}>{t('COMMON_LABEL_LOADING')}</Text>
+                            </View>
+                          ) : courtReviews.length === 0 ? (
+                            <View style={styles.placeholderSection}>
+                              <Text style={styles.placeholderText}>{t('MAP_REVIEWS_PLACEHOLDER')}</Text>
+                            </View>
+                          ) : (
+                            courtReviews.map((review: any) => (
+                              <View key={review.reviewid} style={[styles.reviewCard, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
+                                <View style={styles.reviewHeader}>
+                                  <View style={styles.reviewStars}>
+                                    {[1,2,3,4,5].map(s => (
+                                      <Text key={s} style={[styles.reviewStar, { color: s <= review.rating ? '#FBBF24' : tc.textSecondary }]}>★</Text>
+                                    ))}
+                                  </View>
+                                  <Text style={[styles.reviewDate, { color: tc.textSecondary }]}>
+                                    {review.updated_at ? new Date(review.updated_at).toLocaleDateString('vi-VN') : ''}
+                                  </Text>
+                                </View>
+                                {!!review.comment && (
+                                  <Text style={[styles.reviewComment, { color: tc.textPrimary }]} numberOfLines={4}>{review.comment}</Text>
+                                )}
+                              </View>
+                            ))
+                          )}
+                          <TouchableOpacity
+                            style={[styles.writeReviewBtn, { backgroundColor: tc.brand }]}
+                            onPress={() => {
+                              if (!selectedMarker) return
+                              router.push({
+                                pathname: '/event/reviewForm',
+                                params: {
+                                  targettype: 'court',
+                                  targetid: String(selectedMarker.courtid),
+                                  title: encodeURIComponent(selectedMarker.name ?? ''),
+                                  venueName: encodeURIComponent(selectedMarker.name ?? ''),
+                                },
+                              } as any)
+                            }}
+                          >
+                            <Text style={styles.writeReviewBtnText}>{t('MAP_BTN_WRITE_REVIEW')}</Text>
+                          </TouchableOpacity>
                         </View>
                       )}
                     </BottomSheetScrollView>
@@ -3231,4 +3283,13 @@
     dayDate: { fontSize: 14, fontWeight: '700', color: tc.textPrimary, marginTop: 4 },
     sectionHeader: { fontSize: 15, fontWeight: '700', marginTop: 16, marginBottom: 8, color: tc.textPrimary },
     placeholderSection: { padding: 20, backgroundColor: tc.bgSurface, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 10 },
+    reviewsContainer: { paddingHorizontal: 4, paddingBottom: 8 },
+    reviewCard: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 12 },
+    reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+    reviewStars: { flexDirection: 'row', gap: 2 },
+    reviewStar: { fontSize: 17 },
+    reviewDate: { fontSize: 12 },
+    reviewComment: { fontSize: 14, lineHeight: 20 },
+    writeReviewBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 8, marginBottom: 4 },
+    writeReviewBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   }); }

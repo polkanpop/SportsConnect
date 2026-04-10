@@ -207,7 +207,9 @@ export default function ReviewForm() {
       <Modal visible={successVisible} transparent animationType="fade" onRequestClose={handleGoBack}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: tc.bgElevated }]}>
-            <Text style={styles.successIcon}>✓</Text>
+            <View style={styles.successCircle}>
+              <Text style={styles.successCheck}>✓</Text>
+            </View>
             <Text style={[styles.modalTitle, { color: tc.textPrimary }]}>{t('REVIEW_MODAL_SUCCESS_TITLE')}</Text>
             <Text style={[styles.modalBody, { color: tc.textSecondary }]}>{t('REVIEW_MODAL_SUCCESS_BODY')}</Text>
             <TouchableOpacity style={[styles.modalBtn, styles.modalConfirmBtn, { width: '100%' }]} onPress={handleGoBack}>
@@ -357,10 +359,26 @@ const styles = StyleSheet.create({
     maxWidth: 380,
     alignItems: 'center',
   },
-  successIcon: {
-    fontSize: 48,
-    color: COLORS.success ?? '#28A745',
-    marginBottom: 8,
+  successCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  successCheck: {
+    fontSize: 38,
+    color: '#fff',
+    fontWeight: '900',
+    lineHeight: 44,
+    marginTop: 2,
   },
   modalTitle: {
     fontSize: 18,

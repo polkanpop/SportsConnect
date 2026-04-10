@@ -433,6 +433,23 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       const nextBase = firstFull ? String((firstFull as any).base_name || (firstFull as any).name || '').trim() : ''
       setSelectedSubBaseName((prev) => (prev && prev.trim() ? prev : nextBase || null))
 
+      // ---- Venue court base name (mirrors subCourtOptions[0] logic) ----
+      // Set directly so buildMainSnapshotFromRaw below gets the correct value and
+      // the baseline matches currentMainSnapshot immediately — no re-stamp race.
+      const seenBase = new Set<string>()
+      const subCourtOpts: string[] = []
+      for (const pc of pcsArr) {
+        const base = String((pc as any).base_name || (pc as any).name || '').trim()
+        if (!base) continue
+        const key = base.toLowerCase()
+        if (seenBase.has(key)) continue
+        seenBase.add(key)
+        subCourtOpts.push(base)
+      }
+      const venueBase = subCourtOpts[0] || ''
+      setSelectedVenueCourtBaseName(venueBase || null)
+      setVenueCourtBaseEditName(venueBase)
+
       // ---- Availability ----
       const availArr = Array.isArray(availSlots) ? (availSlots as CourtAvailabilityRow[]) : []
       setAvailability(availArr)
@@ -532,6 +549,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       const baseline = buildMainSnapshotFromRaw({
         name, address, venue, autoApprove: Boolean((info as any)?.auto_approve), images,
         serviceDrafts: drafts,
+        venueBaseName: venueBase,
       })
       setMainBaselineSnapshot(baseline)
     } catch {
