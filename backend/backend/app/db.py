@@ -192,24 +192,36 @@ async def ensure_insert_review_bypass_rpc() -> None:
 
 
 async def insert_review_pg(userid: int, targettype: str, targetid: int, rating: int, comment: str) -> int:
-    """Insert a review via asyncpg, bypassing the PostgREST enum-column bug.
+    """Insert a review via asyncpg using simple query protocol (no bind params).
 
-    asyncpg uses the extended query protocol which infers the OID for $2 from the
-    function signature, causing PostgreSQL to receive an empty string for the
-    reviewtargettype enum parameter. Fix: embed the targettype as a quoted SQL
-    literal so no parameter type inference occurs for that column.
-    The value is sanitised to one of the three known enum values before embedding.
+    asyncpg's extended query protocol infers PostgreSQL OIDs for each $N, which
+    causes it to send an empty value for enum-typed parameters regardless of the
+    Python string provided.  Bypassing that entirely by embedding ALL values as
+    SQL literals in the query string — asyncpg then uses the simple query
+    protocol (no Bind/Parse round-trip, no type inference) so PostgreSQL
+    receives the literal text and performs the enum cast itself.
+
+    Security: integers are cast with int(); targettype is allowlisted; comment
+    single-quotes are doubled (standard PostgreSQL literal escaping).
     """
     pool = _require_pg_pool()
     # Allowlist — only these three values exist in the reviewtargettype enum.
     allowed = {"court", "event", "trainingsession"}
     safe_tt = targettype if targettype in allowed else "court"
-    # Embed safe_tt as a literal inside the SQL — no type-inference for enum params.
-    sql = f"SELECT public.insert_review_bypass($1, '{safe_tt}'::text, $2, $3, $4)"
+    # Escape comment single-quotes (PostgreSQL dollar-quoting alternative not
+    # needed here because the allowlist + int() guard every other value).
+    safe_comment = str(comment).replace("'", "''")
+    # No $N parameters — simple query protocol, zero type inference.
+    sql = (
+        f"INSERT INTO public.reviews (userid, targettype, targetid, rating, comment) "
+        f"VALUES ({int(userid)}, '{safe_tt}'::public.reviewtargettype, "
+        f"{int(targetid)}, {int(rating)}, '{safe_comment}') "
+        f"RETURNING reviewid"
+    )
     async with pool.acquire() as conn:
-        new_id = await conn.fetchval(sql, userid, targetid, rating, comment)
+        new_id = await conn.fetchval(sql)
         if new_id is None:
-            raise RuntimeError("insert_review_pg: function returned null")
+            raise RuntimeError("insert_review_pg: INSERT returned null reviewid")
         return int(new_id)
 
 
