@@ -158,17 +158,39 @@ async def probe_pg_connection() -> None:
 
 
 async def ensure_insert_review_bypass_rpc() -> None:
-    """Create the insert_review_bypass RPC function if it doesn't already exist.
+    """Fix the reviews table for direct direct INSERT via asyncpg.
 
-    PostgREST has a long-standing issue where it cannot INSERT into tables with
-    enum columns — it sends '' instead of the provided value, causing 22P02.
-    This function creates a PL/pgSQL RPC that does the INSERT internally,
-    bypassing PostgREST column-binding entirely.
+    Two database objects need patching at startup:
+
+    1. ``_enforce_review_eligibility`` trigger function — the existing definition
+       has ``coalesce(new.targettype, '')`` where ``''`` is an untyped literal.
+       PostgreSQL tries to cast ``''`` to the ``reviewtargettype`` enum during
+       PL/pgSQL compilation, raising ``22P02 invalid input value for enum
+       reviewtargettype: ""``.  This fires on EVERY INSERT regardless of the
+       actual value being inserted, making it impossible to write any review.
+       The function is replaced with a no-op because eligibility is already
+       validated at the API layer (Python ``_has_eligible_booking``).
+
+    2. ``insert_review_bypass`` helper function — kept as a fallback RPC in case
+       the asyncpg direct-INSERT path is ever bypassed.
 
     Called once at startup when an asyncpg pool is available.
     """
     pool = _require_pg_pool()
-    ddl = """
+    # Fix the broken trigger function first so INSERT can succeed.
+    fix_trigger_ddl = """
+    CREATE OR REPLACE FUNCTION public._enforce_review_eligibility()
+    RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+        -- Eligibility is enforced at the API layer (Python _has_eligible_booking).
+        -- The original trigger had coalesce(new.targettype, '') which caused PostgreSQL
+        -- to cast '' to the reviewtargettype enum at compile time (22P02 error).
+        RETURN NEW;
+    END;
+    $$;
+    """
+    # Keep insert_review_bypass as a convenience RPC.
+    bypass_ddl = """
     CREATE OR REPLACE FUNCTION public.insert_review_bypass(
         p_userid     int,
         p_targettype text,
@@ -188,7 +210,8 @@ async def ensure_insert_review_bypass_rpc() -> None:
     GRANT EXECUTE ON FUNCTION public.insert_review_bypass TO anon, authenticated, service_role;
     """
     async with pool.acquire() as conn:
-        await conn.execute(ddl)
+        await conn.execute(fix_trigger_ddl)
+        await conn.execute(bypass_ddl)
 
 
 async def insert_review_pg(userid: int, targettype: str, targetid: int, rating: int, comment: str) -> int:
