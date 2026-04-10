@@ -1620,7 +1620,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             await Promise.allSettled(ops)
           }
         }
-        await loadAvailability(courtid)
+        // Do NOT call loadAvailability here: the schedule effect re-runs from
+        // freshly-fetched availability and would overwrite scheduleDays/startTime/endTime
+        // AFTER the baseline is stamped, making the form look dirty again.
+        // The availability cache is invalidated below; a pull-to-refresh fetches fresh data.
       }
 
       // Invalidate caches so loadMyCourts and loadCourtData fetch fresh data

@@ -192,23 +192,22 @@ async def ensure_insert_review_bypass_rpc() -> None:
 
 
 async def insert_review_pg(userid: int, targettype: str, targetid: int, rating: int, comment: str) -> int:
-    """Insert a review row directly via asyncpg, bypassing PostgREST enum-cast bug.
+    """Insert a review via asyncpg, using the insert_review_bypass PL/pgSQL function.
 
-    Returns the new reviewid.
+    Calls the function with plain text/int parameters — asyncpg handles these natively,
+    avoiding the extended-protocol enum-type inference bug where asyncpg mis-encodes
+    Python strings as the custom enum OID and PostgreSQL receives an empty value.
+    The PL/pgSQL function casts text to reviewtargettype internally.
     """
     pool = _require_pg_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO public.reviews (userid, targettype, targetid, rating, comment)
-            VALUES ($1, $2::public.reviewtargettype, $3, $4, $5)
-            RETURNING reviewid
-            """,
+        new_id = await conn.fetchval(
+            "SELECT public.insert_review_bypass($1, $2, $3, $4, $5)",
             userid, targettype, targetid, rating, comment,
         )
-        if row is None:
-            raise RuntimeError("insert_review_pg: INSERT returned no row")
-        return int(row["reviewid"])
+        if new_id is None:
+            raise RuntimeError("insert_review_pg: function returned null")
+        return int(new_id)
 
 
 async def update_review_pg(reviewid: int, rating: int, comment: str) -> None:
@@ -254,7 +253,7 @@ async def fetch_venue_booking_bundle_pg(courtid: int, start_date: str, end_date:
                     'price', pc.price,
                     'allow_half_booking', pc.allow_half_booking,
                     'surface', pc.surface,
-                    'images', coalesce(pci.images, '[]'::jsonb)
+                    'images', coalesce(to_jsonb(pci.images), '[]'::jsonb)
                 )
                 order by pc.playingcourtid
             ),
