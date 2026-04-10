@@ -196,9 +196,9 @@ async def create_review(
                     rid = result[0]["reviewid"] if isinstance(result, list) and result else None
 
             row = {"reviewid": rid, "created": True}
-    except RuntimeError as e:
-        logger.error("review upsert failed userid=%s targettype=%s targetid=%s: %s", userid, targettype, body.targetid, e)
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("review upsert failed userid=%s targettype=%s targetid=%s: %s: %r", userid, targettype, body.targetid, type(e).__name__, e)
+        raise HTTPException(status_code=400, detail=f"{type(e).__name__}: {e}")
 
     background_tasks.add_task(invalidate_namespace, "reviews")
     return row
