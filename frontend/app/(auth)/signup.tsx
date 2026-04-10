@@ -480,8 +480,8 @@ const styles = StyleSheet.create({
     borderColor: COLOR.brand,
   },
   checkboxTick: {
-    width: 12,
-    height: 12,
+    width: 20,
+    height: 20,
     tintColor: COLOR.white,
   },
   textDark: {

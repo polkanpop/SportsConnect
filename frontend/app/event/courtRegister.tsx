@@ -129,6 +129,7 @@ export default function CourtRegisterPage() {
   const { t } = useTranslation()
   const tc = useThemeColors()
   const coverFrameDynamic = { backgroundColor: tc.bgElevated, borderColor: tc.border }
+  const coverFrameModalDynamic = { backgroundColor: tc.bgSurface, borderColor: tc.border }
 
   useEffect(() => {
     return () => {
@@ -1287,8 +1288,8 @@ export default function CourtRegisterPage() {
                   <Text style={styles.courtDetailLine}>{`${t('COURT_REGISTER_SURFACE_PREFIX')}${pc.surface || 'concrete'}`}</Text>
                   {pc.allowHalfBooking ? (
                     <>
-                      <Text style={styles.courtDetailLine}>{`Half Court 1: ${pc.half1Name || 'Half Court 1'} ? ${formatVnd(pc.half1Price)}`}</Text>
-                      <Text style={styles.courtDetailLine}>{`Half Court 2: ${pc.half2Name || 'Half Court 2'} ? ${formatVnd(pc.half2Price)}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 1: ${pc.half1Name || 'Half Court 1'} · ${formatVnd(pc.half1Price)}`}</Text>
+                      <Text style={styles.courtDetailLine}>{`Half Court 2: ${pc.half2Name || 'Half Court 2'} · ${formatVnd(pc.half2Price)}`}</Text>
                     </>
                   ) : null}
                   <Text style={[styles.courtDetailLabel, { color: tc.textSecondary }]}>Description:</Text>
@@ -1661,7 +1662,7 @@ export default function CourtRegisterPage() {
               <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                 {pcImages.map((uri) => (
-                  <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
+                  <View key={uri} style={[styles.coverFrame, coverFrameModalDynamic]}>
                     <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                       <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
@@ -1671,7 +1672,7 @@ export default function CourtRegisterPage() {
                   </View>
                 ))}
                 {pcImages.length < 6 && (
-                  <View style={[styles.coverFrame, coverFrameDynamic]}>
+                  <View style={[styles.coverFrame, coverFrameModalDynamic]}>
                     <TouchableOpacity
                       onPress={() => pickPlayingCourtImage('full')}
                       disabled={imageUploading}
@@ -1750,7 +1751,7 @@ export default function CourtRegisterPage() {
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf1Images.map((uri) => (
-                          <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
+                          <View key={uri} style={[styles.coverFrame, coverFrameModalDynamic]}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
@@ -1760,7 +1761,7 @@ export default function CourtRegisterPage() {
                           </View>
                         ))}
                         {pcHalf1Images.length < 6 && (
-                          <View style={[styles.coverFrame, coverFrameDynamic]}>
+                          <View style={[styles.coverFrame, coverFrameModalDynamic]}>
                             <TouchableOpacity
                               onPress={() => pickPlayingCourtImage('half1')}
                               disabled={imageUploading}
@@ -1799,7 +1800,7 @@ export default function CourtRegisterPage() {
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesRow}>
                         {pcHalf2Images.map((uri) => (
-                          <View key={uri} style={[styles.coverFrame, coverFrameDynamic]}>
+                          <View key={uri} style={[styles.coverFrame, coverFrameModalDynamic]}>
                             <TouchableOpacity style={styles.coverPressable} onPress={() => setZoomImageUri(uri)} activeOpacity={0.9}>
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
@@ -1809,7 +1810,7 @@ export default function CourtRegisterPage() {
                           </View>
                         ))}
                         {pcHalf2Images.length < 6 && (
-                          <View style={[styles.coverFrame, coverFrameDynamic]}>
+                          <View style={[styles.coverFrame, coverFrameModalDynamic]}>
                             <TouchableOpacity
                               onPress={() => pickPlayingCourtImage('half2')}
                               disabled={imageUploading}
@@ -1873,7 +1874,7 @@ export default function CourtRegisterPage() {
         onPress={() => setAgreeTruth(v => !v)}
       >
         <View style={[styles.checkboxBox, agreeTruth && styles.checkboxBoxChecked]}>
-          {agreeTruth && <Text style={styles.checkboxTick}>?</Text>}
+          {agreeTruth && <ExpoImage source={ICONS.checkSmall} style={styles.checkboxTick} contentFit="contain" />}
         </View>
         <Text style={[styles.checkboxLabel, { color: tc.textPrimary }]}>
           {t('COURT_REGISTER_AGREE_TRUTH1')}<Text style={styles.truthBold}>{t('COURT_REGISTER_AGREE_TRUTH_BOLD')}</Text>.
@@ -1884,7 +1885,7 @@ export default function CourtRegisterPage() {
         <View style={styles.warningBox}>
           <Text style={styles.warningTitle}>{t('COURT_REGISTER_WARNINGS_TITLE')}</Text>
           {warnings.map((w, i) => (
-            <Text key={`${w}-${i}`} style={styles.warningText}>? {w}</Text>
+            <Text key={`${w}-${i}`} style={styles.warningText}>{w}</Text>
           ))}
         </View>
       )}
@@ -2289,7 +2290,7 @@ const styles = StyleSheet.create({
   },
   checkboxBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.neutral550, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.neutral0 },
   checkboxBoxChecked: { backgroundColor: COLORS.limeGreen, borderColor: COLORS.limeGreen },
-  checkboxTick: { color: COLORS.neutral0, fontWeight: '900', fontSize: 14, marginTop: -1 },
+  checkboxTick: { width: 20, height: 20, tintColor: COLORS.neutral0 },
   checkboxLabel: { marginLeft: 10, color: COLORS.neutral925, fontWeight: '400', flex: 1, lineHeight: 18, marginTop: 1 },
   truthBold: { fontWeight: '800' },
 
