@@ -71,6 +71,11 @@ async def init_pg_pool() -> None:
     if not settings.SUPABASE_DB_POOLER_URL:
         return
     _validate_supabase_pooler_dsn(settings.SUPABASE_DB_POOLER_URL)
+    # statement_cache_size=0 is required for PgBouncer transaction mode (port 6543).
+    # It is safe (but slightly slower for repeated queries) with session mode (port 5432).
+    from urllib.parse import urlparse as _urlparse
+    _parsed_dsn = _urlparse(settings.SUPABASE_DB_POOLER_URL)
+    _is_transaction_mode = _parsed_dsn.port == 6543
     _pg_pool = await asyncpg.create_pool(
         dsn=settings.SUPABASE_DB_POOLER_URL,
         min_size=max(1, settings.SUPABASE_DB_POOL_MIN_SIZE),
@@ -78,6 +83,7 @@ async def init_pg_pool() -> None:
         timeout=settings.SUPABASE_DB_COMMAND_TIMEOUT_SECONDS,
         command_timeout=settings.SUPABASE_DB_COMMAND_TIMEOUT_SECONDS,
         max_inactive_connection_lifetime=300.0,
+        statement_cache_size=0 if _is_transaction_mode else 100,
         init=_init_pg_connection,
         server_settings={
             "application_name": "sportconnect-fastapi",
