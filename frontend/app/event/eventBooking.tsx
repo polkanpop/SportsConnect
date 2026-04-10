@@ -268,6 +268,9 @@ export default function EventBooking() {
         }
       }
       
+      // Invalidate map pins so event markers update participant count
+      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
+
       const invoicePath = String((booking as any)?.status ?? 'pending').toLowerCase().includes('pend')
         ? '/event/invoicePending'
         : '/event/invoice'

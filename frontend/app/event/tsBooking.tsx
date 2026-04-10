@@ -267,6 +267,9 @@ export default function TrainingSessionBooking() {
         }
       }
       
+      // Invalidate map pins so training session markers update participant count
+      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
+
       const invoicePath = String((booking as any)?.status ?? 'pending').toLowerCase().includes('pend')
         ? '/event/invoicePending'
         : '/event/invoice'

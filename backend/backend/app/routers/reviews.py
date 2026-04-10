@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
 from fastapi_cache.decorator import cache
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
@@ -44,11 +44,19 @@ def get_review(reviewid: int):
 # ── Pydantic request models ───────────────────────────────────────────────────
 
 class ReviewIn(BaseModel):
-    targettype: str = Field(..., description="'court', 'event', or 'trainingsession'")
+    targettype: Literal['court', 'event', 'trainingsession'] = Field(..., description="'court', 'event', or 'trainingsession'")
     targetid: int
     rating: int = Field(..., ge=1, le=5)
     comment: str
     userid: Optional[int] = None  # falls back to auth subject
+
+    @field_validator('targettype', mode='before')
+    @classmethod
+    def normalize_targettype(cls, v: str) -> str:
+        normalized = str(v or '').lower().strip()
+        if normalized not in ('court', 'event', 'trainingsession'):
+            return 'court'  # default to court review
+        return normalized
 
 
 class ReactIn(BaseModel):

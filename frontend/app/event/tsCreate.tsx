@@ -526,6 +526,8 @@ export default function TsCreate() {
         qc.invalidateQueries({ queryKey: queryKeys.activityHostingSessions(userId) })
       }
       qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
+      // Invalidate map pins so new training session appears on map
+      qc.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
       // Clear draft and reset form state so draft-save debounce writes empty state on any subsequent tick.
       try { AsyncStorage.removeItem('@tsCreate:draft') } catch {}
       setTitle(''); setParticipantsCap(''); setDescription(''); setRemoteImageUrls([])

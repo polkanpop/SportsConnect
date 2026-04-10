@@ -386,6 +386,8 @@ export default function TrainingSessionPanel({ coachId }: Props) {
     //
     // Details-page queries need invalidation so they reflect status changes immediately.
     queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
+    // Invalidate map pins so training session markers reflect approval/rejection changes
+    queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
   }, [queryClient])
 
   const [confirmCancelVisible, setConfirmCancelVisible] = useState(false)

@@ -409,6 +409,8 @@ export default function EventPanel({ organizerId }: Props) {
 		// Details-page queries (booking/event info cards) do need invalidation so they reflect the new
 		// approval status immediately.
 		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'details' })
+		// Invalidate map pins so event markers reflect approval/rejection changes
+		queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
 	}, [queryClient]);
 
 	const uploadOneToCloudinary = useCallback(

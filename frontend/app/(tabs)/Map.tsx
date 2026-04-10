@@ -55,7 +55,7 @@
   
   import { useCourtAvailability, usePlayingCourts, usePlayingCourtImages } from '@/hooks/use-court-data';
   import { useDistanceMatrixPrefetch } from '@/hooks/use-distance-matrix';
-  import { useQuery } from '@tanstack/react-query';
+  import { useQuery, keepPreviousData } from '@tanstack/react-query';
   import { queryKeys } from '@/hooks/query-keys';
   import DynamicMap, { type DynamicMapMarker } from '@/components/maps/DynamicMap';
   import { Image as ExpoImage } from 'expo-image'
@@ -411,10 +411,10 @@
     // Bounds key: rounded bbox string used as stable React Query key
     const boundsKey = useMemo(() => {
       const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
-      const minLat = Math.round((latitude - latitudeDelta / 2) * 100) / 100;
-      const maxLat = Math.round((latitude + latitudeDelta / 2) * 100) / 100;
-      const minLng = Math.round((longitude - longitudeDelta / 2) * 100) / 100;
-      const maxLng = Math.round((longitude + longitudeDelta / 2) * 100) / 100;
+      const minLat = Math.round((latitude - latitudeDelta / 2) * 10) / 10;
+      const maxLat = Math.round((latitude + latitudeDelta / 2) * 10) / 10;
+      const minLng = Math.round((longitude - longitudeDelta / 2) * 10) / 10;
+      const maxLng = Math.round((longitude + longitudeDelta / 2) * 10) / 10;
       return `${minLat},${maxLat},${minLng},${maxLng}`;
     }, [mapRegion]);
 
@@ -435,6 +435,7 @@
       enabled: mapMode === 'events',
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
+      placeholderData: keepPreviousData,
     });
 
     // TS pins for map (only fetched when in training mode)
@@ -444,6 +445,7 @@
       enabled: mapMode === 'training',
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
+      placeholderData: keepPreviousData,
     });
 
     // Clear per-mode selections when switching modes
@@ -1311,6 +1313,39 @@
 
     const styles = useMemo(() => createThemedStyles(tc), [tc]);
 
+    // Memoize marker arrays to prevent DynamicMap re-rendering on every parent render
+    const mapMarkers = useMemo((): DynamicMapMarker[] => {
+      if (mapMode === 'courts') {
+        return filteredMarkers.map((marker): DynamicMapMarker => ({
+          id: marker.id,
+          coordinate: { latitude: marker.latitude, longitude: marker.longitude },
+          title: marker.name,
+          description: marker.address,
+          pinColor: selectedMarker?.id === marker.id
+            ? COLORS.green
+            : marker.isFavorite
+              ? COLORS.gold
+              : COLORS.brandOrangeDeep,
+        }));
+      }
+      if (mapMode === 'events') {
+        return eventPins.map((pin): DynamicMapMarker => ({
+          id: `event-${pin.eventid}`,
+          coordinate: { latitude: pin.latitude, longitude: pin.longitude },
+          title: pin.title ?? '',
+          description: pin.address ?? '',
+          imageKey: 'event',
+        }));
+      }
+      return tsPins.map((pin): DynamicMapMarker => ({
+        id: `ts-${pin.sessionid}`,
+        coordinate: { latitude: pin.latitude, longitude: pin.longitude },
+        title: pin.title ?? '',
+        description: pin.address ?? '',
+        imageKey: 'training',
+      }));
+    }, [mapMode, filteredMarkers, selectedMarker?.id, eventPins, tsPins]);
+
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
@@ -1337,35 +1372,7 @@
                   rotateEnabled={false}
                   pitchEnabled={false}
                   onRegionChangeComplete={handleRegionChangeComplete}
-                  markers={
-                    mapMode === 'courts'
-                      ? filteredMarkers.map((marker): DynamicMapMarker => ({
-                          id: marker.id,
-                          coordinate: { latitude: marker.latitude, longitude: marker.longitude },
-                          title: marker.name,
-                          description: marker.address,
-                          pinColor: selectedMarker?.id === marker.id
-                            ? COLORS.green
-                            : marker.isFavorite
-                              ? COLORS.gold
-                              : COLORS.brandOrangeDeep,
-                        }))
-                      : mapMode === 'events'
-                      ? eventPins.map((pin): DynamicMapMarker => ({
-                          id: `event-${pin.eventid}`,
-                          coordinate: { latitude: pin.latitude, longitude: pin.longitude },
-                          title: pin.title ?? '',
-                          description: pin.address ?? '',
-                          imageKey: 'event',
-                        }))
-                      : tsPins.map((pin): DynamicMapMarker => ({
-                          id: `ts-${pin.sessionid}`,
-                          coordinate: { latitude: pin.latitude, longitude: pin.longitude },
-                          title: pin.title ?? '',
-                          description: pin.address ?? '',
-                          imageKey: 'training',
-                        }))
-                  }
+                  markers={mapMarkers}
                   onMarkerPress={(markerId) => {
                     if (mapMode === 'courts') {
                       const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
@@ -1811,71 +1818,89 @@
                   {selectedEventPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
                       <View style={styles.sheetHeaderCard}>
-                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? t('MAP_CHIP_EVENTS')}</Text>
-                        <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedEventPin.address ?? ''}</Text>
-                        {selectedEventPin.court_name ? (
-                          <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedEventPin.court_name}</Text>
-                        ) : null}
-                        <View style={[styles.actionRow, { marginTop: 10, flexWrap: 'wrap', gap: 6 }]}>
+                        <View style={styles.titleRow}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? t('MAP_CHIP_EVENTS')}</Text>
+                            <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedEventPin.address ?? ''}</Text>
+                            {selectedEventPin.court_name ? (
+                              <Text style={[styles.sheetCoverAddress, { marginTop: 2, fontWeight: '600' }]}>{selectedEventPin.court_name}</Text>
+                            ) : null}
+                          </View>
+                          <TouchableOpacity
+                            style={styles.bookingButton}
+                            onPress={() => router.push({ pathname: '/event/eventBooking', params: { eventid: String(selectedEventPin.eventid) } })}
+                          >
+                            <Image source={ICONS.booking} style={styles.bookingIcon} />
+                            <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <View style={[styles.actionRow, { marginTop: 12, flexWrap: 'wrap', gap: 8 }]}>
                           {selectedEventPin.start_timestamp ? (
-                            <Text style={styles.filterChipText}>
-                              {new Date(selectedEventPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                            </Text>
+                            <View style={styles.pinMetaChip}>
+                              <Image source={ICONS.starCal} style={styles.pinMetaIcon} />
+                              <Text style={styles.pinMetaText}>
+                                {new Date(selectedEventPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                              </Text>
+                            </View>
                           ) : null}
                           {selectedEventPin.entry_fee != null ? (
-                            <Text style={styles.filterChipText}>
-                              {selectedEventPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
-                            </Text>
+                            <View style={styles.pinMetaChip}>
+                              <Text style={[styles.pinMetaText, { fontWeight: '700' }]}>
+                                {selectedEventPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedEventPin.entry_fee.toLocaleString()} ₫`}
+                              </Text>
+                            </View>
                           ) : null}
                           {selectedEventPin.participants_cap != null ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Image source={ICONS.participants} style={{ width: 14, height: 14, tintColor: '#888', marginRight: 4 }} />
-                              <Text style={styles.filterChipText}>{selectedEventPin.participants_cap}</Text>
+                            <View style={styles.pinMetaChip}>
+                              <Image source={ICONS.participants} style={styles.pinMetaIcon} />
+                              <Text style={styles.pinMetaText}>{selectedEventPin.participants_cap}</Text>
                             </View>
                           ) : null}
                         </View>
-                        <TouchableOpacity
-                          style={styles.bookingButton}
-                          onPress={() => router.push({ pathname: '/event/eventBooking', params: { eventid: String(selectedEventPin.eventid) } })}
-                        >
-                          <Image source={ICONS.booking} style={styles.bookingIcon} />
-                          <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
-                        </TouchableOpacity>
                       </View>
                     </BottomSheetScrollView>
                   ) : selectedTSPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
                       <View style={styles.sheetHeaderCard}>
-                        <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? t('MAP_CHIP_TRAINING')}</Text>
-                        <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedTSPin.address ?? ''}</Text>
-                        {selectedTSPin.court_name ? (
-                          <Text style={[styles.sheetCoverAddress, { marginTop: 2 }]}>{selectedTSPin.court_name}</Text>
-                        ) : null}
-                        <View style={[styles.actionRow, { marginTop: 10, flexWrap: 'wrap', gap: 6 }]}>
+                        <View style={styles.titleRow}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? t('MAP_CHIP_TRAINING')}</Text>
+                            <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedTSPin.address ?? ''}</Text>
+                            {selectedTSPin.court_name ? (
+                              <Text style={[styles.sheetCoverAddress, { marginTop: 2, fontWeight: '600' }]}>{selectedTSPin.court_name}</Text>
+                            ) : null}
+                          </View>
+                          <TouchableOpacity
+                            style={styles.bookingButton}
+                            onPress={() => router.push({ pathname: '/event/tsBooking', params: { sessionid: String(selectedTSPin.sessionid) } })}
+                          >
+                            <Image source={ICONS.booking} style={styles.bookingIcon} />
+                            <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <View style={[styles.actionRow, { marginTop: 12, flexWrap: 'wrap', gap: 8 }]}>
                           {selectedTSPin.start_timestamp ? (
-                            <Text style={styles.filterChipText}>
-                              {new Date(selectedTSPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                            </Text>
+                            <View style={styles.pinMetaChip}>
+                              <Image source={ICONS.tsNoti} style={styles.pinMetaIcon} />
+                              <Text style={styles.pinMetaText}>
+                                {new Date(selectedTSPin.start_timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                              </Text>
+                            </View>
                           ) : null}
                           {selectedTSPin.entry_fee != null ? (
-                            <Text style={styles.filterChipText}>
-                              {selectedTSPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
-                            </Text>
+                            <View style={styles.pinMetaChip}>
+                              <Text style={[styles.pinMetaText, { fontWeight: '700' }]}>
+                                {selectedTSPin.entry_fee === 0 ? t('COMMON_LABEL_FREE') : `${selectedTSPin.entry_fee.toLocaleString()} ₫`}
+                              </Text>
+                            </View>
                           ) : null}
                           {selectedTSPin.participants_cap != null ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Image source={ICONS.participants} style={{ width: 14, height: 14, tintColor: '#888', marginRight: 4 }} />
-                              <Text style={styles.filterChipText}>{selectedTSPin.participants_cap}</Text>
+                            <View style={styles.pinMetaChip}>
+                              <Image source={ICONS.participants} style={styles.pinMetaIcon} />
+                              <Text style={styles.pinMetaText}>{selectedTSPin.participants_cap}</Text>
                             </View>
                           ) : null}
                         </View>
-                        <TouchableOpacity
-                          style={styles.bookingButton}
-                          onPress={() => router.push({ pathname: '/event/tsBooking', params: { sessionid: String(selectedTSPin.sessionid) } })}
-                        >
-                          <Image source={ICONS.booking} style={styles.bookingIcon} />
-                          <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
-                        </TouchableOpacity>
                       </View>
                     </BottomSheetScrollView>
                   ) : selectedMarker ? (
@@ -2811,6 +2836,26 @@
       flexDirection: 'row',
       alignItems: 'center',
       flexShrink: 0,
+    },
+    pinMetaChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: tc.bgSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: tc.divider,
+    },
+    pinMetaIcon: {
+      width: 14,
+      height: 14,
+      tintColor: tc.textSecondary,
+      marginRight: 5,
+    },
+    pinMetaText: {
+      fontSize: 13,
+      color: tc.textSecondary,
     },
     markerAddress: {
       fontSize: 16,

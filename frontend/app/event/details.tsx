@@ -1120,6 +1120,9 @@ export default function DetailsPage() {
         }, 15_000)
       }
 
+      // Invalidate map pins so cancelled items are removed from map
+      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'map' })
+
       // Show cancellation notification page.
       const anim = parsed.kind === 'created_event' || parsed.kind === 'created_session' ? 'cancel' : 'booking_cancel'
       const detailsId = parsed.raw
