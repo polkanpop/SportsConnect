@@ -393,7 +393,7 @@ export default function TrainingSessionBooking() {
             </View>
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{session.address || 'Address N/A'}</Text>
+              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{session.address || t('TS_LIST_NO_ADDRESS')}</Text>
             </View>
           </View>
         )}

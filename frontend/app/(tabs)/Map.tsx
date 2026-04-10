@@ -2741,16 +2741,15 @@
     favoriteButton: {
       marginRight: 10,
       marginTop: 0,
-      padding: 6,
-      borderRadius: 20,
-      backgroundColor: tc.bgSurface,
-      borderWidth: 1,
-      borderColor: tc.borderStrong,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: 'rgba(255,255,255,0.25)',
       alignItems: 'center',
       justifyContent: 'center',
     },
     favoriteActive: {
-      backgroundColor: tc.brandSoft,
+      backgroundColor: 'rgba(255,255,255,0.25)',
     },
     favoriteIcon: {
       width: 24,

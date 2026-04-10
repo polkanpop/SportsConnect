@@ -962,7 +962,7 @@ export default function CourtBooking() {
                     </Text>
                     {/* Favourite star */}
                     <TouchableOpacity
-                      style={[{ padding: 6, borderRadius: 20, backgroundColor: tc.bgSurface, borderWidth: 1, borderColor: tc.borderStrong, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: tc.brandSoft }]}
+                      style={[{ width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.25)' }]}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite
@@ -986,7 +986,7 @@ export default function CourtBooking() {
                     >
                       <Image
                         source={ICONS.starCal}
-                        style={{ width: 22, height: 22, tintColor: isFavourite ? COLORS.gold : tc.textSecondary }}
+                        style={{ width: 22, height: 22, tintColor: isFavourite ? COLORS.gold : tc.textPrimary }}
                       />
                     </TouchableOpacity>
                   </View>

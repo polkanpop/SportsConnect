@@ -394,7 +394,7 @@ export default function EventBooking() {
             </View>
             <View style={styles.metaRow}>
               <Image source={ICONS.mapPin} style={[styles.metaIcon, { tintColor: tc.textSecondary }]} />
-              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{event.address || 'Address N/A'}</Text>
+              <Text style={[styles.courtAddress, { color: tc.textSecondary }]}>{event.address || t('EVENT_LIST_EXPANDED_UNKNOWN_ADDRESS')}</Text>
             </View>
           </View>
         )}
