@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker'
 // MaterialIcons import removed – text labels used instead of icon glyphs
 
 import { useThemeColors } from '@/hooks/use-theme-colors'
+import { useTheme } from '@/providers/theme-provider'
 import { useTranslation } from '@/constants/translations'
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
@@ -224,6 +225,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const router = useRouter()
   const { t } = useTranslation()
   const tc = useThemeColors()
+  const { isDark } = useTheme()
 
   const [rows, setRows] = useState<Array<{ court: CourtRow; info: CourtInfoRow | null }>>([])
   const [loading, setLoading] = useState(false)
@@ -2102,15 +2104,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 styles.dayCell,
                                 { backgroundColor: tc.bgSurface, borderColor: tc.divider },
                                 isSelected && { backgroundColor: tc.brand, borderColor: tc.brand },
-                                hasBookings && !isSelected && { backgroundColor: tc.brandSoft, borderColor: tc.brand },
-                                !hasBookings && !isSelected && !isPast && { backgroundColor: tc.bgBase, borderColor: tc.divider },
-                                isPast && { backgroundColor: tc.bgBase, borderColor: tc.divider },
+                                hasBookings && !isSelected && { backgroundColor: isDark ? '#7C3AED' : '#FB923C', borderColor: isDark ? '#9B6DFF' : '#F59E0B' },
+                                !hasBookings && !isSelected && !isPast && { backgroundColor: isDark ? '#F0F2FF' : '#E5E7EB', borderColor: isDark ? '#C0C4D0' : '#D1D5DB' },
+                                isPast && { backgroundColor: isDark ? '#1C2040' : '#F3F4F6', borderColor: tc.divider },
                               ]}
                               activeOpacity={0.8}
                               disabled={isPast}
                             >
-                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, (isSelected || hasBookings) && { color: tc.btnPrimaryText }, isPast && { color: tc.textMuted }]} numberOfLines={1}>{d.label}</Text>
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : isPast ? tc.textMuted : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
+                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, isSelected && { color: tc.btnPrimaryText }, hasBookings && !isSelected && { color: '#FFFFFF' }, !hasBookings && !isSelected && !isPast && isDark && { color: '#1A1A2E' }, isPast && { color: tc.textMuted }]} numberOfLines={1}>{d.label}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : isPast ? tc.textMuted : hasBookings ? '#FFFFFF' : (!isPast && isDark) ? '#1A1A2E' : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
                             </TouchableOpacity>
                           )
                         })}

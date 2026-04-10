@@ -46,7 +46,10 @@ async def register_device_token(
     same platform+type combination so only the latest device slot is active.
     This cleanly handles app reinstalls and device swaps.
     """
-    userid = int(userid_str)
+    try:
+        userid = int(userid_str)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid userid in token (expected numeric)")
 
     push_token = (payload.get("push_token") or "").strip()
     platform   = (payload.get("platform")   or "").lower().strip()
@@ -134,7 +137,10 @@ async def unregister_device_token(
     Body JSON:
         push_token (str) — the token to deactivate
     """
-    userid = int(userid_str)
+    try:
+        userid = int(userid_str)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid userid in token (expected numeric)")
 
     push_token = (payload.get("push_token") or "").strip()
     if not push_token:

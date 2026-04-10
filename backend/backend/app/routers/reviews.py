@@ -144,32 +144,39 @@ def create_review(
         raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
 
     # ── Eligibility check ─────────────────────────────────────────────────
-    if not _has_eligible_booking(userid, body.targettype, body.targetid):
-        raise HTTPException(status_code=403, detail=f"User {userid} has no qualifying booking for {body.targettype} id={body.targetid}")
+    targettype = body.targettype
+    if not targettype or targettype not in ('court', 'event', 'trainingsession'):
+        raise HTTPException(status_code=400, detail=f"Invalid targettype: {targettype!r}")
+
+    if not _has_eligible_booking(userid, targettype, body.targetid):
+        raise HTTPException(status_code=403, detail=f"User {userid} has no qualifying booking for {targettype} id={body.targetid}")
 
     # ── Upsert: one review per (userid, targettype, targetid) ─────────────
-    existing = rest_select(
-        "reviews", "reviewid",
-        filters={"userid": userid, "targettype": body.targettype, "targetid": body.targetid},
-    )
+    try:
+        existing = rest_select(
+            "reviews", "reviewid",
+            filters={"userid": userid, "targettype": targettype, "targetid": body.targetid},
+        )
 
-    if existing and isinstance(existing, list) and len(existing) > 0:
-        review_id = existing[0]["reviewid"]
-        rest_update("reviews", {"reviewid": review_id}, {
-            "rating": body.rating,
-            "comment": body.comment,
-        })
-        row = {"reviewid": review_id, "created": False}
-    else:
-        result = rest_insert("reviews", {
-            "userid": userid,
-            "targettype": body.targettype,
-            "targetid": body.targetid,
-            "rating": body.rating,
-            "comment": body.comment,
-        })
-        rid = result[0]["reviewid"] if isinstance(result, list) and result else None
-        row = {"reviewid": rid, "created": True}
+        if existing and isinstance(existing, list) and len(existing) > 0:
+            review_id = existing[0]["reviewid"]
+            rest_update("reviews", {"reviewid": review_id}, {
+                "rating": body.rating,
+                "comment": body.comment,
+            })
+            row = {"reviewid": review_id, "created": False}
+        else:
+            result = rest_insert("reviews", {
+                "userid": userid,
+                "targettype": targettype,
+                "targetid": body.targetid,
+                "rating": body.rating,
+                "comment": body.comment,
+            })
+            rid = result[0]["reviewid"] if isinstance(result, list) and result else None
+            row = {"reviewid": rid, "created": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     background_tasks.add_task(invalidate_namespace, "reviews")
     return row

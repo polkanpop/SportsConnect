@@ -724,7 +724,7 @@
     // Auto-expand BottomSheet to full height when a day is selected so all time slots are visible
     useEffect(() => {
       if (selectedMapScheduleDate) {
-        bottomSheetRef.current?.snapToIndex(2)
+        bottomSheetRef.current?.snapToIndex(3)
       }
     }, [selectedMapScheduleDate])
 
@@ -980,9 +980,14 @@
       }
     }, [focusMapRegion]);
 
-    // Every time the user enters the Map tab, auto-center to their location
+    // Center map on first visit only — re-centering on every focus changes
+    // boundsKey which causes event/TS markers to briefly disappear during refetch.
+    const hasInitiallycentered = useRef(false);
     useFocusEffect(useCallback(() => {
-      void handleMyLocationPress();
+      if (!hasInitiallycentered.current) {
+        hasInitiallycentered.current = true;
+        void handleMyLocationPress();
+      }
     }, [handleMyLocationPress]));
 
     // Handle marker when pressed
