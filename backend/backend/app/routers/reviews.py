@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
-from ..db import RpcError, rest_insert, rest_rpc, rest_select, rest_update
+from ..db import RpcError, has_pg_pool, insert_review_pg, update_review_pg, rest_insert, rest_rpc, rest_select, rest_update
 
 logger = logging.getLogger("reviews")
 
@@ -122,7 +122,7 @@ def _has_eligible_booking(userid: int, targettype: str, targetid: int) -> bool:
 # ── Write endpoints ───────────────────────────────────────────────────────────
 
 @router.post("", response_model=dict, summary="Create or update a review")
-def create_review(
+async def create_review(
     body: ReviewIn,
     background_tasks: BackgroundTasks,
     current_user: str = Depends(get_current_user),
@@ -154,33 +154,47 @@ def create_review(
 
         if existing and isinstance(existing, list) and len(existing) > 0:
             review_id = existing[0]["reviewid"]
-            rest_update("reviews", {"reviewid": review_id}, {
-                "rating": body.rating,
-                "comment": body.comment,
-            })
+            # UPDATE path: rest_update (PATCH) works fine without enum issues
+            if has_pg_pool():
+                await update_review_pg(review_id, body.rating, body.comment)
+            else:
+                rest_update("reviews", {"reviewid": review_id}, {
+                    "rating": body.rating,
+                    "comment": body.comment,
+                })
             row = {"reviewid": review_id, "created": False}
         else:
-            payload = {
-                "userid": userid,
-                "targettype": targettype,
-                "targetid": body.targetid,
-                "rating": body.rating,
-                "comment": body.comment,
-            }
-            # Try RPC function first (bypasses trg_reviews_eligibility trigger)
-            try:
-                rpc_result = rest_rpc("insert_review_bypass", {
-                    "p_userid": userid,
-                    "p_targettype": targettype,
-                    "p_targetid": body.targetid,
-                    "p_rating": body.rating,
-                    "p_comment": body.comment,
-                })
-                rid = rpc_result if isinstance(rpc_result, int) else None
-            except (RuntimeError, RpcError) as rpc_err:
-                logger.info("insert_review_bypass RPC unavailable (%s), falling back to rest_insert", rpc_err)
-                result = rest_insert("reviews", payload)
-                rid = result[0]["reviewid"] if isinstance(result, list) and result else None
+            # INSERT path: PostgREST has a bug where it sends '' for enum
+            # columns regardless of the provided value (22P02 error). Work
+            # around in priority order:
+            #   1. Direct asyncpg SQL (bypasses PostgREST entirely)
+            #   2. insert_review_bypass RPC (created at startup via asyncpg)
+            #   3. rest_insert fallback (will fail until DB is fixed)
+            rid: int | None = None
+
+            if has_pg_pool():
+                rid = await insert_review_pg(userid, targettype, body.targetid, body.rating, body.comment)
+            else:
+                try:
+                    rpc_result = rest_rpc("insert_review_bypass", {
+                        "p_userid": userid,
+                        "p_targettype": targettype,
+                        "p_targetid": body.targetid,
+                        "p_rating": body.rating,
+                        "p_comment": body.comment,
+                    })
+                    rid = rpc_result if isinstance(rpc_result, int) else None
+                except (RuntimeError, RpcError) as rpc_err:
+                    logger.warning("insert_review_bypass RPC unavailable (%s), falling back to rest_insert", rpc_err)
+                    result = rest_insert("reviews", {
+                        "userid": userid,
+                        "targettype": targettype,
+                        "targetid": body.targetid,
+                        "rating": body.rating,
+                        "comment": body.comment,
+                    })
+                    rid = result[0]["reviewid"] if isinstance(result, list) and result else None
+
             row = {"reviewid": rid, "created": True}
     except RuntimeError as e:
         logger.error("review upsert failed userid=%s targettype=%s targetid=%s: %s", userid, targettype, body.targetid, e)

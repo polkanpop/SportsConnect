@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from .db import close_pg_pool, get_settings, has_pg_pool_config, init_pg_pool, probe_pg_connection
+from .db import close_pg_pool, ensure_insert_review_bypass_rpc, get_settings, has_pg_pool_config, init_pg_pool, probe_pg_connection
 from .rate_limit import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
@@ -308,6 +308,13 @@ async def _init_cache():
             await probe_pg_connection()
             venues.mark_venues_startup_warmup((time.perf_counter() - t0) * 1000.0)
             logger.info("Venues Postgres pool warmup completed successfully")
+            # Auto-create the insert_review_bypass RPC so reviews POST works
+            # even when PostgREST has the enum-column INSERT bug.
+            try:
+                await ensure_insert_review_bypass_rpc()
+                logger.info("insert_review_bypass RPC ensured via asyncpg")
+            except Exception as rpc_exc:
+                logger.warning("Could not ensure insert_review_bypass RPC: %r", rpc_exc)
         except Exception as exc:
             logger.warning(
                 "Venues Postgres pool warmup failed during startup, falling back to REST path: %s: %r",

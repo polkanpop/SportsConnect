@@ -142,6 +142,70 @@ async def probe_pg_connection() -> None:
         await conn.fetchval("select 1")
 
 
+async def ensure_insert_review_bypass_rpc() -> None:
+    """Create the insert_review_bypass RPC function if it doesn't already exist.
+
+    PostgREST has a long-standing issue where it cannot INSERT into tables with
+    enum columns — it sends '' instead of the provided value, causing 22P02.
+    This function creates a PL/pgSQL RPC that does the INSERT internally,
+    bypassing PostgREST column-binding entirely.
+
+    Called once at startup when an asyncpg pool is available.
+    """
+    pool = _require_pg_pool()
+    ddl = """
+    CREATE OR REPLACE FUNCTION public.insert_review_bypass(
+        p_userid     int,
+        p_targettype text,
+        p_targetid   int,
+        p_rating     int,
+        p_comment    text
+    ) RETURNS int LANGUAGE plpgsql SECURITY DEFINER AS $$
+    DECLARE
+        new_id int;
+    BEGIN
+        INSERT INTO public.reviews (userid, targettype, targetid, rating, comment)
+        VALUES (p_userid, p_targettype::public.reviewtargettype, p_targetid, p_rating, p_comment)
+        RETURNING reviewid INTO new_id;
+        RETURN new_id;
+    END;
+    $$;
+    GRANT EXECUTE ON FUNCTION public.insert_review_bypass TO anon, authenticated, service_role;
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(ddl)
+
+
+async def insert_review_pg(userid: int, targettype: str, targetid: int, rating: int, comment: str) -> int:
+    """Insert a review row directly via asyncpg, bypassing PostgREST enum-cast bug.
+
+    Returns the new reviewid.
+    """
+    pool = _require_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO public.reviews (userid, targettype, targetid, rating, comment)
+            VALUES ($1, $2::public.reviewtargettype, $3, $4, $5)
+            RETURNING reviewid
+            """,
+            userid, targettype, targetid, rating, comment,
+        )
+        if row is None:
+            raise RuntimeError("insert_review_pg: INSERT returned no row")
+        return int(row["reviewid"])
+
+
+async def update_review_pg(reviewid: int, rating: int, comment: str) -> None:
+    """Update an existing review's rating and comment directly via asyncpg."""
+    pool = _require_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE public.reviews SET rating=$1, comment=$2 WHERE reviewid=$3",
+            rating, comment, reviewid,
+        )
+
+
 async def fetch_venue_booking_bundle_pg(courtid: int, start_date: str, end_date: str) -> dict[str, Any]:
     pool = _require_pg_pool()
     query = """
