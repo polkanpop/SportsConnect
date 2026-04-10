@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -15,10 +16,14 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '..', '.en
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 load_dotenv()
 
+logger = logging.getLogger("db")
+
 class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    SUPABASE_DB_POOLER_URL: str = os.getenv("SUPABASE_DB_POOLER_URL", "")
+    # Strip surrounding quotes so copy-pasting  "postgresql://..." from a .env
+    # file into the Render UI (which stores them literally) still works.
+    SUPABASE_DB_POOLER_URL: str = os.getenv("SUPABASE_DB_POOLER_URL", "").strip().strip('"').strip("'")
     SUPABASE_DB_POOL_MIN_SIZE: int = int(os.getenv("SUPABASE_DB_POOL_MIN_SIZE", "1"))
     SUPABASE_DB_POOL_MAX_SIZE: int = int(os.getenv("SUPABASE_DB_POOL_MAX_SIZE", "5"))
     SUPABASE_DB_COMMAND_TIMEOUT_SECONDS: float = float(os.getenv("SUPABASE_DB_COMMAND_TIMEOUT_SECONDS", "10"))
@@ -69,7 +74,11 @@ async def init_pg_pool() -> None:
         return
     settings = get_settings()
     if not settings.SUPABASE_DB_POOLER_URL:
+        logger.warning("SUPABASE_DB_POOLER_URL is empty — asyncpg pool not created")
         return
+    logger.info("Initialising asyncpg pool (host=%s port=%s)",
+                urlparse(settings.SUPABASE_DB_POOLER_URL).hostname,
+                urlparse(settings.SUPABASE_DB_POOLER_URL).port)
     _validate_supabase_pooler_dsn(settings.SUPABASE_DB_POOLER_URL)
     # statement_cache_size=0 is required for PgBouncer transaction mode (port 6543).
     # It is safe (but slightly slower for repeated queries) with session mode (port 5432).
