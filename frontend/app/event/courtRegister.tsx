@@ -569,12 +569,12 @@ export default function CourtRegisterPage() {
   const pickImages = async () => {
     if (imageUploading) return
     if (!userid) {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ALERT_NOT_SIGNED_IN'), t('COMMON_ALERT_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ALERT_PERMISSION_NEEDED'), t('COMMON_ALERT_PHOTO_PERMISSION'))
       return
     }
 
@@ -596,7 +596,7 @@ export default function CourtRegisterPage() {
       setRemoteImageUrls(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
       setLocalImageUris([])
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ALERT_UPLOAD_FAILED'), e?.message || t('VOICE_TRY_AGAIN'))
     } finally {
       setImageUploading(false)
     }
@@ -605,12 +605,12 @@ export default function CourtRegisterPage() {
   const pickPlayingCourtImage = async (target: 'full' | 'half1' | 'half2') => {
     if (imageUploading) return
     if (!userid) {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ALERT_NOT_SIGNED_IN'), t('COMMON_ALERT_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ALERT_PERMISSION_NEEDED'), t('COMMON_ALERT_PHOTO_PERMISSION'))
       return
     }
 
@@ -639,7 +639,7 @@ export default function CourtRegisterPage() {
         setPcHalf2Images(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
       }
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ALERT_UPLOAD_FAILED'), e?.message || t('VOICE_TRY_AGAIN'))
     } finally {
       setImageUploading(false)
     }
@@ -654,12 +654,12 @@ export default function CourtRegisterPage() {
   const pickServiceImage = async () => {
     if (imageUploading) return
     if (!userid) {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ALERT_NOT_SIGNED_IN'), t('COMMON_ALERT_SIGN_IN_FIRST'))
       return
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to select images.')
+      Alert.alert(t('COMMON_ALERT_PERMISSION_NEEDED'), t('COMMON_ALERT_PHOTO_PERMISSION'))
       return
     }
 
@@ -679,7 +679,7 @@ export default function CourtRegisterPage() {
       const uploadedUrl = await uploadOneToCloudinary(picked[0], svcImages.length, 'svc')
       setSvcImages(prev => dedupeStrings([...prev, uploadedUrl]).slice(0, 6))
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ALERT_UPLOAD_FAILED'), e?.message || t('VOICE_TRY_AGAIN'))
     } finally {
       setImageUploading(false)
     }
@@ -714,7 +714,7 @@ export default function CourtRegisterPage() {
       return
     }
     if (!fullPrice || !Number.isFinite(toNumberFromInput(fullPrice)) || toNumberFromInput(fullPrice) < 0) {
-      Alert.alert('Missing info', 'Please enter a valid full court price.')
+      Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_FULL_COURT_PRICE'))
       return
     }
 
@@ -725,15 +725,15 @@ export default function CourtRegisterPage() {
 
     if (pcAllowHalf) {
       if (!half1Name || !half2Name) {
-        Alert.alert('Missing info', 'Please enter Half Court 1 and Half Court 2 names.')
+        Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_HALF_COURT_NAMES'))
         return
       }
       if (!half1Price || !Number.isFinite(toNumberFromInput(half1Price)) || toNumberFromInput(half1Price) < 0) {
-        Alert.alert('Missing info', 'Please enter a valid price for Half Court 1.')
+        Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_HALF1_PRICE'))
         return
       }
       if (!half2Price || !Number.isFinite(toNumberFromInput(half2Price)) || toNumberFromInput(half2Price) < 0) {
-        Alert.alert('Missing info', 'Please enter a valid price for Half Court 2.')
+        Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_HALF2_PRICE'))
         return
       }
     } else {
@@ -774,15 +774,15 @@ export default function CourtRegisterPage() {
     const price = svcPrice.trim()
     const stock = svcStock.trim()
     if (!nm) {
-      Alert.alert('Missing info', 'Please enter a service name.')
+      Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_SERVICE_NAME'))
       return
     }
     if (!price || !Number.isFinite(toNumberFromInput(price)) || toNumberFromInput(price) < 0) {
-      Alert.alert('Missing info', 'Please enter a valid service price.')
+      Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_SERVICE_PRICE'))
       return
     }
     if (stock && (!Number.isFinite(Number(stock)) || Number(stock) < 0)) {
-      Alert.alert('Missing info', 'Please enter a valid stock (or leave empty).')
+      Alert.alert(t('COURT_REGISTER_ALERT_MISSING_INFO'), t('COURT_REGISTER_ALERT_SERVICE_STOCK'))
       return
     }
     setServices(prev => [
@@ -938,7 +938,7 @@ export default function CourtRegisterPage() {
         },
       })
     } catch (e: any) {
-      Alert.alert('Geocode failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ALERT_GEOCODE_FAILED'), e?.message || t('VOICE_TRY_AGAIN'))
     } finally {
       setChecking(false)
     }
@@ -956,7 +956,7 @@ export default function CourtRegisterPage() {
   const handleSubmit = async () => {
     if (submitting) return
     if (!userid) {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ALERT_NOT_SIGNED_IN'), t('COMMON_ALERT_SIGN_IN_FIRST'))
       return
     }
     const nm = name.trim()
@@ -981,7 +981,7 @@ export default function CourtRegisterPage() {
     }
 
     if (playingCourts.length === 0) {
-      Alert.alert('Court required', 'Please add at least one court in the ?Court? section.')
+      Alert.alert(t('COURT_REGISTER_ALERT_COURT_REQUIRED'), t('COURT_REGISTER_ALERT_COURT_REQUIRED_BODY'))
       return
     }
 
@@ -1066,7 +1066,7 @@ export default function CourtRegisterPage() {
       await invalidateCache(COURT_REGISTER_DRAFT_STORAGE_KEY).catch(() => {})
       setSubmittedVisible(true)
     } catch (e: any) {
-      Alert.alert('Register failed', e?.message || 'Please try again')
+      Alert.alert(t('COMMON_ALERT_REGISTER_FAILED'), e?.message || t('VOICE_TRY_AGAIN'))
       // Clear in-flight flag so the UI doesn't get stuck.
       try {
         const existingDraft: any = await getCache<any>(COURT_REGISTER_DRAFT_STORAGE_KEY)
@@ -1085,7 +1085,7 @@ export default function CourtRegisterPage() {
   const handlePressRegister = () => {
     if (submitting) return
     if (!userid) {
-      Alert.alert('Not signed in', 'Please sign in first.')
+      Alert.alert(t('COMMON_ALERT_NOT_SIGNED_IN'), t('COMMON_ALERT_SIGN_IN_FIRST'))
       return
     }
     if (!name.trim() || !address.trim()) {

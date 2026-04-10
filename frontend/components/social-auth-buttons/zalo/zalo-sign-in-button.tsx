@@ -29,6 +29,7 @@ import { Linking, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, View }
 import { useZaloAuthOverlay } from '@/providers/zalo-auth-overlay-provider';
 import { Image } from 'expo-image';
 import { API_BASE_URL } from '@/env';
+import { useTranslation } from '@/constants/translations';
 
 const ZALO_APP_ID = '959402498466634174';
 const ZALO_AUTH_ENDPOINT = 'https://oauth.zaloapp.com/v4/permission';
@@ -75,6 +76,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
   const router = useRouter();
   const overlay = useZaloAuthOverlay();
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
   const isProcessing = useRef(false);
   const isMounted = useRef(true);
 
@@ -162,7 +164,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       // 4. Extract code from deep link — already have it
       const code = authCode;
       if (!code) {
-        Alert.alert('Đăng nhập Zalo thất bại', 'Không nhận được mã xác thực từ Zalo.');
+        Alert.alert(t('AUTH_ALERT_ZALO_LOGIN_FAILED'), t('AUTH_ALERT_ZALO_NO_CODE'));
         return;
       }
 
@@ -175,7 +177,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       const tokenJson = await tokenResp.json().catch(() => ({}));
       const accessToken: string = tokenJson?.access_token ?? '';
       if (!accessToken) {
-        Alert.alert('Đăng nhập Zalo thất bại', tokenJson?.detail || 'Không lấy được access token.');
+        Alert.alert(t('AUTH_ALERT_ZALO_LOGIN_FAILED'), tokenJson?.detail || t('AUTH_ALERT_ZALO_NO_TOKEN'));
         return;
       }
 
@@ -194,7 +196,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
         } catch { /* non-fatal */ }
       }
       if (!zaloId) {
-        Alert.alert('Đăng nhập Zalo thất bại', 'Không lấy được thông tin người dùng Zalo.');
+        Alert.alert(t('AUTH_ALERT_ZALO_LOGIN_FAILED'), t('AUTH_ALERT_ZALO_NO_PROFILE'));
         return;
       }
 
@@ -206,7 +208,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       });
       const authJson = await authResp.json().catch(() => ({}));
       if (!authResp.ok || !authJson?.userid) {
-        Alert.alert('Đăng nhập Zalo thất bại', authJson?.detail || 'Xác thực thất bại');
+        Alert.alert(t('AUTH_ALERT_ZALO_LOGIN_FAILED'), authJson?.detail || t('AUTH_ALERT_ZALO_AUTH_FAILED'));
         return;
       }
 
@@ -219,17 +221,17 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       if (!alreadyPrompted) {
         await AsyncStorage.setItem(promptKey, '1').catch(() => {});
         Alert.alert(
-          'Thiết lập tài khoản',
-          'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập mà không cần Zalo.',
+          t('AUTH_OAUTH_SETUP_TITLE'),
+          t('AUTH_OAUTH_SETUP_BODY_ZALO'),
           [
             {
-              text: 'Để sau',
+              text: t('AUTH_OAUTH_SETUP_LATER'),
               onPress: () => {
                 if (isMounted.current) router.replace('/(tabs)/Home');
               },
             },
             {
-              text: 'Thiết lập ngay',
+              text: t('AUTH_OAUTH_SETUP_NOW'),
               onPress: () => {
                 if (isMounted.current) router.replace('/event/accountSettings' as any);
               },
@@ -243,7 +245,7 @@ export default function ZaloSignInButton({ onAuthStart, onAuthDone }: ZaloSignIn
       if (__DEV__) console.error('[ZaloSignIn]', e);
       const msg: string = e?.message ?? String(e) ?? '';
       if (!msg.includes('cancel') && !msg.includes('-201')) {
-        Alert.alert('Lỗi đăng nhập Zalo', msg || 'Vui lòng thử lại.');
+        Alert.alert(t('AUTH_ALERT_ZALO_ERROR'), msg || t('AUTH_ALERT_ZALO_TRY_AGAIN'));
       }
     } finally {
       setLoading(false);

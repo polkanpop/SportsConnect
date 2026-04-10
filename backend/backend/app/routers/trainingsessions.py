@@ -83,8 +83,12 @@ def training_sessions_map_pins(
     maxLng: float = Query(...),
     limit: int = Query(100, ge=1, le=500),
 ):
-    """Return upcoming training sessions with lat/lng coords for map pin display."""
+    """Return upcoming training sessions with lat/lng coords for map pin display.
+
+    Join path: courtinfo → courts → playingcourt → courtbooking → trainingsessions
+    """
     try:
+        # 1) courtinfo rows within the bounding box
         courtinfo_rows = rest_select(
             "courtinfo",
             "courtinfoid,courtid,name,address,latitude,longitude",
@@ -100,15 +104,30 @@ def training_sessions_map_pins(
         court_ids = list({row["courtid"] for row in courtinfo_rows if row.get("courtid") is not None})
         if not court_ids:
             return []
+
+        # 2) playing courts for those court IDs
+        pc_rows = rest_select(
+            "playingcourt",
+            "playingcourtid,courtid",
+            filters={"courtid": court_ids},
+        )
+        if not pc_rows:
+            return []
+        pc_ids = [row["playingcourtid"] for row in pc_rows]
+        pc_court_map: dict = {row["playingcourtid"]: row["courtid"] for row in pc_rows}
+
+        # 3) courtbookings for those playing courts
         booking_rows = rest_select(
             "courtbooking",
-            "courtbookingid,courtid,start_timestamp,end_timestamp",
-            filters={"courtid": court_ids},
+            "courtbookingid,playingcourtid,start_timestamp,end_timestamp",
+            filters={"playingcourtid": pc_ids},
         )
         if not booking_rows:
             return []
         booking_by_id: dict = {row["courtbookingid"]: row for row in booking_rows}
         booking_ids = list(booking_by_id.keys())
+
+        # 4) upcoming training sessions for those bookings
         session_rows = rest_select(
             "trainingsessions",
             "sessionid,courtbookingid,status",
@@ -118,6 +137,8 @@ def training_sessions_map_pins(
             return []
         session_rows = session_rows[:limit]
         session_ids = [row["sessionid"] for row in session_rows]
+
+        # 5) trainingsessioninfo for titles/fees
         tsinfo_rows = rest_select(
             "trainingsessioninfo",
             "sessionid,title,entry_fee,participants_cap",
@@ -125,12 +146,14 @@ def training_sessions_map_pins(
         )
         tsinfo_by_sessionid: dict = {row["sessionid"]: row for row in (tsinfo_rows or [])}
         courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
+
         result = []
         for s in session_rows:
             booking = booking_by_id.get(s["courtbookingid"])
             if not booking:
                 continue
-            ci = courtinfo_by_courtid.get(booking["courtid"])
+            court_id = pc_court_map.get(booking.get("playingcourtid"))
+            ci = courtinfo_by_courtid.get(court_id) if court_id else None
             if not ci or ci.get("latitude") is None or ci.get("longitude") is None:
                 continue
             info = tsinfo_by_sessionid.get(s["sessionid"], {})

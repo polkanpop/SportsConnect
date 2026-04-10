@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persistAuthSession } from '@/lib/backendApi';
 import { requestLocationPermissionOnceAfterSignup } from '@/lib/locationOnboarding';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { useTranslation } from '@/constants/translations';
 
 // This screen is reached via deep link after email verification redirect.
 // It receives query params with tokens if auto-login was enabled.
@@ -26,6 +27,7 @@ export default function EmailVerifiedAutoLoginScreen() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tc = useThemeColors();
+  const { t } = useTranslation();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,10 +85,10 @@ export default function EmailVerifiedAutoLoginScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.container, { backgroundColor: tc.bgBase }]}>
-        <Text style={[styles.title, { color: tc.brand }]}>Account verified!</Text>
+        <Text style={[styles.title, { color: tc.brand }]}>{t('VERIFIED_TITLE')}</Text>
         {error && <Text style={[styles.error, { color: tc.error }]}>{error}</Text>}
         {!error && !done && <ActivityIndicator size="large" color={tc.brand} style={{ marginTop: 20 }} />}
-        {!error && done && <Text style={[styles.info, { color: tc.brand }]}>Logging you in…</Text>}
+        {!error && done && <Text style={[styles.info, { color: tc.brand }]}>{t('VERIFIED_LOGGING_IN')}</Text>}
       </View>
     </>
   );

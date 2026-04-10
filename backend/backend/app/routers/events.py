@@ -95,14 +95,10 @@ def events_map_pins(
 ):
     """Return upcoming events with lat/lng coords for map pin display.
 
-    Multi-step approach:
-      1) courtinfo rows within the bbox
-      2) courtbookings for those courts
-      3) upcoming events for those bookings
-      4) eventinfo for title/fees
-      5) assemble and return
+    Join path: courtinfo → courts → playingcourt → courtbooking → events
     """
     try:
+        # 1) courtinfo rows within the bounding box
         courtinfo_rows = rest_select(
             "courtinfo",
             "courtinfoid,courtid,name,address,latitude,longitude",
@@ -118,15 +114,30 @@ def events_map_pins(
         court_ids = list({row["courtid"] for row in courtinfo_rows if row.get("courtid") is not None})
         if not court_ids:
             return []
+
+        # 2) playing courts for those court IDs
+        pc_rows = rest_select(
+            "playingcourt",
+            "playingcourtid,courtid",
+            filters={"courtid": court_ids},
+        )
+        if not pc_rows:
+            return []
+        pc_ids = [row["playingcourtid"] for row in pc_rows]
+        pc_court_map: dict = {row["playingcourtid"]: row["courtid"] for row in pc_rows}
+
+        # 3) courtbookings for those playing courts
         booking_rows = rest_select(
             "courtbooking",
-            "courtbookingid,courtid,start_timestamp,end_timestamp",
-            filters={"courtid": court_ids},
+            "courtbookingid,playingcourtid,start_timestamp,end_timestamp",
+            filters={"playingcourtid": pc_ids},
         )
         if not booking_rows:
             return []
         booking_by_id: dict = {row["courtbookingid"]: row for row in booking_rows}
         booking_ids = list(booking_by_id.keys())
+
+        # 4) upcoming events for those bookings
         event_rows = rest_select(
             "events",
             "eventid,courtbookingid,status",
@@ -136,6 +147,8 @@ def events_map_pins(
             return []
         event_rows = event_rows[:limit]
         event_ids = [row["eventid"] for row in event_rows]
+
+        # 5) eventinfo for titles/fees
         eventinfo_rows = rest_select(
             "eventinfo",
             "eventinfoid,eventid,title,entry_fee,participants_cap",
@@ -143,12 +156,14 @@ def events_map_pins(
         )
         eventinfo_by_eventid: dict = {row["eventid"]: row for row in (eventinfo_rows or [])}
         courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
+
         result = []
         for ev in event_rows:
             booking = booking_by_id.get(ev["courtbookingid"])
             if not booking:
                 continue
-            ci = courtinfo_by_courtid.get(booking["courtid"])
+            court_id = pc_court_map.get(booking.get("playingcourtid"))
+            ci = courtinfo_by_courtid.get(court_id) if court_id else None
             if not ci or ci.get("latitude") is None or ci.get("longitude") is None:
                 continue
             info = eventinfo_by_eventid.get(ev["eventid"], {})

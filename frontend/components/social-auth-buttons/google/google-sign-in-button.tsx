@@ -14,18 +14,19 @@ import { API_BASE_URL } from '@/env';
 import { persistAuthSession } from '@/lib/backendApi';
 import { queryClient } from '@/providers/query-provider';
 import { queryKeys } from '@/hooks/query-keys';
+import { useTranslation, type TranslationKey } from '@/constants/translations';
 
-async function showOAuthSetupPromptOrHome(userid: number, router: ReturnType<typeof useRouter>) {
+async function showOAuthSetupPromptOrHome(userid: number, router: ReturnType<typeof useRouter>, t: (key: TranslationKey) => string) {
   const promptKey = `@oauth_cred_prompt_${userid}`;
   const alreadyPrompted = await AsyncStorage.getItem(promptKey).catch(() => '1');
   if (!alreadyPrompted) {
     await AsyncStorage.setItem(promptKey, '1').catch(() => {});
     Alert.alert(
-      'Thiết lập tài khoản',
-      'Bạn có thể thêm tên đăng nhập & mật khẩu trong Cài đặt tài khoản để đăng nhập dễ dàng hơn.',
+      t('AUTH_OAUTH_SETUP_TITLE'),
+      t('AUTH_OAUTH_SETUP_BODY_GOOGLE'),
       [
-        { text: 'Để sau', onPress: () => router.replace('/(tabs)/Home') },
-        { text: 'Thiết lập ngay', onPress: () => router.replace('/event/accountSettings' as any) },
+        { text: t('AUTH_OAUTH_SETUP_LATER'), onPress: () => router.replace('/(tabs)/Home') },
+        { text: t('AUTH_OAUTH_SETUP_NOW'), onPress: () => router.replace('/event/accountSettings' as any) },
       ],
     );
   } else {
@@ -56,6 +57,7 @@ function parseFragment(url: string) {
 export default function GoogleSignInButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
 
   WebBrowser.maybeCompleteAuthSession();
 
@@ -136,7 +138,7 @@ export default function GoogleSignInButton() {
               if (!syncResp.ok || !syncJson?.userid) {
                 console.error('[GoogleSignIn] backend sync (exchange) failed', syncResp.status, syncJson);
                 setLoading(false);
-                Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
+                Alert.alert(t('AUTH_ALERT_SIGN_IN_ERROR'), `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
                 return;
               }
               await persistAuthSession(syncJson, { rememberMe: true });
@@ -145,12 +147,12 @@ export default function GoogleSignInButton() {
             } catch (e) {
               console.error('[GoogleSignIn] backend sync (exchange) exception', e);
               setLoading(false);
-              Alert.alert('Sign-in error', 'Could not connect to backend. Please try again.');
+              Alert.alert(t('AUTH_ALERT_SIGN_IN_ERROR'), t('AUTH_ALERT_BACKEND_CONNECT'));
               return;
             }
           }
           setLoading(false);
-          await showOAuthSetupPromptOrHome(oauthUserId, router);
+          await showOAuthSetupPromptOrHome(oauthUserId, router, t);
           return;
         }
       } catch (e) {
@@ -200,7 +202,7 @@ export default function GoogleSignInButton() {
         if (!syncResp.ok || !syncJson?.userid) {
           console.error('[GoogleSignIn] backend sync failed', syncResp.status, syncJson);
           setLoading(false);
-          Alert.alert('Sign-in error', `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
+          Alert.alert(t('AUTH_ALERT_SIGN_IN_ERROR'), `Backend sync failed (${syncResp.status}): ${syncJson?.detail || JSON.stringify(syncJson)}`);
           return;
         }
         await persistAuthSession(syncJson, { rememberMe: true });
@@ -209,15 +211,15 @@ export default function GoogleSignInButton() {
       } catch (e) {
         console.error('[GoogleSignIn] backend sync exception', e);
         setLoading(false);
-        Alert.alert('Sign-in error', 'Could not connect to backend. Please try again.');
+        Alert.alert(t('AUTH_ALERT_SIGN_IN_ERROR'), t('AUTH_ALERT_BACKEND_CONNECT'));
         return;
       }
     }
 
     setLoading(false);
     // Navigate to home tabs after success
-    await showOAuthSetupPromptOrHome(oauthUserId, router);
-  }, [loading, router]);
+    await showOAuthSetupPromptOrHome(oauthUserId, router, t);
+  }, [loading, router, t]);
 
   return (
     <TouchableOpacity

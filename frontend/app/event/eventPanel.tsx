@@ -1648,7 +1648,7 @@ export default function EventPanel({ organizerId }: Props) {
 									)}
 									{expandedNoteEventIds.has(a.booking.eventbookingid) && (
 										<View style={{ marginTop: 8, backgroundColor: tc.bgSurface, borderRadius: 8, padding: 10, borderLeftWidth: 3, borderLeftColor: tc.divider }}>
-											<Text style={{ fontSize: 12, fontWeight: "700", color: tc.textPrimary, marginBottom: 4 }}>Note</Text>
+											<Text style={{ fontSize: 12, fontWeight: "700", color: tc.textPrimary, marginBottom: 4 }}>{t('COMMON_LABEL_NOTE')}</Text>
 											<Text style={{ fontSize: 13, color: tc.textSecondary }}>{(a.booking as any).note?.trim() ? (a.booking as any).note : "No note provided."}</Text>
 										</View>
 									)}
@@ -1843,7 +1843,7 @@ export default function EventPanel({ organizerId }: Props) {
 											onPress={() => onRequestRemoveBlockedUser(b.blocked_userid)}
 											style={{ flex: 1.0, alignItems: "flex-end" }}
 										>
-											<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>Remove</Text>
+											<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>{t('COMMON_BTN_REMOVE')}</Text>
 										</TouchableOpacity>
 									</View>
 								))}
@@ -1876,7 +1876,7 @@ export default function EventPanel({ organizerId }: Props) {
 						<TextInput
 							value={editTitle}
 							onChangeText={setEditTitle}
-							placeholder="Event title"
+							placeholder={t('PANEL_PLACEHOLDER_TITLE')}
 							style={{ backgroundColor: tc.bgBase, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10, color: tc.textPrimary }}
 						/>
 
@@ -1884,7 +1884,7 @@ export default function EventPanel({ organizerId }: Props) {
 						<TextInput
 							value={editDescription}
 							onChangeText={setEditDescription}
-							placeholder="Description"
+							placeholder={t('PANEL_PLACEHOLDER_DESC')}
 							multiline
 							style={{
 								backgroundColor: tc.bgBase,
@@ -2053,7 +2053,7 @@ export default function EventPanel({ organizerId }: Props) {
 								onPress={() => {}}
 							>
 								<TouchableOpacity activeOpacity={0.75} onPress={() => setActionMenuVisible(false)} style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
-									<Text style={{ fontWeight: "700", color: tc.textPrimary }}>Report</Text>
+									<Text style={{ fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_REPORT')}</Text>
 								</TouchableOpacity>
 								<View style={{ height: 1, backgroundColor: tc.divider }} />
 								<TouchableOpacity
@@ -2064,7 +2064,7 @@ export default function EventPanel({ organizerId }: Props) {
 									}}
 									style={{ paddingVertical: 10, paddingHorizontal: 12 }}
 								>
-									<Text style={{ fontWeight: "700", color: "#B91C1C" }}>Block</Text>
+									<Text style={{ fontWeight: "700", color: "#B91C1C" }}>{t('COMMON_BTN_BLOCK')}</Text>
 								</TouchableOpacity>
 							</Pressable>
 						);
@@ -2075,8 +2075,8 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmBlockVisible} animationType="fade" onRequestClose={() => setConfirmBlockVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: tc.bgElevated, borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>Confirm Block</Text>
-						<Text style={{ marginTop: 8, color: tc.textSecondary }}>Are you sure you want to block this user ?</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>{t('PANEL_MODAL_CONFIRM_BLOCK')}</Text>
+						<Text style={{ marginTop: 8, color: tc.textSecondary }}>{t('PANEL_MODAL_BLOCK_BODY')}</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2084,7 +2084,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: tc.bgSurface, paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 								disabled={blocking}
 							>
-								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_CANCEL')}</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2092,7 +2092,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: blocking ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={blocking}
 							>
-								<Text style={{ fontWeight: "700", color: "#fff" }}>{blocking ? "Blocking..." : "Block"}</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{blocking ? t('COMMON_LABEL_LOADING') : t('PANEL_MODAL_CONFIRM_BLOCK')}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2102,8 +2102,8 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmCancelVisible} animationType="fade" onRequestClose={() => setConfirmCancelVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: tc.bgElevated, borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>Confirm Cancel</Text>
-						<Text style={{ marginTop: 8, color: tc.textSecondary }}>Are you sure you want to cancel this event?</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>{t('PANEL_MODAL_CONFIRM_CANCEL_EVENT')}</Text>
+						<Text style={{ marginTop: 8, color: tc.textSecondary }}>{t('PANEL_MODAL_CANCEL_EVENT_BODY')}</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2111,7 +2111,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: tc.bgSurface, paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 								disabled={cancellingEvent}
 							>
-								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>No</Text>
+								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_CANCEL')}</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2119,7 +2119,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: cancellingEvent ? "#9ca3af" : "#B91C1C", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={cancellingEvent || !canCancelSelectedEvent}
 							>
-								<Text style={{ fontWeight: "700", color: "#fff" }}>{cancellingEvent ? "Cancelling..." : "Yes"}</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{cancellingEvent ? t('COMMON_LABEL_LOADING') : t('COMMON_BTN_CONFIRM')}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2129,8 +2129,8 @@ export default function EventPanel({ organizerId }: Props) {
 			<Modal transparent visible={confirmRemoveVisible} animationType="fade" onRequestClose={() => setConfirmRemoveVisible(false)}>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: tc.bgElevated, borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>Confirm Remove</Text>
-						<Text style={{ marginTop: 8, color: tc.textSecondary }}>Remove this user from block list ?</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>{t('PANEL_MODAL_CONFIRM_REMOVE')}</Text>
+						<Text style={{ marginTop: 8, color: tc.textSecondary }}>{t('PANEL_MODAL_UNBLOCK_BODY')}</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2140,7 +2140,7 @@ export default function EventPanel({ organizerId }: Props) {
 								}}
 								style={{ flex: 1, backgroundColor: tc.bgSurface, paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 							>
-								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_CANCEL')}</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2148,7 +2148,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: "#2563eb", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={removeCandidate == null}
 							>
-								<Text style={{ fontWeight: "700", color: "#fff" }}>Remove</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{t('COMMON_BTN_REMOVE')}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>
@@ -2166,8 +2166,8 @@ export default function EventPanel({ organizerId }: Props) {
 			>
 				<View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", padding: 18 }}>
 					<View style={{ backgroundColor: tc.bgElevated, borderRadius: 14, padding: 16 }}>
-						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>Remove image</Text>
-						<Text style={{ marginTop: 8, color: tc.textSecondary }}>Do you want to remove this image?</Text>
+						<Text style={{ fontSize: 14, fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_REMOVE_IMAGE')}</Text>
+						<Text style={{ marginTop: 8, color: tc.textSecondary }}>{t('COMMON_ALERT_REMOVE_IMAGE_BODY')}</Text>
 						<View style={{ flexDirection: "row", marginTop: 14 }}>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2177,7 +2177,7 @@ export default function EventPanel({ organizerId }: Props) {
 								}}
 								style={{ flex: 1, backgroundColor: tc.bgSurface, paddingVertical: 12, borderRadius: 12, alignItems: "center", marginRight: 10 }}
 							>
-								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>Cancel</Text>
+								<Text style={{ fontWeight: "700", color: tc.textPrimary }}>{t('COMMON_BTN_CANCEL')}</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								activeOpacity={0.8}
@@ -2185,7 +2185,7 @@ export default function EventPanel({ organizerId }: Props) {
 								style={{ flex: 1, backgroundColor: removeImageCandidateUri ? "#2563eb" : "#9ca3af", paddingVertical: 12, borderRadius: 12, alignItems: "center" }}
 								disabled={!removeImageCandidateUri}
 							>
-								<Text style={{ fontWeight: "700", color: "#fff" }}>Remove</Text>
+								<Text style={{ fontWeight: "700", color: "#fff" }}>{t('COMMON_BTN_REMOVE')}</Text>
 							</TouchableOpacity>
 						</View>
 					</View>

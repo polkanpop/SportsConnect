@@ -242,7 +242,7 @@ export default function AccountSettingsScreen() {
       await unlinkProvider(provider)
       setProviders(prev => prev.filter(p => p !== provider))
     } catch (e: any) {
-      Alert.alert('Lỗi', e?.message || 'Không thể huỷ liên kết. Vui lòng thử lại.')
+      Alert.alert(t('COMMON_LABEL_ERROR'), e?.message || t('AUTH_ALERT_UNLINK_FAILED'))
     } finally {
       setUnlinkingProvider(null)
     }
@@ -572,7 +572,7 @@ export default function AccountSettingsScreen() {
       })
       const tokenJson = await tokenResp.json().catch(() => ({}))
       const accessToken: string = tokenJson?.access_token ?? ''
-      if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || 'Không lấy được access token.'); return }
+      if (!accessToken) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), tokenJson?.detail || t('AUTH_ALERT_ZALO_NO_TOKEN')); return }
       // 5. Get user_id + name via graph.zalo.me (Social API, works from Vietnam device IPs).
       //    Returns { id, name } — note field is 'id' not 'user_id'.
       let zaloId = String(tokenJson?.user_id ?? '')
@@ -587,7 +587,7 @@ export default function AccountSettingsScreen() {
           if (tiJson?.name) zaloName = String(tiJson.name)
         } catch { /* non-fatal */ }
       }
-      if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), 'Không lấy được thông tin người dùng Zalo.'); return }
+      if (!zaloId) { Alert.alert(t('ACCT_LINK_ZALO_ERR_TITLE'), t('AUTH_ALERT_ZALO_NO_PROFILE')); return }
       // 6. Link provider
       await linkZaloProvider({ access_token: accessToken, zalo_id: zaloId, zalo_name: zaloName })
       void loadMeta()
@@ -608,7 +608,7 @@ export default function AccountSettingsScreen() {
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (expo?.extra?.SUPABASE_URL as string | undefined)
     const backendUrl = (process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL).replace(/\/api$/, '')
     if (!supabaseUrl) {
-      Alert.alert('Lỗi', 'Thiếu cấu hình Supabase URL.')
+      Alert.alert(t('COMMON_LABEL_ERROR'), t('AUTH_ALERT_MISSING_SUPABASE'))
       setLinkingGoogle(false)
       return
     }
@@ -638,7 +638,7 @@ export default function AccountSettingsScreen() {
       }
 
       if (!accessToken) {
-        Alert.alert('Liên kết Google thất bại', 'Không nhận được token xác thực.')
+        Alert.alert(t('AUTH_ALERT_GOOGLE_LINK_FAILED'), t('AUTH_ALERT_GOOGLE_NO_TOKEN'))
         return
       }
 
@@ -659,7 +659,7 @@ export default function AccountSettingsScreen() {
     } catch (e: any) {
       const msg: string = e?.message ?? String(e) ?? ''
       if (!msg.toLowerCase().includes('cancel')) {
-        Alert.alert('Liên kết Google thất bại', msg || 'Vui lòng thử lại.')
+        Alert.alert(t('AUTH_ALERT_GOOGLE_LINK_FAILED'), msg || t('AUTH_ALERT_ZALO_TRY_AGAIN'))
       }
     } finally {
       setLinkingGoogle(false)

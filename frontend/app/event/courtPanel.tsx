@@ -1800,7 +1800,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         </View>
       ) : rows.length === 0 ? (
         <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
-          <Text style={styles.emptyText}>You donâ€™t have any courts yet.</Text>
+          <Text style={styles.emptyText}>{t('COURT_PANEL_EMPTY')}</Text>
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 }}>

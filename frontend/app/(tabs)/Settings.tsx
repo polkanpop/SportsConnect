@@ -39,7 +39,7 @@ export default function SettingsPage() {
   const { enabled: voiceEnabled, setEnabled: setVoiceEnabled } = useVoicePreference();
   const { enabled: pushEnabled, setEnabled: setPushEnabled } = usePushNotificationPreference();
 
-  const [displayName, setDisplayName] = useState<string>('Guest');
+  const [displayName, setDisplayName] = useState<string>(t('COMMON_LABEL_GUEST'));
   const [loadingName, setLoadingName] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +90,7 @@ export default function SettingsPage() {
           }
         } catch {/* ignore parse errors */}
       } else {
-        setDisplayName('Guest');
+        setDisplayName(t('COMMON_LABEL_GUEST'));
         setProfilePfp(null);
       }
     } catch (e: any) {
@@ -123,7 +123,7 @@ export default function SettingsPage() {
       router.replace('/(auth)/login');
     } catch (e: any) {
       console.error('Unexpected sign out error:', e);
-      Alert.alert('Sign Out Error', e.message || 'Unexpected error.');
+      Alert.alert(t('COMMON_ALERT_SIGN_OUT_ERROR'), e.message || 'Unexpected error.');
     }
   }, []);
 
@@ -167,7 +167,7 @@ export default function SettingsPage() {
           ) : (
             <Image source={ICONS.accountCircle} style={[styles.profileIcon, { tintColor: tc.textPrimary }]} />
           )}
-          <Text style={[styles.username, { color: tc.textPrimary }]}>{loadingName ? 'Loading...' : displayName || 'Guest'}</Text>
+          <Text style={[styles.username, { color: tc.textPrimary }]}>{loadingName ? t('COMMON_LABEL_LOADING') : displayName || t('COMMON_LABEL_GUEST')}</Text>
         </TouchableOpacity>
         {error && <Text style={{ color: '#dc2626', textAlign: 'center', marginBottom: 4 }}>{error}</Text>}
 
