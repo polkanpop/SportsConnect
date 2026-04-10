@@ -429,20 +429,46 @@
     }, [mapRegion]);
 
     // Event pins for map (pre-fetched so markers appear instantly on mode switch)
+    // Use a coarser bounds key (rounded to 1°) so events don't refetch on every small map move
+    const coarseBoundsKey = useMemo(() => {
+      const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+      const minLat = Math.floor(latitude - latitudeDelta / 2);
+      const maxLat = Math.ceil(latitude + latitudeDelta / 2);
+      const minLng = Math.floor(longitude - longitudeDelta / 2);
+      const maxLng = Math.ceil(longitude + longitudeDelta / 2);
+      return `${minLat},${maxLat},${minLng},${maxLng}`;
+    }, [mapRegion]);
+
     const { data: eventPins = [] } = useQuery<MapEventPin[]>({
-      queryKey: queryKeys.mapEventsInBounds(boundsKey),
-      queryFn: () => listEventsForMap(regionToBounds()),
-      staleTime: 5 * 60 * 1000,
-      gcTime: 10 * 60 * 1000,
+      queryKey: queryKeys.mapEventsInBounds(coarseBoundsKey),
+      queryFn: () => {
+        const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+        return listEventsForMap({
+          minLat: Math.floor(latitude - latitudeDelta / 2),
+          maxLat: Math.ceil(latitude + latitudeDelta / 2),
+          minLng: Math.floor(longitude - longitudeDelta / 2),
+          maxLng: Math.ceil(longitude + longitudeDelta / 2),
+        });
+      },
+      staleTime: 10 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
       placeholderData: keepPreviousData,
     });
 
     // TS pins for map (pre-fetched so markers appear instantly on mode switch)
     const { data: tsPins = [] } = useQuery<MapTSPin[]>({
-      queryKey: queryKeys.mapTSInBounds(boundsKey),
-      queryFn: () => listTrainingSessionsForMap(regionToBounds()),
-      staleTime: 5 * 60 * 1000,
-      gcTime: 10 * 60 * 1000,
+      queryKey: queryKeys.mapTSInBounds(coarseBoundsKey),
+      queryFn: () => {
+        const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+        return listTrainingSessionsForMap({
+          minLat: Math.floor(latitude - latitudeDelta / 2),
+          maxLat: Math.ceil(latitude + latitudeDelta / 2),
+          minLng: Math.floor(longitude - longitudeDelta / 2),
+          maxLng: Math.ceil(longitude + longitudeDelta / 2),
+        });
+      },
+      staleTime: 10 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
       placeholderData: keepPreviousData,
     });
 
@@ -1876,7 +1902,7 @@
                           {selectedEventPin.participants_cap != null ? (
                             <View style={styles.pinMetaChip}>
                               <Image source={ICONS.participants} style={styles.pinMetaIcon} />
-                              <Text style={styles.pinMetaText}>{selectedEventPin.participants_cap}</Text>
+                              <Text style={styles.pinMetaText}>{selectedEventPin.participant_count ?? 0}/{selectedEventPin.participants_cap}</Text>
                             </View>
                           ) : null}
                         </View>
@@ -1941,7 +1967,7 @@
                           {selectedTSPin.participants_cap != null ? (
                             <View style={styles.pinMetaChip}>
                               <Image source={ICONS.participants} style={styles.pinMetaIcon} />
-                              <Text style={styles.pinMetaText}>{selectedTSPin.participants_cap}</Text>
+                              <Text style={styles.pinMetaText}>{selectedTSPin.participant_count ?? 0}/{selectedTSPin.participants_cap}</Text>
                             </View>
                           ) : null}
                         </View>

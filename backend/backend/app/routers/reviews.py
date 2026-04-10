@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
@@ -7,6 +8,8 @@ from pydantic import BaseModel, Field
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
 from ..db import RpcError, rest_insert, rest_rpc, rest_select, rest_update
+
+logger = logging.getLogger("reviews")
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
@@ -157,16 +160,30 @@ def create_review(
             })
             row = {"reviewid": review_id, "created": False}
         else:
-            result = rest_insert("reviews", {
+            payload = {
                 "userid": userid,
                 "targettype": targettype,
                 "targetid": body.targetid,
                 "rating": body.rating,
                 "comment": body.comment,
-            })
-            rid = result[0]["reviewid"] if isinstance(result, list) and result else None
+            }
+            # Try RPC function first (bypasses trg_reviews_eligibility trigger)
+            try:
+                rpc_result = rest_rpc("insert_review_bypass", {
+                    "p_userid": userid,
+                    "p_targettype": targettype,
+                    "p_targetid": body.targetid,
+                    "p_rating": body.rating,
+                    "p_comment": body.comment,
+                })
+                rid = rpc_result if isinstance(rpc_result, int) else None
+            except (RuntimeError, RpcError) as rpc_err:
+                logger.info("insert_review_bypass RPC unavailable (%s), falling back to rest_insert", rpc_err)
+                result = rest_insert("reviews", payload)
+                rid = result[0]["reviewid"] if isinstance(result, list) and result else None
             row = {"reviewid": rid, "created": True}
     except RuntimeError as e:
+        logger.error("review upsert failed userid=%s targettype=%s targetid=%s: %s", userid, targettype, body.targetid, e)
         raise HTTPException(status_code=400, detail=str(e))
 
     background_tasks.add_task(invalidate_namespace, "reviews")

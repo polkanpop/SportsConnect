@@ -86,6 +86,7 @@ def list_events(organizerid: int | None = Query(None), status: str | None = Quer
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/map-pins", response_model=list[dict])
+@cache(expire=60, key_builder=make_key_builder("events_map_pins"))
 def events_map_pins(
     minLat: float = Query(...),
     maxLat: float = Query(...),
@@ -157,6 +158,17 @@ def events_map_pins(
         eventinfo_by_eventid: dict = {row["eventid"]: row for row in (eventinfo_rows or [])}
         courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
 
+        # 6) count current participants per event (joined bookings)
+        eventbooking_rows = rest_select(
+            "eventbooking", "eventbookingid,eventid",
+            filters={"eventid": event_ids, "status": "joined"},
+        )
+        participant_count_by_event: dict[int, int] = {}
+        for eb in (eventbooking_rows or []):
+            eid = eb.get("eventid")
+            if eid is not None:
+                participant_count_by_event[eid] = participant_count_by_event.get(eid, 0) + 1
+
         result = []
         for ev in event_rows:
             booking = booking_by_id.get(ev["courtbookingid"])
@@ -172,6 +184,7 @@ def events_map_pins(
                 "title": info.get("title"),
                 "entry_fee": info.get("entry_fee"),
                 "participants_cap": info.get("participants_cap"),
+                "participant_count": participant_count_by_event.get(ev["eventid"], 0),
                 "latitude": ci["latitude"],
                 "longitude": ci["longitude"],
                 "address": ci.get("address"),

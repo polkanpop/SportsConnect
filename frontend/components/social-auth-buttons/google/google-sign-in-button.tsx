@@ -92,13 +92,19 @@ export default function GoogleSignInButton() {
 
     let wbResult: WebBrowser.WebBrowserAuthSessionResult;
     try {
-      wbResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, { showInRecents: true });
+      wbResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri, {
+        showInRecents: false,
+        createTask: false,
+      });
     } catch (e) {
       console.error('[GoogleSignIn] openAuthSessionAsync error', e);
       setLoading(false);
       return;
     }
     console.debug('[GoogleSignIn] webBrowser result', wbResult);
+    // Ensure the browser tab is dismissed on Android after receiving the result
+    try { WebBrowser.dismissBrowser(); } catch {}
+    try { WebBrowser.dismissAuthSession(); } catch {}
 
     if (wbResult.type !== 'success') {
       if (wbResult.type === 'dismiss') {

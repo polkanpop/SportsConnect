@@ -347,6 +347,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
   const originalAddressRef = useRef<string>('')
   const venueBaseInitRef = useRef(false)
+  const [dataVersion, setDataVersion] = useState(0)
 
   const loadMyCourts = useCallback(async () => {
     if (typeof ownerId !== 'number') {
@@ -554,7 +555,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setPendingCloudinaryDeletesSub([])
     setSaveSuccessMessage(null)
     loadCourtData(selected)
-  }, [selected?.court?.courtid]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.court?.courtid, dataVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!saveSuccessMessage) return
@@ -905,15 +906,20 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     return currentMainSnapshot !== mainBaselineSnapshot
   }, [currentMainSnapshot, mainBaselineSnapshot])
 
-  // Re-stamp baseline once the venue base name initializes (async from subCourtOptions).
-  // Without this, the baseline is always mismatched and Save stays enabled on fresh load.
+  // Re-stamp baseline once the venue base name AND its edit twin both initialize
+  // (async from subCourtOptions). Without this, the baseline is always mismatched
+  // and Save stays enabled on fresh load.
   useEffect(() => {
     if (venueBaseInitRef.current) return
     if (!mainBaselineSnapshot) return
     if (!selectedVenueCourtBaseName) return
+    // Wait for venueCourtBaseEditName to also update (it mirrors selectedVenueCourtBaseName)
+    const baseFrom = String(selectedVenueCourtBaseName || '').trim()
+    const baseTo = String(venueCourtBaseEditName || '').trim()
+    if (baseFrom && !baseTo) return  // edit name hasn't synced yet; wait for next render
     venueBaseInitRef.current = true
     setMainBaselineSnapshot(currentMainSnapshot)
-  }, [selectedVenueCourtBaseName, mainBaselineSnapshot, currentMainSnapshot])
+  }, [selectedVenueCourtBaseName, venueCourtBaseEditName, mainBaselineSnapshot, currentMainSnapshot])
 
   useEffect(() => {
     mainDirtyRef.current = mainIsDirty
@@ -1614,6 +1620,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         await loadAvailability(courtid)
       }
 
+      // Invalidate caches so loadMyCourts and loadCourtData fetch fresh data
+      await invalidateCache('cache:courtinfo:v1')
+      await invalidateCache('cache:courtinfo:compact:v1')
+      await invalidateCache(`@courtAvailability:${courtid}`)
+
       await loadMyCourts()
 
       // Deferred Cloudinary deletions (only after successful save for that mode)
@@ -1627,7 +1638,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           }
         }
         setPendingCloudinaryDeletesMain([])
-        setMainBaselineSnapshot(currentMainSnapshot)
       } else {
         const urls = dedupeStrings(pendingCloudinaryDeletesSub || [])
         if (urls.length) {
@@ -1638,8 +1648,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           }
         }
         setPendingCloudinaryDeletesSub([])
-        setSubBaselineSnapshot(currentSubSnapshot)
       }
+
+      // Bump dataVersion so the loadCourtData effect re-runs and refreshes all
+      // detail data (playing courts, services, availability) from the server.
+      // loadCourtData will re-stamp the baseline from fresh server data.
+      setDataVersion((v) => v + 1)
 
       setSaveSuccessMessage(t('COURT_PANEL_SAVE_SUCCESS'))
     } catch (e: any) {
@@ -1665,8 +1679,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     playingCourts,
     pendingCloudinaryDeletesMain,
     pendingCloudinaryDeletesSub,
-    currentMainSnapshot,
-    currentSubSnapshot,
     mainBaselineSnapshot,
     subBaselineSnapshot,
     selectedSubBaseName,

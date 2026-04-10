@@ -76,6 +76,7 @@ def list_training_sessions(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/map-pins", response_model=list[dict])
+@cache(expire=60, key_builder=make_key_builder("ts_map_pins"))
 def training_sessions_map_pins(
     minLat: float = Query(...),
     maxLat: float = Query(...),
@@ -147,6 +148,17 @@ def training_sessions_map_pins(
         tsinfo_by_sessionid: dict = {row["sessionid"]: row for row in (tsinfo_rows or [])}
         courtinfo_by_courtid: dict = {row["courtid"]: row for row in courtinfo_rows}
 
+        # 6) count current participants per session (joined bookings)
+        tsbooking_rows = rest_select(
+            "tsbookings", "tsbookingid,sessionid",
+            filters={"sessionid": session_ids, "status": "joined"},
+        )
+        participant_count_by_session: dict[int, int] = {}
+        for tb in (tsbooking_rows or []):
+            sid = tb.get("sessionid")
+            if sid is not None:
+                participant_count_by_session[sid] = participant_count_by_session.get(sid, 0) + 1
+
         result = []
         for s in session_rows:
             booking = booking_by_id.get(s["courtbookingid"])
@@ -162,6 +174,7 @@ def training_sessions_map_pins(
                 "title": info.get("title"),
                 "entry_fee": info.get("entry_fee"),
                 "participants_cap": info.get("participants_cap"),
+                "participant_count": participant_count_by_session.get(s["sessionid"], 0),
                 "latitude": ci["latitude"],
                 "longitude": ci["longitude"],
                 "address": ci.get("address"),
