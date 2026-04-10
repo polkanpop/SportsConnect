@@ -1,7 +1,7 @@
 import os
 import json
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 import asyncpg
 import httpx
@@ -364,12 +364,16 @@ def rest_upsert(table: str, payload: Dict[str, Any], on_conflict: Optional[str] 
         raise RuntimeError(f"Supabase REST error {r.status_code} on {table}: {r.text}")
     return r.json()
 
-def rest_insert(table: str, payload: Dict[str, Any]) -> Any:
+def rest_insert(table: str, payload: Dict[str, Any], columns: Optional[List[str]] = None) -> Any:
     """Strict insert (no upsert). Will raise 409 on duplicate primary key instead of silently updating.
-    This protects sample seed data from being overwritten when sequences are misaligned."""
+    This protects sample seed data from being overwritten when sequences are misaligned.
+    Pass ``columns`` to force PostgREST to use json_to_recordset with explicit type casting
+    instead of json_populate_recordset — required for enum columns to avoid the stale-default bug."""
     settings = get_settings()
     client = get_http_client()
     url = f"{settings.SUPABASE_URL}/rest/v1/{table}"
+    if columns:
+        url += f"?columns={','.join(columns)}"
     headers = rest_headers(settings)
     headers["Prefer"] = "return=representation"  # omit resolution=merge-duplicates
     r = client.post(url, headers=headers, json=payload)

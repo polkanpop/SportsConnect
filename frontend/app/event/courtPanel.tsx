@@ -1040,10 +1040,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   useEffect(() => {
     // Switching which sub-court half is selected should not be treated as an edit.
     // Reset baseline/hydration so Save only enables after actual changes.
+    // Use selected?.court?.courtid (stable number) instead of selected (object ref)
+    // so that loadMyCourts() after save doesn't clear the freshly-stamped baseline.
     if (editMode !== 'sub') return
     if (!selected) return
     setSubBaselineSnapshot('')
-  }, [editMode, selected, selectedSubPlayingCourtId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, selected?.court?.courtid, selectedSubPlayingCourtId])
 
   useFocusEffect(
     useCallback(() => {

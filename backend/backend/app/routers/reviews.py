@@ -192,7 +192,7 @@ async def create_review(
                         "targetid": body.targetid,
                         "rating": body.rating,
                         "comment": body.comment,
-                    })
+                    }, columns=["userid", "targettype", "targetid", "rating", "comment"])
                     rid = result[0]["reviewid"] if isinstance(result, list) and result else None
 
             row = {"reviewid": rid, "created": True}
