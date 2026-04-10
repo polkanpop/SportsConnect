@@ -428,21 +428,19 @@
       };
     }, [mapRegion]);
 
-    // Event pins for map (only fetched when in events mode)
+    // Event pins for map (pre-fetched so markers appear instantly on mode switch)
     const { data: eventPins = [] } = useQuery<MapEventPin[]>({
       queryKey: queryKeys.mapEventsInBounds(boundsKey),
       queryFn: () => listEventsForMap(regionToBounds()),
-      enabled: mapMode === 'events',
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
       placeholderData: keepPreviousData,
     });
 
-    // TS pins for map (only fetched when in training mode)
+    // TS pins for map (pre-fetched so markers appear instantly on mode switch)
     const { data: tsPins = [] } = useQuery<MapTSPin[]>({
       queryKey: queryKeys.mapTSInBounds(boundsKey),
       queryFn: () => listTrainingSessionsForMap(regionToBounds()),
-      enabled: mapMode === 'training',
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
       placeholderData: keepPreviousData,
@@ -1837,13 +1835,7 @@
                       </View>
                       <View style={styles.sheetHeaderCard}>
                         <View style={styles.titleRow}>
-                          <View style={{ flex: 1, marginRight: 10 }}>
-                            <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedEventPin.title ?? t('MAP_CHIP_EVENTS')}</Text>
-                            <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedEventPin.address ?? ''}</Text>
-                            {selectedEventPin.court_name ? (
-                              <Text style={[styles.sheetCoverAddress, { marginTop: 2, fontWeight: '600' }]}>{selectedEventPin.court_name}</Text>
-                            ) : null}
-                          </View>
+                          <Text style={[styles.sheetCoverTitle, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{selectedEventPin.title ?? t('MAP_CHIP_EVENTS')}</Text>
                           <TouchableOpacity
                             style={styles.bookingButton}
                             onPress={() => router.push({ pathname: '/event/eventBooking', params: { eventid: String(selectedEventPin.eventid) } })}
@@ -1852,7 +1844,20 @@
                             <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
                           </TouchableOpacity>
                         </View>
-                        <View style={[styles.actionRow, { marginTop: 12, flexWrap: 'wrap', gap: 8 }]}>
+
+                        <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
+                          {t('COMMON_LABEL_ADDRESS')}: {selectedEventPin.address ?? ''}
+                        </Text>
+
+                        <View style={styles.sheetTagRow}>
+                          {selectedEventPin.court_name ? (
+                            <View style={[styles.sheetTag, styles.sheetVenueTag]}>
+                              <Text style={[styles.sheetTagText, { color: '#fff' }]}>{selectedEventPin.court_name}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <View style={[styles.actionRow, { marginTop: 8, flexWrap: 'wrap', gap: 8 }]}>
                           {selectedEventPin.start_timestamp ? (
                             <View style={styles.pinMetaChip}>
                               <Image source={ICONS.starCal} style={styles.pinMetaIcon} />
@@ -1895,13 +1900,7 @@
                       </View>
                       <View style={styles.sheetHeaderCard}>
                         <View style={styles.titleRow}>
-                          <View style={{ flex: 1, marginRight: 10 }}>
-                            <Text style={styles.sheetCoverTitle} numberOfLines={2}>{selectedTSPin.title ?? t('MAP_CHIP_TRAINING')}</Text>
-                            <Text style={styles.sheetCoverAddress} numberOfLines={2}>{selectedTSPin.address ?? ''}</Text>
-                            {selectedTSPin.court_name ? (
-                              <Text style={[styles.sheetCoverAddress, { marginTop: 2, fontWeight: '600' }]}>{selectedTSPin.court_name}</Text>
-                            ) : null}
-                          </View>
+                          <Text style={[styles.sheetCoverTitle, { flex: 1, marginRight: 10 }]} numberOfLines={2}>{selectedTSPin.title ?? t('MAP_CHIP_TRAINING')}</Text>
                           <TouchableOpacity
                             style={styles.bookingButton}
                             onPress={() => router.push({ pathname: '/event/tsBooking', params: { sessionid: String(selectedTSPin.sessionid) } })}
@@ -1910,7 +1909,20 @@
                             <Text style={styles.bookingText}>{t('MAP_BTN_JOIN')}</Text>
                           </TouchableOpacity>
                         </View>
-                        <View style={[styles.actionRow, { marginTop: 12, flexWrap: 'wrap', gap: 8 }]}>
+
+                        <Text style={styles.sheetCoverAddress} numberOfLines={2} ellipsizeMode="tail">
+                          {t('COMMON_LABEL_ADDRESS')}: {selectedTSPin.address ?? ''}
+                        </Text>
+
+                        <View style={styles.sheetTagRow}>
+                          {selectedTSPin.court_name ? (
+                            <View style={[styles.sheetTag, styles.sheetVenueTag]}>
+                              <Text style={[styles.sheetTagText, { color: '#fff' }]}>{selectedTSPin.court_name}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        <View style={[styles.actionRow, { marginTop: 8, flexWrap: 'wrap', gap: 8 }]}>
                           {selectedTSPin.start_timestamp ? (
                             <View style={styles.pinMetaChip}>
                               <Image source={ICONS.tsNoti} style={styles.pinMetaIcon} />

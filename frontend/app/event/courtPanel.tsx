@@ -195,6 +195,7 @@ function buildMainSnapshotFromRaw(args: {
   autoApprove: boolean
   images: string[]
   serviceDrafts: ServiceEditDraft[]
+  venueBaseName?: string
 }): string {
   const imagesCanonical = dedupeStrings(args.images).slice().sort()
   const normalizedServices = args.serviceDrafts.map((d) => ({
@@ -209,12 +210,15 @@ function buildMainSnapshotFromRaw(args: {
     deleted: !!d.deleted,
   }))
   normalizedServices.sort((a, b) => a.key.localeCompare(b.key))
+  const baseName = String(args.venueBaseName || '').trim()
   return JSON.stringify({
     name: args.name.trim(),
     address: args.address.trim(),
     venue: args.venue,
     autoApprove: !!args.autoApprove,
     images: imagesCanonical,
+    venueBaseFrom: baseName,
+    venueBaseTo: baseName,
     verified: null,
     services: normalizedServices,
   })
@@ -342,6 +346,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [serviceDeleteCandidateLocalId, setServiceDeleteCandidateLocalId] = useState<string | null>(null)
 
   const originalAddressRef = useRef<string>('')
+  const venueBaseInitRef = useRef(false)
 
   const loadMyCourts = useCallback(async () => {
     if (typeof ownerId !== 'number') {
@@ -404,6 +409,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (typeof courtid !== 'number') return
 
     setMainBaselineSnapshot('')
+    venueBaseInitRef.current = false
     setAvailabilityLoading(true)
     setPlayingCourtsLoading(true)
     setServicesLoading(true)
@@ -898,6 +904,16 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (!mainBaselineSnapshot) return false
     return currentMainSnapshot !== mainBaselineSnapshot
   }, [currentMainSnapshot, mainBaselineSnapshot])
+
+  // Re-stamp baseline once the venue base name initializes (async from subCourtOptions).
+  // Without this, the baseline is always mismatched and Save stays enabled on fresh load.
+  useEffect(() => {
+    if (venueBaseInitRef.current) return
+    if (!mainBaselineSnapshot) return
+    if (!selectedVenueCourtBaseName) return
+    venueBaseInitRef.current = true
+    setMainBaselineSnapshot(currentMainSnapshot)
+  }, [selectedVenueCourtBaseName, mainBaselineSnapshot, currentMainSnapshot])
 
   useEffect(() => {
     mainDirtyRef.current = mainIsDirty
@@ -2311,8 +2327,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   }}
                   placeholder={t('COURT_PANEL_PLACEHOLDER_ADDRESS')}
                   placeholderTextColor={tc.placeholder}
-                  style={[styles.addressInput, { color: tc.textPrimary }]}
+                  style={[styles.addressInput, { color: tc.textPrimary, paddingRight: verifiedCoord ? 36 : 12 }]}
                 />
+                {verifiedCoord ? (
+                  <Image source={ICONS.tick} style={{ position: 'absolute', right: 12, top: '50%', marginTop: -8, width: 16, height: 16, tintColor: COLORS.green }} resizeMode="contain" />
+                ) : addressLoading ? (
+                  <ActivityIndicator size="small" color={tc.textMuted} style={{ position: 'absolute', right: 12, top: '50%', marginTop: -8 }} />
+                ) : null}
               </View>
 
               {addressLoading ? <Text style={{ color: tc.textMuted, marginTop: 6 }}>{t('COURT_PANEL_SEARCHING')}</Text> : null}
@@ -2346,18 +2367,25 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               {!!verifyError && <Text style={styles.verifyErrorText}>{verifyError}</Text>}
 
               <View style={styles.verifyRow}>
-                <TouchableOpacity
-                  onPress={handleVerifyLocation}
-                  style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, { backgroundColor: tc.brand }]}
-                  activeOpacity={0.85}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={[styles.smallBtnText, { color: tc.btnPrimaryText }]}>{t('COURT_PANEL_BTN_VERIFY')}</Text>
-                    {verifiedCoord ? (
-                      <Image source={ICONS.tick} style={{ width: 18, height: 18, marginLeft: 8, tintColor: tc.btnPrimaryText }} resizeMode="contain" />
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
+                {(() => {
+                  const addressUnchanged = canonicalizeAddress(editAddress) === canonicalizeAddress(originalAddressRef.current ?? '')
+                  const verifyDisabled = addressUnchanged || addressLoading
+                  return (
+                    <TouchableOpacity
+                      onPress={handleVerifyLocation}
+                      disabled={verifyDisabled}
+                      style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, { backgroundColor: tc.brand, opacity: verifyDisabled ? 0.45 : 1 }]}
+                      activeOpacity={0.85}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={[styles.smallBtnText, { color: tc.btnPrimaryText }]}>{t('COURT_PANEL_BTN_VERIFY')}</Text>
+                        {verifiedCoord ? (
+                          <Image source={ICONS.tick} style={{ width: 18, height: 18, marginLeft: 8, tintColor: tc.btnPrimaryText }} resizeMode="contain" />
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  )
+                })()}
               </View>
 
               {warnings.length ? (

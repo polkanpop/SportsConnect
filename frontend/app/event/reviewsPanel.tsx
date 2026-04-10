@@ -9,6 +9,7 @@ import {
   listTrainingSessionsCombinedCached,
   listCourtAvailabilityAll,
   listCourtInfoCached,
+  listReviews,
 } from '@/lib/backendApi'
 import { useAppBootstrap } from '@/providers/app-bootstrap-provider'
 import { COLORS } from '@/constants/colors'
@@ -22,6 +23,7 @@ type ReviewItem = {
   venueName?: string
   targettype: string
   targetid: number
+  reviewed: boolean
 }
 
 function firstText(...values: any[]): string | null {
@@ -86,6 +88,11 @@ function isReviewableByStatusAndTime(opts: { bookingStatus?: unknown; sessionSta
   const ss = String(opts.sessionStatus ?? '').trim().toLowerCase()
   if (ss.includes('cancel') || ss === 'missed') return false
   if (ss === 'completed' || ss === 'complete') return true
+  // Approved/joined bookings whose end time has passed are reviewable
+  if (bs === 'approved' || bs === 'joined') {
+    const end = parseTimestampLoose(opts.endTs)
+    if (end && end.getTime() < Date.now()) return true
+  }
   return false
 }
 
@@ -127,6 +134,25 @@ export default function ReviewsPanel() {
     staleTime: 5 * 60_000,
   })
 
+  const { data: userReviewsRaw } = useQuery<any[]>({
+    queryKey: ['userReviews', userId],
+    queryFn: () => listReviews({ userid: userId! }),
+    enabled: typeof userId === 'number',
+    staleTime: 2 * 60_000,
+  })
+
+  const reviewedCourtIds = useMemo(() => {
+    const set = new Set<number>()
+    if (Array.isArray(userReviewsRaw)) {
+      for (const r of userReviewsRaw) {
+        if (String(r?.targettype).toLowerCase() === 'court' && Number.isFinite(Number(r?.targetid))) {
+          set.add(Number(r.targetid))
+        }
+      }
+    }
+    return set
+  }, [userReviewsRaw])
+
   const isLoading = dashboardLoading
 
   const reviewItems = useMemo<ReviewItem[]>(() => {
@@ -160,7 +186,8 @@ export default function ReviewsPanel() {
       }
     }
 
-    // Court bookings (completed)
+    // Court bookings (approved & past end time, or completed)
+    const seenCourtIds = new Set<number>()
     if (Array.isArray(courtBookingsRaw)) {
       for (const cb of courtBookingsRaw) {
         const reviewable = isReviewableByStatusAndTime({
@@ -172,18 +199,23 @@ export default function ReviewsPanel() {
         if (!reviewable) continue
         const av = availabilityById.get(Number(cb.availabilityid))
         const courtid = Number.isFinite(Number(av?.courtid)) ? Number(av?.courtid) : undefined
+        if (courtid == null) continue
+        // Deduplicate: show one entry per court
+        if (seenCourtIds.has(courtid)) continue
+        seenCourtIds.add(courtid)
         const courtNameFromBooking = typeof (cb as any)?.court_name === 'string' ? (cb as any).court_name : undefined
         const courtName = courtNameFromBooking || (courtid != null
           ? (courtInfoByCourtId.get(courtid)?.name as string | undefined)
           : undefined)
         const venueName = firstText(courtName, (av as any)?.venue_name, (av as any)?.address)
         items.push({
-          key: `court_${cb.courtbookingid}`,
+          key: `court_${courtid}`,
           title: venueName ?? 'Court',
           subtitle: t('REVIEW_PANEL_SUBTITLE_COURT'),
           venueName: venueName ?? undefined,
           targettype: 'court',
-          targetid: courtid ?? Number(cb.courtbookingid),
+          targetid: courtid,
+          reviewed: reviewedCourtIds.has(courtid),
         })
       }
     }
@@ -194,7 +226,7 @@ export default function ReviewsPanel() {
     // Training session bookings — same as events: review the court instead.
 
     return items
-  }, [courtBookingsRaw, eventBookingsRaw, tsBookingsRaw, courtAvailabilityRaw, courtInfoRaw, eventsCombined, sessionsCombined, t])
+  }, [courtBookingsRaw, eventBookingsRaw, tsBookingsRaw, courtAvailabilityRaw, courtInfoRaw, eventsCombined, sessionsCombined, reviewedCourtIds, t])
 
   if (isLoading) {
     return (
@@ -222,23 +254,29 @@ export default function ReviewsPanel() {
               <Text style={[styles.cardTitle, { color: tc.textPrimary }]} numberOfLines={2}>{item.title}</Text>
               <Text style={[styles.cardSubtitle, { color: tc.textSecondary }]}>{item.subtitle}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.reviewBtn}
-              activeOpacity={0.8}
-              onPress={() =>
-                router.push({
-                  pathname: '/event/reviewForm',
-                  params: {
-                    targettype: item.targettype,
-                    targetid: String(item.targetid),
-                    title: encodeURIComponent(item.title),
-                    venueName: item.venueName ? encodeURIComponent(item.venueName) : undefined,
-                  },
-                })
-              }
-            >
-              <Text style={styles.reviewBtnText}>{t('REVIEW_PANEL_BTN_REVIEW')}</Text>
-            </TouchableOpacity>
+            {item.reviewed ? (
+              <View style={[styles.reviewBtn, { backgroundColor: COLORS.green || '#22C55E', opacity: 0.85 }]}>
+                <Text style={styles.reviewBtnText}>✓ {t('REVIEW_PANEL_BTN_REVIEWED')}</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.reviewBtn}
+                activeOpacity={0.8}
+                onPress={() =>
+                  router.push({
+                    pathname: '/event/reviewForm',
+                    params: {
+                      targettype: item.targettype,
+                      targetid: String(item.targetid),
+                      title: encodeURIComponent(item.title),
+                      venueName: item.venueName ? encodeURIComponent(item.venueName) : undefined,
+                    },
+                  })
+                }
+              >
+                <Text style={styles.reviewBtnText}>{t('REVIEW_PANEL_BTN_REVIEW')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ))
       )}

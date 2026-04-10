@@ -42,6 +42,7 @@ import {
   updateEventBooking,
   updateTrainingSession,
   updateTrainingSessionBooking,
+  listReviews,
 } from '@/lib/backendApi'
 
 type ParsedId =
@@ -564,6 +565,22 @@ export default function DetailsPage() {
     enabled: sessionSummaryCourtid != null,
     staleTime: 10 * 60_000,
   })
+
+  // ── Already-reviewed check ────────────────────────────────────────────
+  const reviewTargetCourtId = useMemo(() => {
+    if (parsed.kind === 'court_booking') return courtCourtId ?? null
+    if (parsed.kind === 'event_booking') return eventSummaryCourtid ?? null
+    if (parsed.kind === 'session_booking') return sessionSummaryCourtid ?? null
+    return null
+  }, [parsed.kind, courtCourtId, eventSummaryCourtid, sessionSummaryCourtid])
+
+  const existingReviewQuery = useQuery({
+    queryKey: ['existingReview', userId, reviewTargetCourtId],
+    queryFn: () => listReviews({ userid: userId!, targettype: 'court', targetid: reviewTargetCourtId! }),
+    enabled: typeof userId === 'number' && reviewTargetCourtId != null,
+    staleTime: 2 * 60_000,
+  })
+  const alreadyReviewed = Array.isArray(existingReviewQuery.data) && existingReviewQuery.data.length > 0
 
   const createdEventQuery = useQuery({
     queryKey: ['details', 'createdEvent', parsed.kind === 'created_event' ? parsed.id : null],
@@ -1904,7 +1921,11 @@ export default function DetailsPage() {
           {parsed.kind === 'court_booking' && !!courtCancelBlockedReason && (
             <Text style={styles.cancelNote}>{courtCancelBlockedReason}</Text>
           )}
-          {isBookingKind && (
+          {isBookingKind && alreadyReviewed ? (
+            <View style={[styles.reviewBtn, styles.reviewBtnDisabled]}>
+              <Text style={styles.reviewBtnText}>✓ {t('REVIEW_PANEL_BTN_REVIEWED')}</Text>
+            </View>
+          ) : isBookingKind ? (
             <Pressable
               disabled={!canReview || !reviewNavParams}
               style={({ pressed }) => [
@@ -1928,7 +1949,7 @@ export default function DetailsPage() {
             >
               <Text style={styles.reviewBtnText}>{t('DETAILS_BTN_REVIEW')}</Text>
             </Pressable>
-          )}
+          ) : null}
         </ScrollView>
       )}
     </SafeAreaView>

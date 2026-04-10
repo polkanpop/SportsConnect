@@ -2662,6 +2662,15 @@ export type ReviewIn = {
 	comment: string
 }
 
+export async function listReviews(params: { userid?: number; targettype?: string; targetid?: number } = {}): Promise<any[]> {
+	const qs = new URLSearchParams()
+	if (params.userid != null) qs.set('userid', String(params.userid))
+	if (params.targettype) qs.set('targettype', params.targettype)
+	if (params.targetid != null) qs.set('targetid', String(params.targetid))
+	const suffix = qs.toString() ? `?${qs}` : ''
+	return request(`/reviews${suffix}`, { debugLabel: 'listReviews' }) as Promise<any[]>
+}
+
 export async function postReview(payload: ReviewIn): Promise<{ reviewid: number }> {
 	return request('/reviews', {
 		method: 'POST',

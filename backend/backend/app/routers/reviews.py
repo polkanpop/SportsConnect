@@ -1,8 +1,8 @@
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
 from fastapi_cache.decorator import cache
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
@@ -44,19 +44,11 @@ def get_review(reviewid: int):
 # ── Pydantic request models ───────────────────────────────────────────────────
 
 class ReviewIn(BaseModel):
-    targettype: Literal['court', 'event', 'trainingsession'] = Field(..., description="'court', 'event', or 'trainingsession'")
+    targettype: str = Field('court', description="'court', 'event', or 'trainingsession'")
     targetid: int
     rating: int = Field(..., ge=1, le=5)
     comment: str
     userid: Optional[int] = None  # falls back to auth subject
-
-    @field_validator('targettype', mode='before')
-    @classmethod
-    def normalize_targettype(cls, v: str) -> str:
-        normalized = str(v or '').lower().strip()
-        if normalized not in ('court', 'event', 'trainingsession'):
-            return 'court'  # default to court review
-        return normalized
 
 
 class ReactIn(BaseModel):
@@ -144,9 +136,8 @@ def create_review(
         raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
 
     # ── Eligibility check ─────────────────────────────────────────────────
-    targettype = body.targettype
-    if not targettype or targettype not in ('court', 'event', 'trainingsession'):
-        raise HTTPException(status_code=400, detail=f"Invalid targettype: {targettype!r}")
+    raw_tt = str(body.targettype or '').lower().strip()
+    targettype = raw_tt if raw_tt in ('court', 'event', 'trainingsession') else 'court'
 
     if not _has_eligible_booking(userid, targettype, body.targetid):
         raise HTTPException(status_code=403, detail=f"User {userid} has no qualifying booking for {targettype} id={body.targetid}")

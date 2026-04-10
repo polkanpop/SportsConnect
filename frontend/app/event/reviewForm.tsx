@@ -54,7 +54,10 @@ export default function ReviewForm() {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: q => Array.isArray(q.queryKey) && q.queryKey[0] === 'reviews' })
+      queryClient.invalidateQueries({ predicate: q => {
+        const k = Array.isArray(q.queryKey) ? q.queryKey[0] : null
+        return k === 'reviews' || k === 'existingReview' || k === 'userReviews'
+      }})
       setConfirmVisible(false)
       setSuccessVisible(true)
     },
@@ -97,7 +100,7 @@ export default function ReviewForm() {
           {/* Target Info */}
           <View style={[styles.card, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
             <Text style={[styles.targetLabel, { color: tc.textPrimary }]}>{displayTitle}</Text>
-            <Text style={[styles.targetType, { color: tc.textSecondary }]}>{contextLabel ? decodeURIComponent(String(contextLabel)) : String(targettype ?? '').replace('trainingsession', 'Training Session')}</Text>
+            <Text style={[styles.targetType, { color: tc.textSecondary }]}>{contextLabel ? decodeURIComponent(String(contextLabel)) : (() => { const tt = String(targettype ?? '').toLowerCase(); if (tt === 'court') return t('COMMON_LABEL_COURT'); if (tt === 'event') return t('COMMON_LABEL_EVENT'); if (tt === 'trainingsession') return t('COMMON_LABEL_TRAINING_SESSION'); return tt; })()}</Text>
           </View>
 
           {/* Star Rating */}
