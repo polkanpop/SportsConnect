@@ -1650,10 +1650,28 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         setPendingCloudinaryDeletesSub([])
       }
 
-      // Bump dataVersion so the loadCourtData effect re-runs and refreshes all
-      // detail data (playing courts, services, availability) from the server.
-      // loadCourtData will re-stamp the baseline from fresh server data.
-      setDataVersion((v) => v + 1)
+      if (editMode === 'main') {
+        // Bump dataVersion so loadCourtData re-runs and refreshes all detail
+        // data (playing courts, services, availability) from the server.
+        setDataVersion((v) => v + 1)
+      } else {
+        // Sub mode: re-stamp the baseline from the current edit state so the
+        // form becomes clean without triggering a full re-fetch. A full
+        // re-fetch would hit the backend availability SWR cache before the
+        // background invalidation finishes, causing the schedule to revert.
+        const savedSubSnapshot = JSON.stringify({
+          playingcourtid: selectedSubPlayingCourtId ?? null,
+          name: String(subEditName || '').trim(),
+          images: dedupeStrings(subEditImages || []).slice().sort(),
+          ...(selectedSubPart === 'full' ? {
+            scheduleDays: (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => scheduleDays.includes(d)),
+            startTime: String(startTime || '').trim(),
+            endTime: String(endTime || '').trim(),
+            availabilityStatus,
+          } : {}),
+        })
+        setSubBaselineSnapshot(savedSubSnapshot)
+      }
 
       setSaveSuccessMessage(t('COURT_PANEL_SAVE_SUCCESS'))
     } catch (e: any) {
@@ -1689,6 +1707,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     subEditName,
     subEditImages,
     loadAvailability,
+    selectedSubPart,
+    setSubBaselineSnapshot,
   ])
 
   const zoomAnimatedStyle = useAnimatedStyle(() => {

@@ -1950,6 +1950,7 @@ export type MapEventPin = {
 	title?: string | null
 	entry_fee?: number | null
 	participants_cap?: number | null
+	participant_count?: number
 	latitude: number
 	longitude: number
 	address?: string | null
@@ -1964,6 +1965,7 @@ export type MapTSPin = {
 	title?: string | null
 	entry_fee?: number | null
 	participants_cap?: number | null
+	participant_count?: number
 	latitude: number
 	longitude: number
 	address?: string | null

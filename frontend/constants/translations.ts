@@ -1115,11 +1115,7 @@ export const en = {
 
   // Auth
   AUTH_LABEL_EMAIL: 'Email',
-  AUTH_PLACEHOLDER_EMAIL: 'email@address.com',
-  AUTH_LABEL_PASSWORD: 'Password',
-  AUTH_PLACEHOLDER_PASSWORD: 'Password',
   AUTH_BTN_SIGN_IN: 'Sign in',
-  AUTH_BTN_SIGN_UP: 'Sign up',
   AUTH_BTN_SIGN_OUT: 'Sign out',
   AUTH_ALERT_CHECK_INBOX: 'Please check your inbox for email verification!',
   AUTH_ALERT_SIGN_IN_ERROR: 'Sign-in error',
@@ -2250,11 +2246,7 @@ export const vi: Record<TranslationKey, string> = {
 
   // Auth
   AUTH_LABEL_EMAIL: 'Email',
-  AUTH_PLACEHOLDER_EMAIL: 'email@address.com',
-  AUTH_LABEL_PASSWORD: 'Mật khẩu',
-  AUTH_PLACEHOLDER_PASSWORD: 'Mật khẩu',
   AUTH_BTN_SIGN_IN: 'Đăng nhập',
-  AUTH_BTN_SIGN_UP: 'Đăng ký',
   AUTH_BTN_SIGN_OUT: 'Đăng xuất',
   AUTH_ALERT_CHECK_INBOX: 'Vui lòng kiểm tra hộp thư để xác minh email!',
   AUTH_ALERT_SIGN_IN_ERROR: 'Lỗi đăng nhập',
