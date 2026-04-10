@@ -254,7 +254,7 @@ def get_playingcourt(playingcourtid: int):
 
 
 @router.patch("/{playingcourtid}", response_model=dict)
-def patch_playingcourt(playingcourtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def patch_playingcourt(playingcourtid: int, body: dict, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_playingcourtid(playingcourtid=playingcourtid, current_user=current_user)
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -267,7 +267,7 @@ def patch_playingcourt(playingcourtid: int, body: dict, background_tasks: Backgr
         raise HTTPException(status_code=422, detail="No fields to update")
 
     updated = rest_update("playingcourt", {PRIMARY_KEY: playingcourtid}, payload)
-    background_tasks.add_task(invalidate_namespace, "playingcourts", "courtavailability")
+    await invalidate_namespace("playingcourts", "courtavailability")
     if isinstance(updated, list) and updated:
         return updated[0]
     return payload
@@ -284,7 +284,7 @@ def get_playingcourtinfo(playingcourtid: int):
 
 
 @router.patch("/{playingcourtid}/info", response_model=dict)
-def patch_playingcourtinfo(playingcourtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def patch_playingcourtinfo(playingcourtid: int, body: dict, current_user: str = Depends(get_current_user)):
     _enforce_owner_by_playingcourtid(playingcourtid=playingcourtid, current_user=current_user)
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
@@ -296,7 +296,7 @@ def patch_playingcourtinfo(playingcourtid: int, body: dict, background_tasks: Ba
     payload.pop("description", None)
 
     updated = rest_upsert("playingcourtinfo", payload, on_conflict="playingcourtid")
-    background_tasks.add_task(invalidate_namespace, "playingcourts")
+    await invalidate_namespace("playingcourts")
     if isinstance(updated, list) and updated:
         return updated[0]
     return payload

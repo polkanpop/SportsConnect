@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 import orjson
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi_cache.decorator import cache
 from fastapi import Request
 from ..db import rest_select, rest_upsert, rest_update
@@ -309,7 +309,7 @@ async def get_court_availability(request: Request, availabilityid: int):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("", response_model=dict)
-def create_court_availability(request: Request, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def create_court_availability(request: Request, body: dict, current_user: str = Depends(get_current_user)):
     """Create an availability slot.
 
     New schema: body should include playingcourtid, start_time, end_time, status, booking_date.
@@ -336,15 +336,15 @@ def create_court_availability(request: Request, body: dict, background_tasks: Ba
         payload.pop("courtid", None)
 
         resp = rest_upsert("courtavailability", payload)
-        background_tasks.add_task(invalidate_namespace, "courtavailability")
-        background_tasks.add_task(_invalidate_courtavailability_swr_cache, request)
+        await invalidate_namespace("courtavailability")
+        await _invalidate_courtavailability_swr_cache(request)
         return resp[0] if isinstance(resp, list) and resp else body
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/by-courtid/{courtid}", response_model=list[dict])
-def patch_court_availability_by_courtid(request: Request, courtid: int, body: dict, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+async def patch_court_availability_by_courtid(request: Request, courtid: int, body: dict, current_user: str = Depends(get_current_user)):
     """Update availability slots for a court.
 
     Intended for updating the default schedule row created by /courts/register.
@@ -380,8 +380,8 @@ def patch_court_availability_by_courtid(request: Request, courtid: int, body: di
                 updated_all.extend([r for r in updated if isinstance(r, dict)])
             elif isinstance(updated, dict):
                 updated_all.append(updated)
-        background_tasks.add_task(invalidate_namespace, "courtavailability")
-        background_tasks.add_task(_invalidate_courtavailability_swr_cache, request)
+        await invalidate_namespace("courtavailability")
+        await _invalidate_courtavailability_swr_cache(request)
         return updated_all
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -390,11 +390,10 @@ def patch_court_availability_by_courtid(request: Request, courtid: int, body: di
 
 
 @router.patch("/by-playingcourtid/{playingcourtid}", response_model=list[dict])
-def patch_court_availability_by_playingcourtid(
+async def patch_court_availability_by_playingcourtid(
     request: Request,
     playingcourtid: int,
     body: dict,
-    background_tasks: BackgroundTasks,
     current_user: str = Depends(get_current_user),
 ):
     """Update availability slot(s) for a specific playing court.
@@ -433,8 +432,8 @@ def patch_court_availability_by_playingcourtid(
             result = [updated]
         else:
             result = []
-        background_tasks.add_task(invalidate_namespace, "courtavailability")
-        background_tasks.add_task(_invalidate_courtavailability_swr_cache, request)
+        await invalidate_namespace("courtavailability")
+        await _invalidate_courtavailability_swr_cache(request)
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

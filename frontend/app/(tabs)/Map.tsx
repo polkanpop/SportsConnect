@@ -240,13 +240,15 @@
     return R * c;
   }
 
-  function formatDuration(seconds: number | null | undefined) {
+  function formatDuration(seconds: number | null | undefined, units?: { min: string; h: string }) {
     if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
     const totalMins = Math.round(seconds / 60);
-    if (totalMins < 60) return `${totalMins} min`;
+    const minUnit = units?.min ?? 'min';
+    const hUnit = units?.h ?? 'h';
+    if (totalMins < 60) return `${totalMins} ${minUnit}`;
     const hours = Math.floor(totalMins / 60);
     const mins = totalMins % 60;
-    return mins > 0 ? `${hours} h ${mins} min` : `${hours} h`;
+    return mins > 0 ? `${hours} ${hUnit} ${mins} ${minUnit}` : `${hours} ${hUnit}`;
   }
 
   function estimateWalkSecondsFromMeters(distanceMeters: number | null | undefined) {
@@ -2264,8 +2266,8 @@
                           : (crowKmLabel ?? t('COMMON_LABEL_LOADING'));
                         const approxTravelSecs = estimateMotorbikeSecondsFromMeters(crowMeters);
                         const approxWalkSecs = estimateWalkSecondsFromMeters(crowMeters);
-                        const approxTravelLabel = approxTravelSecs != null ? `~ ${formatDuration(approxTravelSecs) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
-                        const approxWalkLabel = approxWalkSecs != null ? `~ ${formatDuration(approxWalkSecs) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
+                        const approxTravelLabel = approxTravelSecs != null ? `~ ${formatDuration(approxTravelSecs, { min: t('MAP_TIME_UNIT_MIN'), h: t('MAP_TIME_UNIT_HOUR') }) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
+                        const approxWalkLabel = approxWalkSecs != null ? `~ ${formatDuration(approxWalkSecs, { min: t('MAP_TIME_UNIT_MIN'), h: t('MAP_TIME_UNIT_HOUR') }) ?? t('MAP_LABEL_UNAVAILABLE')}` : t('COMMON_LABEL_LOADING');
 
                         if (isLoading) {
                           // Show "as the crow flies" distance placeholder (same concept as Court List)
@@ -2331,9 +2333,9 @@
                         const meters = hasDistance ? distanceMetersByCourtInfoId[id] : null;
                         const secs = hasDuration ? durationSecondsByCourtInfoId[id] : null;
                         const kmLabel = meters != null ? (formatKmFromMeters(meters) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
-                        const travelLabel = secs != null ? (formatDuration(secs) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
+                        const travelLabel = secs != null ? (formatDuration(secs, { min: t('MAP_TIME_UNIT_MIN'), h: t('MAP_TIME_UNIT_HOUR') }) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
                         const walkSecs = meters != null ? estimateWalkSecondsFromMeters(meters) : null;
-                        const walkLabel = walkSecs != null ? (formatDuration(walkSecs) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
+                        const walkLabel = walkSecs != null ? (formatDuration(walkSecs, { min: t('MAP_TIME_UNIT_MIN'), h: t('MAP_TIME_UNIT_HOUR') }) ?? t('MAP_LABEL_UNAVAILABLE')) : t('MAP_LABEL_UNAVAILABLE');
 
                         return (
                           <View style={styles.transportBox}>
@@ -2428,23 +2430,7 @@
                               </View>
                             ))
                           )}
-                          <TouchableOpacity
-                            style={[styles.writeReviewBtn, { backgroundColor: tc.brand }]}
-                            onPress={() => {
-                              if (!selectedMarker) return
-                              router.push({
-                                pathname: '/event/reviewForm',
-                                params: {
-                                  targettype: 'court',
-                                  targetid: String(selectedMarker.courtid),
-                                  title: encodeURIComponent(selectedMarker.name ?? ''),
-                                  venueName: encodeURIComponent(selectedMarker.name ?? ''),
-                                },
-                              } as any)
-                            }}
-                          >
-                            <Text style={styles.writeReviewBtnText}>{t('MAP_BTN_WRITE_REVIEW')}</Text>
-                          </TouchableOpacity>
+
                         </View>
                       )}
                     </BottomSheetScrollView>
@@ -3290,6 +3276,4 @@
     reviewStar: { fontSize: 17 },
     reviewDate: { fontSize: 12 },
     reviewComment: { fontSize: 14, lineHeight: 20 },
-    writeReviewBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 8, marginBottom: 4 },
-    writeReviewBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   }); }
