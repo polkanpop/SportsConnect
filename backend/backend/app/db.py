@@ -192,19 +192,22 @@ async def ensure_insert_review_bypass_rpc() -> None:
 
 
 async def insert_review_pg(userid: int, targettype: str, targetid: int, rating: int, comment: str) -> int:
-    """Insert a review via asyncpg, using the insert_review_bypass PL/pgSQL function.
+    """Insert a review via asyncpg, bypassing the PostgREST enum-column bug.
 
-    Calls the function with plain text/int parameters — asyncpg handles these natively,
-    avoiding the extended-protocol enum-type inference bug where asyncpg mis-encodes
-    Python strings as the custom enum OID and PostgreSQL receives an empty value.
-    The PL/pgSQL function casts text to reviewtargettype internally.
+    asyncpg uses the extended query protocol which infers the OID for $2 from the
+    function signature, causing PostgreSQL to receive an empty string for the
+    reviewtargettype enum parameter. Fix: embed the targettype as a quoted SQL
+    literal so no parameter type inference occurs for that column.
+    The value is sanitised to one of the three known enum values before embedding.
     """
     pool = _require_pg_pool()
+    # Allowlist — only these three values exist in the reviewtargettype enum.
+    allowed = {"court", "event", "trainingsession"}
+    safe_tt = targettype if targettype in allowed else "court"
+    # Embed safe_tt as a literal inside the SQL — no type-inference for enum params.
+    sql = f"SELECT public.insert_review_bypass($1, '{safe_tt}'::text, $2, $3, $4)"
     async with pool.acquire() as conn:
-        new_id = await conn.fetchval(
-            "SELECT public.insert_review_bypass($1, $2, $3, $4, $5)",
-            userid, targettype, targetid, rating, comment,
-        )
+        new_id = await conn.fetchval(sql, userid, targetid, rating, comment)
         if new_id is None:
             raise RuntimeError("insert_review_pg: function returned null")
         return int(new_id)

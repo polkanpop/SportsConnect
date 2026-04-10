@@ -347,6 +347,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
   const originalAddressRef = useRef<string>('')
   const venueBaseInitRef = useRef(false)
+  // Set to true immediately after sub-save stamps the baseline so the
+  // loadSubCourtInfo effect (triggered by playingCourts changing after
+  // loadMyCourts) does not overwrite the freshly-stamped baseline.
+  const justSavedSubRef = useRef(false)
   const [dataVersion, setDataVersion] = useState(0)
 
   const loadMyCourts = useCallback(async () => {
@@ -993,6 +997,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         baseEnd = hhmmFromDbTime(slot.end_time) || '22:00'
         baseAvailStat = String(slot.status || '').toLowerCase() === 'unavailable' ? 'unavailable' : 'available'
       }
+    }
+
+    // After a sub-save, the baseline is already correct — skip the async
+    // fetch that would overwrite it. Clear the guard immediately so the
+    // next real court selection triggers a fresh load.
+    if (justSavedSubRef.current) {
+      justSavedSubRef.current = false
+      return
     }
 
     let cancelled = false
@@ -1676,6 +1688,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             availabilityStatus,
           } : {}),
         })
+        justSavedSubRef.current = true
         setSubBaselineSnapshot(savedSubSnapshot)
       }
 
