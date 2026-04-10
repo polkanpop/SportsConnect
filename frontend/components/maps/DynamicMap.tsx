@@ -265,8 +265,6 @@ export function DynamicMap({
                 image: require('../../assets/icons/map_markers.png'),
                 sdf: true,
               },
-              eventMarker: require('../../assets/icons/marker-event.png'),
-              trainingMarker: require('../../assets/icons/marker_ts.png'),
             }}
           />
           {/* Court markers: SDF with dynamic color tinting */}
@@ -283,15 +281,16 @@ export function DynamicMap({
               iconOpacity: 1,
             }}
           />
-          {/* Event / Training session markers: pre-colored PNG images, no SDF color tinting */}
+          {/* Event / Training session markers: same SDF icon with distinct colors */}
           <Mapbox.SymbolLayer
             id="event-ts-markers-symbol"
             filter={['in', ['get', 'imageKey'], ['literal', ['event', 'training']]]}
             style={{
-              iconImage: ['match', ['get', 'imageKey'], 'event', 'eventMarker', 'training', 'trainingMarker', 'courtMarker'],
+              iconImage: 'courtMarker',
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
-              iconSize: 0.09,
+              iconSize: 0.07,
+              iconColor: ['match', ['get', 'imageKey'], 'event', '#1E88E5', 'training', '#7C4DFF', '#FF5733'],
               iconAnchor: 'bottom',
               iconOpacity: 1,
             }}

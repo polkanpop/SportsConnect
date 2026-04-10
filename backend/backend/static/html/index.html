@@ -187,7 +187,7 @@
       </p>
 
       <p style="text-align:center; font-size:1rem; font-weight:800; color:#1a1a2e; background:#fff3ec; border:2px solid #FF6017; border-radius:10px; padding:0.85rem 1.25rem; margin:1rem 0;">
-        Legal Documentation: Read our <a href="https://sportconnects.org/privacy" style="font-weight:bold; text-decoration:underline; color:#FF6017;">Privacy Policy here</a>.
+        Legal Documentation: Read our <a href="https://sportconnects.org/privacy" class="lang-link" data-vi="https://sportconnects.org/privacy_vi" data-en="https://sportconnects.org/privacy" style="font-weight:bold; text-decoration:underline; color:#FF6017;">Privacy Policy here</a>.
       </p>
 
       <p>
@@ -197,7 +197,7 @@
       </p>
       <p>
         Review our
-        <a href="https://sportconnects.org/terms">Terms of Service</a>
+        <a href="https://sportconnects.org/terms" class="lang-link" data-vi="https://sportconnects.org/terms_vi" data-en="https://sportconnects.org/terms">Terms of Service</a>
         for full usage details.
       </p>
     </div>
@@ -207,11 +207,21 @@
 
   <footer>
     <div class="footer-links">
-      <a href="https://sportconnects.org/privacy">Privacy Policy</a>
-      <a href="https://sportconnects.org/terms">Terms of Service</a>
+      <a href="https://sportconnects.org/privacy" class="lang-link" data-vi="https://sportconnects.org/privacy_vi" data-en="https://sportconnects.org/privacy">Privacy Policy</a>
+      <a href="https://sportconnects.org/terms" class="lang-link" data-vi="https://sportconnects.org/terms_vi" data-en="https://sportconnects.org/terms">Terms of Service</a>
     </div>
     <p>&copy; 2026 SportConnect &nbsp;&middot;&nbsp; sportconnects.org</p>
   </footer>
 
+  <script>
+    (function(){
+      var isVi = /^vi\b/i.test(navigator.language || navigator.userLanguage || '');
+      var links = document.querySelectorAll('.lang-link');
+      for (var i = 0; i < links.length; i++) {
+        var href = isVi ? links[i].getAttribute('data-vi') : links[i].getAttribute('data-en');
+        if (href) links[i].setAttribute('href', href);
+      }
+    })();
+  </script>
 </body>
 </html>

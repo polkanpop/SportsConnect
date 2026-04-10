@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { getCache, invalidateCache, setCache } from '@/lib/cache'
-import { useTranslation } from '@/constants/translations'
+import { useTranslation, type TranslationKey } from '@/constants/translations'
 import { useThemeColors } from '@/hooks/use-theme-colors'
 
 import { autocompleteCourtAddress, cloudinarySignUpload, geocodeCourtAddress, geocodeCourtPlaceId, getCourtInfoByCourtId, registerCourt, type CourtAddressSuggestion, type CourtRegisterRequest, upsertCourtInfoIntoCache } from '@/lib/backendApi'
@@ -27,7 +27,7 @@ const COURT_REGISTER_VERIFY_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 type WeekDayKey = typeof WEEK_DAYS[number]
 
-const WEEKDAY_TRANSLATION_KEYS: Record<WeekDayKey, string> = {
+const WEEKDAY_TRANSLATION_KEYS: Record<WeekDayKey, TranslationKey> = {
   Mon: 'MAP_DAY_MON',
   Tue: 'MAP_DAY_TUE',
   Wed: 'MAP_DAY_WED',
@@ -582,9 +582,7 @@ export default function CourtRegisterPage() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: false,
       allowsEditing: true,
-      // Lock crop aspect ratio to match the fixed UI frame.
-      // Prevents users from choosing a crop shape that will be re-cropped in our preview.
-      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      aspect: [16, 9],
       quality: 0.9,
     } as any)
 
@@ -592,8 +590,6 @@ export default function CourtRegisterPage() {
     const picked = (result.assets || []).map(a => a.uri).filter(Boolean)
     if (picked.length === 0) return
 
-    // Simplest manual crop: user edits in OS crop UI (allowsEditing).
-    // Upload the returned (cropped) image to Cloudinary immediately.
     setImageUploading(true)
     try {
       const uploadedUrl = await uploadOneToCloudinary(picked[0], remoteImageUrls.length)
@@ -622,7 +618,7 @@ export default function CourtRegisterPage() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: false,
       allowsEditing: true,
-      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
+      aspect: [16, 9],
       quality: 0.9,
     } as any)
 
@@ -671,7 +667,6 @@ export default function CourtRegisterPage() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: false,
       allowsEditing: true,
-      aspect: [IMAGE_TILE_WIDTH, IMAGE_TILE_HEIGHT],
       quality: 0.9,
     } as any)
 

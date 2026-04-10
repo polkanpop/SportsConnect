@@ -292,7 +292,7 @@ export default function SignUpScreen() {
                     style={styles.termsLink}
                     onPress={(e) => {
                       e.stopPropagation()
-                      Linking.openURL(lang === 'vi' ? 'https://sportconnects.org/terms-vi' : 'https://sportconnects.org/terms')
+                      Linking.openURL(lang === 'vi' ? 'https://sportconnects.org/terms_vi' : 'https://sportconnects.org/terms')
                     }}
                   >
                     {t('AUTH_SIGNUP_TERMS_LINK')}
