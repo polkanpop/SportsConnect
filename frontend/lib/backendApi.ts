@@ -1956,6 +1956,7 @@ export type MapEventPin = {
 	court_name?: string | null
 	start_timestamp?: string | null
 	end_timestamp?: string | null
+	cover_image?: string | null
 }
 
 export type MapTSPin = {
@@ -1969,6 +1970,7 @@ export type MapTSPin = {
 	court_name?: string | null
 	start_timestamp?: string | null
 	end_timestamp?: string | null
+	cover_image?: string | null
 }
 
 export async function listEventsForMap(bounds: MapBounds): Promise<MapEventPin[]> {

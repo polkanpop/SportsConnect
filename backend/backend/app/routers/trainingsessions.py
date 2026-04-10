@@ -141,7 +141,7 @@ def training_sessions_map_pins(
         # 5) trainingsessioninfo for titles/fees
         tsinfo_rows = rest_select(
             "trainingsessioninfo",
-            "sessionid,title,entry_fee,participants_cap",
+            "sessionid,title,entry_fee,participants_cap,images",
             filters={"sessionid": session_ids},
         )
         tsinfo_by_sessionid: dict = {row["sessionid"]: row for row in (tsinfo_rows or [])}
@@ -168,6 +168,7 @@ def training_sessions_map_pins(
                 "court_name": ci.get("name"),
                 "start_timestamp": booking.get("start_timestamp"),
                 "end_timestamp": booking.get("end_timestamp"),
+                "cover_image": (info.get("images") or [None])[0],
             })
         return result
     except RuntimeError as e:

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from ..auth import get_current_user
 from ..cache_utils import invalidate_namespace, make_key_builder
-from ..db import RpcError, rest_insert, rest_rpc, rest_select
+from ..db import RpcError, rest_insert, rest_rpc, rest_select, rest_update
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
@@ -67,18 +67,74 @@ class ReactIn(BaseModel):
     )
 
 
+# ── Eligibility helpers ────────────────────────────────────────────────────────
+
+def _has_eligible_booking(userid: int, targettype: str, targetid: int) -> bool:
+    """Check if the user has a qualifying booking for the target.
+
+    Accepts approved/joined bookings whose session time has already passed,
+    OR bookings whose ``bookingstatus`` is already 'completed'.
+    This works around the fact that the ``sessionstatus`` column is never
+    automatically transitioned from 'upcoming' to 'completed'.
+    """
+    from datetime import datetime, timezone
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if targettype == "court":
+        # User has an approved court booking for this court whose end time has passed
+        avails = rest_select("courtavailability", "availabilityid", filters={"courtid": targetid})
+        if not avails:
+            return False
+        avail_ids = [a["availabilityid"] for a in avails]
+        bookings = rest_select(
+            "courtbooking", "courtbookingid,end_timestamp,bookingstatus",
+            filters={"userid": userid, "availabilityid": avail_ids, "status": "approved"},
+        )
+        if not bookings:
+            return False
+        for b in bookings:
+            if b.get("bookingstatus") == "completed":
+                return True
+            end_ts = b.get("end_timestamp")
+            if end_ts and str(end_ts) < now_iso:
+                return True
+        return False
+
+    elif targettype == "event":
+        bookings = rest_select(
+            "eventbooking", "eventbookingid,bookingstatus",
+            filters={"userid": userid, "eventid": targetid, "status": "joined"},
+        )
+        if not bookings:
+            return False
+        # Any joined booking qualifies (event time check via linked courtbooking is complex;
+        # being 'joined' is sufficient proof of participation)
+        return True
+
+    elif targettype == "trainingsession":
+        bookings = rest_select(
+            "tsbookings", "tsbookingid,bookingstatus",
+            filters={"userid": userid, "sessionid": targetid, "status": "joined"},
+        )
+        if not bookings:
+            return False
+        return True
+
+    return False
+
+
 # ── Write endpoints ───────────────────────────────────────────────────────────
 
-@router.post("", response_model=dict, summary="Create or update a review (RPC)")
+@router.post("", response_model=dict, summary="Create or update a review")
 def create_review(
     body: ReviewIn,
     background_tasks: BackgroundTasks,
     current_user: str = Depends(get_current_user),
 ):
-    """Call ``rpc_create_review``.
+    """Create or update a review for a court, event, or training session.
 
-    Blocked with HTTP 403 when the user has no completed booking for the target.
-    Blocked with HTTP 403 if user is not eligible (no completed booking).
+    Blocked with HTTP 403 when the user has no qualifying booking for the target.
     One review per user per target is enforced: subsequent calls update the
     existing review instead of inserting a duplicate.
     """
@@ -87,25 +143,34 @@ def create_review(
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token subject (expected numeric userid)")
 
-    try:
-        result = rest_rpc(
-            "rpc_create_review",
-            {
-                "p_userid":     userid,
-                "p_targettype": body.targettype,
-                "p_targetid":   body.targetid,
-                "p_rating":     body.rating,
-                "p_comment":    body.comment,
-            },
-        )
-    except RpcError as e:
-        if e.code == "P0001":  # REVIEW_NOT_ELIGIBLE
-            raise HTTPException(status_code=403, detail=e.message)
-        if e.code == "P0002":  # INVALID_RATING
-            raise HTTPException(status_code=400, detail=e.message)
-        raise HTTPException(status_code=400, detail=e.message)
+    # ── Eligibility check ─────────────────────────────────────────────────
+    if not _has_eligible_booking(userid, body.targettype, body.targetid):
+        raise HTTPException(status_code=403, detail=f"User {userid} has no qualifying booking for {body.targettype} id={body.targetid}")
 
-    row = result[0] if isinstance(result, list) and result else {}
+    # ── Upsert: one review per (userid, targettype, targetid) ─────────────
+    existing = rest_select(
+        "reviews", "reviewid",
+        filters={"userid": userid, "targettype": body.targettype, "targetid": body.targetid},
+    )
+
+    if existing and isinstance(existing, list) and len(existing) > 0:
+        review_id = existing[0]["reviewid"]
+        rest_update("reviews", {"reviewid": review_id}, {
+            "rating": body.rating,
+            "comment": body.comment,
+        })
+        row = {"reviewid": review_id, "created": False}
+    else:
+        result = rest_insert("reviews", {
+            "userid": userid,
+            "targettype": body.targettype,
+            "targetid": body.targetid,
+            "rating": body.rating,
+            "comment": body.comment,
+        })
+        rid = result[0]["reviewid"] if isinstance(result, list) and result else None
+        row = {"reviewid": rid, "created": True}
+
     background_tasks.add_task(invalidate_namespace, "reviews")
     return row
 

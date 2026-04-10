@@ -1729,7 +1729,7 @@ export default function TrainingSessionPanel({ coachId }: Props) {
               onPress={() => router.push({ pathname: '/event/details', params: { id: `created_session_${selectedSessionId}` } } as any)}
               style={{ paddingHorizontal: 6, paddingVertical: 4 }}
             >
-              <Text style={{ color: '#2563eb', fontWeight: '700', textDecorationLine: 'underline' }}>Details</Text>
+              <Text style={{ color: '#2563eb', fontWeight: '700', textDecorationLine: 'underline' }}>{t('TS_PANEL_LINK_DETAILS')}</Text>
             </TouchableOpacity>
           </View>
 

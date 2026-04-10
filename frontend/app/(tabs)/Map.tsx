@@ -1321,9 +1321,7 @@
           coordinate: { latitude: marker.latitude, longitude: marker.longitude },
           title: marker.name,
           description: marker.address,
-          pinColor: selectedMarker?.id === marker.id
-            ? COLORS.green
-            : marker.isFavorite
+          pinColor: marker.isFavorite
               ? COLORS.gold
               : COLORS.brandOrangeDeep,
         }));
@@ -1344,7 +1342,7 @@
         description: pin.address ?? '',
         imageKey: 'training',
       }));
-    }, [mapMode, filteredMarkers, selectedMarker?.id, eventPins, tsPins]);
+    }, [mapMode, filteredMarkers, eventPins, tsPins]);
 
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1373,6 +1371,7 @@
                   pitchEnabled={false}
                   onRegionChangeComplete={handleRegionChangeComplete}
                   markers={mapMarkers}
+                  selectedMarkerId={mapMode === 'courts' ? selectedMarker?.id : null}
                   onMarkerPress={(markerId) => {
                     if (mapMode === 'courts') {
                       const marker = filteredMarkers.find((m) => String(m.id) === String(markerId));
@@ -1817,6 +1816,20 @@
                 >
                   {selectedEventPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
+                      <View style={styles.sheetCoverFrame}>
+                        {selectedEventPin.cover_image ? (
+                          <ExpoImage
+                            source={{ uri: selectedEventPin.cover_image }}
+                            style={styles.sheetCoverImage}
+                            contentFit="cover"
+                            cachePolicy="disk"
+                          />
+                        ) : (
+                          <View style={styles.sheetCoverPlaceholder}>
+                            <Text style={styles.placeholderText}>{t('MAP_PLACEHOLDER_NO_COVER')}</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.sheetHeaderCard}>
                         <View style={styles.titleRow}>
                           <View style={{ flex: 1, marginRight: 10 }}>
@@ -1861,6 +1874,20 @@
                     </BottomSheetScrollView>
                   ) : selectedTSPin ? (
                     <BottomSheetScrollView contentContainerStyle={styles.bottomSheetContent}>
+                      <View style={styles.sheetCoverFrame}>
+                        {selectedTSPin.cover_image ? (
+                          <ExpoImage
+                            source={{ uri: selectedTSPin.cover_image }}
+                            style={styles.sheetCoverImage}
+                            contentFit="cover"
+                            cachePolicy="disk"
+                          />
+                        ) : (
+                          <View style={styles.sheetCoverPlaceholder}>
+                            <Text style={styles.placeholderText}>{t('MAP_PLACEHOLDER_NO_COVER')}</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.sheetHeaderCard}>
                         <View style={styles.titleRow}>
                           <View style={{ flex: 1, marginRight: 10 }}>

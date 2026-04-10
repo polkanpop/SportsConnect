@@ -2103,14 +2103,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 { backgroundColor: tc.bgSurface, borderColor: tc.divider },
                                 isSelected && { backgroundColor: tc.brand, borderColor: tc.brand },
                                 hasBookings && !isSelected && { backgroundColor: tc.brandSoft, borderColor: tc.brand },
-                                !hasBookings && !isSelected && !isPast && { opacity: 0.55 },
-                                isPast && { opacity: 0.3 },
+                                !hasBookings && !isSelected && !isPast && { backgroundColor: tc.bgBase, borderColor: tc.divider },
+                                isPast && { backgroundColor: tc.bgBase, borderColor: tc.divider },
                               ]}
                               activeOpacity={0.8}
                               disabled={isPast}
                             >
-                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, (isSelected || hasBookings) && { color: tc.btnPrimaryText }]} numberOfLines={1}>{d.label}</Text>
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
+                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, (isSelected || hasBookings) && { color: tc.btnPrimaryText }, isPast && { color: tc.textMuted }]} numberOfLines={1}>{d.label}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : isPast ? tc.textMuted : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
                             </TouchableOpacity>
                           )
                         })}

@@ -1870,7 +1870,7 @@ export default function EventPanel({ organizerId }: Props) {
 							}
 							style={{ paddingHorizontal: 6, paddingVertical: 4 }}
 						>
-							<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>Details</Text>
+							<Text style={{ color: "#2563eb", fontWeight: "700", textDecorationLine: "underline" }}>{t('EVENT_PANEL_LINK_DETAILS')}</Text>
 						</TouchableOpacity>
 					</View>
 					<View style={{ backgroundColor: tc.bgSurface, borderRadius: 12, padding: 12 }}>
@@ -1942,7 +1942,7 @@ export default function EventPanel({ organizerId }: Props) {
 											justifyContent: "center",
 										}}
 									>
-										<Text style={{ fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#ffffff", marginTop: -1 }}>ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â</Text>
+										<Text style={{ fontSize: 18, lineHeight: 20, fontWeight: "700", color: "#ffffff", marginTop: -1 }}>×</Text>
 									</TouchableOpacity>
 								</View>
 							))}

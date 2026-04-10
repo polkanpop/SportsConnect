@@ -78,6 +78,7 @@ export type DynamicMapProps = {
   region?: Region
   cameraCommandId?: number
   markers?: DynamicMapMarker[]
+  selectedMarkerId?: string | number | null
   showUserLocation?: boolean
   showsUserLocation?: boolean
   showsPointsOfInterest?: boolean
@@ -113,6 +114,7 @@ export function DynamicMap({
   region,
   cameraCommandId,
   markers = [],
+  selectedMarkerId,
   showUserLocation,
   showsUserLocation = false,
   showsPointsOfInterest = false,
@@ -276,7 +278,9 @@ export function DynamicMap({
               iconAllowOverlap: true,
               iconIgnorePlacement: true,
               iconSize: 0.07,
-              iconColor: ['coalesce', ['get', 'pinColor'], '#FF5733'],
+              iconColor: selectedMarkerId != null
+                ? ['case', ['==', ['get', 'markerId'], String(selectedMarkerId)], '#2AA84B', ['coalesce', ['get', 'pinColor'], '#FF5733']]
+                : ['coalesce', ['get', 'pinColor'], '#FF5733'],
               iconAnchor: 'bottom',
               iconOpacity: 1,
             }}

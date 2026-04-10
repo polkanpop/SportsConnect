@@ -151,7 +151,7 @@ def events_map_pins(
         # 5) eventinfo for titles/fees
         eventinfo_rows = rest_select(
             "eventinfo",
-            "eventinfoid,eventid,title,entry_fee,participants_cap",
+            "eventinfoid,eventid,title,entry_fee,participants_cap,images",
             filters={"eventid": event_ids},
         )
         eventinfo_by_eventid: dict = {row["eventid"]: row for row in (eventinfo_rows or [])}
@@ -178,6 +178,7 @@ def events_map_pins(
                 "court_name": ci.get("name"),
                 "start_timestamp": booking.get("start_timestamp"),
                 "end_timestamp": booking.get("end_timestamp"),
+                "cover_image": (info.get("images") or [None])[0],
             })
         return result
     except RuntimeError as e:
