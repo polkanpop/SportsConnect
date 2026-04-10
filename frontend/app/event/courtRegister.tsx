@@ -56,9 +56,9 @@ const formatVnd = (value: unknown) => {
     : Number(raw)
   const safe = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
   try {
-    return `${new Intl.NumberFormat('vi-VN').format(safe)}?`
+    return `${new Intl.NumberFormat('vi-VN').format(safe)}đ`
   } catch {
-    return `${String(safe).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}?`
+    return `${String(safe).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}đ`
   }
 }
 
@@ -1230,7 +1230,7 @@ export default function CourtRegisterPage() {
         activeOpacity={0.85}
       >
         <Text style={styles.verifyFullBtnText}>
-          {checking ? t('COURT_REGISTER_VERIFYING') : verifiedCoord ? `? ${t('COURT_PANEL_BTN_VERIFY')}` : t('COURT_PANEL_BTN_VERIFY')}
+          {checking ? t('COURT_REGISTER_VERIFYING') : t('COURT_PANEL_BTN_VERIFY')}
         </Text>
       </TouchableOpacity>
       </View>
@@ -1463,7 +1463,7 @@ export default function CourtRegisterPage() {
                     placeholderTextColor={tc.placeholder}
                     style={[styles.input, styles.inputWithSuffix, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                   />
-                  <Text style={styles.suffixInInput}>?</Text>
+                  <Text style={styles.suffixInInput}>đ</Text>
                 </View>
 
                 <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_STOCK')}</Text>
@@ -1485,7 +1485,7 @@ export default function CourtRegisterPage() {
                         <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => removeServiceImage(uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                        <Text style={styles.removeXText}>?</Text>
+                        <Text style={styles.removeXText}>✕</Text>
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -1543,7 +1543,7 @@ export default function CourtRegisterPage() {
               style={styles.removeXBtn}
               activeOpacity={0.85}
             >
-              <Text style={styles.removeXText}>?</Text>
+              <Text style={styles.removeXText}>✕</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -1582,7 +1582,7 @@ export default function CourtRegisterPage() {
                 style={[styles.modalCloseXBtn, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalCloseXText, { color: tc.textPrimary }]}>?</Text>
+                <Text style={[styles.modalCloseXText, { color: tc.textPrimary }]}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -1607,7 +1607,7 @@ export default function CourtRegisterPage() {
                   placeholderTextColor={tc.placeholder}
                   style={[styles.input, styles.inputWithSuffix, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                 />
-                <Text style={styles.suffixInInput}>?</Text>
+                <Text style={styles.suffixInInput}>đ</Text>
               </View>
 
               <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_SCHEDULE')}</Text>
@@ -1666,7 +1666,7 @@ export default function CourtRegisterPage() {
                       <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => removePlayingCourtImage('full', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                      <Text style={styles.removeXText}>?</Text>
+                      <Text style={styles.removeXText}>✕</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -1744,7 +1744,7 @@ export default function CourtRegisterPage() {
                           inputMode="numeric"
                           style={[styles.input, styles.inputWithSuffix, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                         />
-                        <Text style={styles.suffixInInput}>?</Text>
+                        <Text style={styles.suffixInInput}>đ</Text>
                       </View>
 
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
@@ -1755,7 +1755,7 @@ export default function CourtRegisterPage() {
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half1', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                              <Text style={styles.removeXText}>?</Text>
+                              <Text style={styles.removeXText}>✕</Text>
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -1793,7 +1793,7 @@ export default function CourtRegisterPage() {
                           inputMode="numeric"
                           style={[styles.input, styles.inputWithSuffix, { backgroundColor: tc.bgInput, borderColor: tc.divider, color: tc.textPrimary }]}
                         />
-                        <Text style={styles.suffixInInput}>?</Text>
+                        <Text style={styles.suffixInInput}>đ</Text>
                       </View>
 
                       <Text style={[styles.label, { color: tc.textPrimary }]}>{t('COURT_REGISTER_LABEL_IMAGES')}</Text>
@@ -1804,7 +1804,7 @@ export default function CourtRegisterPage() {
                               <ExpoImage source={{ uri }} style={styles.coverImage} contentFit="cover" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => removePlayingCourtImage('half2', uri)} style={styles.removeXBtn} activeOpacity={0.85}>
-                              <Text style={styles.removeXText}>?</Text>
+                              <Text style={styles.removeXText}>✕</Text>
                             </TouchableOpacity>
                           </View>
                         ))}

@@ -962,7 +962,7 @@ export default function CourtBooking() {
                     </Text>
                     {/* Favourite star */}
                     <TouchableOpacity
-                      style={[{ padding: 6, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+                      style={[{ padding: 6, borderRadius: 20, backgroundColor: tc.bgSurface, borderWidth: 1, borderColor: tc.borderStrong, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }, isFavourite && { backgroundColor: tc.brandSoft }]}
                       onPress={async () => {
                         if (userId == null) return
                         const wasAdded = !isFavourite
