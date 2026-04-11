@@ -187,8 +187,78 @@ function formatBookingTimeOnly(startRaw: string | null | undefined, endRaw: stri
   return fallback
 }
 
-// Builds the main baseline snapshot from raw loaded values (NOT from React state).
-// Must stay in exact sync with the currentMainSnapshot useMemo.
+type NormalizedServiceSnapshot = {
+  key: string
+  serviceid: number | null
+  name: string
+  category: 'consumable' | 'rental'
+  price: number
+  stock: number
+  status: 'active' | 'inactive'
+  images: string[]
+  deleted: boolean
+}
+
+type MainFormSnapshot = {
+  name: string
+  address: string
+  venue: Venue
+  autoApprove: boolean
+  images: string[]
+  venueRename: { from: string; to: string } | null
+  services: NormalizedServiceSnapshot[]
+}
+
+type SubFormSnapshot = {
+  playingcourtid: number | null
+  name: string
+  images: string[]
+  scheduleDays?: WeekDayKey[]
+  startTime?: string
+  endTime?: string
+  availabilityStatus?: 'available' | 'unavailable'
+}
+
+const normalizeVenueRename = (baseFrom: string | null | undefined, baseTo: string | null | undefined) => {
+  const from = String(baseFrom || '').trim()
+  const to = String(baseTo || '').trim()
+  if (!from || !to) return null
+  if (from.toLowerCase() === to.toLowerCase()) return null
+  return { from, to }
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== typeof b) return false
+  if (a == null || b == null) return false
+
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i += 1) {
+      if (!deepEqual(a[i], b[i])) return false
+    }
+    return true
+  }
+
+  if (typeof a === 'object') {
+    if (Array.isArray(b)) return false
+    const aObj = a as Record<string, unknown>
+    const bObj = b as Record<string, unknown>
+    const aKeys = Object.keys(aObj)
+    const bKeys = Object.keys(bObj)
+    if (aKeys.length !== bKeys.length) return false
+    for (const key of aKeys) {
+      if (!Object.prototype.hasOwnProperty.call(bObj, key)) return false
+      if (!deepEqual(aObj[key], bObj[key])) return false
+    }
+    return true
+  }
+
+  return false
+}
+
+// Builds the main initial state snapshot from raw loaded values (NOT from React state).
+// Must stay in exact sync with the currentMainState useMemo.
 function buildMainSnapshotFromRaw(args: {
   name: string
   address: string
@@ -197,9 +267,9 @@ function buildMainSnapshotFromRaw(args: {
   images: string[]
   serviceDrafts: ServiceEditDraft[]
   venueBaseName?: string
-}): string {
+}): MainFormSnapshot {
   const imagesCanonical = dedupeStrings(args.images).slice().sort()
-  const normalizedServices = args.serviceDrafts.map((d) => ({
+  const normalizedServices: NormalizedServiceSnapshot[] = args.serviceDrafts.map((d) => ({
     key: typeof d.serviceid === 'number' ? `id:${d.serviceid}` : `local:${d.localId}`,
     serviceid: typeof d.serviceid === 'number' ? d.serviceid : null,
     name: String(d.name || '').trim(),
@@ -212,16 +282,39 @@ function buildMainSnapshotFromRaw(args: {
   }))
   normalizedServices.sort((a, b) => a.key.localeCompare(b.key))
   const baseName = String(args.venueBaseName || '').trim()
-  return JSON.stringify({
+  return {
     name: args.name.trim(),
     address: args.address.trim(),
     venue: args.venue,
     autoApprove: !!args.autoApprove,
     images: imagesCanonical,
-    venueBaseFrom: baseName,
-    venueBaseTo: baseName,
+    venueRename: normalizeVenueRename(baseName, baseName),
     services: normalizedServices,
-  })
+  }
+}
+
+function buildSubSnapshotFromRaw(args: {
+  playingcourtid: number | null
+  name: string
+  images: string[]
+  part: PlayingCourtPart
+  scheduleDays: WeekDayKey[]
+  startTime: string
+  endTime: string
+  availabilityStatus: 'available' | 'unavailable'
+}): SubFormSnapshot {
+  const snapshot: SubFormSnapshot = {
+    playingcourtid: args.playingcourtid,
+    name: String(args.name || '').trim(),
+    images: dedupeStrings(args.images || []).slice().sort(),
+  }
+  if (args.part === 'full') {
+    snapshot.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => args.scheduleDays.includes(d))
+    snapshot.startTime = String(args.startTime || '').trim()
+    snapshot.endTime = String(args.endTime || '').trim()
+    snapshot.availabilityStatus = args.availabilityStatus
+  }
+  return snapshot
 }
 
 export default function CourtPanel(props: { ownerId: number | null; deeplinkCourtId?: number | null; deeplinkCourtBookingId?: number | null; deeplinkToken?: string | null }) {
@@ -337,28 +430,21 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [pendingCloudinaryDeletesMain, setPendingCloudinaryDeletesMain] = useState<string[]>([])
   const [pendingCloudinaryDeletesSub, setPendingCloudinaryDeletesSub] = useState<string[]>([])
 
-  const [mainBaselineSnapshot, setMainBaselineSnapshot] = useState<string>('')
-  const [subBaselineSnapshot, setSubBaselineSnapshot] = useState<string>('')
+  const [mainInitialState, setMainInitialState] = useState<MainFormSnapshot | null>(null)
+  const [subInitialState, setSubInitialState] = useState<SubFormSnapshot | null>(null)
   const mainDirtyRef = useRef<boolean>(false)
-  const subDirtyRef = useRef<boolean>(false)
 
   const [confirmServiceDeleteVisible, setConfirmServiceDeleteVisible] = useState(false)
   const [serviceDeleteCandidateLocalId, setServiceDeleteCandidateLocalId] = useState<string | null>(null)
 
   const originalAddressRef = useRef<string>('')
-  const venueBaseInitRef = useRef(false)
-  // Set to true immediately after sub-save stamps the baseline so the
+  // Set to true immediately after sub-save stamps the initial state so the
   // loadSubCourtInfo effect (triggered by playingCourts changing after
-  // loadMyCourts) does not overwrite the freshly-stamped baseline.
+  // loadMyCourts) does not overwrite the freshly-stamped initial state.
   const justSavedSubRef = useRef(false)
   // Set to true immediately after main-save to prevent the selected-sync
   // effect from resetting form fields.
   const justSavedMainRef = useRef(false)
-  // Safety-net: after save, re-stamp baseline from currentSnapshot on the
-  // next render when all cascading state updates have settled.  Mimics the
-  // event-panel / training-session-panel pattern of baseline = current.
-  const mainNeedsRestampRef = useRef(false)
-  const subNeedsRestampRef = useRef(false)
   const [dataVersion, setDataVersion] = useState(0)
 
   const loadMyCourts = useCallback(async (opts?: { forceFresh?: boolean }) => {
@@ -423,16 +509,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     }
   }, [])
 
-  // Loads ALL court detail data in one async shot, then sets the baseline
+  // Loads ALL court detail data in one async shot, then sets the initial state
   // snapshot from LOCAL variables â€” identical pattern to Event Panel.
   // This avoids the cascading-effect race where schedule state updates one
-  // render after the (old) baseline was captured.
+  // render after the (old) initial state was captured.
   const loadCourtData = useCallback(async (courtRecord: { court: CourtRow; info: CourtInfoRow | null }) => {
     const courtid = courtRecord.court.courtid
     if (typeof courtid !== 'number') return
 
-    setMainBaselineSnapshot('')
-    venueBaseInitRef.current = false
+    setMainInitialState(null)
     setAvailabilityLoading(true)
     setPlayingCourtsLoading(true)
     setServicesLoading(true)
@@ -453,7 +538,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
       // ---- Venue court base name (mirrors subCourtOptions[0] logic) ----
       // Set directly so buildMainSnapshotFromRaw below gets the correct value and
-      // the baseline matches currentMainSnapshot immediately — no re-stamp race.
+      // the initial state matches currentMainState immediately.
       const seenBase = new Set<string>()
       const subCourtOpts: string[] = []
       for (const pc of pcsArr) {
@@ -561,22 +646,22 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       setVerifyError(null)
       setWarnings([])
 
-      // ---- Set baseline from local vars (NOT from React state) ----
+      // ---- Set initial state from local vars (NOT from React state) ----
       // Computed from the same raw values we just set into state, so the
-      // baseline is guaranteed to match the form on first render.
-      const baseline = buildMainSnapshotFromRaw({
+      // initial state is guaranteed to match the form on first render.
+      const nextInitialState = buildMainSnapshotFromRaw({
         name, address, venue, autoApprove: Boolean((info as any)?.auto_approve), images,
         serviceDrafts: drafts,
         venueBaseName: venueBase,
       })
-      setMainBaselineSnapshot(baseline)
+      setMainInitialState(nextInitialState)
     } catch {
       setPlayingCourts([])
       setServiceDrafts([])
       originalServicesRef.current = new Map()
       setSelectedSubBaseName(null)
       setAvailability([])
-      // Do NOT set baseline on error: keeps Save disabled
+      // Do NOT set initial state on error: keeps Save disabled
     } finally {
       setAvailabilityLoading(false)
       setPlayingCourtsLoading(false)
@@ -590,7 +675,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
   useEffect(() => {
     if (!selected) return
-    setSubBaselineSnapshot('')
+    setSubInitialState(null)
     setPendingCloudinaryDeletesMain([])
     setPendingCloudinaryDeletesSub([])
     setSaveSuccessMessage(null)
@@ -898,7 +983,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     return typeof fid === 'number' && Number.isFinite(fid) ? fid : null
   }, [playingCourts])
 
-  const normalizedServicesSnapshot = useMemo(() => {
+  const normalizedServicesSnapshot = useMemo<NormalizedServiceSnapshot[]>(() => {
     const arr = Array.isArray(serviceDrafts) ? serviceDrafts : []
     const normalized = arr.map((d) => ({
       key: typeof d.serviceid === 'number' ? `id:${d.serviceid}` : `local:${d.localId}`,
@@ -915,87 +1000,50 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     return normalized
   }, [serviceDrafts])
 
-  const currentMainSnapshot = useMemo(() => {
+  const currentMainState = useMemo<MainFormSnapshot>(() => {
     const name = String(editName || '').trim()
     const address = String(editAddress || '').trim()
 
     // Canonicalize arrays so order-only differences don't keep Save enabled.
     const imagesCanonical = dedupeStrings(editImages).slice().sort()
 
-    return JSON.stringify({
+    return {
       name,
       address,
       venue: editVenue,
       autoApprove: !!editAutoApprove,
       images: imagesCanonical,
-      venueBaseFrom: String(selectedVenueCourtBaseName || '').trim(),
-      venueBaseTo: String(venueCourtBaseEditName || '').trim(),
+      venueRename: normalizeVenueRename(selectedVenueCourtBaseName, venueCourtBaseEditName),
       services: normalizedServicesSnapshot,
-    })
+    }
   }, [editAddress, editAutoApprove, editImages, editName, editVenue, normalizedServicesSnapshot, selectedVenueCourtBaseName, venueCourtBaseEditName])
 
   const mainIsDirty = useMemo(() => {
-    if (!mainBaselineSnapshot) return false
-    return currentMainSnapshot !== mainBaselineSnapshot
-  }, [currentMainSnapshot, mainBaselineSnapshot])
-
-  // Re-stamp baseline once the venue base name AND its edit twin both initialize
-  // (async from subCourtOptions). Without this, the baseline is always mismatched
-  // and Save stays enabled on fresh load.
-  useEffect(() => {
-    if (venueBaseInitRef.current) return
-    if (!mainBaselineSnapshot) return
-    if (!selectedVenueCourtBaseName) return
-    // Wait for venueCourtBaseEditName to also update (it mirrors selectedVenueCourtBaseName)
-    const baseFrom = String(selectedVenueCourtBaseName || '').trim()
-    const baseTo = String(venueCourtBaseEditName || '').trim()
-    if (baseFrom && !baseTo) return  // edit name hasn't synced yet; wait for next render
-    venueBaseInitRef.current = true
-    setMainBaselineSnapshot(currentMainSnapshot)
-  }, [selectedVenueCourtBaseName, venueCourtBaseEditName, mainBaselineSnapshot, currentMainSnapshot])
+    if (!mainInitialState) return false
+    return !deepEqual(currentMainState, mainInitialState)
+  }, [currentMainState, mainInitialState])
 
   useEffect(() => {
     mainDirtyRef.current = mainIsDirty
   }, [mainIsDirty])
 
-  // Safety-net restamp: after save, once all cascading state updates have
-  // settled, re-stamp baseline from the live snapshot so dirty == false.
-  useEffect(() => {
-    if (!mainNeedsRestampRef.current) return
-    mainNeedsRestampRef.current = false
-    setMainBaselineSnapshot(currentMainSnapshot)
-  }, [mainBaselineSnapshot, currentMainSnapshot])
-
-  const currentSubSnapshot = useMemo(() => {
-    const base: any = {
+  const currentSubState = useMemo<SubFormSnapshot>(() => {
+    return buildSubSnapshotFromRaw({
       playingcourtid: selectedSubPlayingCourtId ?? null,
-      name: String(subEditName || '').trim(),
-      images: dedupeStrings(subEditImages || []).slice().sort(),
-    }
-    if (selectedSubPart === 'full') {
-      base.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => scheduleDays.includes(d))
-      base.startTime = String(startTime || '').trim()
-      base.endTime = String(endTime || '').trim()
-      base.availabilityStatus = availabilityStatus
-    }
-    return JSON.stringify(base)
+      name: subEditName,
+      images: subEditImages || [],
+      part: selectedSubPart,
+      scheduleDays,
+      startTime,
+      endTime,
+      availabilityStatus,
+    })
   }, [selectedSubPlayingCourtId, subEditImages, subEditName, selectedSubPart, scheduleDays, startTime, endTime, availabilityStatus])
 
   const subIsDirty = useMemo(() => {
-    if (!subBaselineSnapshot) return false
-    return currentSubSnapshot !== subBaselineSnapshot
-  }, [currentSubSnapshot, subBaselineSnapshot])
-
-  useEffect(() => {
-    subDirtyRef.current = subIsDirty
-  }, [subIsDirty])
-
-  // Safety-net restamp for sub mode.
-  useEffect(() => {
-    if (!subNeedsRestampRef.current) return
-    subNeedsRestampRef.current = false
-    setSubBaselineSnapshot(currentSubSnapshot)
-  }, [subBaselineSnapshot, currentSubSnapshot])
+    if (!subInitialState) return false
+    return !deepEqual(currentSubState, subInitialState)
+  }, [currentSubState, subInitialState])
 
   useEffect(() => {
     // Schedule editing is in Court (sub) mode, full part only.
@@ -1028,7 +1076,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
     setSubEditName(String((row as any).name || '').trim())
 
-    // Pre-load schedule/time from availability for full court baseline
+    // Pre-load schedule/time from availability for full court initial state
     let baseSchedDays: WeekDayKey[] = [...WEEK_DAYS]
     let baseStart = '08:00'
     let baseEnd = '22:00'
@@ -1043,7 +1091,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       }
     }
 
-    // After a sub-save, the baseline is already correct — skip the async
+    // After a sub-save, the initial state is already correct — skip the async
     // fetch that would overwrite it. Clear the guard immediately so the
     // next real court selection triggers a fresh load.
     if (justSavedSubRef.current) {
@@ -1060,29 +1108,31 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         const imgs = Array.isArray((info as any)?.images) ? ((info as any).images as any[]).filter((x) => typeof x === 'string') as string[] : []
         const subImgs = dedupeStrings(imgs).slice(0, 1)
         setSubEditImages(subImgs)
-        const baselineObj: any = {
+        const snapshot = buildSubSnapshotFromRaw({
           playingcourtid: pid,
           name: String((row as any).name || '').trim(),
-          images: dedupeStrings(subImgs).slice().sort(),
-        }
-        if (selectedSubPart === 'full') {
-          baselineObj.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => baseSchedDays.includes(d))
-          baselineObj.startTime = baseStart
-          baselineObj.endTime = baseEnd
-          baselineObj.availabilityStatus = baseAvailStat
-        }
-        setSubBaselineSnapshot(JSON.stringify(baselineObj))
+          images: subImgs,
+          part: selectedSubPart,
+          scheduleDays: baseSchedDays,
+          startTime: baseStart,
+          endTime: baseEnd,
+          availabilityStatus: baseAvailStat,
+        })
+        setSubInitialState(snapshot)
       } catch {
         if (cancelled) return
         setSubEditImages([])
-        const baselineObjFallback: any = { playingcourtid: pid, name: String((row as any).name || '').trim(), images: [] }
-        if (selectedSubPart === 'full') {
-          baselineObjFallback.scheduleDays = (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => baseSchedDays.includes(d))
-          baselineObjFallback.startTime = baseStart
-          baselineObjFallback.endTime = baseEnd
-          baselineObjFallback.availabilityStatus = baseAvailStat
-        }
-        setSubBaselineSnapshot(JSON.stringify(baselineObjFallback))
+        const fallbackSnapshot = buildSubSnapshotFromRaw({
+          playingcourtid: pid,
+          name: String((row as any).name || '').trim(),
+          images: [],
+          part: selectedSubPart,
+          scheduleDays: baseSchedDays,
+          startTime: baseStart,
+          endTime: baseEnd,
+          availabilityStatus: baseAvailStat,
+        })
+        setSubInitialState(fallbackSnapshot)
       } finally {
         if (cancelled) return
         setSubInfoLoading(false)
@@ -1095,12 +1145,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
   useEffect(() => {
     // Switching which sub-court half is selected should not be treated as an edit.
-    // Reset baseline/hydration so Save only enables after actual changes.
+    // Reset initial state/hydration so Save only enables after actual changes.
     // Use selected?.court?.courtid (stable number) instead of selected (object ref)
-    // so that loadMyCourts() after save doesn't clear the freshly-stamped baseline.
+    // so that loadMyCourts() after save doesn't clear the freshly-captured initial state.
     if (editMode !== 'sub') return
     if (!selected) return
-    setSubBaselineSnapshot('')
+    setSubInitialState(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editMode, selected?.court?.courtid, selectedSubPlayingCourtId])
 
@@ -1485,9 +1535,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       return
     }
 
-    const hasBaseline = editMode === 'main' ? !!mainBaselineSnapshot : !!subBaselineSnapshot
-    const isDirtyNow = editMode === 'main' ? mainDirtyRef.current : subDirtyRef.current
-    if (!hasBaseline) return
+    const isDirtyNow = editMode === 'main' ? mainIsDirty : subIsDirty
     if (!isDirtyNow) return
 
     const courtid = selected.court.courtid
@@ -1496,7 +1544,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setSaveSuccessMessage(null)
     setSaving(true)
     // Track the latest service drafts across the save (may be refreshed
-    // by the service-save block below; used for baseline re-stamp).
+    // by the service-save block below; used for initial-state reset).
     let latestSavedDrafts: ServiceEditDraft[] = serviceDrafts
     try {
       if (editMode === 'main') {
@@ -1662,7 +1710,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
         // Set guard BEFORE refreshing playingCourts so the sub-court
         // selection effect (triggered by the new playingCourts reference)
-        // skips its async fetch and doesn't overwrite the baseline.
+        // skips its async fetch and doesn't overwrite the initial state.
         justSavedSubRef.current = true
 
         // Refresh local data so the UI reflects new names/images immediately.
@@ -1742,7 +1790,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         // --- In-place post-save for main mode ---
         // Instead of bumping dataVersion (which re-fetches ALL data and
         // races with backend Redis cache), update local state directly
-        // and re-stamp the baseline to mark the form clean.
+        // and reset the initial state to mark the form clean.
         justSavedMainRef.current = true
 
         // Determine the venue base name that was actually saved.
@@ -1776,11 +1824,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         // detect changes relative to the just-saved value.
         originalAddressRef.current = editAddress.trim()
 
-        // Best-effort baseline from known saved values.  The safety-net
-        // restamp effect (mainNeedsRestampRef) will re-stamp from
-        // currentMainSnapshot once all cascading state updates settle.
-        mainNeedsRestampRef.current = true
-        setMainBaselineSnapshot(buildMainSnapshotFromRaw({
+        setMainInitialState(buildMainSnapshotFromRaw({
           name: editName.trim(),
           address: editAddress.trim(),
           venue: editVenue,
@@ -1790,21 +1834,19 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           venueBaseName: savedVB,
         }))
       } else {
-        // Sub mode: re-stamp the baseline from the current edit state so the
+        // Sub mode: reset the initial state from the current edit state so the
         // form becomes clean without triggering a full re-fetch.
-        const savedSubSnapshot = JSON.stringify({
+        const savedSubState = buildSubSnapshotFromRaw({
           playingcourtid: selectedSubPlayingCourtId ?? null,
-          name: String(subEditName || '').trim(),
-          images: dedupeStrings(subEditImages || []).slice().sort(),
-          ...(selectedSubPart === 'full' ? {
-            scheduleDays: (WEEK_DAYS as readonly WeekDayKey[]).filter((d) => scheduleDays.includes(d)),
-            startTime: String(startTime || '').trim(),
-            endTime: String(endTime || '').trim(),
-            availabilityStatus,
-          } : {}),
+          name: subEditName,
+          images: subEditImages || [],
+          part: selectedSubPart,
+          scheduleDays,
+          startTime,
+          endTime,
+          availabilityStatus,
         })
-        subNeedsRestampRef.current = true
-        setSubBaselineSnapshot(savedSubSnapshot)
+        setSubInitialState(savedSubState)
       }
 
       setSaveSuccessMessage(t('COURT_PANEL_SAVE_SUCCESS'))
@@ -1830,17 +1872,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     playingCourts,
     pendingCloudinaryDeletesMain,
     pendingCloudinaryDeletesSub,
-    mainBaselineSnapshot,
-    subBaselineSnapshot,
+    mainIsDirty,
+    subIsDirty,
     selectedSubBaseName,
     selectedSubPlayingCourtIds,
     selectedSubPlayingCourtId,
     serviceDrafts,
     subEditName,
     subEditImages,
-    loadAvailability,
     selectedSubPart,
-    setSubBaselineSnapshot,
     selectedVenueCourtBaseName,
     venueCourtBaseEditName,
   ])
@@ -1945,9 +1985,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     })
   }, [rows, selectedCourtId])
 
-  const saveBaselineReady = editMode === 'main' ? !!mainBaselineSnapshot : !!subBaselineSnapshot
   const saveDirty = editMode === 'main' ? mainIsDirty : subIsDirty
-  const saveDisabled = saving || !saveBaselineReady || !saveDirty
+  const saveDisabled = saving || !saveDirty
 
   if (typeof ownerId !== 'number') {
     return (
