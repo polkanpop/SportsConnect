@@ -220,7 +220,6 @@ function buildMainSnapshotFromRaw(args: {
     images: imagesCanonical,
     venueBaseFrom: baseName,
     venueBaseTo: baseName,
-    verified: null,
     services: normalizedServices,
   })
 }
@@ -353,8 +352,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   // loadMyCourts) does not overwrite the freshly-stamped baseline.
   const justSavedSubRef = useRef(false)
   // Set to true immediately after main-save to prevent the selected-sync
-  // effect from resetting form fields / clearing verifiedCoord.
+  // effect from resetting form fields.
   const justSavedMainRef = useRef(false)
+  // Safety-net: after save, re-stamp baseline from currentSnapshot on the
+  // next render when all cascading state updates have settled.  Mimics the
+  // event-panel / training-session-panel pattern of baseline = current.
+  const mainNeedsRestampRef = useRef(false)
+  const subNeedsRestampRef = useRef(false)
   const [dataVersion, setDataVersion] = useState(0)
 
   const loadMyCourts = useCallback(async (opts?: { forceFresh?: boolean }) => {
@@ -738,7 +742,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (saving) return
     if (mainDirtyRef.current) return
     // After main-save we update rows in-place which triggers this effect;
-    // skip once so it doesn't overwrite the form / clear verifiedCoord.
+    // skip once so it doesn't overwrite the form.
     if (justSavedMainRef.current) { justSavedMainRef.current = false; return }
 
     const info = selected.info
@@ -755,10 +759,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setSelectedPlaceId(null)
     setAddressSuggestions([])
     setAddressLoading(false)
-    setLastGeocode(null)
-    setVerifiedCoord(null)
-    setVerifyError(null)
-    setWarnings([])
   }, [editMode, saving, selected])
 
 
@@ -918,16 +918,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const currentMainSnapshot = useMemo(() => {
     const name = String(editName || '').trim()
     const address = String(editAddress || '').trim()
-    const originalAddr = String(originalAddressRef.current || '').trim()
-    const addressChangedFromOriginal = canonicalizeAddress(address) !== canonicalizeAddress(originalAddr)
 
     // Canonicalize arrays so order-only differences don't keep Save enabled.
     const imagesCanonical = dedupeStrings(editImages).slice().sort()
 
-    // Coords only matter when the address is changed (verification requirement).
-    const verified = addressChangedFromOriginal && verifiedCoord
-      ? { latitude: verifiedCoord.latitude, longitude: verifiedCoord.longitude }
-      : null
     return JSON.stringify({
       name,
       address,
@@ -936,10 +930,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       images: imagesCanonical,
       venueBaseFrom: String(selectedVenueCourtBaseName || '').trim(),
       venueBaseTo: String(venueCourtBaseEditName || '').trim(),
-      verified,
       services: normalizedServicesSnapshot,
     })
-  }, [editAddress, editAutoApprove, editImages, editName, editVenue, normalizedServicesSnapshot, selectedVenueCourtBaseName, venueCourtBaseEditName, verifiedCoord])
+  }, [editAddress, editAutoApprove, editImages, editName, editVenue, normalizedServicesSnapshot, selectedVenueCourtBaseName, venueCourtBaseEditName])
 
   const mainIsDirty = useMemo(() => {
     if (!mainBaselineSnapshot) return false
@@ -965,6 +958,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     mainDirtyRef.current = mainIsDirty
   }, [mainIsDirty])
 
+  // Safety-net restamp: after save, once all cascading state updates have
+  // settled, re-stamp baseline from the live snapshot so dirty == false.
+  useEffect(() => {
+    if (!mainNeedsRestampRef.current) return
+    mainNeedsRestampRef.current = false
+    setMainBaselineSnapshot(currentMainSnapshot)
+  }, [mainBaselineSnapshot, currentMainSnapshot])
+
   const currentSubSnapshot = useMemo(() => {
     const base: any = {
       playingcourtid: selectedSubPlayingCourtId ?? null,
@@ -988,6 +989,13 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   useEffect(() => {
     subDirtyRef.current = subIsDirty
   }, [subIsDirty])
+
+  // Safety-net restamp for sub mode.
+  useEffect(() => {
+    if (!subNeedsRestampRef.current) return
+    subNeedsRestampRef.current = false
+    setSubBaselineSnapshot(currentSubSnapshot)
+  }, [subBaselineSnapshot, currentSubSnapshot])
 
   useEffect(() => {
     // Schedule editing is in Court (sub) mode, full part only.
@@ -1138,15 +1146,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       return
     }
 
-    // If user edits away from selected suggestion, clear selection and verification.
+    // If user edits away from selected suggestion, clear selection.
     if (selectedPlaceId && canonicalizeAddress(editAddress) !== canonicalizeAddress(originalAddressRef.current)) {
-      // keep selectedPlaceId until user explicitly changes? simplest: clear when typing.
       setSelectedPlaceId(null)
-    }
-
-    setVerifyError(null)
-    if (verifiedCoord && canonicalizeAddress(editAddress) !== canonicalizeAddress(originalAddressRef.current)) {
-      setVerifiedCoord(null)
     }
 
     if (debouncedFetchRef.current) clearTimeout(debouncedFetchRef.current)
@@ -1170,7 +1172,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     return () => {
       if (debouncedFetchRef.current) clearTimeout(debouncedFetchRef.current)
     }
-  }, [editAddress, selectedPlaceId, verifiedCoord])
+  }, [editAddress, selectedPlaceId])
 
   const handleVerifyLocation = useCallback(async () => {
     const a = editAddress.trim()
@@ -1508,10 +1510,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
         const originalAddr = originalAddressRef.current
         const addressChanged = canonicalizeAddress(addr) !== canonicalizeAddress(originalAddr)
-        if (addressChanged && !verifiedCoord) {
-          Alert.alert(t('COURT_PANEL_ERR_VERIFY_LOC_TITLE'), t('COURT_PANEL_ERR_VERIFY_LOC_MSG'))
-          return
-        }
 
         const venuePayload = editVenue
         const venueNormalized = venuePayload === 'Both' ? ['Indoor', 'Outdoor'] : [venuePayload]
@@ -1526,13 +1524,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           venue: venueNormalized,
           auto_approve: !!editAutoApprove,
           images: editImages,
-          ...(verifiedCoord
-            ? {
-                latitude: verifiedCoord.latitude,
-                longitude: verifiedCoord.longitude,
-                accuracy_type: 'user_selected',
-              }
-            : {}),
         })
 
         const baseFrom = String(selectedVenueCourtBaseName || '').trim()
@@ -1669,6 +1660,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           images: dedupeStrings(subEditImages || []),
         } as any)
 
+        // Set guard BEFORE refreshing playingCourts so the sub-court
+        // selection effect (triggered by the new playingCourts reference)
+        // skips its async fetch and doesn't overwrite the baseline.
+        justSavedSubRef.current = true
+
         // Refresh local data so the UI reflects new names/images immediately.
         try {
           setPlayingCourtsLoading(true)
@@ -1771,9 +1767,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                   venue: editVenue === 'Both' ? ['Indoor', 'Outdoor'] : [editVenue],
                   auto_approve: !!editAutoApprove,
                   images: editImages,
-                  ...(verifiedCoord
-                    ? { latitude: verifiedCoord.latitude, longitude: verifiedCoord.longitude, accuracy_type: 'user_selected' as const }
-                    : {}),
                 }
               : r.info,
           }
@@ -1783,18 +1776,10 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         // detect changes relative to the just-saved value.
         originalAddressRef.current = editAddress.trim()
 
-        // Clear verification state (already consumed by save).
-        setVerifiedCoord(null)
-        setVerifyError(null)
-        setWarnings([])
-        setLastGeocode(null)
-        setSelectedPlaceId(null)
-        setAddressSuggestions([])
-
-        // Re-stamp baseline from the known saved values.  Because the
-        // service-refresh block above may have set new drafts via
-        // setServiceDrafts, and that state update hasn't committed yet,
-        // we capture the latest drafts that were used.
+        // Best-effort baseline from known saved values.  The safety-net
+        // restamp effect (mainNeedsRestampRef) will re-stamp from
+        // currentMainSnapshot once all cascading state updates settle.
+        mainNeedsRestampRef.current = true
         setMainBaselineSnapshot(buildMainSnapshotFromRaw({
           name: editName.trim(),
           address: editAddress.trim(),
@@ -1806,9 +1791,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         }))
       } else {
         // Sub mode: re-stamp the baseline from the current edit state so the
-        // form becomes clean without triggering a full re-fetch. A full
-        // re-fetch would hit the backend availability SWR cache before the
-        // background invalidation finishes, causing the schedule to revert.
+        // form becomes clean without triggering a full re-fetch.
         const savedSubSnapshot = JSON.stringify({
           playingcourtid: selectedSubPlayingCourtId ?? null,
           name: String(subEditName || '').trim(),
@@ -1820,7 +1803,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             availabilityStatus,
           } : {}),
         })
-        justSavedSubRef.current = true
+        subNeedsRestampRef.current = true
         setSubBaselineSnapshot(savedSubSnapshot)
       }
 
@@ -1853,7 +1836,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     selectedSubPlayingCourtIds,
     selectedSubPlayingCourtId,
     serviceDrafts,
-    verifiedCoord,
     subEditName,
     subEditImages,
     loadAvailability,
@@ -2506,17 +2488,12 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               <View style={[styles.addressRow, { backgroundColor: tc.bgSurface, borderColor: tc.divider }]}>
                 <TextInput
                   value={editAddress}
-                  onChangeText={(v) => {
-                    setEditAddress(v)
-                    setVerifyError(null)
-                  }}
+                  onChangeText={setEditAddress}
                   placeholder={t('COURT_PANEL_PLACEHOLDER_ADDRESS')}
                   placeholderTextColor={tc.placeholder}
-                  style={[styles.addressInput, { color: tc.textPrimary, paddingRight: verifiedCoord ? 36 : 12 }]}
+                  style={[styles.addressInput, { color: tc.textPrimary }]}
                 />
-                {verifiedCoord ? (
-                  <Image source={ICONS.tick} style={{ position: 'absolute', right: 12, top: '50%', marginTop: -8, width: 16, height: 16, tintColor: COLORS.green }} resizeMode="contain" />
-                ) : addressLoading ? (
+                {addressLoading ? (
                   <ActivityIndicator size="small" color={tc.textMuted} style={{ position: 'absolute', right: 12, top: '50%', marginTop: -8 }} />
                 ) : null}
               </View>
@@ -2535,9 +2512,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                           setSelectedPlaceId(s.place_id)
                           setEditAddress(s.description)
                           setAddressSuggestions([])
-                          setVerifyError(null)
-                          setVerifiedCoord(null)
-                          setLastGeocode(null)
                         }}
                       >
                         <Text style={[styles.suggestText, { color: tc.textPrimary }]} numberOfLines={2}>
@@ -2546,39 +2520,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
-                </View>
-              ) : null}
-
-              {!!verifyError && <Text style={styles.verifyErrorText}>{verifyError}</Text>}
-
-              <View style={styles.verifyRow}>
-                {(() => {
-                  const verifyDisabled = addressLoading
-                  return (
-                    <TouchableOpacity
-                      onPress={handleVerifyLocation}
-                      disabled={verifyDisabled}
-                      style={[styles.smallBtn, styles.smallBtnRed, styles.verifyBtnFull, { backgroundColor: tc.brand, opacity: verifyDisabled ? 0.45 : 1 }]}
-                      activeOpacity={0.85}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={[styles.smallBtnText, { color: tc.btnPrimaryText }]}>{t('COURT_PANEL_BTN_VERIFY')}</Text>
-                        {verifiedCoord ? (
-                          <Image source={ICONS.tick} style={{ width: 18, height: 18, marginLeft: 8, tintColor: tc.btnPrimaryText }} resizeMode="contain" />
-                        ) : null}
-                      </View>
-                    </TouchableOpacity>
-                  )
-                })()}
-              </View>
-
-              {warnings.length ? (
-                <View style={{ marginTop: 6 }}>
-                  {warnings.map((w, idx) => (
-                    <Text key={idx} style={{ color: tc.textSecondary, fontSize: 12, marginTop: 2 }}>
-                      {w}
-                    </Text>
-                  ))}
                 </View>
               ) : null}
 
