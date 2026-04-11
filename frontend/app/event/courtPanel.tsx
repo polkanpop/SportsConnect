@@ -352,6 +352,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   // loadSubCourtInfo effect (triggered by playingCourts changing after
   // loadMyCourts) does not overwrite the freshly-stamped baseline.
   const justSavedSubRef = useRef(false)
+  // Set to true immediately after main-save to prevent the selected-sync
+  // effect from resetting form fields / clearing verifiedCoord.
+  const justSavedMainRef = useRef(false)
   const [dataVersion, setDataVersion] = useState(0)
 
   const loadMyCourts = useCallback(async (opts?: { forceFresh?: boolean }) => {
@@ -734,6 +737,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (editMode !== 'main') return
     if (saving) return
     if (mainDirtyRef.current) return
+    // After main-save we update rows in-place which triggers this effect;
+    // skip once so it doesn't overwrite the form / clear verifiedCoord.
+    if (justSavedMainRef.current) { justSavedMainRef.current = false; return }
 
     const info = selected.info
     if (!info) return
@@ -1487,6 +1493,9 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
     setSaveSuccessMessage(null)
     setSaving(true)
+    // Track the latest service drafts across the save (may be refreshed
+    // by the service-save block below; used for baseline re-stamp).
+    let latestSavedDrafts: ServiceEditDraft[] = serviceDrafts
     try {
       if (editMode === 'main') {
         const nm = editName.trim()
@@ -1517,7 +1526,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           venue: venueNormalized,
           auto_approve: !!editAutoApprove,
           images: editImages,
-          ...(addressChanged && verifiedCoord
+          ...(verifiedCoord
             ? {
                 latitude: verifiedCoord.latitude,
                 longitude: verifiedCoord.longitude,
@@ -1635,6 +1644,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
               }
             })
             originalServicesRef.current = nextOriginal
+            latestSavedDrafts = drafts
             setServiceDrafts(drafts)
           } finally {
             setServicesLoading(false)
@@ -1703,12 +1713,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         }
       }
 
-      // Invalidate caches so loadMyCourts and loadCourtData fetch fresh data
-      await invalidateCache('cache:courtinfo:v1')
-      await invalidateCache('cache:courtinfo:compact:v1')
-      await invalidateCache(`@courtAvailability:${courtid}`)
-
-      await loadMyCourts({ forceFresh: true })
+      // Invalidate local caches (fire-and-forget; stale entries will be
+      // refreshed on next screen entry / pull-to-refresh).
+      invalidateCache('cache:courtinfo:v1').catch(() => {})
+      invalidateCache('cache:courtinfo:compact:v1').catch(() => {})
+      invalidateCache(`@courtAvailability:${courtid}`).catch(() => {})
 
       // Deferred Cloudinary deletions (only after successful save for that mode)
       if (editMode === 'main') {
@@ -1734,9 +1743,67 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       }
 
       if (editMode === 'main') {
-        // Bump dataVersion so loadCourtData re-runs and refreshes all detail
-        // data (playing courts, services, availability) from the server.
-        setDataVersion((v) => v + 1)
+        // --- In-place post-save for main mode ---
+        // Instead of bumping dataVersion (which re-fetches ALL data and
+        // races with backend Redis cache), update local state directly
+        // and re-stamp the baseline to mark the form clean.
+        justSavedMainRef.current = true
+
+        // Determine the venue base name that was actually saved.
+        const savedVB = (() => {
+          const bFrom = String(selectedVenueCourtBaseName || '').trim()
+          const bTo = String(venueCourtBaseEditName || '').trim()
+          if (bFrom && bTo && bFrom.toLowerCase() !== bTo.toLowerCase()) return bTo
+          return bFrom || bTo
+        })()
+
+        // Update rows in-place so the sidebar/card reflects the save.
+        const addrChanged = canonicalizeAddress(editAddress.trim()) !== canonicalizeAddress(originalAddressRef.current)
+        setRows((prev) => prev.map((r) => {
+          if (r.court.courtid !== courtid) return r
+          return {
+            court: addrChanged ? { ...r.court, courtinfo: editAddress.trim() } : r.court,
+            info: r.info
+              ? {
+                  ...r.info,
+                  name: editName.trim(),
+                  address: editAddress.trim(),
+                  venue: editVenue === 'Both' ? ['Indoor', 'Outdoor'] : [editVenue],
+                  auto_approve: !!editAutoApprove,
+                  images: editImages,
+                  ...(verifiedCoord
+                    ? { latitude: verifiedCoord.latitude, longitude: verifiedCoord.longitude, accuracy_type: 'user_selected' as const }
+                    : {}),
+                }
+              : r.info,
+          }
+        }))
+
+        // Adopt current address as the new "original" so future edits
+        // detect changes relative to the just-saved value.
+        originalAddressRef.current = editAddress.trim()
+
+        // Clear verification state (already consumed by save).
+        setVerifiedCoord(null)
+        setVerifyError(null)
+        setWarnings([])
+        setLastGeocode(null)
+        setSelectedPlaceId(null)
+        setAddressSuggestions([])
+
+        // Re-stamp baseline from the known saved values.  Because the
+        // service-refresh block above may have set new drafts via
+        // setServiceDrafts, and that state update hasn't committed yet,
+        // we capture the latest drafts that were used.
+        setMainBaselineSnapshot(buildMainSnapshotFromRaw({
+          name: editName.trim(),
+          address: editAddress.trim(),
+          venue: editVenue,
+          autoApprove: !!editAutoApprove,
+          images: editImages,
+          serviceDrafts: latestSavedDrafts,
+          venueBaseName: savedVB,
+        }))
       } else {
         // Sub mode: re-stamp the baseline from the current edit state so the
         // form becomes clean without triggering a full re-fetch. A full
@@ -1770,7 +1837,6 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     editImages,
     editName,
     editVenue,
-    loadMyCourts,
     saving,
     availabilityStatus,
     scheduleDays,
