@@ -1586,14 +1586,15 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
           )
           if (renameTargets.length > 0) {
             await Promise.all(renameTargets.map((pc) => patchPlayingCourt(Number((pc as any).playingcourtid), { base_name: baseTo } as any)))
-            setPlayingCourtsLoading(true)
-            try {
-              const pcs = await listPlayingCourtsByCourtId(courtid)
-              setPlayingCourts(Array.isArray(pcs) ? (pcs as PlayingCourtRow[]) : [])
-            } finally {
-              setPlayingCourtsLoading(false)
-            }
+            setPlayingCourts((prev) =>
+              prev.map((pc) => {
+                const pcBase = String((pc as any).base_name || '').trim().toLowerCase()
+                if (pcBase !== baseFrom.toLowerCase()) return pc
+                return { ...pc, base_name: baseTo }
+              })
+            )
             setSelectedVenueCourtBaseName(baseTo)
+            setVenueCourtBaseEditName(baseTo)
             if (String(selectedSubBaseName || '').trim().toLowerCase() === baseFrom.toLowerCase()) {
               setSelectedSubBaseName(baseTo)
             }
@@ -1713,18 +1714,18 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
         } as any)
 
         // Set guard BEFORE refreshing playingCourts so the sub-court
-        // selection effect (triggered by the new playingCourts reference)
+        // selection effect (triggered by the new playingCourts state)
         // skips its async fetch and doesn't overwrite the initial state.
         justSavedSubRef.current = true
 
-        // Refresh local data so the UI reflects new names/images immediately.
-        try {
-          setPlayingCourtsLoading(true)
-          const pcs = await listPlayingCourtsByCourtId(courtid)
-          setPlayingCourts(Array.isArray(pcs) ? (pcs as PlayingCourtRow[]) : [])
-        } finally {
-          setPlayingCourtsLoading(false)
-        }
+        // Update local rows directly so stale cached reads cannot snap back.
+        setPlayingCourts((prev) =>
+          prev.map((pc) =>
+            Number((pc as any).playingcourtid) === Number(selectedSubPlayingCourtId)
+              ? { ...pc, name: subEditName.trim() }
+              : pc
+          )
+        )
 
         // ---- Availability / schedule (full court â†’ all parts of this base) ----
         if (selectedSubPart === 'full' && selectedSubPlayingCourtIds.length > 0) {
