@@ -815,10 +815,11 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     const dayIdx = today.getDay()
     const offsetToMonday = (dayIdx + 6) % 7
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetToMonday + bookingWeekOffset * 7)
+    const dayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
     return [t('MAP_DAY_MON'), t('MAP_DAY_TUE'), t('MAP_DAY_WED'), t('MAP_DAY_THU'), t('MAP_DAY_FRI'), t('MAP_DAY_SAT'), t('MAP_DAY_SUN')].map((label, i) => {
       const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
       const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      return { label, d, dateStr: ds }
+      return { label, d, dateStr: ds, dayKey: dayKeys[i] }
     })
   }, [bookingWeekOffset])
 
@@ -1199,6 +1200,27 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       return
     }
 
+    // If the address hasn't changed, use the existing court coordinates directly
+    // instead of re-geocoding. This lets the owner adjust the pin without
+    // having to change the address text first.
+    const addressUnchangedNow = canonicalizeAddress(a) === canonicalizeAddress(originalAddressRef.current ?? '')
+    if (addressUnchangedNow && selected?.info) {
+      const lat = Number((selected.info as any)?.latitude)
+      const lng = Number((selected.info as any)?.longitude)
+      if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+        router.push({
+          pathname: '/event/mapVerify',
+          params: {
+            address: a,
+            formatted: a,
+            lat: String(lat),
+            lng: String(lng),
+          },
+        })
+        return
+      }
+    }
+
     setWarnings([])
     setVerifiedCoord(null)
     setVerifyError(null)
@@ -1227,7 +1249,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     } catch (e: any) {
       Alert.alert(t('COURT_PANEL_ERR_GEOCODE'), e?.message || t('COMMON_ERR_TRY_AGAIN'))
     }
-  }, [editAddress, lastGeocode, router, selectedPlaceId, verifiedCoord])
+  }, [editAddress, lastGeocode, router, selected, selectedPlaceId, verifiedCoord])
 
   const uploadOneToCloudinary = useCallback(
     async (localUri: string, idx: number, opts?: { deliveryShape?: 'tile' | 'square' }) => {
@@ -1659,12 +1681,26 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
             }
             const ops = selectedSubPlayingCourtIds.map((pid2) => updateCourtAvailabilityByPlayingCourtId(pid2, patch as any, { courtid }))
             await Promise.allSettled(ops)
+
+            // Update local availability state in-place so the booking tab
+            // and schedule UI reflect the changes immediately without
+            // re-fetching (which might hit a stale SWR cache).
+            setAvailability((prev) => {
+              if (!prev) return prev
+              const patchedPids = new Set(selectedSubPlayingCourtIds)
+              return prev.map((slot) => {
+                if (!patchedPids.has(Number((slot as any).playingcourtid))) return slot
+                return {
+                  ...slot,
+                  status: availabilityStatus,
+                  booking_date: scheduleDays,
+                  start_time: `${schedStart}:00`,
+                  end_time: `${schedEnd}:00`,
+                }
+              })
+            })
           }
         }
-        // Do NOT call loadAvailability here: the schedule effect re-runs from
-        // freshly-fetched availability and would overwrite scheduleDays/startTime/endTime
-        // AFTER the baseline is stamped, making the form look dirty again.
-        // The availability cache is invalidated below; a pull-to-refresh fetches fresh data.
       }
 
       // Invalidate caches so loadMyCourts and loadCourtData fetch fresh data
@@ -1757,6 +1793,8 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     loadAvailability,
     selectedSubPart,
     setSubBaselineSnapshot,
+    selectedVenueCourtBaseName,
+    venueCourtBaseEditName,
   ])
 
   const zoomAnimatedStyle = useAnimatedStyle(() => {
@@ -2185,15 +2223,16 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                         {bookingWeekDays.map((d) => {
                           const hasBookings = bookedDates.has(d.dateStr)
                           const isSelected = bookingSelectedDate === d.dateStr
-                          const isAvailable = availableWeekdays.length === 0 || availableWeekdays.includes(d.label)
+                          const isAvailable = availableWeekdays.length === 0 || availableWeekdays.includes(d.dayKey)
                           const today = new Date()
                           const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
                           const isPast = bookingWeekOffset === 0 && d.d < todayOnly
+                          const isDisabled = isPast || !isAvailable
                           return (
                             <TouchableOpacity
                               key={d.dateStr}
                               onPress={() => {
-                                if (isPast) return
+                                if (isDisabled) return
                                 setBookingSelectedDate((prev) => prev === d.dateStr ? null : d.dateStr)
                               }}
                               style={[
@@ -2201,14 +2240,14 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
                                 { backgroundColor: tc.bgSurface, borderColor: tc.divider },
                                 isSelected && { backgroundColor: tc.brand, borderColor: tc.brand },
                                 hasBookings && !isSelected && { backgroundColor: isDark ? '#7C3AED' : '#FB923C', borderColor: isDark ? '#9B6DFF' : '#F59E0B' },
-                                !hasBookings && !isSelected && !isPast && { backgroundColor: isDark ? '#F0F2FF' : '#E5E7EB', borderColor: isDark ? '#C0C4D0' : '#D1D5DB' },
-                                isPast && { backgroundColor: isDark ? '#1C2040' : '#F3F4F6', borderColor: tc.divider },
+                                !hasBookings && !isSelected && !isDisabled && { backgroundColor: isDark ? '#F0F2FF' : '#E5E7EB', borderColor: isDark ? '#C0C4D0' : '#D1D5DB' },
+                                isDisabled && { backgroundColor: isDark ? '#1C2040' : '#F3F4F6', borderColor: tc.divider },
                               ]}
                               activeOpacity={0.8}
-                              disabled={isPast}
+                              disabled={isDisabled}
                             >
-                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, isSelected && { color: tc.btnPrimaryText }, hasBookings && !isSelected && { color: '#FFFFFF' }, !hasBookings && !isSelected && !isPast && isDark && { color: '#1A1A2E' }, isPast && { color: tc.textMuted }]} numberOfLines={1}>{d.label}</Text>
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : isPast ? tc.textMuted : hasBookings ? '#FFFFFF' : (!isPast && isDark) ? '#1A1A2E' : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
+                              <Text style={[styles.dayLabel, { color: tc.textPrimary }, isSelected && { color: tc.btnPrimaryText }, hasBookings && !isSelected && { color: '#FFFFFF' }, !hasBookings && !isSelected && !isDisabled && isDark && { color: '#1A1A2E' }, isDisabled && { color: tc.textMuted }]} numberOfLines={1}>{d.label}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? tc.btnPrimaryText : isDisabled ? tc.textMuted : hasBookings ? '#FFFFFF' : (!isDisabled && isDark) ? '#1A1A2E' : tc.textPrimary, marginTop: 4 }}>{d.d.getDate()}</Text>
                             </TouchableOpacity>
                           )
                         })}
@@ -2448,8 +2487,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
 
               <View style={styles.verifyRow}>
                 {(() => {
-                  const addressUnchanged = canonicalizeAddress(editAddress) === canonicalizeAddress(originalAddressRef.current ?? '')
-                  const verifyDisabled = addressUnchanged || addressLoading
+                  const verifyDisabled = addressLoading
                   return (
                     <TouchableOpacity
                       onPress={handleVerifyLocation}
