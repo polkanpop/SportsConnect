@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from fastapi_cache.decorator import cache
 
 from ..auth import get_current_user
-from ..cache_utils import make_key_builder
+from ..cache_utils import invalidate_namespace, make_key_builder
 from ..db import get_http_client, rest_delete, rest_insert, rest_select, rest_update, rest_upsert
 
 router = APIRouter(prefix="/courts", tags=["courts"])
@@ -1063,6 +1063,7 @@ async def update_court(courtid: int, body: dict, current_user: str = Depends(get
     try:
         updated = rest_update("courts", {"courtid": courtid}, patch)
         row = updated[0] if isinstance(updated, list) and updated else updated
+        await invalidate_namespace("courts")
         return row
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

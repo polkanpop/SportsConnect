@@ -16,7 +16,7 @@ import { useTranslation } from '@/constants/translations'
 import { COLORS } from '@/constants/colors'
 import { ICONS } from '@/constants/icons'
 import { optimizeRemoteImageUrl } from '@/lib/imageOptimize'
-import { getCache, invalidateCache } from '@/lib/cache'
+import { getCache, invalidateCache, setCache } from '@/lib/cache'
 import { SkeletonBox, SkeletonPulse } from '@/components/ui/skeleton'
 import {
   autocompleteCourtAddress,
@@ -31,6 +31,7 @@ import {
   listCourtBookingsByCourtId,
   listPlayingCourtsByCourtId,
   listCourtAvailabilityCached,
+  listCourtInfo,
   listCourtInfoCached,
   listCourts,
   listServicesByCourtId,
@@ -353,7 +354,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const justSavedSubRef = useRef(false)
   const [dataVersion, setDataVersion] = useState(0)
 
-  const loadMyCourts = useCallback(async () => {
+  const loadMyCourts = useCallback(async (opts?: { forceFresh?: boolean }) => {
     if (typeof ownerId !== 'number') {
       setRows([])
       setSelectedCourtId(null)
@@ -363,7 +364,17 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     setLoading(true)
     setError(null)
     try {
-      const [courtsAll, infosAll] = await Promise.all([listCourts(), listCourtInfoCached()])
+      // When forceFresh is set (e.g. after save), bypass the AsyncStorage cache
+      // to guarantee we read the data the backend just persisted.
+      let infosAll: CourtInfoRow[]
+      if (opts?.forceFresh) {
+        infosAll = await listCourtInfo()
+        // Re-populate the cache so other consumers see fresh data too
+        await setCache('cache:courtinfo:v1', infosAll, 60_000, 60_000)
+      } else {
+        infosAll = await listCourtInfoCached()
+      }
+      const courtsAll = await listCourts()
       const mine = (Array.isArray(courtsAll) ? courtsAll : []).filter((c) => {
         const raw = (c as any)?.ownerid
         const oid = typeof raw === 'number' ? raw : Number(raw)
@@ -1661,7 +1672,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
       await invalidateCache('cache:courtinfo:compact:v1')
       await invalidateCache(`@courtAvailability:${courtid}`)
 
-      await loadMyCourts()
+      await loadMyCourts({ forceFresh: true })
 
       // Deferred Cloudinary deletions (only after successful save for that mode)
       if (editMode === 'main') {
