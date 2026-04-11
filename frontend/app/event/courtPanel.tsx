@@ -438,6 +438,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
   const [serviceDeleteCandidateLocalId, setServiceDeleteCandidateLocalId] = useState<string | null>(null)
 
   const originalAddressRef = useRef<string>('')
+  const venueBaseSelectionSyncRef = useRef<string>('')
   // Set to true immediately after sub-save stamps the initial state so the
   // loadSubCourtInfo effect (triggered by playingCourts changing after
   // loadMyCourts) does not overwrite the freshly-stamped initial state.
@@ -518,6 +519,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (typeof courtid !== 'number') return
 
     setMainInitialState(null)
+    venueBaseSelectionSyncRef.current = ''
     setAvailabilityLoading(true)
     setPlayingCourtsLoading(true)
     setServicesLoading(true)
@@ -884,11 +886,16 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (editMode !== 'main') return
     const selectedBase = String(selectedVenueCourtBaseName || '').trim().toLowerCase()
     if (!selectedBase) {
+      venueBaseSelectionSyncRef.current = ''
       setVenueCourtBaseEditName('')
       return
     }
-    const matched = subCourtOptions.find((name) => name.toLowerCase() === selectedBase) || ''
+    // Only sync editable text when the selected base actually changes.
+    // This avoids snapping user typing back to old records.
+    if (venueBaseSelectionSyncRef.current === selectedBase) return
+    const matched = subCourtOptions.find((name) => name.toLowerCase() === selectedBase) || String(selectedVenueCourtBaseName || '').trim()
     setVenueCourtBaseEditName(matched)
+    venueBaseSelectionSyncRef.current = selectedBase
   }, [editMode, selectedVenueCourtBaseName, subCourtOptions])
 
   const bookingBaseNames = useMemo(() => {
@@ -1022,10 +1029,7 @@ export default function CourtPanel(props: { ownerId: number | null; deeplinkCour
     if (!mainInitialState) return false
     return !deepEqual(currentMainState, mainInitialState)
   }, [currentMainState, mainInitialState])
-
-  useEffect(() => {
-    mainDirtyRef.current = mainIsDirty
-  }, [mainIsDirty])
+  mainDirtyRef.current = mainIsDirty
 
   const currentSubState = useMemo<SubFormSnapshot>(() => {
     return buildSubSnapshotFromRaw({
